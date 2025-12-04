@@ -1,0 +1,239 @@
+{
+  "མཉན་ཡོད": {
+    "wylie": "mnyan yod",
+    "english": "Śrāvastī",
+    "sanskrit": "śrāvastī",
+    "category": "place"
+  },
+  "རྒྱལ་པོའི་ཁབ": {
+    "wylie": "rgyal po'i khab",
+    "english": "Rājagṛha",
+    "sanskrit": "rājagṛha",
+    "category": "place"
+  },
+  "ཡངས་པ་ཅན": {
+    "wylie": "yangs pa can",
+    "english": "Vaiśālī",
+    "sanskrit": "vaiśālī",
+    "category": "place"
+  },
+  "བཱ་ར་ཎ་སཱི": {
+    "wylie": "bA ra Na sI",
+    "english": "Vārāṇasī",
+    "sanskrit": "vārāṇasī",
+    "category": "place"
+  },
+  "རི་དྭགས་ཀྱི་ནགས": {
+    "wylie": "ri dwags kyi nags",
+    "english": "Deer Park, Mṛgadāva",
+    "sanskrit": "mṛgadāva",
+    "category": "place"
+  },
+  "འོད་མའི་ཚལ": {
+    "wylie": "'od ma'i tshal",
+    "english": "Jeta Grove, Jetavana",
+    "sanskrit": "jetavana",
+    "category": "place"
+  },
+  "བྱ་རྒོད་ཕུང་པོའི་རི": {
+    "wylie": "bya rgod phung po'i ri",
+    "english": "Vulture Peak, Gṛdhrakūṭa",
+    "sanskrit": "gṛdhrakūṭa",
+    "category": "place"
+  },
+  "རྒྱ་གར": {
+    "wylie": "rgya gar",
+    "english": "India",
+    "category": "place"
+  },
+  "བོད": {
+    "wylie": "bod",
+    "english": "Tibet",
+    "category": "place"
+  },
+  "ལྷ་ས": {
+    "wylie": "lha sa",
+    "english": "Lhasa",
+    "category": "place"
+  },
+  "ནཱ་ལེནྡྲ": {
+    "wylie": "nA len+d+ra",
+    "english": "Nālandā",
+    "sanskrit": "nālandā",
+    "category": "place"
+  },
+  "བི་ཀྲ་མ་ཤཱི་ལ": {
+    "wylie": "bi kra ma shI la",
+    "english": "Vikramaśīla",
+    "sanskrit": "vikramaśīla",
+    "category": "place"
+  },
+  "འཇམ་དཔལ": {
+    "wylie": "'jam dpal",
+    "english": "Mañjuśrī",
+    "sanskrit": "mañjuśrī",
+    "category": "bodhisattva"
+  },
+  "སྤྱན་རས་གཟིགས": {
+    "wylie": "spyan ras gzigs",
+    "english": "Avalokiteśvara",
+    "sanskrit": "avalokiteśvara",
+    "category": "bodhisattva"
+  },
+  "ཕྱག་ན་རྡོ་རྗེ": {
+    "wylie": "phyag na rdo rje",
+    "english": "Vajrapāṇi",
+    "sanskrit": "vajrapāṇi",
+    "category": "bodhisattva"
+  },
+  "བྱམས་པ": {
+    "wylie": "byams pa",
+    "english": "Maitreya",
+    "sanskrit": "maitreya",
+    "category": "bodhisattva"
+  },
+  "སྒྲིབ་པ་ཐམས་ཅད་རྣམ་པར་སེལ་བ": {
+    "wylie": "sgrib pa thams cad rnam par sel ba",
+    "english": "Sarvanīvaraṇaviṣkambhin",
+    "sanskrit": "sarvanīvaraṇaviṣkambhin",
+    "category": "bodhisattva"
+  },
+  "ས་འི་སྙིང་པོ": {
+    "wylie": "sa'i snying po",
+    "english": "Kṣitigarbha",
+    "sanskrit": "kṣitigarbha",
+    "category": "bodhisattva"
+  },
+  "ནམ་མཁའི་སྙིང་པོ": {
+    "wylie": "nam mkha'i snying po",
+    "english": "Ākāśagarbha",
+    "sanskrit": "ākāśagarbha",
+    "category": "bodhisattva"
+  },
+  "ཀླུ་སྒྲུབ": {
+    "wylie": "klu sgrub",
+    "english": "Nāgārjuna",
+    "sanskrit": "nāgārjuna",
+    "category": "person"
+  },
+  "ཐོགས་མེད": {
+    "wylie": "thogs med",
+    "english": "Asaṅga",
+    "sanskrit": "asaṅga",
+    "category": "person"
+  },
+  "དབྱིག་གཉེན": {
+    "wylie": "dbyig gnyen",
+    "english": "Vasubandhu",
+    "sanskrit": "vasubandhu",
+    "category": "person"
+  },
+  "ཟླ་བ་གྲགས་པ": {
+    "wylie": "zla ba grags pa",
+    "english": "Candrakīrti",
+    "sanskrit": "candrakīrti",
+    "category": "person"
+  },
+  "ལེགས་ལྡན་འབྱེད": {
+    "wylie": "legs ldan 'byed",
+    "english": "Bhāviveka",
+    "sanskrit": "bhāviveka",
+    "category": "person"
+  },
+  "ཤཱནྟི་དེ་བ": {
+    "wylie": "shAn+ti de ba",
+    "english": "Śāntideva",
+    "sanskrit": "śāntideva",
+    "category": "person"
+  },
+  "ཞི་བ་འཚོ": {
+    "wylie": "zhi ba 'tsho",
+    "english": "Śāntarakṣita",
+    "sanskrit": "śāntarakṣita",
+    "category": "person"
+  },
+  "ཀ་མ་ལ་ཤཱི་ལ": {
+    "wylie": "ka ma la shI la",
+    "english": "Kamalaśīla",
+    "sanskrit": "kamalaśīla",
+    "category": "person"
+  },
+  "དྷརྨ་ཀཱིརྟི": {
+    "wylie": "d+harma kIr+ti",
+    "english": "Dharmakīrti",
+    "sanskrit": "dharmakīrti",
+    "category": "person"
+  },
+  "དིག་ནཱ་ག": {
+    "wylie": "dig nA ga",
+    "english": "Dignāga",
+    "sanskrit": "dignāga",
+    "category": "person"
+  },
+  "བློ་གྲོས་བརྟན་པ": {
+    "wylie": "blo gros brtan pa",
+    "english": "Sthiramati",
+    "sanskrit": "sthiramati",
+    "category": "person"
+  },
+  "ཤཱཀྱ་ཐུབ་པ": {
+    "wylie": "shAkya thub pa",
+    "english": "Śākyamuni",
+    "sanskrit": "śākyamuni",
+    "category": "buddha"
+  },
+  "སངས་རྒྱས": {
+    "wylie": "sangs rgyas",
+    "english": "Buddha",
+    "sanskrit": "buddha",
+    "category": "buddha"
+  },
+  "འོད་དཔག་མེད": {
+    "wylie": "'od dpag med",
+    "english": "Amitābha",
+    "sanskrit": "amitābha",
+    "category": "buddha"
+  },
+  "རྣམ་པར་སྣང་མཛད": {
+    "wylie": "rnam par snang mdzad",
+    "english": "Vairocana",
+    "sanskrit": "vairocana",
+    "category": "buddha"
+  },
+  "མི་བསྐྱོད་པ": {
+    "wylie": "mi bskyod pa",
+    "english": "Akṣobhya",
+    "sanskrit": "akṣobhya",
+    "category": "buddha"
+  },
+  "ཀུན་ཏུ་བཟང་པོ": {
+    "wylie": "kun tu bzang po",
+    "english": "Samantabhadra",
+    "sanskrit": "samantabhadra",
+    "category": "bodhisattva"
+  },
+  "ཤཱ་རིའི་བུ": {
+    "wylie": "shA ri'i bu",
+    "english": "Śāriputra",
+    "sanskrit": "śāriputra",
+    "category": "person"
+  },
+  "མོའུ་འགལ་གྱི་བུ": {
+    "wylie": "mo'u 'gal gyi bu",
+    "english": "Maudgalyāyana",
+    "sanskrit": "maudgalyāyana",
+    "category": "person"
+  },
+  "འོད་སྲུང": {
+    "wylie": "'od srung",
+    "english": "Kāśyapa",
+    "sanskrit": "kāśyapa",
+    "category": "person"
+  },
+  "ཀུན་དགའ་བོ": {
+    "wylie": "kun dga' bo",
+    "english": "Ānanda",
+    "sanskrit": "ānanda",
+    "category": "person"
+  }
+}

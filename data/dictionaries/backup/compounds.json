@@ -1,0 +1,384 @@
+{
+  "གླེང་གཞི": {
+    "wylie": "gleng gzhi",
+    "english": "nidāna, narrative occasion, background story",
+    "sanskrit": "nidāna",
+    "category": "technical_term"
+  },
+  "བཅོམ་ལྡན་འདས": {
+    "wylie": "bcom ldan 'das",
+    "english": "Blessed One, Bhagavān",
+    "sanskrit": "bhagavat",
+    "category": "epithet"
+  },
+  "དགེ་སློང": {
+    "wylie": "dge slong",
+    "english": "monk, bhikṣu",
+    "sanskrit": "bhikṣu",
+    "category": "technical_term"
+  },
+  "དགེ་སློང་མ": {
+    "wylie": "dge slong ma",
+    "english": "nun, bhikṣuṇī",
+    "sanskrit": "bhikṣuṇī",
+    "category": "technical_term"
+  },
+  "དགེ་བསྙེན": {
+    "wylie": "dge bsnyen",
+    "english": "lay practitioner, upāsaka",
+    "sanskrit": "upāsaka",
+    "category": "technical_term"
+  },
+  "དགེ་བསྙེན་མ": {
+    "wylie": "dge bsnyen ma",
+    "english": "female lay practitioner, upāsikā",
+    "sanskrit": "upāsikā",
+    "category": "technical_term"
+  },
+  "བྱང་ཆུབ་སེམས་དཔའ": {
+    "wylie": "byang chub sems dpa'",
+    "english": "bodhisattva",
+    "sanskrit": "bodhisattva",
+    "category": "technical_term"
+  },
+  "བྱང་ཆུབ་སེམས": {
+    "wylie": "byang chub sems",
+    "english": "mind of awakening, bodhicitta",
+    "sanskrit": "bodhicitta",
+    "category": "technical_term"
+  },
+  "ཆོས་ཀྱི་དབྱིངས": {
+    "wylie": "chos kyi dbyings",
+    "english": "dharmadhātu, expanse of phenomena",
+    "sanskrit": "dharmadhātu",
+    "category": "technical_term"
+  },
+  "དེ་བཞིན་གཤེགས་པ": {
+    "wylie": "de bzhin gshegs pa",
+    "english": "Tathāgata, Thus-Gone One",
+    "sanskrit": "tathāgata",
+    "category": "epithet"
+  },
+  "དེ་ལྟ་བུ": {
+    "wylie": "de lta bu",
+    "english": "such, like that",
+    "category": "pronoun_phrase"
+  },
+  "དེའི་ཚེ": {
+    "wylie": "de'i tshe",
+    "english": "at that time",
+    "category": "temporal_phrase"
+  },
+  "དེ་ནས": {
+    "wylie": "de nas",
+    "english": "then, after that",
+    "category": "temporal_phrase"
+  },
+  "དགེ་འདུན": {
+    "wylie": "dge 'dun",
+    "english": "saṅgha, community",
+    "sanskrit": "saṅgha",
+    "category": "technical_term"
+  },
+  "འཁོར་ལོ": {
+    "wylie": "'khor lo",
+    "english": "wheel, cakra",
+    "sanskrit": "cakra",
+    "category": "technical_term"
+  },
+  "ཆོས་ཀྱི་འཁོར་ལོ": {
+    "wylie": "chos kyi 'khor lo",
+    "english": "wheel of dharma",
+    "sanskrit": "dharmacakra",
+    "category": "technical_term"
+  },
+  "ཡང་དག་པ": {
+    "wylie": "yang dag pa",
+    "english": "correct, perfect, samyak",
+    "sanskrit": "samyak",
+    "category": "technical_term"
+  },
+  "རྫོགས་པའི་སངས་རྒྱས": {
+    "wylie": "rdzogs pa'i sangs rgyas",
+    "english": "perfectly awakened buddha",
+    "sanskrit": "samyaksaṃbuddha",
+    "category": "epithet"
+  },
+  "མཁན་པོ": {
+    "wylie": "mkhan po",
+    "english": "abbot, preceptor, upādhyāya",
+    "sanskrit": "upādhyāya",
+    "category": "title"
+  },
+  "སློབ་དཔོན": {
+    "wylie": "slob dpon",
+    "english": "master, ācārya",
+    "sanskrit": "ācārya",
+    "category": "title"
+  },
+  "སྟོན་པ": {
+    "wylie": "ston pa",
+    "english": "Teacher (epithet of Buddha)",
+    "sanskrit": "śāstṛ",
+    "category": "epithet"
+  },
+  "ཐུབ་པ": {
+    "wylie": "thub pa",
+    "english": "Sage, Muni",
+    "sanskrit": "muni",
+    "category": "epithet"
+  },
+  "རྒྱལ་བ": {
+    "wylie": "rgyal ba",
+    "english": "Victor, Jina",
+    "sanskrit": "jina",
+    "category": "epithet"
+  },
+  "མགོན་པོ": {
+    "wylie": "mgon po",
+    "english": "Protector, Lord",
+    "sanskrit": "nātha",
+    "category": "epithet"
+  },
+  "འཇིག་རྟེན": {
+    "wylie": "'jig rten",
+    "english": "world, loka",
+    "sanskrit": "loka",
+    "category": "technical_term"
+  },
+  "འཇིག་རྟེན་གྱི་ཁམས": {
+    "wylie": "'jig rten gyi khams",
+    "english": "world-realm, lokadhātu",
+    "sanskrit": "lokadhātu",
+    "category": "technical_term"
+  },
+  "སེམས་ཅན": {
+    "wylie": "sems can",
+    "english": "sentient being, sattva",
+    "sanskrit": "sattva",
+    "category": "technical_term"
+  },
+  "ཉན་ཐོས": {
+    "wylie": "nyan thos",
+    "english": "śrāvaka, hearer",
+    "sanskrit": "śrāvaka",
+    "category": "technical_term"
+  },
+  "རང་སངས་རྒྱས": {
+    "wylie": "rang sangs rgyas",
+    "english": "pratyekabuddha",
+    "sanskrit": "pratyekabuddha",
+    "category": "technical_term"
+  },
+  "ཕ་རོལ་ཏུ་ཕྱིན་པ": {
+    "wylie": "pha rol tu phyin pa",
+    "english": "perfection, pāramitā",
+    "sanskrit": "pāramitā",
+    "category": "technical_term"
+  },
+  "ཤེས་རབ་ཀྱི་ཕ་རོལ་ཏུ་ཕྱིན་པ": {
+    "wylie": "shes rab kyi pha rol tu phyin pa",
+    "english": "perfection of wisdom",
+    "sanskrit": "prajñāpāramitā",
+    "category": "technical_term"
+  },
+  "སྡུག་བསྔལ": {
+    "wylie": "sdug bsngal",
+    "english": "suffering, duḥkha",
+    "sanskrit": "duḥkha",
+    "category": "technical_term"
+  },
+  "སྐྱེ་བ": {
+    "wylie": "skye ba",
+    "english": "birth, jāti",
+    "sanskrit": "jāti",
+    "category": "technical_term"
+  },
+  "རྒ་བ": {
+    "wylie": "rga ba",
+    "english": "aging, jarā",
+    "sanskrit": "jarā",
+    "category": "technical_term"
+  },
+  "འཆི་བ": {
+    "wylie": "'chi ba",
+    "english": "death, maraṇa",
+    "sanskrit": "maraṇa",
+    "category": "technical_term"
+  },
+  "མྱ་ངན་ལས་འདས་པ": {
+    "wylie": "mya ngan las 'das pa",
+    "english": "nirvāṇa",
+    "sanskrit": "nirvāṇa",
+    "category": "technical_term"
+  },
+  "འཁོར་བ": {
+    "wylie": "'khor ba",
+    "english": "saṃsāra, cyclic existence",
+    "sanskrit": "saṃsāra",
+    "category": "technical_term"
+  },
+  "ལས་དང་པོ་པ": {
+    "wylie": "las dang po pa",
+    "english": "beginner",
+    "category": "technical_term"
+  },
+  "རྣམ་པར་ཤེས་པ": {
+    "wylie": "rnam par shes pa",
+    "english": "consciousness, vijñāna",
+    "sanskrit": "vijñāna",
+    "category": "technical_term"
+  },
+  "ཀུན་གཞི་རྣམ་པར་ཤེས་པ": {
+    "wylie": "kun gzhi rnam par shes pa",
+    "english": "ālayavijñāna, store consciousness",
+    "sanskrit": "ālayavijñāna",
+    "category": "technical_term"
+  },
+  "རྣམ་པར་རྟོག་པ": {
+    "wylie": "rnam par rtog pa",
+    "english": "conceptualization, vikalpa",
+    "sanskrit": "vikalpa",
+    "category": "technical_term"
+  },
+  "སྒྱུ་མ": {
+    "wylie": "sgyu ma",
+    "english": "illusion, māyā",
+    "sanskrit": "māyā",
+    "category": "technical_term"
+  },
+  "སྟོང་པ་ཉིད": {
+    "wylie": "stong pa nyid",
+    "english": "emptiness, śūnyatā",
+    "sanskrit": "śūnyatā",
+    "category": "technical_term"
+  },
+  "རང་བཞིན": {
+    "wylie": "rang bzhin",
+    "english": "nature, svabhāva",
+    "sanskrit": "svabhāva",
+    "category": "technical_term"
+  },
+  "ངོ་བོ་ཉིད": {
+    "wylie": "ngo bo nyid",
+    "english": "essence, svabhāva",
+    "sanskrit": "svabhāva",
+    "category": "technical_term"
+  },
+  "མཚན་ཉིད": {
+    "wylie": "mtshan nyid",
+    "english": "characteristic, lakṣaṇa",
+    "sanskrit": "lakṣaṇa",
+    "category": "technical_term"
+  },
+  "དབུ་མ": {
+    "wylie": "dbu ma",
+    "english": "middle way, madhyamaka",
+    "sanskrit": "madhyamaka",
+    "category": "technical_term"
+  },
+  "རྣལ་འབྱོར": {
+    "wylie": "rnal 'byor",
+    "english": "yoga",
+    "sanskrit": "yoga",
+    "category": "technical_term"
+  },
+  "རྣལ་འབྱོར་སྤྱོད་པ": {
+    "wylie": "rnal 'byor spyod pa",
+    "english": "Yogācāra",
+    "sanskrit": "yogācāra",
+    "category": "technical_term"
+  },
+  "གཞན་སྟོང": {
+    "wylie": "gzhan stong",
+    "english": "other-emptiness, extrinsic emptiness",
+    "category": "technical_term"
+  },
+  "རང་སྟོང": {
+    "wylie": "rang stong",
+    "english": "self-emptiness, intrinsic emptiness",
+    "category": "technical_term"
+  },
+  "ཐལ་འགྱུར་བ": {
+    "wylie": "thal 'gyur ba",
+    "english": "Prāsaṅgika",
+    "sanskrit": "prāsaṅgika",
+    "category": "technical_term"
+  },
+  "རང་རྒྱུད་པ": {
+    "wylie": "rang rgyud pa",
+    "english": "Svātantrika",
+    "sanskrit": "svātantrika",
+    "category": "technical_term"
+  },
+  "གཞན་ཡང": {
+    "wylie": "gzhan yang",
+    "english": "moreover, furthermore",
+    "category": "connector"
+  },
+  "དེ་ལྟར": {
+    "wylie": "de ltar",
+    "english": "thus, in that way",
+    "category": "connector"
+  },
+  "འདི་ལྟར": {
+    "wylie": "'di ltar",
+    "english": "as follows, in this way",
+    "category": "connector"
+  },
+  "དེ་བས་ན": {
+    "wylie": "de bas na",
+    "english": "therefore",
+    "category": "connector"
+  },
+  "དེའི་ཕྱིར": {
+    "wylie": "de'i phyir",
+    "english": "therefore, because of that",
+    "category": "connector"
+  },
+  "འོན་ཀྱང": {
+    "wylie": "'on kyang",
+    "english": "however, nevertheless",
+    "category": "connector"
+  },
+  "ཅི་སྟེ": {
+    "wylie": "ci ste",
+    "english": "if, supposing that",
+    "category": "connector"
+  },
+  "གལ་ཏེ": {
+    "wylie": "gal te",
+    "english": "if",
+    "category": "connector"
+  },
+  "ཇི་ལྟར": {
+    "wylie": "ji ltar",
+    "english": "how, in what way",
+    "category": "connector"
+  },
+  "ཅིའི་ཕྱིར": {
+    "wylie": "ci'i phyir",
+    "english": "why, for what reason",
+    "category": "connector"
+  },
+  "ཞེས་བྱ་བ": {
+    "wylie": "zhes bya ba",
+    "english": "called, so-called",
+    "category": "quotative"
+  },
+  "ཅེས་བྱ་བ": {
+    "wylie": "ces bya ba",
+    "english": "called, so-called",
+    "category": "quotative"
+  },
+  "ན་བཞུགས": {
+    "wylie": "na bzhugs",
+    "english": "resides in",
+    "category": "verb_phrase"
+  },
+  "པའི་ཚེ": {
+    "wylie": "pa'i tshe",
+    "english": "at the time when",
+    "category": "temporal_phrase"
+  }
+}
