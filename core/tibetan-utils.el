@@ -67,31 +67,60 @@ Returns cons cell (seg-id . seg-text) or nil."
 
 (defun tibetan-get-current-segment ()
   "Get current segment ID and text.
+Handles both old format 〔seg:ID〕 and new format 〔seg〕.
 Returns cons cell (seg-id . seg-text) if point is within a segment, nil otherwise."
   (save-excursion
     (let ((pos (point))
           (case-fold-search t))
-      (when (re-search-backward "〔seg:\\([^〕]+\\)〕" nil t)
-        (let ((seg-id (match-string 1))
-              (seg-start (match-end 0)))
-          (when (re-search-forward "〔/seg〕" nil t)
-            (let ((seg-end (match-beginning 0)))
-              (when (and (>= pos seg-start) (<= pos seg-end))
-                (cons seg-id (string-trim (buffer-substring-no-properties seg-start seg-end)))))))))))
+      ;; Try new format first: 〔seg〕...〔/seg〕 (no ID)
+      (or (tibetan--get-segment-new-format pos)
+          ;; Fall back to old format: 〔seg:ID〕...〔/seg〕
+          (tibetan--get-segment-old-format pos)))))
+
+(defun tibetan--get-segment-new-format (pos)
+  "Get segment in new format 〔seg〕...〔/seg〕 at POS.
+Returns (line-number . text) or nil."
+  (save-excursion
+    (goto-char pos)
+    (when (re-search-backward "〔seg〕" nil t)
+      (let ((seg-start (match-end 0))
+            (seg-line (line-number-at-pos)))
+        (when (re-search-forward "〔/seg〕" nil t)
+          (let ((seg-end (match-beginning 0)))
+            (when (and (>= pos seg-start) (<= pos seg-end))
+              (cons (format "Line %d" seg-line)
+                    (string-trim (buffer-substring-no-properties seg-start seg-end))))))))))
+
+(defun tibetan--get-segment-old-format (pos)
+  "Get segment in old format 〔seg:ID〕...〔/seg〕 at POS.
+Returns (id . text) or nil."
+  (save-excursion
+    (goto-char pos)
+    (when (re-search-backward "〔seg:\\([^〕]+\\)〕" nil t)
+      (let ((seg-id (match-string 1))
+            (seg-start (match-end 0)))
+        (when (re-search-forward "〔/seg〕" nil t)
+          (let ((seg-end (match-beginning 0)))
+            (when (and (>= pos seg-start) (<= pos seg-end))
+              (cons seg-id (string-trim (buffer-substring-no-properties seg-start seg-end))))))))))
 
 (defun tibetan-get-all-segments ()
   "Get all segments in current buffer.
+Handles both old format 〔seg:ID〕 and new format 〔seg〕.
 Returns list of cons cells (seg-id . seg-text)."
   (save-excursion
     (goto-char (point-min))
     (let ((segments '())
-          (case-fold-search t))
-      (while (re-search-forward "〔seg:\\([^〕]+\\)〕" nil t)
-        (let ((seg-id (match-string 1))
+          (case-fold-search t)
+          (seg-count 0))
+      ;; Match both 〔seg:ID〕 and 〔seg〕
+      (while (re-search-forward "〔seg\\(?::\\([^〕]+\\)\\)?〕" nil t)
+        (setq seg-count (1+ seg-count))
+        (let ((seg-id (or (match-string 1) (format "seg-%d" seg-count)))
               (seg-start (match-end 0)))
           (when (re-search-forward "〔/seg〕" nil t)
-            (let ((seg-end (match-beginning 0))
-                  (seg-text (string-trim (buffer-substring-no-properties seg-start seg-end))))
+            (let* ((seg-end (match-beginning 0))
+                   (seg-text (string-trim (buffer-substring-no-properties seg-start seg-end))))
               (push (cons seg-id seg-text) segments)))))
       (nreverse segments))))
 
