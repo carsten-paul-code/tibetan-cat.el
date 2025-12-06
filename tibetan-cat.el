@@ -37,11 +37,13 @@
 
 (let ((base-dir (file-name-directory (or load-file-name buffer-file-name))))
   ;; Add base dir and all subdirectories to load path
-  (add-to-list 'load-path base-dir)  ; For modules in root (tibetan-analysis-persist.el)
+  (add-to-list 'load-path base-dir)
   (add-to-list 'load-path (expand-file-name "core" base-dir))
   (add-to-list 'load-path (expand-file-name "analysis" base-dir))
+  (add-to-list 'load-path (expand-file-name "persist" base-dir))    ; Persistent analysis
   (add-to-list 'load-path (expand-file-name "workspace" base-dir))
-  (add-to-list 'load-path (expand-file-name "philology" base-dir))  ; New: verse philology
+  (add-to-list 'load-path (expand-file-name "philology" base-dir))
+  (add-to-list 'load-path (expand-file-name "doc-prep" base-dir))   ; Document preparation
   (add-to-list 'load-path (expand-file-name "config" base-dir))
 
   ;; Set data directory for glossaries
@@ -115,6 +117,9 @@ Loads glossaries and prepares the system for use."
   (message "  C-c v A - Persistent compound analysis (verse/sentence)")
   (message "  C-c v R - Re-analyze compound (keep notes)")
   (message "")
+  (message "DOCUMENT PREPARATION:")
+  (message "  M-x tibetan-doc-prep  - 3-step workflow (OCR → AI correct → format)")
+  (message "")
   (message "OTHER:")
   (message "  C-c u E - Toggle auto-analysis")
   (message "  C-c s w - Sentence workspace")
@@ -131,7 +136,7 @@ Loads glossaries and prepares the system for use."
 ;; VERSION INFO
 ;; ============================================================================
 
-(defconst tibetan-cat-version "1.0.0"
+(defconst tibetan-cat-version "2.0.0"
   "Version of Tibetan CAT system.")
 
 (defun tibetan-cat-version ()
