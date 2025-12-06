@@ -14,6 +14,19 @@
 
 (require 'cl-lib)
 
+;; Safe substring for multi-byte Tibetan text
+(defun tibetan-vocab-safe-substring (str start &optional end)
+  "Safely extract substring from STR between START and END.
+Returns empty string if indices are out of range or invalid."
+  (condition-case nil
+      (let* ((len (length str))
+             (s (max 0 (min start len)))
+             (e (if end (max s (min end len)) len)))
+        (if (and (<= 0 s) (<= s e) (<= e len))
+            (substring str s e)
+          ""))
+    (error "")))
+
 ;; ============================================================================
 ;; DHARMAMITRA CACHE
 ;; ============================================================================
@@ -45,7 +58,7 @@ Only strips unambiguous multi-character particles to avoid false positives."
              "སོ" "ཏོ" "ནོ" "དོ" "རོ" "འོ" "ངོ")))  ; sentence-final
       (dolist (particle particle-patterns)
         (when (string-suffix-p particle root)
-          (setq root (substring root 0 (- (length root) (length particle)))))))
+          (setq root (tibetan-vocab-safe-substring root 0 (- (length root) (length particle)))))))
     root))
 
 ;; ============================================================================

@@ -11,40 +11,62 @@
 
 ;;; Code:
 
+(defun tibetan-safe-substring (str start &optional end)
+  "Safely extract substring from STR between START and END.
+Returns empty string if indices are out of range."
+  (condition-case nil
+      (let* ((len (length str))
+             (s (max 0 (min start len)))
+             (e (if end (max s (min end len)) len)))
+        (if (<= s e len)
+            (substring str s e)
+          ""))
+    (error "")))
+
 (defun tibetan-to-wylie-fixed (tibetan-text)
   "Convert Tibetan Unicode text to Wylie transliteration.
 FIXED: Properly handles implicit 'a' vowels after each consonant."
-  (let ((result "")
-        (pos 0)
-        (len (length tibetan-text)))
+  (condition-case err
+      (let ((result "")
+            (pos 0)
+            (len (length tibetan-text)))
 
-    (while (< pos len)
-      (let* ((char (substring tibetan-text pos (1+ pos))))
+        (while (< pos len)
+          ;; Safe substring extraction
+          (let* ((char (tibetan-safe-substring tibetan-text pos (1+ pos))))
 
-        ;; Check if current position is punctuation - handle it directly
-        (if (string-match-p "[་།༎༏༐༑༔ ]" char)
-            ;; Handle punctuation immediately
-            (progn
-              (cond
-               ((string= char "་") (setq result (concat result " ")))
-               ((string= char " ") (setq result (concat result " ")))
-               ((string= char "།") (setq result (concat result "/")))
-               ((string= char "༎") (setq result (concat result "//")))
-               (t (setq result (concat result char))))
-              (setq pos (1+ pos)))
+            ;; Check if current position is punctuation - handle it directly
+            (if (and (> (length char) 0) (string-match-p "[་།༎༏༐༑༔ ]" char))
+                ;; Handle punctuation immediately
+                (progn
+                  (cond
+                   ((string= char "་") (setq result (concat result " ")))
+                   ((string= char " ") (setq result (concat result " ")))
+                   ((string= char "།") (setq result (concat result "/")))
+                   ((string= char "༎") (setq result (concat result "//")))
+                   (t (setq result (concat result char))))
+                  (setq pos (1+ pos)))
 
-          ;; Not punctuation, process as syllable
-          (let* ((syllable-end (or (string-match-p "་\\|།\\|༎\\|༏\\|༐\\|༑\\|༔\\| \\|$"
-                                                   tibetan-text (1+ pos))
-                                  len))
-                 (syllable (substring tibetan-text pos syllable-end))
-                 (wylie-syllable (tibetan-syllable-to-wylie syllable)))
+              ;; Not punctuation, process as syllable
+              (let* ((search-start (min (1+ pos) len))
+                     (syllable-end (or (and (< search-start len)
+                                           (string-match-p "་\\|།\\|༎\\|༏\\|༐\\|༑\\|༔\\| "
+                                                          tibetan-text search-start))
+                                      len))
+                     (syllable (tibetan-safe-substring tibetan-text pos syllable-end))
+                     (wylie-syllable (if (> (length syllable) 0)
+                                        (tibetan-syllable-to-wylie syllable)
+                                      "")))
 
-            (setq result (concat result wylie-syllable))
-            ;; Move to syllable-end, next iteration will handle punctuation
-            (setq pos syllable-end)))))
+                (setq result (concat result wylie-syllable))
+                ;; Move to syllable-end, next iteration will handle punctuation
+                (setq pos (max (1+ pos) syllable-end))))))
 
-    result))
+        result)
+    (error
+     ;; On any error, return the original text or empty string
+     (message "Wylie conversion error for '%s': %s" tibetan-text (error-message-string err))
+     (or tibetan-text ""))))
 
 (defun tibetan-is-prefix (char next-char)
   "Check if CHAR is a valid prefix before NEXT-CHAR in Tibetan.
@@ -68,7 +90,7 @@ Prefixes don't get implicit 'a' vowel."
   "Convert a single Tibetan syllable to Wylie.
 Handles implicit 'a' vowels correctly after each consonant.
 Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix]"
-
+  (condition-case err
   ;; Character mappings with priority (longer matches first)
   (let ((consonant-stacks '(
         ;; Four-character stacks (must come before 3-char!)
@@ -135,7 +157,7 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
         ;; Try to match longest possible sequence first (4, 3, 2, then 1 character)
         (dolist (len '(4 3 2 1))
           (when (and (not matched) (<= (+ pos len) (length syllable)))
-            (let ((substr (substring syllable pos (+ pos len))))
+            (let ((substr (tibetan-safe-substring syllable pos (+ pos len))))
 
               ;; Try consonant stacks
               (dolist (pair consonant-stacks)
@@ -188,7 +210,7 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
                        (is-prefix nil)
                        (is-root nil)
                        (is-suffix nil)
-                       (current-char (substring syllable pos (min (1+ pos) (length syllable)))))
+                       (current-char (tibetan-safe-substring syllable pos (1+ pos))))
 
                   ;; ===== STEP 1: Check if this consonant is a prefix =====
                   ;; Only single-character consonants can be prefixes
@@ -196,12 +218,12 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
                   (when (and (< next-pos (length syllable))
                             is-first-consonant
                             (= match-length 1))
-                    (let ((next-char (substring syllable next-pos (min (1+ next-pos) (length syllable))))
+                    (let ((next-char (tibetan-safe-substring syllable next-pos (1+ next-pos)))
                           (consonant-count 0))
                       ;; Count total consonants in syllable
                       (let ((temp-pos 0))
                         (while (< temp-pos (length syllable))
-                          (let ((temp-char (substring syllable temp-pos (min (1+ temp-pos) (length syllable)))))
+                          (let ((temp-char (tibetan-safe-substring syllable temp-pos (1+ temp-pos))))
                             (when (and (>= (string-to-char temp-char) #x0F40)
                                       (<= (string-to-char temp-char) #x0F6C))
                               (setq consonant-count (1+ consonant-count))))
@@ -237,9 +259,8 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
                     (dolist (pair vowels)
                       (when (and (not has-vowel-after)
                                 (<= (+ next-pos (length (car pair))) (length syllable)))
-                        (let ((next-substr (substring syllable next-pos
-                                                     (min (+ next-pos (length (car pair)))
-                                                          (length syllable)))))
+                        (let ((next-substr (tibetan-safe-substring syllable next-pos
+                                                     (+ next-pos (length (car pair))))))
                           (when (string= next-substr (car pair))
                             (setq has-vowel-after t))))))
 
@@ -248,9 +269,8 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
                     (dolist (pair final-marks)
                       (when (and (not has-vowel-after)
                                 (<= (+ next-pos (length (car pair))) (length syllable)))
-                        (let ((next-substr (substring syllable next-pos
-                                                     (min (+ next-pos (length (car pair)))
-                                                          (length syllable)))))
+                        (let ((next-substr (tibetan-safe-substring syllable next-pos
+                                                     (+ next-pos (length (car pair))))))
                           (when (string= next-substr (car pair))
                             (setq has-vowel-after t))))))
 
@@ -267,7 +287,11 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
           ;; No match, skip this character
           (setq pos (1+ pos)))))
 
-    result))
+    result)
+  (error
+   ;; On any error, return empty string - the caller will handle it
+   (message "Syllable-to-Wylie error for '%s': %s" syllable (error-message-string err))
+   "")))
 
 ;; Alias for backward compatibility
 (defalias 'tibetan-to-wylie 'tibetan-to-wylie-fixed)

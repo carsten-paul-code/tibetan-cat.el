@@ -16,6 +16,19 @@
 
 (require 'cl-lib)
 
+;; Safe substring for multi-byte Tibetan text
+(defun tibetan-particles-safe-substring (str start &optional end)
+  "Safely extract substring from STR between START and END.
+Returns empty string if indices are out of range or invalid."
+  (condition-case nil
+      (let* ((len (length str))
+             (s (max 0 (min start len)))
+             (e (if end (max s (min end len)) len)))
+        (if (and (<= 0 s) (<= s e) (<= e len))
+            (substring str s e)
+          ""))
+    (error "")))
+
 ;; ============================================================================
 ;; BIALEK GRAMMAR ANALYSIS - CASE PARTICLES
 ;; ============================================================================
@@ -36,7 +49,7 @@ Returns list of (particle word case function translation-guide bialek-ref)."
                               ((string-suffix-p "འིས" word) "འིས")
                               ((string-suffix-p "ཡིས" word) "ཡིས")
                               (t "གིས")))
-               (root (substring word 0 (- (length word) (length particle)))))
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
           (when (> (length root) 0)
             (push (list particle word "ERGATIVE (ERG)"
                        (format "Marks '%s' as AGENT of a transitive/controllable verb" root)
@@ -52,7 +65,7 @@ Returns list of (particle word case function translation-guide bialek-ref)."
                               ((string-suffix-p "འི" word) "འི")
                               ((string-suffix-p "ཡི" word) "ཡི")
                               (t "གི")))
-               (root (substring word 0 (- (length word) (length particle)))))
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
           (when (> (length root) 0)
             (push (list particle word "GENITIVE (GEN)"
                        (format "Marks '%s' as POSSESSOR or MODIFIER of following noun" root)
@@ -70,7 +83,7 @@ Returns list of (particle word case function translation-guide bialek-ref)."
                               ((string-suffix-p "སུ" word) "སུ")
                               ((string-suffix-p "རུ" word) "རུ")
                               (t "ར")))
-               (root (substring word 0 (- (length word) (length particle)))))
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
           (when (> (length root) 0)
             (push (list particle word "DATIVE (DAT)"
                        (format "Marks '%s' as GOAL, RECIPIENT, or LOCATION" root)
@@ -81,7 +94,7 @@ Returns list of (particle word case function translation-guide bialek-ref)."
        ;; ========== ELATIVE/ABLATIVE (source, origin, starting point) ==========
        ((or (string-suffix-p "ནས" word) (string-suffix-p "ལས" word))
         (let* ((particle (if (string-suffix-p "ནས" word) "ནས" "ལས"))
-               (root (substring word 0 (- (length word) (length particle)))))
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
           (if (> (length root) 0)
               (push (list particle word "ELATIVE/ABLATIVE (ABL)"
                          (format "Marks '%s' as SOURCE or STARTING POINT" root)
@@ -98,7 +111,7 @@ Returns list of (particle word case function translation-guide bialek-ref)."
        ;; ========== LOCATIVE (location, condition) ==========
        ((string-suffix-p "ན" word)
         (let* ((particle "ན")
-               (root (substring word 0 (- (length word) (length particle)))))
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
           (when (> (length root) 0)
             (push (list particle word "LOCATIVE (LOC)"
                        (format "Marks '%s' as LOCATION or expresses CONDITION" root)
@@ -130,7 +143,7 @@ Returns list of (particle word type function translation-guide bialek-ref)."
        ;; ========== ABLATIVE CONVERB: ནས (sequential action) ==========
        ((string-suffix-p "ནས" word)
         (let* ((particle "ནས")
-               (root (substring word 0 (- (length word) (length particle)))))
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
           (if (> (length root) 0)
               (push (list particle word "CONVERBIAL: ABLATIVE CONVERB"
                          (format "Sequential converb: '%s' happens BEFORE main verb" root)
@@ -149,7 +162,7 @@ Returns list of (particle word type function translation-guide bialek-ref)."
         (let* ((particle (cond ((string-suffix-p "སྟེ" word) "སྟེ")
                               ((string-suffix-p "དེ" word) "དེ")
                               (t "ཏེ")))
-               (root (substring word 0 (- (length word) (length particle)))))
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
           (if (> (length root) 0)
               (push (list particle word "CONVERBIAL: COORDINATIVE CONVERB"
                          (format "Connects '%s' to following action sequentially" root)
@@ -168,7 +181,7 @@ Returns list of (particle word type function translation-guide bialek-ref)."
         (let* ((particle (cond ((string-suffix-p "ཞིང" word) "ཞིང")
                               ((string-suffix-p "ཤིང" word) "ཤིང")
                               (t "ཅིང")))
-               (root (substring word 0 (- (length word) (length particle)))))
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
           (if (> (length root) 0)
               (push (list particle word "CONVERBIAL: SIMULTANEOUS CONVERB"
                          (format "Simultaneous converb: '%s' happens AT SAME TIME as main verb" root)
@@ -185,7 +198,7 @@ Returns list of (particle word type function translation-guide bialek-ref)."
        ;; ========== CAUSAL CONVERB: པས/བས (cause, reason) ==========
        ((or (string-suffix-p "པས" word) (string-suffix-p "བས" word))
         (let* ((particle (if (string-suffix-p "པས" word) "པས" "བས"))
-               (root (substring word 0 (- (length word) (length particle)))))
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
           (when (> (length root) 0)
             (push (list particle word "CONVERBIAL: CAUSAL CONVERB"
                        (format "Causal converb: '%s' is the REASON for main verb" root)
@@ -198,7 +211,7 @@ Returns list of (particle word type function translation-guide bialek-ref)."
         (let* ((particle (cond ((string-suffix-p "ཀྱང" word) "ཀྱང")
                               ((string-suffix-p "འང" word) "འང")
                               (t "ཡང")))
-               (root (substring word 0 (- (length word) (length particle)))))
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
           (when (> (length root) 0)
             (push (list particle word "CONCESSIVE PARTICLE"
                        (format "Marks '%s' with concessive meaning" root)

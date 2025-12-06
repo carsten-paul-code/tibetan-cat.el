@@ -336,37 +336,73 @@ Uses EXACT SAME analysis as C-c u I (tibetan-segment-info-enhanced)."
 
       ;; Particles & Case Markers (SAME LOGIC AS C-c u I)
       (insert "** Particles & Case Markers\n")
-      (let ((particles-found nil))
-        ;; PASS 1: Check each FREE syllable (not in compounds) for particles
-        (when (and words claimed-indices)
-          (cl-loop for idx from 0 below (length words)
-                   unless (gethash idx claimed-indices)
-                   do (let ((word (nth idx words)))
-                        (cond
-                         ;; Check for genitive particles
-                         ((string-match "\\(.+\\)\\(འི\\|གི\\|ཀྱི\\|ཡི\\|གྱི\\)$" word)
-                          (setq particles-found t)
-                          (let ((base (match-string 1 word))
-                                (particle (match-string 2 word)))
-                            (insert (format "- %s (after %s)\n" particle base))
-                            (insert "  - Type: Genitive (GEN)\n")
-                            (insert "  - Function: Marks possessor or modifier\n")
-                            (insert "  - Reference: Bialek: Genitive for possession/modification\n\n")))
+      (let ((particles-found nil)
+            (seen-particles (make-hash-table :test 'equal)))  ; Avoid duplicates
 
-                         ;; Check for standalone case particles
-                         ((member word '("ན" "ལ" "ར" "སུ" "ཏུ" "དུ" "ནས" "ལས" "དང"))
-                          (setq particles-found t)
-                          (insert (format "- %s\n" word))
-                          (insert "  - Type: Case particle\n")
-                          (insert (format "  - Function: %s\n\n"
-                                         (cond
-                                          ((string= word "ན") "Locative: marks location or temporal/conditional setting")
-                                          ((string= word "ལ") "Dative-locative: marks recipient, goal, or location")
-                                          ((member word '("ར" "སུ" "ཏུ" "དུ")) "Allative: marks direction or goal")
-                                          ((string= word "ནས") "Ablative/converb: marks source or 'after V-ing'")
-                                          ((string= word "ལས") "Ablative: marks source, origin, or comparison")
-                                          ((string= word "དང") "Comitative/connective: 'with' or 'and'")
-                                          (t "Case marker"))))))))
+        ;; PASS 1: Check ALL words for case particles and converbs
+        ;; (even if claimed by vocabulary - they're still grammatically particles)
+        (when words
+          (dolist (word words)
+            (cond
+             ;; Case particles
+             ((and (member word '("ན" "ལ" "ར" "སུ" "ཏུ" "དུ" "ནས" "ལས" "དང"))
+                   (not (gethash word seen-particles)))
+              (puthash word t seen-particles)
+              (setq particles-found t)
+              (insert (format "- %s\n" word))
+              (insert "  - Type: Case particle\n")
+              (insert (format "  - Function: %s\n"
+                             (cond
+                              ((string= word "ན") "Locative: marks location or temporal/conditional setting")
+                              ((string= word "ལ") "Dative-locative: marks recipient, goal, or location")
+                              ((member word '("ར" "སུ" "ཏུ" "དུ")) "Allative: marks direction or goal")
+                              ((string= word "ནས") "Ablative: marks source; also converb 'after V-ing'")
+                              ((string= word "ལས") "Ablative: marks source, origin, or comparison")
+                              ((string= word "དང") "Comitative/connective: 'with' or 'and'")
+                              (t "Case marker"))))
+              (insert (format "  - Reference: Bialek §4\n\n")))
+
+             ;; Converb/continuative particles
+             ((and (member word '("སྟེ" "ཏེ" "དེ" "ཅིང" "ཞིང" "ཤིང" "ནས"))
+                   (not (gethash (concat word "-converb") seen-particles)))
+              (puthash (concat word "-converb") t seen-particles)
+              (setq particles-found t)
+              (insert (format "- %s\n" word))
+              (insert "  - Type: Converb/Continuative particle\n")
+              (insert (format "  - Function: %s\n"
+                             (cond
+                              ((member word '("སྟེ" "ཏེ" "དེ")) "Coordination: connects clauses; 'and then', 'having done'")
+                              ((member word '("ཅིང" "ཞིང" "ཤིང")) "Simultaneous: 'while V-ing', lists actions")
+                              ((string= word "ནས") "Sequential: 'after V-ing', 'having V-ed'")
+                              (t "Clause connector"))))
+              (insert (format "  - Reference: Bialek §8 (converbs)\n\n")))
+
+             ;; Nominalizer particles
+             ((and (member word '("པ" "བ" "པོ" "བོ" "མ" "མོ"))
+                   (not (gethash word seen-particles)))
+              (puthash word t seen-particles)
+              (setq particles-found t)
+              (insert (format "- %s\n" word))
+              (insert "  - Type: Nominalizer\n")
+              (insert (format "  - Function: %s\n"
+                             (cond
+                              ((member word '("པ" "བ")) "Creates noun from verb; 'the one who V-s', 'V-ing'")
+                              ((member word '("པོ" "བོ")) "Agentive: 'one who V-s', masculine")
+                              ((member word '("མ" "མོ")) "Feminine nominalizer or negation")
+                              (t "Nominalizer"))))
+              (insert (format "  - Reference: Bialek §6.2\n\n")))
+
+             ;; Genitive particles attached to words
+             ((and (string-match "\\(.+\\)\\(འི\\|གི\\|ཀྱི\\|ཡི\\|གྱི\\)$" word)
+                   (not (gethash word seen-particles)))
+              (puthash word t seen-particles)
+              (setq particles-found t)
+              (let ((base (match-string 1 word))
+                    (particle (match-string 2 word)))
+                (insert (format "- %s (after %s)\n" particle base))
+                (insert "  - Type: Genitive (GEN)\n")
+                (insert "  - Function: Marks possessor or modifier\n")
+                (insert "  - Reference: Bialek §4.2.1\n\n"))))))
 
         ;; PASS 2: Check lexical units for embedded particles
         ;; (e.g., མཉན་ཡོད་ན has ན, པའི་ཚེ has འི in པའི)
@@ -375,36 +411,41 @@ Uses EXACT SAME analysis as C-c u I (tibetan-segment-info-enhanced)."
                  (syllables (split-string form "་" t)))
             ;; Check if compound ends with a case particle
             (when (and (> (length syllables) 1)
-                      (member (car (last syllables)) '("ན" "ལ" "ར" "སུ" "ཏུ" "དུ" "ནས" "ལས" "དང")))
+                      (member (car (last syllables)) '("ན" "ལ" "ར" "སུ" "ཏུ" "དུ" "ནས" "ལས" "དང"))
+                      (not (gethash (concat form "-embedded") seen-particles)))
+              (puthash (concat form "-embedded") t seen-particles)
               (setq particles-found t)
               (let* ((particle (car (last syllables)))
                      (base-syllables (butlast syllables))
                      (base (string-join base-syllables "་")))
                 (insert (format "- %s (after %s in compound %s)\n" particle base form))
                 (insert "  - Type: Case particle (in lexical unit)\n")
-                (insert (format "  - Function: %s\n\n"
+                (insert (format "  - Function: %s\n"
                                (cond
                                 ((string= particle "ན") "Locative: marks location or temporal/conditional setting")
                                 ((string= particle "ལ") "Dative-locative: marks recipient, goal, or location")
                                 ((member particle '("ར" "སུ" "ཏུ" "དུ")) "Allative: marks direction or goal")
-                                ((string= particle "ནས") "Ablative/converb: marks source or 'after V-ing'")
+                                ((string= particle "ནས") "Ablative: marks source; also converb 'after V-ing'")
                                 ((string= particle "ལས") "Ablative: marks source, origin, or comparison")
                                 ((string= particle "དང") "Comitative/connective: 'with' or 'and'")
-                                (t "Case marker"))))))
+                                (t "Case marker"))))
+                (insert "\n")))
             ;; Check ALL syllables for genitive particles (not just last)
             ;; (e.g., པའི in པའི་ཚེ)
             (dolist (syl syllables)
-              (when (string-match "\\(.+\\)\\(འི\\|གི\\|ཀྱི\\|ཡི\\|གྱི\\)$" syl)
+              (when (and (string-match "\\(.+\\)\\(འི\\|གི\\|ཀྱི\\|ཡི\\|གྱི\\)$" syl)
+                        (not (gethash (concat form "-" syl) seen-particles)))
+                (puthash (concat form "-" syl) t seen-particles)
                 (setq particles-found t)
                 (let* ((base-in-syl (match-string 1 syl))
                        (particle (match-string 2 syl)))
                   (insert (format "- %s (after %s in compound %s)\n" particle base-in-syl form))
                   (insert "  - Type: Genitive (GEN) (in lexical unit)\n")
                   (insert "  - Function: Marks possessor or modifier\n")
-                  (insert "  - Reference: Bialek: Genitive for possession/modification\n\n"))))))
+                  (insert "  - Reference: Bialek §4.2.1\n\n"))))))
 
         (unless particles-found
-          (insert "[No particles detected]\n"))))
+          (insert "[No particles detected]\n")))
       (insert "\n")
 
       ;; Verb Analysis (full details like C-c u I)

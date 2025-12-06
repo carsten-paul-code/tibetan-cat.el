@@ -85,7 +85,8 @@
 ;; LOAD PERSISTENCE MODULES
 ;; ============================================================================
 
-(require 'tibetan-analysis-persist)    ; Persistent analysis files (C-c u A / C-c u R)
+(require 'tibetan-analysis-persist)    ; Persistent segment analysis (C-c u A / C-c u R)
+(require 'tibetan-compound-analysis)   ; Persistent compound analysis (C-c v A / C-c v R)
 
 ;; ============================================================================
 ;; LOAD KEYBINDINGS
@@ -102,28 +103,26 @@
 Loads glossaries and prepares the system for use."
   (interactive)
   (message "Tibetan CAT system initialized")
-  (message "  C-c u i - Segment analysis (line-level: Bialek grammar + verb stems + translation)")
+  (message "")
+  (message "SEGMENT (line) analysis:")
+  (message "  C-c u i - Segment analysis (Bialek grammar + verb stems)")
   (message "  C-c u I - Enhanced segment analysis (improved parsing)")
-  (message "  C-c u A - Open/create persistent analysis (with notes, footnotes)")
-  (message "  C-c u R - Re-analyze (regenerate auto, keep notes)")
-  (message "  C-c v v - Verse analysis (verse-level: meter + vocab + Madhyamaka terms)")
+  (message "  C-c u A - Persistent segment analysis (with notes, footnotes)")
+  (message "  C-c u R - Re-analyze segment (keep notes)")
+  (message "")
+  (message "COMPOUND (verse/sentence) analysis:")
+  (message "  C-c v v - Quick verse analysis (meter + vocab)")
+  (message "  C-c v A - Persistent compound analysis (verse/sentence)")
+  (message "  C-c v R - Re-analyze compound (keep notes)")
+  (message "")
+  (message "OTHER:")
   (message "  C-c u E - Toggle auto-analysis")
   (message "  C-c s w - Sentence workspace")
   (message "  C-c u v - Reload glossaries")
   (message "")
-  (message "Text classification support:")
-  (message "  Add header: #+TIBETAN_TEXT_TYPE: classical | madhyamaka-verse | kagyu-verse")
-  (message "  'classical' → Bialek grammar (prose)")
-  (message "  'madhyamaka-verse' → Philology tools (7-syllable meter, Madhyamaka terms)")
-  (message "")
-  (message "Analysis levels for verse texts:")
-  (message "  LINE-LEVEL (C-c u i): Single 7-syllable line analysis")
-  (message "  VERSE-LEVEL (C-c v v): Entire verse block (all lines) analysis")
-  (message "    • Syllable counter & meter validation")
-  (message "    • Metrical filler detection")
-  (message "    • Vocabulary for all lines")
-  (message "    • Madhyamaka terminology (90+ terms)")
-  (message "    • Translation workspace"))
+  (message "CONTEXT (add to document header):")
+  (message "  #+TIBETAN_TEXT_TYPE: classical | madhyamaka-verse | kagyu-verse")
+  (message "  #+TIBETAN_CONTEXT: bhutan-kagyu-madhyamaka | gelug-madhyamaka"))
 
 ;; Auto-run setup on load
 (tibetan-cat-setup)

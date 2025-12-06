@@ -13,6 +13,19 @@
 
 (require 'cl-lib)
 
+;; Safe substring for multi-byte Tibetan text
+(defun tibetan-particles-safe-substr (str start &optional end)
+  "Safely extract substring from STR between START and END.
+Returns empty string if indices are out of range or invalid."
+  (condition-case nil
+      (let* ((len (length str))
+             (s (max 0 (min start len)))
+             (e (if end (max s (min end len)) len)))
+        (if (and (<= 0 s) (<= s e) (<= e len))
+            (substring str s e)
+          ""))
+    (error "")))
+
 ;; ============================================================================
 ;; PARTICLE IDENTIFICATION
 ;; ============================================================================
@@ -71,7 +84,7 @@ Where:
           (let* ((particle (cond ((string-suffix-p "ཀྱི" word) "ཀྱི")
                                 ((string-suffix-p "གྱི" word) "གྱི")
                                 (t "འི")))
-                 (root (substring word 0 (- (length word) (length particle)))))
+                 (root (tibetan-particles-safe-substr word 0 (- (length word) (length particle)))))
             (when (> (length root) 0)
               (push (list particle word "GEN"
                          (format "Marks '%s' as possessor/modifier" root)
@@ -84,7 +97,7 @@ Where:
           (let* ((particle (cond ((string-suffix-p "ཀྱིས" word) "ཀྱིས")
                                 ((string-suffix-p "གྱིས" word) "གྱིས")
                                 (t "གིས")))
-                 (root (substring word 0 (- (length word) (length particle)))))
+                 (root (tibetan-particles-safe-substr word 0 (- (length word) (length particle)))))
             (when (> (length root) 0)
               (push (list particle word "ERG"
                          (format "Marks '%s' as agent of transitive verb" root)
@@ -95,7 +108,7 @@ Where:
          ;; ========== ABLATIVE ==========
          ((or (string-suffix-p "ནས" word) (string-suffix-p "ལས" word))
           (let* ((particle (if (string-suffix-p "ནས" word) "ནས" "ལས"))
-                 (root (substring word 0 (- (length word) (length particle)))))
+                 (root (tibetan-particles-safe-substr word 0 (- (length word) (length particle)))))
             (if (> (length root) 0)
                 (push (list particle word "ABL"
                            (format "Marks '%s' as source/starting point" root)
@@ -114,7 +127,7 @@ Where:
           (let* ((particle (cond ((string-suffix-p "ཞིང" word) "ཞིང")
                                 ((string-suffix-p "ཅིང" word) "ཅིང")
                                 (t "སྟེ")))
-                 (root (substring word 0 (- (length word) (length particle)))))
+                 (root (tibetan-particles-safe-substr word 0 (- (length word) (length particle)))))
             (if (> (length root) 0)
                 (push (list particle word "SEQ"
                            (format "Connects '%s' to next action" root)
@@ -131,7 +144,7 @@ Where:
          ;; ========== CAUSAL CONVERBS ==========
          ((or (string-suffix-p "པས" word) (string-suffix-p "བས" word))
           (let* ((particle (if (string-suffix-p "པས" word) "པས" "བས"))
-                 (root (substring word 0 (- (length word) (length particle)))))
+                 (root (tibetan-particles-safe-substr word 0 (- (length word) (length particle)))))
             (when (> (length root) 0)
               (push (list particle word "CAUSAL"
                          (format "Marks '%s' as cause/reason" root)

@@ -289,16 +289,31 @@ If SILENT is non-nil, return nil instead of error when not in segment."
             (insert "PARTICLES & CASE MARKERS:\n")
             (tibetan-insert-separator)
             (let ((particles-found nil)
-                  (claimed-indices (tibetan-get-claimed-indices multiword-units)))
+                  (claimed-indices (tibetan-get-claimed-indices multiword-units))
+                  (seen-particles (make-hash-table :test 'equal)))
 
               ;; PASS 1: Check each FREE syllable (not in compounds) for particles
               (cl-loop for idx from 0 below (length words)
                        unless (gethash idx claimed-indices)
                        do (let ((word (nth idx words)))
                            (cond
-                            ;; Check for genitive particles
-                            ((string-match "\\(.+\\)\\(འི\\|གི\\|ཀྱི\\|ཡི\\|གྱི\\)$" word)
+                            ;; Check for ergative particles (agent markers)
+                            ((and (string-match "\\(.+\\)\\(ཀྱིས\\|གྱིས\\|གིས\\|འིས\\|ཡིས\\|ས\\)$" word)
+                                  (not (gethash (concat word "-erg") seen-particles)))
                              (setq particles-found t)
+                             (puthash (concat word "-erg") t seen-particles)
+                             (let ((base (match-string 1 word))
+                                   (particle (match-string 2 word)))
+                               (insert (format "%s (after %s)\n" particle base))
+                               (insert "TYPE: Ergative (ERG)\n")
+                               (insert "FUNCTION: Marks agent of transitive/controllable verb\n")
+                               (insert "REFERENCE: Bialek: Ergative case for TR/C verb subjects\n\n")))
+
+                            ;; Check for genitive particles
+                            ((and (string-match "\\(.+\\)\\(འི\\|གི\\|ཀྱི\\|ཡི\\|གྱི\\)$" word)
+                                  (not (gethash (concat word "-gen") seen-particles)))
+                             (setq particles-found t)
+                             (puthash (concat word "-gen") t seen-particles)
                              (let ((base (match-string 1 word))
                                    (particle (match-string 2 word)))
                                (insert (format "%s (after %s)\n" particle base))
@@ -306,9 +321,66 @@ If SILENT is non-nil, return nil instead of error when not in segment."
                                (insert "FUNCTION: Marks possessor or modifier\n")
                                (insert "REFERENCE: Bialek: Genitive for possession/modification\n\n")))
 
-                            ;; Check for standalone case particles
-                            ((member word '("ན" "ལ" "ར" "སུ" "ཏུ" "དུ" "ནས" "ལས" "དང"))
+                            ;; Check for converb particles (attached)
+                            ((and (string-match "\\(.+\\)\\(ནས\\|སྟེ\\|ཏེ\\|དེ\\|ཅིང\\|ཞིང\\|ཤིང\\)$" word)
+                                  (not (gethash (concat word "-conv") seen-particles)))
                              (setq particles-found t)
+                             (puthash (concat word "-conv") t seen-particles)
+                             (let ((base (match-string 1 word))
+                                   (particle (match-string 2 word)))
+                               (insert (format "%s (after %s)\n" particle base))
+                               (insert "TYPE: Converb\n")
+                               (insert (format "FUNCTION: %s\n"
+                                              (cond
+                                               ((string= particle "ནས") "Sequential: 'having V-ed' or 'after V-ing'")
+                                               ((member particle '("སྟེ" "ཏེ" "དེ")) "Coordinative: 'V-ing and...' or 'having V-ed'")
+                                               ((member particle '("ཅིང" "ཞིང" "ཤིང")) "Simultaneous: 'while V-ing'")
+                                               (t "Converb connector"))))
+                               (insert "REFERENCE: Bialek: Converbial constructions\n\n")))
+
+                            ;; Check for causal converb particles
+                            ((and (string-match "\\(.+\\)\\(པས\\|བས\\)$" word)
+                                  (not (gethash (concat word "-causal") seen-particles)))
+                             (setq particles-found t)
+                             (puthash (concat word "-causal") t seen-particles)
+                             (let ((base (match-string 1 word))
+                                   (particle (match-string 2 word)))
+                               (insert (format "%s (after %s)\n" particle base))
+                               (insert "TYPE: Causal Converb\n")
+                               (insert "FUNCTION: Marks cause/reason: 'because V' or 'since V'\n")
+                               (insert "REFERENCE: Bialek: Causal converb\n\n")))
+
+                            ;; Check for nominalizer particles
+                            ((and (string-match "\\(.+\\)\\(པ\\|བ\\|པོ\\|བོ\\|མ\\|མོ\\)$" word)
+                                  (> (length (match-string 1 word)) 0)
+                                  (not (gethash (concat word "-nmz") seen-particles)))
+                             (setq particles-found t)
+                             (puthash (concat word "-nmz") t seen-particles)
+                             (let ((base (match-string 1 word))
+                                   (particle (match-string 2 word)))
+                               (insert (format "%s (after %s)\n" particle base))
+                               (insert "TYPE: Nominalizer (NMZ)\n")
+                               (insert "FUNCTION: Creates noun from verb: 'the V-ing' or 'one who V-s'\n")
+                               (insert "REFERENCE: Bialek: Nominalization\n\n")))
+
+                            ;; Check for dative/allative particles (attached)
+                            ((and (string-match "\\(.+\\)\\(ལ\\|དུ\\|ཏུ\\|སུ\\|རུ\\|ར\\)$" word)
+                                  (> (length (match-string 1 word)) 0)
+                                  (not (gethash (concat word "-dat") seen-particles)))
+                             (setq particles-found t)
+                             (puthash (concat word "-dat") t seen-particles)
+                             (let ((base (match-string 1 word))
+                                   (particle (match-string 2 word)))
+                               (insert (format "%s (after %s)\n" particle base))
+                               (insert "TYPE: Dative/Allative (DAT)\n")
+                               (insert "FUNCTION: Marks goal, recipient, or direction: 'to X', 'toward X'\n")
+                               (insert "REFERENCE: Bialek: Dative for indirect objects and destinations\n\n")))
+
+                            ;; Check for standalone case particles
+                            ((and (member word '("ན" "ལ" "ར" "སུ" "ཏུ" "དུ" "ནས" "ལས" "དང"))
+                                  (not (gethash word seen-particles)))
+                             (setq particles-found t)
+                             (puthash word t seen-particles)
                              (insert (format "%s\n" word))
                              (insert "TYPE: Case particle\n")
                              (insert (format "FUNCTION: %s\n"
@@ -474,6 +546,63 @@ If SILENT is non-nil, return nil instead of error when not in segment."
                     (insert "\n"))))
               (tibetan-insert-separator)
               (insert "\n"))
+
+            ;; Working Translation (generated from vocabulary)
+            (insert "WORKING TRANSLATION:\n")
+            (tibetan-insert-separator)
+            (let* ((segments (tibetan-build-compound-aware-segments words multiword-units))
+                   (gloss-pairs '())
+                   (content-words '())
+                   ;; Particles to skip in translation
+                   (particles '("ནི" "ཡང" "གི" "ཀྱི" "འི" "ཡི" "གྱི" "ལ" "ན" "དུ" "སུ" "ར" "ས" "ནས" "ལས" "དང")))
+
+              ;; Build gloss pairs
+              (dolist (seg segments)
+                (let ((meaning
+                       (or (let ((unit (cl-find-if (lambda (u) (string= (nth 2 u) seg))
+                                                   multiword-units)))
+                            (when unit
+                              (alist-get 'english (nth 3 unit))))
+                           (when (boundp 'tibetan-comprehensive-vocabulary)
+                             (gethash seg tibetan-comprehensive-vocabulary)))))
+                  (push (cons seg (or meaning "?")) gloss-pairs)))
+              (setq gloss-pairs (nreverse gloss-pairs))
+
+              ;; Build content words (skip particles and unknown)
+              (dolist (pair gloss-pairs)
+                (let ((tib (car pair))
+                      (eng (cdr pair)))
+                  (unless (or (string= eng "?")
+                              (string= eng "")
+                              (member tib particles))
+                    ;; Clean up - take first meaning
+                    (when (string-match "^\\([^,;]+\\)" eng)
+                      (setq eng (string-trim (match-string 1 eng))))
+                    (push eng content-words))))
+              (setq content-words (nreverse content-words))
+
+              ;; Build translation
+              (let ((trans-text (string-join content-words " ")))
+                ;; Add verb meaning if available
+                (when (and verbs (car verbs))
+                  (let* ((main-verb (car verbs))
+                         (verb-meaning (when (and (listp main-verb) (consp (car main-verb)))
+                                        (car (split-string (or (alist-get 'meaning main-verb) "") "," t)))))
+                    (when (and verb-meaning
+                               (not (cl-some (lambda (w) (string-match-p (regexp-quote verb-meaning) w))
+                                             content-words)))
+                      (setq trans-text (concat trans-text " " verb-meaning)))))
+                ;; Capitalize first letter if ASCII
+                (when (and (> (length trans-text) 0)
+                           (string-match "^[a-z]" trans-text))
+                  (setq trans-text (concat (upcase (substring trans-text 0 1))
+                                          (substring trans-text 1))))
+                (if (> (length trans-text) 0)
+                    (insert (format "\"%s\"\n" trans-text))
+                  (insert "[Could not generate translation - check vocabulary]\n"))))
+            (insert "\n")
+            (tibetan-insert-separator)
+            (insert "\n")
 
             ;; DharmaMitra translation
             (insert "DHARMAMITRA TRANSLATION:\n")

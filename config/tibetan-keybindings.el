@@ -83,7 +83,7 @@
   ;;   ...
 
 ;; ============================================================================
-;; PERSISTENT ANALYSIS - C-c u A / C-c u R
+;; PERSISTENT SEGMENT ANALYSIS - C-c u A / C-c u R
 ;; ============================================================================
 
 (global-set-key (kbd "C-c u A") 'tibetan-open-segment-analysis)
@@ -98,6 +98,28 @@
   ;; Re-analyze current segment:
   ;; - Regenerates Auto-Analysis section
   ;; - PRESERVES your notes, translation, and footnotes
+  ;; - Updates hash and last-analyzed date
+
+;; ============================================================================
+;; PERSISTENT COMPOUND ANALYSIS - C-c v A / C-c v R
+;; ============================================================================
+
+(global-set-key (kbd "C-c v A") 'tibetan-open-compound-analysis)
+  ;; Open or create persistent COMPOUND (verse/sentence) analysis:
+  ;; - Detects compound boundaries automatically (verse numbers, double shad, meter)
+  ;; - Or use with active region to analyze selected lines
+  ;; - Aggregates line-by-line analysis
+  ;; - Inter-line grammar (how lines connect: converbs, conjunctions)
+  ;; - Topic/subject flow across lines
+  ;; - Context-aware (set #+TIBETAN_CONTEXT: bhutan-kagyu-madhyamaka)
+  ;; - Madhyamaka terminology identification
+  ;; - Sections for: working translation, notes, commentary, footnotes
+
+(global-set-key (kbd "C-c v R") 'tibetan-reanalyze-compound)
+  ;; Re-analyze current compound:
+  ;; - Must be called from within a compound analysis buffer
+  ;; - Regenerates Auto-Analysis section
+  ;; - PRESERVES your translation, notes, commentary, footnotes
   ;; - Updates hash and last-analyzed date
 
 ;; ============================================================================
