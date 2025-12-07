@@ -128,8 +128,8 @@ Loads glossaries and prepares the system for use."
   (message "  C-c v R - Re-analyze compound (keep notes)")
   (message "")
   (message "CAT TRANSLATION:")
-  (message "  C-c t g - Generate CAT translation (in analysis buffer)")
-  (message "  C-c t r - Translate selected region")
+  (message "  C-c u t - Generate CAT translation (in analysis buffer)")
+  (message "  C-c u T - Translate selected region")
   (message "")
   (message "DOCUMENT PREPARATION:")
   (message "  M-x tibetan-doc-prep  - 3-step workflow (OCR → AI correct → format)")
@@ -143,8 +143,8 @@ Loads glossaries and prepares the system for use."
   (message "  #+TIBETAN_TEXT_TYPE: classical | madhyamaka-verse | kagyu-verse")
   (message "  #+TIBETAN_CONTEXT: bhutan-kagyu-madhyamaka | gelug-madhyamaka"))
 
-;; Auto-run setup on load
-(tibetan-cat-setup)
+;; To see keybinding summary, run: M-x tibetan-cat-setup
+;; (tibetan-cat-setup)  ; Disabled - run manually if needed
 
 ;; ============================================================================
 ;; VERSION INFO

@@ -444,7 +444,7 @@ New compact format with inline annotations."
       ;; ============================================================
       (insert "** Translations\n")
       (insert (format "- DharmaMitra: %s\n" (or translation "[Not available]")))
-      (insert "- CAT Suggested: [Generate with C-c t g]\n")
+      (insert "- CAT Suggested: [Generate with C-c u t]\n")
       (insert "\n")
 
       ;; ============================================================

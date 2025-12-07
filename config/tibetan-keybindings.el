@@ -123,19 +123,19 @@
   ;; - Updates hash and last-analyzed date
 
 ;; ============================================================================
-;; CAT TRANSLATION - C-c t g
+;; CAT TRANSLATION - C-c u t / C-c u T
 ;; ============================================================================
 
-(global-set-key (kbd "C-c t g") 'tibetan-cat-insert-translation)
+(global-set-key (kbd "C-c u t") 'tibetan-cat-insert-translation)
   ;; Generate CAT-suggested translation:
   ;; - Uses vocabulary glosses + grammatical structure
   ;; - Reorders SOV → SVO for English word order
   ;; - Produces a "scholar's rough draft"
   ;; - Works in analysis buffers (C-c u A)
 
-(global-set-key (kbd "C-c t r") 'tibetan-cat-translate-region)
+(global-set-key (kbd "C-c u T") 'tibetan-cat-translate-region)
   ;; Translate selected region:
-  ;; - Select Tibetan text, then C-c t r
+  ;; - Select Tibetan text, then C-c u T
   ;; - Shows translation in minibuffer
 
 ;; ============================================================================
