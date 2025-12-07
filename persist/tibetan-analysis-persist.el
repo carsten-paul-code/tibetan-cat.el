@@ -20,7 +20,6 @@
 (require 'cl-lib)
 (require 'org)
 (require 'md5)
-(require 'tibetan-verb-classifier nil t)  ; Verb classification (Hill 2010)
 
 (defconst tibetan-analysis-version "1.0"
   "Version of the analysis file format.")
@@ -388,22 +387,15 @@ New compact format with inline annotations."
          (claimed-indices (when (fboundp 'tibetan-get-claimed-indices)
                             (tibetan-get-claimed-indices multiword-units)))
          (particles (when analysis (alist-get 'particles analysis)))
-         ;; Build verb lookup table (keyed by SURFACE FORM, not lemma)
-         (verb-table (make-hash-table :test 'equal))
-         ;; Also collect the surface forms that matched
-         (verb-surface-forms '()))
+         ;; Build verb lookup table
+         (verb-table (make-hash-table :test 'equal)))
 
-    ;; Build verb lookup - we need to store by surface form for annotation
-    ;; First, collect what surface forms matched verbs
-    (when words
-      (dolist (word words)
-        (let ((clean (string-trim word)))
-          (when (and (not (string-empty-p clean))
-                     (fboundp 'tibetan-verb-lookup))
-            (let ((entry (tibetan-verb-lookup clean)))
-              (when entry
-                (puthash clean entry verb-table)
-                (push clean verb-surface-forms)))))))
+    ;; Build verb lookup for quick access
+    (dolist (verb verbs)
+      (when (and verb (listp verb) (consp (car verb)))
+        (let ((lemma (alist-get 'lemma verb)))
+          (when lemma
+            (puthash lemma verb verb-table)))))
 
     (with-temp-buffer
       ;; ============================================================
@@ -452,44 +444,43 @@ New compact format with inline annotations."
       ;; ============================================================
       (insert "** Translations\n")
       (insert (format "- DharmaMitra: %s\n" (or translation "[Not available]")))
-      (insert "- CAT Suggested: [Generate with C-c u t]\n")
+      (insert "- CAT Suggested: [Generate with C-c t g]\n")
       (insert "\n")
 
       ;; ============================================================
       ;; SECTION 3: Sentence Structure (grammatical analysis)
       ;; ============================================================
       (insert "** Sentence Structure\n")
-      (if (and (> (hash-table-count verb-table) 0) (fboundp 'tibetan-analyze-arguments))
+      (if (and verbs (fboundp 'tibetan-analyze-arguments))
           (let ((any-structure nil))
-            (maphash
-             (lambda (surface-form verb)
-               (let* ((lemma (alist-get 'lemma verb))
-                      (meaning (alist-get 'meaning verb))
-                      (frame (or (alist-get 'case_frame verb) "?"))
-                      (trans (alist-get 'transitivity verb))
-                      (arg-analysis (tibetan-analyze-arguments verb multiword-units words)))
-                 (when lemma
-                   (setq any-structure t)
-                   ;; Display predicate first
-                   (insert (format "- PREDICATE: %s" lemma))
-                   (when meaning
-                     (insert (format " \"%s\"" (car (split-string meaning "," t)))))
-                   (when trans
-                     (insert (format " [%s]" (if (string-match-p "Transitive" trans) "tr" "intr"))))
-                   (insert "\n")
-                   ;; Display arguments
-                   (dolist (arg arg-analysis)
-                     (let ((role (alist-get 'role arg))
-                           (marker (alist-get 'marker arg))
-                           (form (alist-get 'form arg))
-                           (english (alist-get 'english arg))
-                           (is-topic (alist-get 'is-topic arg)))
-                       (unless is-topic
-                         (insert (format "  - %s: %s" role form))
-                         (when english (insert (format " \"%s\"" english)))
-                         (insert (format " (%s)\n" (if (string= marker "Ø") "Ø" marker))))))
-                   (insert "\n"))))
-             verb-table)
+            (dolist (verb verbs)
+              (when (and verb (listp verb) (consp (car verb)))
+                (let* ((lemma (alist-get 'lemma verb))
+                       (meaning (alist-get 'meaning verb))
+                       (frame (or (alist-get 'case_frame verb) "?"))
+                       (trans (alist-get 'transitivity verb))
+                       (arg-analysis (tibetan-analyze-arguments verb multiword-units words)))
+                  (when (or arg-analysis lemma)
+                    (setq any-structure t)
+                    ;; Display predicate first
+                    (insert (format "- PREDICATE: %s" lemma))
+                    (when meaning
+                      (insert (format " \"%s\"" (car (split-string meaning "," t)))))
+                    (when trans
+                      (insert (format " [%s]" (if (string-match-p "Transitive" trans) "tr" "intr"))))
+                    (insert "\n")
+                    ;; Display arguments
+                    (dolist (arg arg-analysis)
+                      (let ((role (alist-get 'role arg))
+                            (marker (alist-get 'marker arg))
+                            (form (alist-get 'form arg))
+                            (english (alist-get 'english arg))
+                            (is-topic (alist-get 'is-topic arg)))
+                        (unless is-topic
+                          (insert (format "  - %s: %s" role form))
+                          (when english (insert (format " \"%s\"" english)))
+                          (insert (format " (%s)\n" (if (string= marker "Ø") "Ø" marker))))))
+                    (insert "\n")))))
             (unless any-structure
               (insert "[Structure analysis pending]\n")))
         (insert "[No verb-based structure detected]\n"))
@@ -499,21 +490,20 @@ New compact format with inline annotations."
       ;; SECTION 4: Verb Details (Hill 2010) - collapsed by default
       ;; ============================================================
       (insert "** Verb Details (Hill 2010)\n")
-      (if (> (hash-table-count verb-table) 0)
-          (maphash
-           (lambda (surface-form verb)
-             (let* ((lemma (alist-get 'lemma verb))
-                    (meaning (alist-get 'meaning verb))
-                    (present (or (alist-get 'present_stem verb) "—"))
-                    (past (or (alist-get 'past_stem verb) "—"))
-                    (future (or (alist-get 'future_stem verb) "—"))
-                    (imperative (or (alist-get 'imperative_stem verb) "—"))
-                    (frame (or (alist-get 'case_frame verb) "?")))
-               (insert (format "- %s: %s / %s / %s / %s [%s]\n"
-                              lemma present past future imperative frame))
-               (when meaning
-                 (insert (format "  %s\n" meaning)))))
-           verb-table)
+      (if verbs
+          (dolist (verb verbs)
+            (when (and verb (listp verb) (consp (car verb)))
+              (let* ((lemma (alist-get 'lemma verb))
+                     (meaning (alist-get 'meaning verb))
+                     (present (or (alist-get 'present_stem verb) "—"))
+                     (past (or (alist-get 'past_stem verb) "—"))
+                     (future (or (alist-get 'future_stem verb) "—"))
+                     (imperative (or (alist-get 'imperative_stem verb) "—"))
+                     (frame (or (alist-get 'case_frame verb) "?")))
+                (insert (format "- %s: %s / %s / %s / %s [%s]\n"
+                               lemma present past future imperative frame))
+                (when meaning
+                  (insert (format "  %s\n" meaning))))))
         (insert "[No verbs]\n"))
       (insert "\n")
 
