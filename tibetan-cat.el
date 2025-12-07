@@ -66,6 +66,7 @@
 
 ;; Verb classification (Hill 2010)
 (require 'tibetan-verb-classifier)      ; Verb stems, transitivity, case frames
+(require 'tibetan-translation-engine)   ; CAT-suggested translation generation
 
 ;; Bialek grammar system (for classical prose)
 (require 'tibetan-particles-bialek)    ; Bialek-based grammar analysis
@@ -125,6 +126,10 @@ Loads glossaries and prepares the system for use."
   (message "  C-c v v - Quick verse analysis (meter + vocab)")
   (message "  C-c v A - Persistent compound analysis (verse/sentence)")
   (message "  C-c v R - Re-analyze compound (keep notes)")
+  (message "")
+  (message "CAT TRANSLATION:")
+  (message "  C-c t g - Generate CAT translation (in analysis buffer)")
+  (message "  C-c t r - Translate selected region")
   (message "")
   (message "DOCUMENT PREPARATION:")
   (message "  M-x tibetan-doc-prep  - 3-step workflow (OCR → AI correct → format)")
