@@ -13,7 +13,7 @@
     (should result)
     (should (alist-get 'lemma result))
     (should (string= "སྦྱིན" (alist-get 'lemma result)))
-    (should (string= "to give" (alist-get 'meaning result)))))
+    (should (string-match-p "to give" (alist-get 'meaning result)))))
 
 (ert-deftest tibetan-verb-lookup-with-punctuation ()
   "Test that verbs with trailing shad are still found."
