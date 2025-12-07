@@ -64,6 +64,9 @@
 ;; LOAD ANALYSIS MODULES
 ;; ============================================================================
 
+;; Verb classification (Hill 2010)
+(require 'tibetan-verb-classifier)      ; Verb stems, transitivity, case frames
+
 ;; Bialek grammar system (for classical prose)
 (require 'tibetan-particles-bialek)    ; Bialek-based grammar analysis
 (require 'tibetan-translation-suggest)  ; Translation suggestion engine
