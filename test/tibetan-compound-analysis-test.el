@@ -1,9 +1,7 @@
 ;;; tibetan-compound-analysis-test.el --- Tests for compound detection -*- lexical-binding: t -*-
 
 (require 'ert)
-
-;; Load just the detection functions we need to test
-(defvar tibetan-compound--detect-block-markers-fn nil)
+(require 'tibetan-compound-analysis)
 
 ;; ============================================================================
 ;; BLOCK MARKER DETECTION TESTS
