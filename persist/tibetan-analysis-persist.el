@@ -270,22 +270,114 @@ Updates hash and last-analyzed date."
       (message "Re-analyzed segment. User notes preserved."))))
 
 ;; ============================================================================
-;; GENERATE AUTO-CONTENT (matches C-c u I enhanced analysis)
+;; GENERATE AUTO-CONTENT - Improved format with inline annotations
 ;; ============================================================================
+
+(defun tibetan-analysis--ensure-vocabulary ()
+  "Ensure vocabulary is loaded before analysis."
+  (unless (and (boundp 'tibetan-comprehensive-vocabulary)
+               tibetan-comprehensive-vocabulary
+               (> (hash-table-count tibetan-comprehensive-vocabulary) 0))
+    (when (fboundp 'load-all-glossaries)
+      (load-all-glossaries))
+    (unless (and (boundp 'tibetan-comprehensive-vocabulary)
+                 tibetan-comprehensive-vocabulary)
+      ;; Try loading from file
+      (let ((glossary-file "~/buddhist-studies/translation-tools/load-comprehensive-glossaries.el"))
+        (when (file-exists-p (expand-file-name glossary-file))
+          (load-file (expand-file-name glossary-file)))))))
+
+(defun tibetan-analysis--get-particle-annotation (word)
+  "Get compact particle annotation for WORD.
+Returns string like '(ERG)' or '(LOC: if/when)' or nil."
+  (cond
+   ;; Ergative
+   ((member word '("ས" "གིས" "ཀྱིས" "གྱིས" "ཡིས"))
+    "(ERG: by)")
+   ;; Genitive
+   ((member word '("འི" "གི" "ཀྱི" "གྱི" "ཡི"))
+    "(GEN: of)")
+   ;; Locative/Conditional
+   ((string= word "ན")
+    "(LOC: in/if/when)")
+   ;; Dative
+   ((string= word "ལ")
+    "(DAT: to/at)")
+   ;; Allative
+   ((member word '("ར" "སུ" "ཏུ" "དུ"))
+    "(ALL: toward)")
+   ;; Ablative
+   ((string= word "ནས")
+    "(ABL: from/after)")
+   ((string= word "ལས")
+    "(ABL: from/than)")
+   ;; Comitative
+   ((string= word "དང")
+    "(COM: and/with)")
+   ;; Converbs
+   ((member word '("སྟེ" "ཏེ" "དེ"))
+    "(CONV: and then)")
+   ((member word '("ཅིང" "ཞིང" "ཤིང"))
+    "(CONV: while)")
+   ;; Nominalizers
+   ((member word '("པ" "བ"))
+    "(NOM)")
+   ((member word '("པོ" "བོ"))
+    "(AGT: one who)")
+   ;; Imperative
+   ((member word '("ཅིག" "ཤིག" "ཞིག"))
+    "(IMP)")
+   ;; Topic
+   ((string= word "ནི")
+    "(TOP: as for)")
+   (t nil)))
+
+(defun tibetan-analysis--get-word-info (word multiword-units)
+  "Get meaning and info for WORD, checking MULTIWORD-UNITS first.
+Returns alist with keys: meaning, wylie, is-verb, verb-info."
+  (let ((info '())
+        (meaning nil)
+        (wylie nil))
+    ;; Check multiword-units first
+    (dolist (unit multiword-units)
+      (when (string= (nth 2 unit) word)
+        (let ((data (nth 3 unit)))
+          (setq meaning (alist-get 'english data))
+          (setq wylie (alist-get 'wylie data)))))
+    ;; If not found, try vocabulary
+    (unless meaning
+      (when (and (boundp 'tibetan-comprehensive-vocabulary)
+                 tibetan-comprehensive-vocabulary)
+        (setq meaning (gethash word tibetan-comprehensive-vocabulary))))
+    ;; If still not found, try tibetan-lookup-word
+    (unless meaning
+      (when (fboundp 'tibetan-lookup-word)
+        (setq meaning (tibetan-lookup-word word))))
+    ;; Get wylie if not already set
+    (unless wylie
+      (when (fboundp 'tibetan-to-wylie-fixed)
+        (condition-case nil
+            (setq wylie (tibetan-to-wylie-fixed word))
+          (error nil))))
+    `((meaning . ,meaning)
+      (wylie . ,wylie))))
 
 (defun tibetan-analysis-generate-content (tibetan-text)
   "Generate auto-analysis content for TIBETAN-TEXT.
 Returns the analysis as a string (org-mode formatted).
-Uses EXACT SAME analysis as C-c u I (tibetan-segment-info-enhanced)."
+New compact format with inline annotations."
+  ;; Ensure vocabulary is loaded
+  (tibetan-analysis--ensure-vocabulary)
+
   (let* ((parsed (when (fboundp 'tibetan-parse-enhanced)
                    (tibetan-parse-enhanced tibetan-text)))
          (words (alist-get 'words parsed))
          (analysis (alist-get 'analysis parsed))
          (multiword-units (alist-get 'multiword-units parsed))
-         (wylie (when (fboundp 'tibetan-to-wylie-fixed)
-                  (condition-case nil
-                      (tibetan-to-wylie-fixed tibetan-text)
-                    (error "[Wylie conversion error]"))))
+         (wylie-full (when (fboundp 'tibetan-to-wylie-fixed)
+                       (condition-case nil
+                           (tibetan-to-wylie-fixed tibetan-text)
+                         (error "[Wylie conversion error]"))))
          (verbs (when (fboundp 'tibetan-extract-verbs-compound-aware)
                   (tibetan-extract-verbs-compound-aware tibetan-text words multiword-units)))
          (zero-analysis (when (and verbs multiword-units (fboundp 'tibetan-analyze-zero-markers))
@@ -294,162 +386,110 @@ Uses EXACT SAME analysis as C-c u I (tibetan-segment-info-enhanced)."
                         (tibetan-get-dharmamitra-translation tibetan-text)))
          (claimed-indices (when (fboundp 'tibetan-get-claimed-indices)
                             (tibetan-get-claimed-indices multiword-units)))
-         ;; Get particles from analysis (SAME AS C-c u I)
-         (particles (when analysis (alist-get 'particles analysis))))
+         (particles (when analysis (alist-get 'particles analysis)))
+         ;; Build verb lookup table
+         (verb-table (make-hash-table :test 'equal)))
+
+    ;; Build verb lookup for quick access
+    (dolist (verb verbs)
+      (when (and verb (listp verb) (consp (car verb)))
+        (let ((lemma (alist-get 'lemma verb)))
+          (when lemma
+            (puthash lemma verb verb-table)))))
 
     (with-temp-buffer
-      ;; Wylie
-      (insert "** Wylie Transliteration\n")
-      (insert (or wylie "[Not available]"))
-      (insert "\n\n")
-
-      ;; Segmentation
-      (insert "** Segmentation\n")
+      ;; ============================================================
+      ;; SECTION 1: Annotated Text (compact format with inline info)
+      ;; ============================================================
+      (insert "** Annotated Text\n")
+      (insert "#+BEGIN_EXAMPLE\n")
       (when (and words (fboundp 'tibetan-build-compound-aware-segments))
         (let ((segments (tibetan-build-compound-aware-segments words multiword-units)))
-          (insert (string-join segments " | "))))
+          (dolist (seg segments)
+            (let* ((info (tibetan-analysis--get-word-info seg multiword-units))
+                   (meaning (alist-get 'meaning info))
+                   (wylie-seg (alist-get 'wylie info))
+                   (particle-annot (tibetan-analysis--get-particle-annotation seg))
+                   (verb-info (gethash seg verb-table))
+                   (annotation-parts '()))
+              ;; Build annotation string
+              (when wylie-seg
+                (push (format "[%s]" wylie-seg) annotation-parts))
+              (when meaning
+                (push (format "\"%s\"" (if (> (length meaning) 30)
+                                           (concat (substring meaning 0 27) "...")
+                                         meaning))
+                      annotation-parts))
+              (when particle-annot
+                (push particle-annot annotation-parts))
+              (when verb-info
+                (let ((trans (alist-get 'transitivity verb-info)))
+                  (push (format "V:%s" (if (and trans (string-match-p "Transitive" trans))
+                                          "tr" "intr"))
+                        annotation-parts)))
+              ;; Output line
+              (insert (format "%s %s\n" seg
+                             (if annotation-parts
+                                 (string-join (nreverse annotation-parts) " ")
+                               "")))))))
+      (insert "#+END_EXAMPLE\n\n")
+
+      ;; Full Wylie for reference
+      (insert "** Full Wylie\n")
+      (insert (or wylie-full "[Not available]"))
       (insert "\n\n")
 
-      ;; Lexical Units (compounds & proper nouns)
-      (insert "** Lexical Units\n")
-      (if multiword-units
-          (dolist (unit multiword-units)
-            (let* ((form (nth 2 unit))
-                   (data (nth 3 unit))
-                   (wylie-val (alist-get 'wylie data))
-                   (english (alist-get 'english data))
-                   (sanskrit (alist-get 'sanskrit data))
-                   (category (alist-get 'category data))
-                   (wylie-display (or wylie-val
-                                      (when (fboundp 'tibetan-to-wylie-fixed)
-                                        (tibetan-to-wylie-fixed form))
-                                      "?")))
-              (insert (format "- %s [%s]\n" form wylie-display))
-              (insert (format "  - Type: %s\n" (if category
-                                                   (capitalize (replace-regexp-in-string "_" " " category))
-                                                 "Vocabulary")))
-              (insert (format "  - Meaning: %s\n" (or english "?")))
-              (when sanskrit
-                (insert (format "  - Sanskrit: %s\n" sanskrit)))))
-        (insert "[No lexical units detected]\n"))
+      ;; ============================================================
+      ;; SECTION 2: Translations (immediately visible)
+      ;; ============================================================
+      (insert "** Translations\n")
+      (insert (format "- DharmaMitra: %s\n" (or translation "[Not available]")))
+      (insert "- CAT Suggested: [Generate with C-c t g]\n")
       (insert "\n")
 
-      ;; Particles & Case Markers (SAME LOGIC AS C-c u I)
-      (insert "** Particles & Case Markers\n")
-      (let ((particles-found nil)
-            (seen-particles (make-hash-table :test 'equal)))  ; Avoid duplicates
-
-        ;; PASS 1: Check ALL words for case particles and converbs
-        ;; (even if claimed by vocabulary - they're still grammatically particles)
-        (when words
-          (dolist (word words)
-            (cond
-             ;; Case particles
-             ((and (member word '("ན" "ལ" "ར" "སུ" "ཏུ" "དུ" "ནས" "ལས" "དང"))
-                   (not (gethash word seen-particles)))
-              (puthash word t seen-particles)
-              (setq particles-found t)
-              (insert (format "- %s\n" word))
-              (insert "  - Type: Case particle\n")
-              (insert (format "  - Function: %s\n"
-                             (cond
-                              ((string= word "ན") "Locative: marks location or temporal/conditional setting")
-                              ((string= word "ལ") "Dative-locative: marks recipient, goal, or location")
-                              ((member word '("ར" "སུ" "ཏུ" "དུ")) "Allative: marks direction or goal")
-                              ((string= word "ནས") "Ablative: marks source; also converb 'after V-ing'")
-                              ((string= word "ལས") "Ablative: marks source, origin, or comparison")
-                              ((string= word "དང") "Comitative/connective: 'with' or 'and'")
-                              (t "Case marker"))))
-              (insert (format "  - Reference: Bialek §4\n\n")))
-
-             ;; Converb/continuative particles
-             ((and (member word '("སྟེ" "ཏེ" "དེ" "ཅིང" "ཞིང" "ཤིང" "ནས"))
-                   (not (gethash (concat word "-converb") seen-particles)))
-              (puthash (concat word "-converb") t seen-particles)
-              (setq particles-found t)
-              (insert (format "- %s\n" word))
-              (insert "  - Type: Converb/Continuative particle\n")
-              (insert (format "  - Function: %s\n"
-                             (cond
-                              ((member word '("སྟེ" "ཏེ" "དེ")) "Coordination: connects clauses; 'and then', 'having done'")
-                              ((member word '("ཅིང" "ཞིང" "ཤིང")) "Simultaneous: 'while V-ing', lists actions")
-                              ((string= word "ནས") "Sequential: 'after V-ing', 'having V-ed'")
-                              (t "Clause connector"))))
-              (insert (format "  - Reference: Bialek §8 (converbs)\n\n")))
-
-             ;; Nominalizer particles
-             ((and (member word '("པ" "བ" "པོ" "བོ" "མ" "མོ"))
-                   (not (gethash word seen-particles)))
-              (puthash word t seen-particles)
-              (setq particles-found t)
-              (insert (format "- %s\n" word))
-              (insert "  - Type: Nominalizer\n")
-              (insert (format "  - Function: %s\n"
-                             (cond
-                              ((member word '("པ" "བ")) "Creates noun from verb; 'the one who V-s', 'V-ing'")
-                              ((member word '("པོ" "བོ")) "Agentive: 'one who V-s', masculine")
-                              ((member word '("མ" "མོ")) "Feminine nominalizer or negation")
-                              (t "Nominalizer"))))
-              (insert (format "  - Reference: Bialek §6.2\n\n")))
-
-             ;; Genitive particles attached to words
-             ((and (string-match "\\(.+\\)\\(འི\\|གི\\|ཀྱི\\|ཡི\\|གྱི\\)$" word)
-                   (not (gethash word seen-particles)))
-              (puthash word t seen-particles)
-              (setq particles-found t)
-              (let ((base (match-string 1 word))
-                    (particle (match-string 2 word)))
-                (insert (format "- %s (after %s)\n" particle base))
-                (insert "  - Type: Genitive (GEN)\n")
-                (insert "  - Function: Marks possessor or modifier\n")
-                (insert "  - Reference: Bialek §4.2.1\n\n"))))))
-
-        ;; PASS 2: Check lexical units for embedded particles
-        ;; (e.g., མཉན་ཡོད་ན has ན, པའི་ཚེ has འི in པའི)
-        (dolist (unit multiword-units)
-          (let* ((form (nth 2 unit))
-                 (syllables (split-string form "་" t)))
-            ;; Check if compound ends with a case particle
-            (when (and (> (length syllables) 1)
-                      (member (car (last syllables)) '("ན" "ལ" "ར" "སུ" "ཏུ" "དུ" "ནས" "ལས" "དང"))
-                      (not (gethash (concat form "-embedded") seen-particles)))
-              (puthash (concat form "-embedded") t seen-particles)
-              (setq particles-found t)
-              (let* ((particle (car (last syllables)))
-                     (base-syllables (butlast syllables))
-                     (base (string-join base-syllables "་")))
-                (insert (format "- %s (after %s in compound %s)\n" particle base form))
-                (insert "  - Type: Case particle (in lexical unit)\n")
-                (insert (format "  - Function: %s\n"
-                               (cond
-                                ((string= particle "ན") "Locative: marks location or temporal/conditional setting")
-                                ((string= particle "ལ") "Dative-locative: marks recipient, goal, or location")
-                                ((member particle '("ར" "སུ" "ཏུ" "དུ")) "Allative: marks direction or goal")
-                                ((string= particle "ནས") "Ablative: marks source; also converb 'after V-ing'")
-                                ((string= particle "ལས") "Ablative: marks source, origin, or comparison")
-                                ((string= particle "དང") "Comitative/connective: 'with' or 'and'")
-                                (t "Case marker"))))
-                (insert "\n")))
-            ;; Check ALL syllables for genitive particles (not just last)
-            ;; (e.g., པའི in པའི་ཚེ)
-            (dolist (syl syllables)
-              (when (and (string-match "\\(.+\\)\\(འི\\|གི\\|ཀྱི\\|ཡི\\|གྱི\\)$" syl)
-                        (not (gethash (concat form "-" syl) seen-particles)))
-                (puthash (concat form "-" syl) t seen-particles)
-                (setq particles-found t)
-                (let* ((base-in-syl (match-string 1 syl))
-                       (particle (match-string 2 syl)))
-                  (insert (format "- %s (after %s in compound %s)\n" particle base-in-syl form))
-                  (insert "  - Type: Genitive (GEN) (in lexical unit)\n")
-                  (insert "  - Function: Marks possessor or modifier\n")
-                  (insert "  - Reference: Bialek §4.2.1\n\n"))))))
-
-        (unless particles-found
-          (insert "[No particles detected]\n")))
+      ;; ============================================================
+      ;; SECTION 3: Sentence Structure (grammatical analysis)
+      ;; ============================================================
+      (insert "** Sentence Structure\n")
+      (if (and verbs (fboundp 'tibetan-analyze-arguments))
+          (let ((any-structure nil))
+            (dolist (verb verbs)
+              (when (and verb (listp verb) (consp (car verb)))
+                (let* ((lemma (alist-get 'lemma verb))
+                       (meaning (alist-get 'meaning verb))
+                       (frame (or (alist-get 'case_frame verb) "?"))
+                       (trans (alist-get 'transitivity verb))
+                       (arg-analysis (tibetan-analyze-arguments verb multiword-units words)))
+                  (when (or arg-analysis lemma)
+                    (setq any-structure t)
+                    ;; Display predicate first
+                    (insert (format "- PREDICATE: %s" lemma))
+                    (when meaning
+                      (insert (format " \"%s\"" (car (split-string meaning "," t)))))
+                    (when trans
+                      (insert (format " [%s]" (if (string-match-p "Transitive" trans) "tr" "intr"))))
+                    (insert "\n")
+                    ;; Display arguments
+                    (dolist (arg arg-analysis)
+                      (let ((role (alist-get 'role arg))
+                            (marker (alist-get 'marker arg))
+                            (form (alist-get 'form arg))
+                            (english (alist-get 'english arg))
+                            (is-topic (alist-get 'is-topic arg)))
+                        (unless is-topic
+                          (insert (format "  - %s: %s" role form))
+                          (when english (insert (format " \"%s\"" english)))
+                          (insert (format " (%s)\n" (if (string= marker "Ø") "Ø" marker))))))
+                    (insert "\n")))))
+            (unless any-structure
+              (insert "[Structure analysis pending]\n")))
+        (insert "[No verb-based structure detected]\n"))
       (insert "\n")
 
-      ;; Verb Analysis (full details like C-c u I)
-      (insert "** Verb Analysis (Hill 2010)\n")
+      ;; ============================================================
+      ;; SECTION 4: Verb Details (Hill 2010) - collapsed by default
+      ;; ============================================================
+      (insert "** Verb Details (Hill 2010)\n")
       (if verbs
           (dolist (verb verbs)
             (when (and verb (listp verb) (consp (car verb)))
@@ -459,106 +499,27 @@ Uses EXACT SAME analysis as C-c u I (tibetan-segment-info-enhanced)."
                      (past (or (alist-get 'past_stem verb) "—"))
                      (future (or (alist-get 'future_stem verb) "—"))
                      (imperative (or (alist-get 'imperative_stem verb) "—"))
-                     (vol (or (alist-get 'volitionality verb) "?"))
-                     (trans (or (alist-get 'transitivity verb) "?"))
-                     (frame (or (alist-get 'case_frame verb) "?"))
-                     (class (or (alist-get 'indigenous_class verb) "?")))
-                (insert (format "*** %s\n" lemma))
+                     (frame (or (alist-get 'case_frame verb) "?")))
+                (insert (format "- %s: %s / %s / %s / %s [%s]\n"
+                               lemma present past future imperative frame))
                 (when meaning
-                  (insert (format "- Meaning: %s\n" meaning)))
-                (insert (format "- Stems: %s / %s / %s / %s\n" present past future imperative))
-                (insert (format "- Volitionality: %s\n" vol))
-                (insert (format "- Transitivity: %s\n" trans))
-                (insert (format "- Case frame: %s\n" frame))
-                (insert (format "- Tibetan class: %s\n"
-                                (cond
-                                 ((string= class "tha_dad_pa") "ཐ་དད་པ་ (transitive)")
-                                 ((string= class "tha_mi_dad_pa") "ཐ་མི་དད་པ་ (intransitive)")
-                                 (t "—"))))
-                (insert "\n"))))
-        (insert "[No verbs detected]\n"))
+                  (insert (format "  %s\n" meaning))))))
+        (insert "[No verbs]\n"))
       (insert "\n")
 
-      ;; Zero Marker Analysis
-      (insert "** Zero Marker Analysis\n")
-      (if zero-analysis
-          (dolist (item zero-analysis)
-            (let ((form (alist-get 'form item))
-                  (function (alist-get 'function item))
-                  (gloss (alist-get 'gloss item))
-                  (note (alist-get 'note item))
-                  (verb-name (alist-get 'verb item)))
-              (insert (format "- %s (Ø)\n" form))
-              (insert (format "  - Function: %s\n" function))
-              (when verb-name
-                (insert (format "  - Verb: %s\n" verb-name)))
-              (when gloss
-                (insert (format "  - Gloss: %s\n" gloss)))
-              (when note
-                (insert (format "  - Note: %s\n" note)))))
-        (insert "[No zero-marked NPs detected]\n"))
-      (insert "\n")
-
-      ;; Argument Structure (only verb arguments, not topics)
-      (insert "** Argument Structure\n")
-      (if (and verbs (fboundp 'tibetan-analyze-arguments))
-          (let ((any-args nil))
-            (dolist (verb verbs)
-              (when (and verb (listp verb) (consp (car verb)))
-                (let* ((lemma (alist-get 'lemma verb))
-                       (frame (or (alist-get 'case_frame verb) "?"))
-                       (meaning (alist-get 'meaning verb))
-                       (arg-analysis (tibetan-analyze-arguments verb multiword-units words)))
-                  (when arg-analysis
-                    (setq any-args t)
-                    (insert (format "*** %s [%s]" lemma frame))
-                    (when meaning
-                      (insert (format " \"%s\"" (car (split-string meaning "," t)))))
-                    (insert "\n")
-                    ;; Display each argument (only actual arguments, not topics)
-                    (dolist (arg arg-analysis)
-                      (let ((role (alist-get 'role arg))
-                            (marker (alist-get 'marker arg))
-                            (form (alist-get 'form arg))
-                            (english (alist-get 'english arg))
-                            (function (alist-get 'function arg))
-                            (is-topic (alist-get 'is-topic arg)))
-                        ;; Only display if NOT a topic
-                        (unless is-topic
-                          (insert (format "- %s (%s): %s"
-                                         role
-                                         (if (string= marker "Ø") "Ø" marker)
-                                         form))
-                          (when english
-                            (insert (format " \"%s\"" english)))
-                          (when function
-                            (insert (format " — %s" function)))
-                          (insert "\n"))))
-                    (insert "\n")))))
-            (unless any-args
-              (insert "[No argument structures detected]\n")))
-        (insert "[Argument analysis not available]\n"))
-      (insert "\n")
-
-      ;; Word-by-word Gloss
-      (insert "** Word-by-Word Gloss\n")
-      (when (and words (fboundp 'tibetan-build-compound-aware-segments))
-        (let ((segments (tibetan-build-compound-aware-segments words multiword-units)))
-          (dolist (seg segments)
-            (let ((meaning
-                   (or (let ((unit (cl-find-if (lambda (u) (string= (nth 2 u) seg))
-                                               multiword-units)))
-                         (when unit
-                           (alist-get 'english (nth 3 unit))))
-                       (when (boundp 'tibetan-comprehensive-vocabulary)
-                         (gethash seg tibetan-comprehensive-vocabulary)))))
-              (insert (format "- %s = %s\n" seg (or meaning "[?]")))))))
-      (insert "\n")
-
-      ;; DharmaMitra Translation
-      (insert "** DharmaMitra Translation\n")
-      (insert (or translation "[Not available]"))
-      (insert "\n")
+      ;; ============================================================
+      ;; SECTION 5: Zero Markers & Special Notes
+      ;; ============================================================
+      (when zero-analysis
+        (insert "** Zero-Marked NPs\n")
+        (dolist (item zero-analysis)
+          (let ((form (alist-get 'form item))
+                (function (alist-get 'function item))
+                (gloss (alist-get 'gloss item)))
+            (insert (format "- %s (Ø): %s" form function))
+            (when gloss (insert (format " — %s" gloss)))
+            (insert "\n")))
+        (insert "\n"))
 
       (buffer-string))))
 

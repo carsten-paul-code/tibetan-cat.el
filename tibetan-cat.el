@@ -91,6 +91,12 @@
 (require 'tibetan-compound-analysis)   ; Persistent compound analysis (C-c v A / C-c v R)
 
 ;; ============================================================================
+;; LOAD DOCUMENT DISPLAY MODULES
+;; ============================================================================
+
+(require 'tibetan-doc-display)         ; Display settings for prepared documents
+
+;; ============================================================================
 ;; LOAD KEYBINDINGS
 ;; ============================================================================
 
