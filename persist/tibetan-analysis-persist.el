@@ -20,6 +20,7 @@
 (require 'cl-lib)
 (require 'org)
 (require 'md5)
+(require 'tibetan-verb-classifier nil t)  ; Verb classification (Hill 2010)
 
 (defconst tibetan-analysis-version "1.0"
   "Version of the analysis file format.")

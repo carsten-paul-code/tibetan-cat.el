@@ -236,10 +236,11 @@ Works within an analysis buffer to fill in the CAT Suggested line."
           ;; Find and update the CAT Suggested line
           (save-excursion
             (goto-char (point-min))
-            (if (re-search-forward "^- CAT Suggested: \\[.*\\]$" nil t)
+            (if (re-search-forward "^- CAT Suggested: .*$" nil t)
                 (progn
                   (replace-match (format "- CAT Suggested: %s" translation))
                   (message "CAT translation inserted"))
+              ;; If no CAT Suggested line, just show in message
               (message "CAT translation: %s" translation))))
       (message "No Tibetan text found in buffer"))))
 
