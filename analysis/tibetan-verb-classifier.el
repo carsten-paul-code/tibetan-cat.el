@@ -602,10 +602,10 @@
 Returns verb entry alist if found, nil otherwise."
   (when (and word (not (string-empty-p word)))
     (let ((clean-word (string-trim word)))
+      ;; Strip trailing punctuation (shad, double shad, etc.)
+      (setq clean-word (replace-regexp-in-string "[།༎༔]+$" "" clean-word))
       ;; Try direct lookup
       (or (gethash clean-word tibetan-verb-database)
-          ;; Try without final shad
-          (gethash (replace-regexp-in-string "།$" "" clean-word) tibetan-verb-database)
           ;; Try with common suffix variations
           (gethash (replace-regexp-in-string "ས$" "" clean-word) tibetan-verb-database)))))
 
