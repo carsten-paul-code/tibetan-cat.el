@@ -35,26 +35,35 @@ Key: Tibetan text, Value: alist with wylie, english, sanskrit, category.")
     (when (file-exists-p file-path)
       (let* ((json-object-type 'alist)
              (json-array-type 'list)
-             (json-key-type 'symbol)  ; Changed from 'string to 'symbol
+             (json-key-type 'string)  ; Use strings for Tibetan keys
              (json-data (json-read-file file-path))
              (hash (make-hash-table :test 'equal)))
         (dolist (entry json-data)
           (let ((key (car entry))
                 (value (cdr entry)))
-            (puthash key value hash)))
+            ;; Ensure key is a string (convert from symbol if needed)
+            (puthash (if (symbolp key) (symbol-name key) key)
+                     value hash)))
         hash))))
 
 (defun tibetan-load-dictionaries ()
-  "Load compound and proper noun dictionaries from JSON files."
+  "Load compound and proper noun dictionaries from JSON files.
+Creates empty hash tables if files don't exist or tibetan-cat-data-dir is unset."
   (unless tibetan-compounds-dict
-    (setq tibetan-compounds-dict
-          (tibetan-load-json-dict "dictionaries/compounds.json"))
-    (message "✓ Loaded %d compound terms" (hash-table-count tibetan-compounds-dict)))
+    (let ((loaded (and (boundp 'tibetan-cat-data-dir)
+                       tibetan-cat-data-dir
+                       (tibetan-load-json-dict "data/dictionaries/compounds.json"))))
+      (setq tibetan-compounds-dict (or loaded (make-hash-table :test 'equal)))
+      (when loaded
+        (message "✓ Loaded %d compound terms" (hash-table-count tibetan-compounds-dict)))))
 
   (unless tibetan-proper-nouns-dict
-    (setq tibetan-proper-nouns-dict
-          (tibetan-load-json-dict "dictionaries/proper_nouns.json"))
-    (message "✓ Loaded %d proper nouns" (hash-table-count tibetan-proper-nouns-dict))))
+    (let ((loaded (and (boundp 'tibetan-cat-data-dir)
+                       tibetan-cat-data-dir
+                       (tibetan-load-json-dict "data/dictionaries/proper_nouns.json"))))
+      (setq tibetan-proper-nouns-dict (or loaded (make-hash-table :test 'equal)))
+      (when loaded
+        (message "✓ Loaded %d proper nouns" (hash-table-count tibetan-proper-nouns-dict))))))
 
 ;; Load on require
 (tibetan-load-dictionaries)
@@ -73,6 +82,8 @@ Returns list of word strings."
   "Find multi-word compound/proper noun units in WORDS list.
 Uses longest-match-first strategy.
 Returns list of (start-index . end-index . entry-data) tuples."
+  ;; Ensure dictionaries are loaded
+  (tibetan-load-dictionaries)
   (let ((matches '())
         (i 0))
     (while (< i (length words))

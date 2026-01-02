@@ -98,6 +98,14 @@ Adds to the current suite being defined."
            needle
            (or haystack "nil"))))
 
+(defun tibetan-bdd-assert-not-contains (haystack needle &optional message)
+  "Assert that HAYSTACK does NOT contain NEEDLE."
+  (when (and haystack (string-match-p (regexp-quote needle) haystack))
+    (error "FAILED: %s\n  Should NOT contain: %s\n  Actual: %s"
+           (or message "not-contains assertion")
+           needle
+           haystack)))
+
 (defun tibetan-bdd-assert-has-key (result key &optional message)
   "Assert that RESULT alist has KEY."
   (unless (alist-get key result)
@@ -139,6 +147,26 @@ Adds to the current suite being defined."
     (error "FAILED: %s\n  Expected nil, got: %s"
            (or message "nil assertion")
            value)))
+
+(defun tibetan-bdd-assert-not-nil (value &optional message)
+  "Assert that VALUE is non-nil."
+  (unless value
+    (error "FAILED: %s\n  Expected non-nil value, got nil"
+           (or message "not-nil assertion"))))
+
+(defun tibetan-bdd-assert-member (element list &optional message)
+  "Assert that ELEMENT is a member of LIST."
+  (unless (member element list)
+    (error "FAILED: %s\n  Expected member: %s\n  In list: %s"
+           (or message "member assertion")
+           element list)))
+
+(defun tibetan-bdd-assert-not-matches (pattern text &optional message)
+  "Assert that TEXT does NOT match regex PATTERN."
+  (when (and text (string-match-p pattern text))
+    (error "FAILED: %s\n  Pattern should NOT match: %s\n  Text: %s"
+           (or message "not-matches assertion")
+           pattern text)))
 
 ;; Alias for ERT-style should
 (defalias 'should 'tibetan-bdd-assert-truthy)

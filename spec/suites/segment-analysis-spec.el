@@ -20,10 +20,12 @@
     :given (setq test-text "འཕགས་བས་ཇི་སྟེ་དབུལ་བ་བཙོང་ན་ཁྱོད་སྔར་ཁྲུས་གྱིས་ལ་འོག་ཏུ་སྦྱིན་པ་ཐོངས་ཤིག་གསུངས།")
     :when (when (fboundp 'tibetan-analysis-generate-content)
             (tibetan-analysis-generate-content test-text))
-    :then ((tibetan-bdd-assert-contains result "** Annotated Text"
+    :then ((tibetan-bdd-assert-not-contains result "[Error"
+            "Should not have analysis errors (Args out of range bug)")
+           (tibetan-bdd-assert-contains result "** Annotated Text"
             "Should have Annotated Text section")
-           (tibetan-bdd-assert-contains result "** Verb Details"
-            "Should have Verb Details section")
+           (tibetan-bdd-assert-contains result "** Verb Classification"
+            "Should have Verb Classification section")
            (tibetan-bdd-assert-contains result "** Sentence Structure"
             "Should have Sentence Structure section"))
     :example "Segment 25: selling poverty passage"
@@ -33,17 +35,23 @@
     :given (setq test-text "འཕགས་བས་ཇི་སྟེ་དབུལ་བ་བཙོང་ན་ཁྱོད་སྔར་ཁྲུས་གྱིས་ལ་འོག་ཏུ་སྦྱིན་པ་ཐོངས་ཤིག་གསུངས།")
     :when (when (fboundp 'tibetan-analysis-generate-content)
             (tibetan-analysis-generate-content test-text))
-    :then ((tibetan-bdd-assert-matches "གསུང\\|གཏོང\\|བཙོང\\|ཁྲུས" result
+    :then ((tibetan-bdd-assert-not-contains result "[Error"
+            "Should not have analysis errors")
+           (tibetan-bdd-assert-not-contains result "[No verbs]"
+            "Should detect verbs, not show [No verbs]")
+           (tibetan-bdd-assert-matches "གསུང\\|གཏོང\\|བཙོང\\|ཁྲུས" result
             "Should list detected verbs"))
     :example "Segment 25"
-    :tags (:regression :verbs))
+    :tags (:regression :verbs :critical))
 
   (spec "Include Wylie transliteration"
     :given (setq test-text "སངས་རྒྱས།")
     :when (when (fboundp 'tibetan-analysis-generate-content)
             (tibetan-analysis-generate-content test-text))
-    :then ((tibetan-bdd-assert-contains result "** Full Wylie"
-            "Should have Wylie section")
+    :then ((tibetan-bdd-assert-contains result "** Wylie (for reading aloud)"
+            "Should have Wylie section for reading aloud")
+           (tibetan-bdd-assert-contains result "** Transliteration"
+            "Should have Transliteration section")
            ;; Accept either correct or minor typo in Wylie output
            (tibetan-bdd-assert-matches "sangs rg[ya]" result
             "Should have Wylie for Buddha"))

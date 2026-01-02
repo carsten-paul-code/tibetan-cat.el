@@ -117,16 +117,21 @@ Checks MULTIWORD-UNITS first, then vocabulary."
   "Generate CAT-suggested translation for TIBETAN-TEXT.
 Uses PARSED analysis and VERBS if provided, otherwise generates them.
 Returns a string with the suggested translation."
-  ;; Ensure vocabulary is loaded
-  (when (fboundp 'tibetan-analysis--ensure-vocabulary)
-    (tibetan-analysis--ensure-vocabulary))
+  ;; Guard for nil/empty input
+  (if (or (null tibetan-text) (string-empty-p tibetan-text))
+      ""  ; Return empty string for empty input
+    ;; Else: generate translation
+    (progn
+      ;; Ensure vocabulary is loaded
+      (when (fboundp 'tibetan-analysis--ensure-vocabulary)
+        (tibetan-analysis--ensure-vocabulary))
 
-  ;; Get parsed data if not provided
-  (unless parsed
-    (when (fboundp 'tibetan-parse-enhanced)
-      (setq parsed (tibetan-parse-enhanced tibetan-text))))
+      ;; Get parsed data if not provided
+      (unless parsed
+        (when (fboundp 'tibetan-parse-enhanced)
+          (setq parsed (tibetan-parse-enhanced tibetan-text))))
 
-  (let* ((words (alist-get 'words parsed))
+      (let* ((words (alist-get 'words parsed))
          (multiword-units (alist-get 'multiword-units parsed))
          ;; Get verbs if not provided
          (verbs (or verbs
@@ -207,10 +212,10 @@ Returns a string with the suggested translation."
         (when glosses
           (push (string-join (nreverse glosses) " ") translation-parts))))
 
-    ;; Join clauses
-    (if translation-parts
-        (string-join (nreverse translation-parts) "; ")
-      "[Unable to generate translation]")))
+      ;; Join clauses
+      (if translation-parts
+          (string-join (nreverse translation-parts) "; ")
+        "[Unable to generate translation]")))))
 
 ;; ============================================================================
 ;; INTERACTIVE COMMAND

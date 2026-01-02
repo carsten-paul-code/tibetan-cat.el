@@ -139,6 +139,21 @@
   ;; - Shows translation in minibuffer
 
 ;; ============================================================================
+;; MITRA AI TRANSLATION - C-c u m / C-c u M
+;; ============================================================================
+
+(global-set-key (kbd "C-c u m") 'tibetan-mitra-translate-dwim)
+  ;; Translate using Gemma-2-Mitra-E AI model:
+  ;; - Region if active, else current segment
+  ;; - Requires backend setup (Ollama, HuggingFace, or local server)
+  ;; - Run M-x tibetan-mitra-setup-ollama for instructions
+
+(global-set-key (kbd "C-c u M") 'tibetan-mitra-check-status)
+  ;; Check Mitra backend status:
+  ;; - Shows if backend is configured and available
+  ;; - Helps debug connection issues
+
+;; ============================================================================
 ;; FUTURE KEYBINDINGS (commented out - not yet implemented in modular system)
 ;; ============================================================================
 

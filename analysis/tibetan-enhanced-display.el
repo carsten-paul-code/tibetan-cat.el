@@ -11,7 +11,8 @@
 
 (require 'tibetan-enhanced-parser)
 (require 'tibetan-wylie)
-(require 'tibetan-verb-classifier nil t)
+(require 'tibetan-verb-classifier nil t)  ; Soft load - main loading via tibetan-cat.el
+(require 'tibetan-mitra-translation nil t)  ; Optional: Gemma-2-Mitra-E integration
 
 ;; ============================================================================
 ;; HELPER FUNCTIONS (must be defined before main display function)
@@ -97,6 +98,7 @@ Returns nil if no zero markers found or if inputs are invalid."
 (defun tibetan-analyze-arguments (verb multiword-units words)
   "Analyze argument structure for VERB given MULTIWORD-UNITS and WORDS.
 Returns list of argument alists with keys: role, marker, form, english, function."
+  (condition-case err
   (let* ((frame (or (alist-get 'case_frame verb) ""))
          (lemma (alist-get 'lemma verb))
          (arguments '()))
@@ -148,9 +150,15 @@ Returns list of argument alists with keys: role, marker, form, english, function
                   (setq function "RECIPIENT/GOAL"))
 
                  ;; Check for allative
-                 ((or (member last-syl '("ར" "སུ" "ཏུ" "དུ"))
-                      (string-match "\\(ར\\|སུ\\|ཏུ\\|དུ\\)$" last-syl))
-                  (setq marker (or (match-string 1 last-syl) last-syl))
+                 ((member last-syl '("ར" "སུ" "ཏུ" "དུ"))
+                  ;; Standalone allative particle - use directly
+                  (setq marker last-syl)
+                  (setq role "ALLATIVE")
+                  (setq function "DIRECTION (toward)"))
+
+                 ;; Check for allative suffix on longer word
+                 ((string-match "\\(ར\\|སུ\\|ཏུ\\|དུ\\)$" last-syl)
+                  (setq marker (match-string 1 last-syl))
                   (setq role "ALLATIVE")
                   (setq function "DIRECTION (toward)"))
 
@@ -190,7 +198,8 @@ Returns list of argument alists with keys: role, marker, form, english, function
                        (is-topic . ,is-topic))
                       arguments)))))))
 
-    (nreverse arguments)))
+    (nreverse arguments))
+    (error nil)))
 
 ;; ============================================================================
 ;; ENHANCED SEGMENT ANALYSIS DISPLAY
@@ -612,6 +621,19 @@ If SILENT is non-nil, return nil instead of error when not in segment."
             (tibetan-insert-separator)
             (insert "\n")
 
+            ;; Mitra AI translation (if available)
+            (when (fboundp 'tibetan-mitra-translate)
+              (insert "MITRA AI TRANSLATION (Gemma-2-Mitra-E):\n")
+              (tibetan-insert-separator)
+              (let ((mitra-translation
+                     (condition-case err
+                         (tibetan-mitra-translate tibetan-text)
+                       (error (format "[Error: %s]" (error-message-string err))))))
+                (insert (or mitra-translation "[Not configured - see M-x tibetan-mitra-setup-ollama]")))
+              (insert "\n\n")
+              (tibetan-insert-separator)
+              (insert "\n"))
+
             ;; Word-by-word gloss (compound-aware)
             (insert "WORD-BY-WORD GLOSS:\n")
             (tibetan-insert-separator)
@@ -699,14 +721,25 @@ Returns hash table for fast lookup."
 (defun tibetan-extract-verbs-compound-aware (tibetan-text words multiword-units)
   "Extract and analyze verbs from TIBETAN-TEXT, excluding multi-word compound parts.
 WORDS is the syllable list, MULTIWORD-UNITS are recognized compounds.
-Single-word vocabulary entries are still checked for verbs."
+Checks both single syllables AND multi-syllable compound verbs."
   (when (and tibetan-text
              (fboundp 'tibetan-verb-lookup)
              (not (string-empty-p tibetan-text)))
     (let ((verbs '())
           (claimed-indices (tibetan-get-claimed-indices multiword-units)))
 
-      ;; Check each syllable NOT in a TRUE multi-word compound (length > 1)
+      ;; First, check for multi-syllable compound verbs (e.g., བཀའ་སྩལ)
+      (cl-loop for idx from 0 below (1- (length words))
+               do (let* ((two-syl (string-join (cl-subseq words idx (+ idx 2)) "་"))
+                        (verb-entry (tibetan-verb-lookup two-syl)))
+                    (when verb-entry
+                      (let ((lemma (alist-get 'lemma verb-entry)))
+                        (unless (cl-find lemma verbs
+                                        :key (lambda (v) (alist-get 'lemma v))
+                                        :test 'string=)
+                          (push verb-entry verbs))))))
+
+      ;; Then check each single syllable NOT in a TRUE multi-word compound
       (cl-loop for idx from 0 below (length words)
                do (let* ((syl (nth idx words))
                         (syl-clean (string-trim syl))

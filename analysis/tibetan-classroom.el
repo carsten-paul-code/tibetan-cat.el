@@ -292,35 +292,47 @@ If FAST is non-nil, skip slow DharmaMitra translation (for auto-mode)."
   "Non-nil if auto-analysis mode is enabled.
 Auto-analysis automatically updates segment analysis as you navigate.")
 
+(defvar tibetan-auto-last-segment nil
+  "Last segment ID analyzed in auto mode, to avoid redundant updates.")
+
 (defun tibetan-auto-update ()
   "Auto-update analysis when in auto-analysis mode.
-Called by post-command-hook."
+Called by post-command-hook. Uses persistent analysis (C-c u A)."
   (when tibetan-auto-mode
     ;; Only run in org-mode buffers to avoid overhead
     (when (derived-mode-p 'org-mode)
-      ;; Call with SILENT and FAST flags for performance
-      ;; SILENT = no error messages, FAST = skip slow DharmaMitra translation
       (condition-case nil
-          (tibetan-segment-info t t)  ; silent=t, fast=t
+          (let* ((seg-data (tibetan-get-current-segment-any-format))
+                 (seg-id (car seg-data)))
+            ;; Only update if we moved to a different segment
+            (when (and seg-id (not (equal seg-id tibetan-auto-last-segment)))
+              (setq tibetan-auto-last-segment seg-id)
+              ;; Use persistent analysis (C-c u A) instead of simple segment-info
+              (when (fboundp 'tibetan-open-segment-analysis)
+                (tibetan-open-segment-analysis))))
         (error nil)))))
 
 (defun tibetan-toggle-auto ()
   "Toggle auto-analysis mode.
-When enabled, segment analysis updates automatically as you navigate.
-Note: DharmaMitra translation is skipped in auto-mode for speed.
-Use C-c u i manually to see full translation.
+When enabled, persistent analysis (C-c u A) updates automatically as you navigate.
 Bound to C-c u E."
   (interactive)
   (if tibetan-auto-mode
       (progn
         (remove-hook 'post-command-hook 'tibetan-auto-update t)
         (setq tibetan-auto-mode nil)
+        (setq tibetan-auto-last-segment nil)
         (message "Auto-analysis DISABLED"))
     (progn
       (add-hook 'post-command-hook 'tibetan-auto-update nil t)
       (setq tibetan-auto-mode t)
-      (tibetan-segment-info)
-      (message "Auto-analysis ENABLED (fast mode - C-c u i for full translation)"))))
+      (setq tibetan-auto-last-segment nil)
+      ;; Open persistent analysis for current segment
+      (when (fboundp 'tibetan-open-segment-analysis)
+        (condition-case nil
+            (tibetan-open-segment-analysis)
+          (error nil)))
+      (message "Auto-analysis ENABLED (C-c u A mode)"))))
 
 ;; Alias for convenience
 (defalias 'tibetan-enable-auto-analysis 'tibetan-toggle-auto)

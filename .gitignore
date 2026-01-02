@@ -1,0 +1,37 @@
+# Byte-compiled files
+*.elc
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Emacs backup and autosave
+*~
+\#*\#
+.\#*
+*.orig
+
+# Package build artifacts
+*.tar
+*.tar.gz
+/dist/
+
+# Local configuration
+.dir-locals.el
+
+# Test artifacts
+/test-output/
+/coverage/
+
+# IDE
+.idea/
+.vscode/
+*.sublime-*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log

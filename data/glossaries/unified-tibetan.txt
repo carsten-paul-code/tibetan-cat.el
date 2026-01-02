@@ -1,0 +1,653 @@
+# Unified Tibetan Buddhist Glossary
+# Comprehensive vocabulary for ALL classical Tibetan texts
+# Sources: Hopkins, Bialek, Reading texts, Philosophical texts, Vinaya, Abhidharma
+# Format: Tibetan[TAB]English[TAB]Notes
+
+# === CORE BUDDHIST CONCEPTS ===
+སངས་རྒྱས	Buddha	Awakened One
+བཅོམ་ལྡན་འདས	Bhagavan	Blessed One, epithet of Buddha
+སྟོན་པ	Teacher	epithet of Buddha, lit. "one who shows"
+སྟོན	show/teach	to demonstrate/reveal
+ཆོས	dharma	teaching/phenomenon/law
+དགེ་འདུན	sangha	monastic community
+ཤེས་བྱ	knowable object	object of knowledge/cognizable object
+ཤེས་བྱའི་གནས་ལུགས	mode of abiding of knowables	epistemological reality
+ཤེས	know	to know/cognize
+གནས་ལུགས	mode of abiding	way things exist/natural state
+གསལ་བ	clarity	clear/bright/evident
+ཕྱིར	purpose/because	for the sake of/because
+དཀོན་མཆོག་གསུམ	Three Jewels	Buddha, Dharma, Sangha
+
+# === FUNDAMENTAL DOCTRINES ===
+སྟོང་པ་ཉིད	emptiness	śūnyatā
+རྟེན་འབྲེལ	dependent origination	pratītyasamutpāda
+བདག་མེད	selflessness	anātman
+མི་རྟག་པ	impermanence	anicca
+སྡུག་བསྔལ	suffering	duḥkha
+མྱ་ངན་ལས་འདས་པ	nirvana	liberation
+
+# === TWO TRUTHS DOCTRINE ===
+བདེན་པ་གཉིས	two truths	fundamental Madhyamaka doctrine
+ཀུན་རྫོབ་བདེན་པ	conventional truth	saṃvṛtisatya
+དོན་དམ་བདེན་པ	ultimate truth	paramārthasatya
+ཀུན་རྫོབ	conventional	everyday/worldly truth
+དོན་དམ	ultimate	highest/absolute truth
+
+# === PHILOSOPHICAL SCHOOLS ===
+དབུ་མ	Madhyamaka	Middle Way philosophy
+དབུ	head/beginning	madhya (in compounds)
+མ	not/mother	negation particle
+མའི	of the/genitive	genitive particle (མ + འི)
+དབུ་མ་པ	Mādhyamika	follower of Middle Way
+སེམས་ཙམ	Cittamatra	Mind-Only school/Yogācāra
+མངོན་པ	Abhidharma	systematic doctrine
+ཐེག་པ་ཆེན་པོ	Mahayana	Great Vehicle
+ཐེག་པ་དམན་པ	Hinayana	Lesser Vehicle
+རང་རྒྱལ	Pratyekabuddha	solitary buddha vehicle
+
+# === MEDITATION AND PATH ===
+བསམ་གཏན	meditation	dhyāna
+ཏིང་ངེ་འཛིན	concentration	samādhi
+ཞི་གནས	calm abiding	śamatha
+ལྷག་མཐོང	insight	vipaśyanā
+ལམ	path	mārga
+ས	stage/ground	bhūmi
+ལམ་རིམ	graduated path	systematic stages
+
+# === BEINGS AND PERSONS ===
+སེམས་ཅན	sentient beings	all living creatures
+སེམས་དཔའ	bodhisattva	enlightenment being
+སེམས་དཔའ་ཆེན་པོ	great bodhisattva	mahāsattva
+སེམས་དཔའ་ཆེན་པོས	by the great bodhisattva	mahāsattva (instrumental)
+སྟག་མོ	tigress	female tiger
+སྟག	tiger	male tiger
+ལུས	body	physical form
+ལུས་སྦྱིན	giving body	self-sacrifice
+ཉན་ཐོས	śrāvaka	hearer/disciple
+རང་སངས་རྒྱས	pratyekabuddha	solitary buddha
+སྐྱེ་བོ	person/being	pudgala
+འགྲོ་བ	beings	sentient creatures
+
+# === MENTAL FACTORS ===
+སེམས	mind	citta
+རྣམ་ཤེས	consciousness	vijñāna
+ཡེ་ཤེས	wisdom	jñāna
+ཤེས་རབ	wisdom	prajñā
+བློ	mind/intellect	buddhi
+རིག་པ	awareness	vidyā
+ཉོན་མོངས	affliction	kleśa
+ཞེ་སྡང	hatred	dveṣa
+འདོད་ཆགས	attachment	rāga
+གཏི་མུག	ignorance	moha
+
+# === CAUSATION ===
+རྒྱུ	cause	hetu
+རྐྱེན	condition	pratyaya
+འབྲས་བུ	result/fruit	phala
+ལས	karma/action	karman
+ལས་ཀྱི་འབྲས་བུ	karmic result	karmaphala
+རྒྱུ་རྐྱེན	causes and conditions	hetu-pratyaya
+
+# === NATURE AND CHARACTERISTICS ===
+རང་བཞིན	intrinsic nature	svabhāva
+རང་བཞིན་མེད་པ	lacking intrinsic nature	niḥsvabhāva
+ངོ་བོ་ཉིད	essence	ultimate nature
+ངོ་བོ་ཉིད་མེད་པ	essenceless	without essence
+མཚན་ཉིད	defining characteristic	lakṣaṇa
+མཚན་མ	sign/mark	nimitta
+མཚན་ཉིད་མེད་པ	without characteristics	alākṣaṇa
+
+# === LOGIC AND REASONING ===
+རིགས་པ	reasoning/logic	yukti
+ཚད་མ	valid cognition	pramāṇa
+དཔེ	example/analogy	dṛṣṭānta
+གཏན་ཚིགས	logical reason	hetu
+དམ་བཅའ	thesis/proposition	pakṣa
+རྟགས	logical sign	liṅga
+སྒྲུབ་པ	establishment/proof	sādhana
+དགག་པ	negation/refutation	niṣedha
+
+# === CONCEPTUAL ELABORATION ===
+སྤྲོས་པ	conceptual elaboration	prapañca
+སྤྲོས་བྲལ	free from elaboration	niṣprapañca
+རྣམ་རྟོག	conceptual thought	kalpanā/vikalpa
+རྣམ་རྟོག་མེད་པ	non-conceptual	nirvikalpa
+
+# === PERFECTIONS (PĀRAMITĀS) ===
+ཕར་ཕྱིན	perfection	pāramitā
+ཕར་ཕྱིན་དྲུག	six perfections	ṣaṭpāramitā
+སྦྱིན་པ	giving/generosity	dāna
+ཚུལ་ཁྲིམས	ethics	śīla
+བཟོད་པ	patience	kṣānti
+བརྩོན་འགྲུས	effort	vīrya
+བསམ་གཏན	meditation	dhyāna
+ཤེས་རབ	wisdom	prajñā
+
+# === TEXT TYPES ===
+མདོ	sūtra	discourse
+བསྟན་བཅོས	treatise	śāstra
+འགྲེལ་པ	commentary	bhāṣya
+མཆན་འགྲེལ	sub-commentary	ṭīkā
+འགྲེལ་ཆུང	short commentary	laghu-ṭīkā
+གཏམ་རྒྱུད	narrative/story	avadāna
+སྐྱེས་རབས	jātaka	birth story
+དཔེ་ཆོས	exemplary tale	moral story
+འདུལ་བ	vinaya	monastic discipline
+
+# === ABHIDHARMA TERMS ===
+ཕུང་པོ	aggregate	skandha
+ཕུང་པོ་ལྔ	five aggregates	pañcaskandha
+གཟུགས	form	rūpa
+ཚོར་བ	feeling	vedanā
+འདུ་ཤེས	perception	saṃjñā
+འདུ་བྱེད	formations	saṃskāra
+རྣམ་ཤེས	consciousness	vijñāna
+དབང་པོ	sense faculty	indriya
+ཡུལ	object	viṣaya
+སྒྲ	sound/voice	śabda - one of five sense objects
+སྒྲ་ཆེན་པོ	Great Sound	common personal name in jātakas
+སྐྱེ་མཆེད	sense field	āyatana
+ཁམས	element	dhātu
+
+# === VINAYA TERMS ===
+དགེ་སློང	monk	bhikṣu
+དགེ་སློང་མ	nun	bhikṣuṇī
+དགེ་ཚུལ	novice	śrāmaṇera
+དགེ་ཚུལ་མ	female novice	śrāmaṇerikā
+གསོ་སབྱོང	poṣadha	confession ceremony
+བསླབ་པ	training	śikṣā
+བསླབ་པ་གསུམ	three trainings	triśikṣā
+ལྟུང་བ	transgression	āpatti
+ཕམ་པ	defeat	pārājika
+ལྷག་མ	remainder	śeṣa
+
+# === YOGĀCĀRA TERMS ===
+རྣམ་ཤེས་བརྒྱད	eight consciousnesses	aṣṭavijñāna
+ཀུན་གཞི་རྣམ་ཤེས	ālaya consciousness	ālayavijñāna
+ཡིད	manas	mental consciousness
+ཡིད་རྣམ་ཤེས	mental consciousness	manovijñāna
+གཟུང་འཛིན	grasping	grāhya-grāhaka
+རང་རིག	self-awareness	svasaṃvedana
+གཞན་དབང	other-dependent	paratantra
+ཡོངས་གྲུབ	perfectly established	pariniṣpanna
+ཀུན་བཏགས	imputed	parikalpita
+
+# === NARRATIVE/STORY TERMS ===
+གླེང་གཞི	nidāna	introductory story/opening narration
+གླེང	narrate/relate	to tell/recount
+དེ་ནས	then/after that	temporal sequence
+དེའི་ཚེ	at that time	temporal marker
+ཞིག	indefinite article	a certain/some
+ཤིག	a/one	indefinite article (variant of ཞིག)
+ཞིག་ན	once upon a time	narrative opening
+སྔོན་ཚེ	in previous lives	past life indicator
+ལུས་སྦྱིན	giving body	self-sacrifice
+བཀའ་དྲིན	kindness/grace	spiritual benefit
+སྐྱབས	refuge	protection
+ཕྱག་འཚལ	prostration	homage
+རྒན་མོ	old woman	elderly female
+རྒན་པོ	old man	elderly male
+རྒན	old/elder	senior person
+བུ	son/child	male offspring
+བུ་མོ	daughter	female offspring
+རྟག་ཏུ	always	constantly/perpetually
+རྟག	permanent/always	constant
+རྐུ་བ	thief/stealing	one who steals
+རྐུ	steal/rob	to take unlawfully
+དེར	there/to that	locative marker
+ཁྲིམས	law/ethics	legal/moral code
+སྦྱར	apply/connect	to join/attach
+བསད་པ	killing/killed	past of གསོད
+གསོད་པ	to kill	murder/execute
+གཤེད་མ	executioner	one who executes
+གནས	place/abode	location
+ཁྲིད	lead/guide	to conduct
+ཐུག	meet/reach	to arrive at
+མཐོང	see/perceive	to see/observe
+མོ	female/feminine	feminine particle
+རིང	long/far	distance/duration
+རིང་མོ	long/distant	far away
+རྒྱང	distance	span/range
+རྒྱང་རིང	distant	far away
+རྒྱང་རིང་མོ	very distant	from far away
+རྒྱང་རིང་པོ	very distant	from far away
+རྒྱང་རིང་ནས	from afar	from a distance
+རྒྱལ་པོ	king	monarch/ruler
+རྒྱལ	king/royal	victory/royal
+པོ	male/person	masculine suffix
+པོས	by the person	instrumental of པོ
+གསོལ	petition/request	formal request (honorific)
+གསོལ་བ	petition/prayer	formal request
+འདེགས	lift/raise	to elevate/present
+འདེགས་པ	lifting/raising	presentation
+བཏང	sent/gave	past of གཏང (to send)
+གཏང	send/give	to dispatch/offer
+ཀུན་དགའ་བོ	Ānanda	Buddha's attendant/cousin
+བཀའ་སྩལ	spoke/said	honorific for speech
+སྩལ	give/bestow	honorific verb
+ནས	from/after/having	ablative/temporal particle
+ལ	to/at/in	dative/locative particle
+ནས་	from/after	ablative particle (with tsheg)
+མེད	not exist/without	negative existential
+མེད་པ	absence/lacking	nominalized non-existence
+གཉིས	two/dual	number/duality
+གཉིས་མེད	non-dual	advaya (without duality)
+འཚལ	prostrate/pay homage	respectful greeting
+ཕྱག	hand/respectful gesture	honorific
+ཕྱག་འཚལ	prostration	respectful homage
+ཕྱག་འཚལ་བ	prostrating	act of paying respect
+གསུང	speech/teaching	honorific for speech
+གསུང་རབ	holy speech	sacred text/scripture
+ཕྱག་འཚལ་ནས	having prostrated	converbal construction
+གསལ	clear/bright	luminous/evident
+གསལ་བ	clarity/being clear	nominalized adjective
+གསལ་བའི	of clarity	genitive of clarity
+སྤྲིན	cloud	meteorological
+ཕྱིར	purpose/because	reason/purpose
+ཕྱིར་	because of	causal particle
+བའི	genitive nominalizer	of the [VERB-ed]
+པའི	genitive nominalizer	of the [VERB-ed]
+
+# === MADHYAMAKA SPECIFIC ===
+བསྡུས་དོན	essential meaning	condensed teaching
+ལྟ་བ	view	philosophical view (dṛṣṭi)
+ལྟ	look/see	lta (in compounds like ལྟ་བ)
+མེ་ལོང	mirror	clarity/reflection metaphor
+མེ	fire	me (in compounds)
+ལོང	valley/hollow	long (in compounds like མེ་ལོང)
+གསལ་བྱེད	clarifying	that which illuminates
+ལུང་གི་ཕྲེང་བ	garland of scriptures	collection of teachings
+མཐའ	extreme/limit	philosophical extreme
+མཐའ་གཉིས	two extremes	eternalism/nihilism
+དབུ་མ	middle	avoiding extremes
+མ་ཡིན་དགག	non-affirming negation	prasajya-pratiṣedha
+མེད་དགག	affirming negation	paryudāsa-pratiṣedha
+
+# === PLACES AND LOCATIONS ===
+མཉན་ཡོད	Śrāvastī	important city
+མཉན་ཡོད་ན	in Śrāvastī	with locative particle
+རྒྱལ་པོའི་ཁབ	Rājagṛha	royal city
+གནས་ཆེན	great place	sacred site
+གྲོང་ཁྱེར	city	urban center
+གྲོང	village	settlement
+ཞིང་ཁམས	buddha field	pure realm
+
+# === LOGICAL STRUCTURE MARKERS ===
+གལ་ཏེ	if/supposing	conditional marker
+ཅི་སྟེ	what if	question particle
+ཅི་ཞིག	how/what	interrogative
+དེ་ལྟར	thus/therefore	conclusion marker
+དེ་བས་ན	therefore	consequential
+གང་གི་ཕྱིར	because/why	reason marker
+འདི་ལྟར	like this	example intro
+མི་རུང	impossible/absurd	refutation
+མི་འཐད	not suitable	rejection
+
+# === PRONOUNS AND DEMONSTRATIVES ===
+འདི	this	proximal demonstrative
+དེ	that	distal demonstrative
+གཞན	other/another	different/else
+ང	I/me	first person pronoun
+ཁྱོད	you	second person pronoun
+
+# === PARTICLES AND CONNECTIVES ===
+པའི	nominalizer + genitive	particle compound
+བའི	nominalizer + genitive	particle compound
+པར	nominalizer + dative	particle compound
+བར	nominalizer + dative	particle compound
+པས	nominalizer + instrumental	particle compound
+བས	nominalizer + instrumental	particle compound
+གི	genitive	of/possessive
+གྱི	genitive	of/possessive (after i/e)
+ཀྱི	genitive	of/possessive (after a/o)
+ཡི	genitive	of/possessive (after vowels)
+གིས	instrumental	by/with
+གྱིས	instrumental	by/with (after i/e)
+ཀྱིས	instrumental	by/with (after a/o)
+ཡིས	instrumental	by/with (after vowels)
+ལ	dative/locative	to/at/in
+ར	dative	to (after vowels)
+ཏུ	dative	to
+སུ	dative	to
+དུ	dative	to
+ལས	ablative	from/than
+ནས	ablative/temporal	from/after
+དང	conjunction	and/with
+ཡང	concessive	also/even
+ཀྱང	concessive	also/even
+ནི	topic marker	as for
+ཏེ	continuative	and/then
+སྟེ	continuative	and/then
+དེ	continuative	and/then
+ཅིང	conjunction	and
+ཞིང	conjunction	and
+ཤིང	conjunction	and
+ཅེས	quotative	saying/called
+ཞེས	quotative	saying/called
+
+# === STATES AND QUALITIES ===
+ཞི་བ	peaceful	śānta
+རབ་ཏུ་ཞི་བ	perfectly peaceful	praśānta
+ཉེ་བར་ཞི་བ	pacified	upaśānta
+དང་བ	pure	śuddha
+དག་པ	pure/clean	viśuddha
+རྣམ་པར་དག་པ	completely pure	viśuddha
+དྲི་མ་མེད་པ	stainless	vimala
+གསལ་བ	clear	sphuṭa
+
+# === TEMPORAL EXPRESSIONS ===
+དུས	time	kāla
+ཆར	at the time of	temporal
+ཚེ	lifetime/time	āyus
+ནམ	when	interrogative temporal
+ཅི་ཚེ	when/at what time	temporal question
+དེ་དུས	at that time	demonstrative temporal
+ད་ལྟ	now	present time
+
+# === HONORIFIC TERMS ===
+བཞུགས	abide/stay	honorific for sitting
+གཤེགས	go/come	honorific for going
+མཆིས	have/exist	honorific copula
+མཛད	do/perform	honorific for action
+གསུངས	speak/say	honorific for speech
+# === COMMON ACTION VERBS ===
+བསད	killed/slain	past tense of གསོད (to kill)
+གསད	kill	present tense
+གསོད	to kill	infinitive form
+ཟོས	ate/consumed	past tense of ཟ (to eat)
+ཟ	eat	present tense
+བཟས	ate	past/perfect tense
+སད	be destroyed	destruction verb
+
+# === PHYSICAL DESCRIPTIONS ===
+རློན	fresh/warm	recently alive, not yet decomposed
+དྲོན	warm/hot	temperature descriptor
+རྣོན	sharp/pointed	weapon descriptor
+བཀྲེས	hungry	state of hunger
+སྐོམ	thirsty	state of thirst
+ཁྲག	blood	bodily fluid
+ཤ	meat/flesh	body tissue
+
+# === TIME EXPRESSIONS ===
+ཐག	immediately	in ཐག་པ = just now, immediately
+ཐག་པ	immediate/just now	temporal marker
+མ་ཐག	immediately after	མ་ཐག་པ
+
+# === PARTICLES & SENTENCE ENDINGS ===
+མོའོ	[final particle]	མོ (feminine) + འོ (emphatic)
+ངོ	[final particle]	emphatic/declarative ending
+ནོ	[final particle]	declarative/assertion
+རོ	[final particle]	declarative variant
+ཏོ	[final particle]	declarative variant
+སོ	[final particle]	declarative variant (after ས ending)
+དོ	[final particle]	declarative variant (after ད ending)
+བོ	[final particle]	declarative variant (after བ ending)
+གོ	[final particle]	declarative variant (after ག ending)
+
+# === NARRATIVE VOCABULARY ===
+གླེང་གཞི	nidāna	introductory story/opening narration
+གླེང	narrate/relate	to tell/recount
+འདི་སྙམ	thus thinking	སྙམ (thinking) + འདི (this)
+སྙམ	thinking/thought	quotative particle for internal speech
+
+# === COMMON PHILOSOPHICAL TERMS ===
+དངོས་པོ	thing/entity/reality	bhāva - fundamental Buddhist term
+དངོས	actual/real	reality/actuality
+བདེན	true/real	satya - truth/reality
+
+# === AUXILIARY VERBS & MODALS ===
+རུང	suitable/acceptable	in ཡང་རུང = whatever/whichever
+ནུས	able/capable/can	expresses ability or capability
+ནུས་པ	able to/capability	verbal noun form
+
+# === LIFE & BODY ===
+སྲོག	life/life-force	vitality/living energy
+སྲོག་གཅོད	taking life	killing (one of ten non-virtues)
+
+# === COMMON PATTERNS ===
+ལྟ་བུ	like/such as	comparison marker
+དེ་ལྟ་བུ	such/like that	demonstrative + comparison
+གང་ཡང	whatever/anything	indefinite pronoun
+གང་སུ	whoever/anyone	indefinite person
+ཡང་རུང	whatever/whichever	indefinite choice
+
+# === INTERROGATIVE PARTICLES ===
+དམ	question particle	marks yes/no questions
+འམ	or/question	alternative or question marker
+དེ་ལྟ་བུའི	of such a kind	དེ་ལྟ་བུ + genitive particle
+གང་སུ་ཡང་རུང	whoever/anyone at all	indefinite pronoun phrase
+
+# === FOUR IMMEASURABLES (ཚད་མེད་བཞི) ===
+བྱམས་པ	loving-kindness	maitrī - first of four immeasurables
+སྙིང་རྗེ	compassion	karuṇā - great compassion
+དགའ་བ	joy	muditā - sympathetic joy
+བཏང་སྙོམས	equanimity	upekṣā - even-mindedness
+
+# === COMPOUND FORMS ===
+སྙིང་རྗེར	with compassion	སྙིང་རྗེ + allative particle
+བྱམས་པར	with loving-kindness	བྱམས་པ + allative
+སྙིང་རྗེ་ཆེན་པོ	great compassion	mahākaruṇā
+
+# === UNIVERSAL QUANTIFIERS ===
+ཐམས་ཅད	all/everything	sarva - extremely common
+ཀུན	all/everything	sarva (alternative form)
+ཅད	all/limit	in ཐམས་ཅད
+ཐམས	all	in ཐམས་ཅད
+
+# === POSSESSION & ATTRIBUTES ===
+ལྡན	endowed with/possessing	-vat, has/possesses
+ལྡན་པ	endowed/possessing	nominal form
+རྗེར་ལྡན	possessed of compassion	endowed with compassion
+
+# === COMPARISON ===
+འདྲ	similar/like	sama - resembles/is like
+འདྲ་བ	similar/like	nominal form
+འདྲའོ	is like	འདྲ + འོ (emphatic)
+
+# === ORDINAL/TEMPORAL ===
+ཕྱི་མ	last/youngest/later	antima - final/last
+ཕྱི	later/outer/external	opposed to ནང (inner)
+སྔ་མ	first/earlier/former	pūrva - prior/previous
+
+# === NUMBERS (BASIC) ===
+གཅིག	one	eka
+གཅིག་པ	one/single	the one
+གཅིག་པུ	alone/only	solely/exclusively
+
+# === SIX PERFECTIONS (ཕ་རོལ་ཏུ་ཕྱིན་པ་དྲུག) ===
+སྦྱིན་པ	generosity	dāna - giving/charity
+ཚུལ་ཁྲིམས	ethics/discipline	śīla - moral conduct
+བཟོད་པ	patience	kṣānti - forbearance
+བརྩོན་འགྲུས	diligence	vīrya - effort/energy
+
+# === THREE JEWELS ===
+དགེ་འདུན	sangha	monastic community
+
+# === FOUR NOBLE TRUTHS ===
+ཀུན་འབྱུང	origin/arising	samudaya - origin of suffering
+འགོག་པ	cessation	nirodha - cessation of suffering
+
+# === COMMON VERBS (MORE) ===
+མཐོང	saw/see	past/present of མཐོང་བ
+སྨྲས	said/spoke	past of སྨྲ་བ
+བསམས་ནས	having thought	past + continuative
+གསོལ	request/eat (hon.)	honorific verb
+
+# === FAMILY & RELATIONS ===
+མཆེད	brothers/siblings	collective term
+ཕུ་བོ	brothers	elder brothers
+སྲས	son/prince	putra - male offspring
+ཡུམ	mother	honorific term
+བུ	son/child	common term for son
+ཕ	father	common term
+
+# === BUDDHIST COSMOLOGY ===
+འཛམ་བུ་གླིང	Jambudvipa	the southern continent, our world
+འཛམ་བུ	jambu tree	rose-apple tree
+གླིང	continent/island	dvīpa - land mass
+
+# === COMMON ADJECTIVES (EXTREMELY BASIC!) ===
+ཆེན་པོ	great/big	mahā - large/important
+ཆེ	great/big	root form, comparative
+ཆེ་བ	great/elder	nominal/comparative form, "the eldest"
+ཆུང	small/little	opposite of ཆེན་པོ
+ཆུང་བ	small/little	nominal form
+ཐ་ཆུང	youngest	smallest/last born
+
+# === ANIMALS & VEHICLES ===
+རྟ	horse	aśva - equine
+ཤིང་རྟ	chariot/vehicle	lit. "wood-horse", cart/carriage
+རྟ་ཆེན་པོ	great horse	mahāśva
+
+# === COMMON VERBS (PAST TENSE) ===
+བྱུང	happened/arose/came	past of འབྱུང (to arise/happen)
+འབྱུང	arise/happen/occur	present tense
+བྱུང་བ	arising/occurrence	nominal form
+བྱུང་སྟེ	having arisen	past + continuative
+
+# === NAMES & TITLES ===
+ཞེས་བྱ་བ	called/named	quotative phrase "so-called"
+ཞེས	quotative	marks quotations/names
+བྱ་བ	called/named	verbal noun of བྱ (to do)
+
+# === MORE BASIC ADJECTIVES ===
+དམན་པ	low/inferior	hīna - small/lesser
+མཆོག	supreme/excellent	best/foremost
+མཆོག་ཏུ	supremely	to the highest degree
+བླ་མེད	unsurpassed	without higher, supreme
+
+# === BASIC SIZE/AMOUNT ===
+མང་པོ	many/much	bahu - numerous
+ཉུང་བ	few/little	alpa - scant
+
+# === BUDDHA EPITHETS (EXTREMELY CRITICAL!) ===
+བཅོམ་ལྡན་འདས	Bhagavan	Blessed One - standard Buddha epithet
+བཅོམ	conquered	subdued afflictions
+ལྡན	endowed with	possessing qualities
+འདས	gone beyond	transcended samsara
+
+# === IMPORTANT DISCIPLES & FIGURES ===
+ཀུན་དགའ་བོ	Ānanda	Buddha's cousin and attendant
+ཀུན་དགའ	Ānanda	short form
+
+# === IMPORTANT PLACES ===
+མཉན་ཡོད	Śrāvastī	city where Buddha taught
+དགའ་ལྡན	Tuṣita	Tuṣita Heaven
+རྒྱལ་བྱེད་ཀྱི་ཚལ	Jeta Grove	where Buddha taught
+
+# === BUDDHA'S PARENTS (HISTORICAL) ===
+ཟས་གཙང་མ	Śuddhodana	Buddha's father
+སྒྱུ་མ་ལྷ་མཛེས་མ	Māyādevī	Buddha's mother
+
+# === HIGH-FREQUENCY VERBS ===
+ཡོད	exists/there is	existential verb
+ཡིན	is/am/are	copula verb
+སྐྱེས	born/arose	past of སྐྱེ་བ
+གྱུར	became/transformed	past of འགྱུར་བ
+བྱས	did/made	past of བྱ་བ
+ཕྱིན	went	past of འགྲོ་བ
+ཐོབ	obtained/attained	to gain/receive
+རྙེད	found/discovered	to find
+སྨོན	aspired	to pray/aspire
+ཕུལ	offered	to present/give
+སྲུང	protect/guard	to watch over
+ཁྱེར	carried/took	to bring/carry
+ལོན	arrived/reached	to come to
+སོང	went	past of སོང་བ
+བསྟན	taught/showed	past of སྟོན
+ཐོས	heard	past of ཐོས་པ
+དྲན	remembered	to recall/remember
+འོང	come	to arrive
+བྱེད	do/make	to perform
+
+# === HIGH-FREQUENCY NOUNS ===
+བདག	self/I	first person pronoun (formal)
+ལྷ	deity/god	deva
+མྱ་ངན	sorrow/grief	lamentation
+དྲིན	kindness/grace	favor/benefit
+ཡབ	father	parent (male)
+དྲུང	presence	proximity/near
+ནང	inside/inner	interior
+ཁ	mouth/opening	entrance/face
+ཉིན	day	daytime
+ཞག	day/night	24-hour period
+ལོ	year	annual period
+མས	by (agent)	agentive particle
+ཉིད	self/very	emphatic particle
+སླད	sake/purpose	for the benefit of
+
+# === IMPORTANT ADJECTIVES & ADVERBS ===
+རབ	very/extremely	rab - intense/excellent
+སྔོན	former/previous	ancient/before
+མི	not/non-	negative prefix (before nouns)
+
+# === PARTICLES & GRAMMATICAL ===
+ཅན	possessing/with	-ful/-ous
+ཅིག	a certain/some	indefinite article
+པ	nominalizer	makes noun from verb
+བ	nominalizer	variant of པ
+ན	when/if/at	locative/conditional
+
+# === IMPORTANT COMPOUNDS ===
+སེམས་ཅན	sentient being	one with consciousness
+དམ་པའི་ཆོས	holy dharma	sublime teaching
+ལོ་རྒྱུས	story/history	account/narrative
+མྱ་ངན་བྱེད	to grieve	to lament
+ཡབ་ཡུམ	parents	father and mother
+ཕྱིར་མི་འོང	non-returner	anāgāmin - 3rd stage
+སྨོན་ལམ	aspiration prayer	vow/wish
+བཀའ་དྲིན	kindness/grace	compassionate benefit
+རབ་ཏུ་བྱུང	fully ordained	pravrajita
+བསྙེན་གནས	one-day vows	upavāsa - 8 precepts
+ཡན་ལག་བརྒྱད	eight branches	aṣṭāṅga
+
+# === MORE VINAYA TERMS ===
+གསོལ་བ	request/petition	to ask respectfully
+གསོལ	request/eat (hon.)	honorific forms
+འདེགས	raise/present	to offer up
+
+# === ADDITIONAL STORY VOCABULARY ===
+རྒན་མོ	old woman	elderly female
+རྐུ་བ	thief	robber/stealer
+གཤེད་མ	executioner	one who kills
+རྒྱང་རིང	far away	distant
+ཁྲིད	lead/guide	to conduct
+ཟིན	caught	seized/grasped
+ཁྲིམས	law/rules	legal system
+སྦྱར	applied	to submit to
+གུམ	death/peril	danger/loss
+སྐྱགས	witness	testimony
+ནོར་བ	police/guards	law enforcers
+
+# === ATTAINMENT STAGES (ŚRĀVAKA PATH) ===
+ཕྱིར་མི་འོང་གི་འབྲས་བུ	non-returner fruit	anāgāmin stage
+དགྲ་བཅོམ་པ	arhat	foe-destroyer
+དགྲ་བཅོམ་པའི་གོ་འཕང	arhat stage	arhatship
+
+# === STORY NARRATIVE TERMS ===
+གླེང་གཞི	narrative framework	story context
+སྟོན་པ	teacher/Buddha	one who shows
+གྲོང་ཁྱེར	city/town	urban area
+རྟག་ཏུ	always/constantly	regularly
+གཞན་ཡང	moreover/furthermore	in addition
+
+# === MORE FAMILY & SOCIAL ===
+བློན	minister	government official
+བློན་པོ	minister	court official
+
+# === TIME EXPRESSIONS ===
+རིང་པོར	for a long time	extended duration
+མ་ལོན་པ	not yet arrived	before reaching
+དེ་ནས	then/after that	subsequently
+
+# === GRAMMATICAL CONSTRUCTIONS ===
+# Temporal constructions
+པའི་ཚེ	when/at the time when	temporal marker (nominalizer + genitive + time)
+པའི་ཚེ་ན	when	temporal marker with locative
+པའི་དུས་སུ	at the time when	temporal construction (with allative)
+པ་ན	when	converb + locative
+# Causal/purpose constructions
+པའི་ཕྱིར	because/for the purpose of	causal/purpose marker
+པས་ན	because/therefore	causal marker (instrumental + locative)
+པའི་སླད་དུ	for the sake of	purpose construction
+

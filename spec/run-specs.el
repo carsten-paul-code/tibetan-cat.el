@@ -28,10 +28,14 @@
 (require 'tibetan-utils nil t)
 (require 'tibetan-vocabulary nil t)
 (require 'tibetan-verb-classifier nil t)
+(require 'tibetan-enhanced-parser nil t)  ; For compound recognition
+(require 'tibetan-particles-bialek nil t) ; For Bialek particle analysis
 ;; Skip heavy modules - test via individual functions
 (require 'tibetan-analysis-persist nil t)
 (require 'tibetan-compound-analysis nil t)
 (require 'tibetan-translation-engine nil t)
+(require 'tibetan-classroom nil t)  ; For auto-analysis mode
+(require 'tibetan-mitra-translation nil t)  ; For Mitra AI translation
 
 ;; Load BDD framework
 (require 'tibetan-bdd)
@@ -42,9 +46,13 @@
 (require 'segment-analysis-spec)
 (require 'cat-translation-spec)
 (require 'compound-analysis-spec)
+(require 'tigress-story-spec)
+(require 'custom-vocab-spec)
+(require 'mitra-translation-spec)
 
 ;; Run specs when loaded in batch mode
 (when noninteractive
+  (setq debug-on-error t)
   (let ((results (tibetan-bdd-run-all)))
     (kill-emacs (tibetan-bdd-report results))))
 

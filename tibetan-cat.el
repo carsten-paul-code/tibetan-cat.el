@@ -1,5 +1,27 @@
 ;;; tibetan-cat.el --- Tibetan Computer-Assisted Translation System -*- lexical-binding: t -*-
 
+;; Author: Carsten Paul <post@carstenpaul.de>
+;; Maintainer: Carsten Paul <post@carstenpaul.de>
+;; URL: https://github.com/carsten-paul-code/tibetan-cat.el
+;; Version: 2.1.0
+;; Package-Requires: ((emacs "27.1") (org "9.0"))
+;; Keywords: languages, tibetan, translation, tools, buddhism
+
+;; This file is not part of GNU Emacs.
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 ;;; Commentary:
 ;; Main entry point for Emacs Tibetan CAT tools
 ;; Provides segment analysis, grammatical analysis, translation workspace, and philology tools
@@ -77,6 +99,9 @@
 (require 'tibetan-enhanced-parser)      ; Multi-word units, accurate particle detection
 (require 'tibetan-enhanced-display)     ; Enhanced analysis display
 
+;; AI Translation (optional - soft load)
+(require 'tibetan-mitra-translation nil t)  ; Gemma-2-Mitra-E integration (Ollama/HuggingFace)
+
 ;; Philology modules (for verse texts)
 (require 'tibetan-verse-philology)      ; Verse meter, metrical fillers
 (require 'tibetan-madhyamaka-terms)     ; Madhyamaka vocabulary
@@ -150,7 +175,7 @@ Loads glossaries and prepares the system for use."
 ;; VERSION INFO
 ;; ============================================================================
 
-(defconst tibetan-cat-version "2.0.0"
+(defconst tibetan-cat-version "2.1.0"
   "Version of Tibetan CAT system.")
 
 (defun tibetan-cat-version ()

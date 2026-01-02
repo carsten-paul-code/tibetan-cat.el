@@ -1,0 +1,117 @@
+# Madhyamaka Specialized Glossary
+# Based on the texts: dbu mai bsdus don lta bai me long & dGe-dun-rin-chen's commentary
+# Format: Tibetan[TAB]English[TAB]Notes
+
+# Core Madhyamaka Terms
+དབུ་མ	Madhyamaka	Middle Way philosophy
+དབུ་མ་པ	Mādhyamika	follower of Middle Way
+དབུ་མ་བ	Madhyamaka view	philosophical position
+བསྡུས་དོན	essential meaning	condensed/summary teaching
+ལྟ་བ	view	philosophical view (dṛṣṭi)
+མེ་ལོང	mirror	clarity/reflection metaphor
+གསལ་བྱེད	clarifying	that which illuminates
+ལུང་གི་ཕྲེང་བ	garland of scriptures	collection of teachings
+
+# Two Truths Doctrine
+བདེན་པ་གཉིས	two truths	fundamental Madhyamaka doctrine
+ཀུན་རྫོབ་བདེན་པ	conventional truth	saṃvṛtisatya
+དོན་དམ་བདེན་པ	ultimate truth	paramārthasatya
+ཀུན་རྫོབ	conventional	everyday/worldly truth
+དོན་དམ	ultimate	highest/absolute truth
+
+# Emptiness Terms
+སྟོང་པ་ཉིད	emptiness	śūnyatā
+སྟོང་པ	empty	lacking inherent existence
+རང་བཞིན	intrinsic nature	svabhāva
+རང་བཞིན་མེད་པ	lacking intrinsic nature	niḥsvabhāva
+ངོ་བོ་ཉིད	essence	ultimate nature
+ངོ་བོ་ཉིད་མེད་པ	essenceless	without essence
+
+# Dependent Origination
+རྟེན་འབྲེལ	dependent origination	pratītyasamutpāda
+རྟེན་ནས་འབྱུང་བ	arising in dependence	dependent arising
+རྟེན་འབྲེལ་གྱི་ཆོས	dharma of dependent origination	natural law
+འབྲེལ་བ	connection/relationship	sambandha
+རྒྱུ་རྐྱེན	causes and conditions	hetu-pratyaya
+
+# Negation and Establishment
+དགག་པ	negation	niṣedha/pratiṣedha
+སྒྲུབ་པ	establishment	sādhana
+སེལ་བ	clearing away	removal of misconceptions
+གཞག་པ	establishing	positive presentation
+མ་ཡིན་དགག	non-affirming negation	prasajya-pratiṣedha
+མེད་དགག	affirming negation	paryudāsa-pratiṣedha
+
+# Conceptual Elaboration
+སྤྲོས་པ	conceptual elaboration	prapañca
+སྤྲོས་བྲལ	free from elaboration	niṣprapañca
+རྣམ་རྟོག	conceptual thought	kalpanā/vikalpa
+རྣམ་རྟོག་མེད་པ	non-conceptual	nirvikalpa
+
+# Characteristics and Marks
+མཚན་ཉིད	defining characteristic	lakṣaṇa
+མཚན་མ	sign/mark	nimitta
+མཚན་ཉིད་མེད་པ	without characteristics	alākṣaṇa
+རང་གི་མཚན་ཉིད	own-characteristic	svalakṣaṇa
+སྤྱི་མཚན	general characteristic	sāmānyalakṣaṇa
+
+# Philosophical Analysis
+རིགས་པ	reasoning/logic	yukti
+དཔེ	example/analogy	dṛṣṭānta
+གཏན་ཚིགས	logical reason	hetu
+དམ་བཅའ	thesis/proposition	pakṣa
+རྟགས	logical sign	liṅga
+ཚད་མ	valid cognition	pramāṇa
+
+# Methods and Approach
+ཐབས	means/method	upāya
+ལམ	path	mārga
+ཞུགས་པ	entry/entrance	praveśa
+སྒོ	door/gateway	dvāra
+གོ་རིམ	sequence/order	krama
+རིམ་པ	stage/level	krama
+
+# Textual Terms
+ལུང	scripture	āgama/śruti
+བཤད་པ	explanation	vyākhyā
+འགྲེལ་པ	commentary	ṭīkā
+མཆན་འགྲེལ	annotation	vivṛti
+དོན	meaning	artha
+ཚིག	word/term	śabda/pada
+
+# Logical Structure
+གལ་ཏེ	if/supposing	yadi
+ཅི་སྟེ	what if	kim tu
+དེ་ལྟར	thus/therefore	evaṃ
+དེ་བས་ན	therefore	tasmāt
+གང་གི་ཕྱིར	because/why	yasmāt
+འདི་ལྟར	like this	evaṃ
+མི་རུང	impossible/absurd	na yujyate
+
+# States and Qualities
+ཞི་བ	peaceful	śānta
+རབ་ཏུ་ཞི་བ	perfectly peaceful	praśānta
+ཉེ་བར་ཞི་བ	pacified	upaśānta
+དང་བ	pure	śuddha
+དག་པ	pure/clean	viśuddha
+རྣམ་པར་དག་པ	completely pure	viśuddha
+
+# Extremes and Middle
+མཐའ	extreme/limit	anta
+མཐའ་གཉིས	two extremes	dvayanta
+དབུ་མ	middle	madhya
+དམིགས་མེད	without object	anālambana
+དམིགས་པ	object/objective support	ālambana
+
+# Consciousness and Cognition
+རྣམ་པར་ཤེས་པ	consciousness	vijñāna
+ཤེས་པ	knowledge/cognition	jñāna
+རིག་པ	awareness	vidyā
+ཡེ་ཤེས	primordial wisdom	jñāna
+བློ	mind/intellect	buddhi
+
+# Author and Historical
+རྗེ་དགེ་འདུན་རིན་ཆེན	Je Gedun Rinchen	author name
+ཀླུ་སྒྲུབ	Nāgārjuna	founder of Madhyamaka
+འཕགས་པ	Ārya	noble one (epithet)
+སློབ་དཔོན	ācārya	master/teacher

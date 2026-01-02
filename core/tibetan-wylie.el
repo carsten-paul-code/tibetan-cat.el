@@ -14,14 +14,22 @@
 (defun tibetan-safe-substring (str start &optional end)
   "Safely extract substring from STR between START and END.
 Returns empty string if indices are out of range."
-  (condition-case nil
-      (let* ((len (length str))
-             (s (max 0 (min start len)))
-             (e (if end (max s (min end len)) len)))
-        (if (<= s e len)
-            (substring str s e)
-          ""))
-    (error "")))
+  (condition-case err
+      (if (not (stringp str))
+          ""
+        (let* ((len (length str))
+               (s (max 0 (min start len)))
+               (e (if end (max s (min end len)) len)))
+          (if (and (integerp s)
+                   (integerp e)
+                   (<= 0 s)
+                   (<= s e)
+                   (<= e len))
+              (substring str s e)
+            "")))
+    (error
+     (message "SAFE-SUBSTR ERROR: str='%s' start=%s end=%s err=%S" str start end err)
+     "")))
 
 (defun tibetan-to-wylie-fixed (tibetan-text)
   "Convert Tibetan Unicode text to Wylie transliteration.
@@ -55,7 +63,9 @@ FIXED: Properly handles implicit 'a' vowels after each consonant."
                                       len))
                      (syllable (tibetan-safe-substring tibetan-text pos syllable-end))
                      (wylie-syllable (if (> (length syllable) 0)
-                                        (tibetan-syllable-to-wylie syllable)
+                                        (condition-case nil
+                                            (tibetan-syllable-to-wylie syllable)
+                                          (error syllable))  ; On error, return original
                                       "")))
 
                 (setq result (concat result wylie-syllable))
@@ -157,6 +167,10 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
         ;; Try to match longest possible sequence first (4, 3, 2, then 1 character)
         (dolist (len '(4 3 2 1))
           (when (and (not matched) (<= (+ pos len) (length syllable)))
+            ;; DEBUG: Check that we don't enter with too large len
+            (when (> (+ pos len) (length syllable))
+              (message "BUG: Entered with pos=%d len=%d syllable='%s' (len=%d)"
+                       pos len syllable (length syllable)))
             (let ((substr (tibetan-safe-substring syllable pos (+ pos len))))
 
               ;; Try consonant stacks

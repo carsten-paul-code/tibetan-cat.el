@@ -21,12 +21,18 @@
   "Safely extract substring from STR between START and END.
 Returns empty string if indices are out of range or invalid."
   (condition-case nil
-      (let* ((len (length str))
-             (s (max 0 (min start len)))
-             (e (if end (max s (min end len)) len)))
-        (if (and (<= 0 s) (<= s e) (<= e len))
-            (substring str s e)
-          ""))
+      (if (not (stringp str))
+          ""
+        (let* ((len (length str))
+               (s (max 0 (min start len)))
+               (e (if end (max s (min end len)) len)))
+          (if (and (integerp s)
+                   (integerp e)
+                   (<= 0 s)
+                   (<= s e)
+                   (<= e len))
+              (substring str s e)
+            "")))
     (error "")))
 
 ;; ============================================================================
@@ -41,20 +47,30 @@ Returns list of (particle word case function translation-guide bialek-ref)."
 
     (dolist (word words)
       (cond
-       ;; ========== ERGATIVE (agent of transitive/controllable verbs) ==========
+       ;; ========== ERGATIVE/INSTRUMENTAL (agent OR instrument/means) ==========
+       ;; Note: Same particles mark both agent (ergative) and instrument/means
        ((or (string-suffix-p "ཀྱིས" word) (string-suffix-p "གྱིས" word)
-            (string-suffix-p "གིས" word) (string-suffix-p "འིས" word) (string-suffix-p "ཡིས" word))
+            (string-suffix-p "གིས" word) (string-suffix-p "འིས" word) (string-suffix-p "ཡིས" word)
+            (string= "ས" word))  ; Standalone ས
         (let* ((particle (cond ((string-suffix-p "ཀྱིས" word) "ཀྱིས")
                               ((string-suffix-p "གྱིས" word) "གྱིས")
                               ((string-suffix-p "འིས" word) "འིས")
                               ((string-suffix-p "ཡིས" word) "ཡིས")
+                              ((string= "ས" word) "ས")
                               (t "གིས")))
                (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
-          (when (> (length root) 0)
-            (push (list particle word "ERGATIVE (ERG)"
-                       (format "Marks '%s' as AGENT of a transitive/controllable verb" root)
-                       (format "Translation: 'by %s' or '%s [does the action]'" root root)
-                       "Bialek: Ergative case for TR/C verb subjects")
+          ;; Handle both attached and standalone particles
+          (if (> (length root) 0)
+              (push (list particle word "ERGATIVE/INSTRUMENTAL (ERG/INST)"
+                         (format "Marks '%s' as AGENT or INSTRUMENT/MEANS" root)
+                         (format "Translation: 'by %s' (agent) or 'by means of %s' (instrument)" root root)
+                         "Bialek: Ergative for agents; Instrumental for means/instrument")
+                    analysis)
+            ;; Standalone particle - marks previous word
+            (push (list particle word "ERGATIVE/INSTRUMENTAL (ERG/INST)"
+                       "Marks preceding word as AGENT or INSTRUMENT/MEANS"
+                       "Translation: 'by [previous]' (agent) or 'by means of [previous]' (instrument)"
+                       "Bialek: Ergative/Instrumental (standalone)")
                   analysis))))
 
        ;; ========== GENITIVE (possession, modification) ==========
@@ -73,22 +89,41 @@ Returns list of (particle word case function translation-guide bialek-ref)."
                        "Bialek: Genitive case for possession/modification")
                   analysis))))
 
-       ;; ========== DATIVE (goal, recipient, indirect object) ==========
+       ;; ========== DATIVE/TERMINATIVE (goal, recipient, manner) ==========
+       ;; Note: ར/དུ/ཏུ/སུ can be TERMINATIVE when expressing manner/result
        ((or (string-suffix-p "ལ" word) (string-suffix-p "ར" word)
             (string-suffix-p "དུ" word) (string-suffix-p "ཏུ" word)
-            (string-suffix-p "སུ" word) (string-suffix-p "རུ" word))
-        (let* ((particle (cond ((string-suffix-p "ལ" word) "ལ")
-                              ((string-suffix-p "དུ" word) "དུ")
-                              ((string-suffix-p "ཏུ" word) "ཏུ")
-                              ((string-suffix-p "སུ" word) "སུ")
-                              ((string-suffix-p "རུ" word) "རུ")
+            (string-suffix-p "སུ" word) (string-suffix-p "རུ" word)
+            (member word '("ལ" "ར" "དུ" "ཏུ" "སུ" "རུ")))  ; Standalone particles
+        (let* ((particle (cond ((or (string-suffix-p "དུ" word) (string= "དུ" word)) "དུ")
+                              ((or (string-suffix-p "ཏུ" word) (string= "ཏུ" word)) "ཏུ")
+                              ((or (string-suffix-p "སུ" word) (string= "སུ" word)) "སུ")
+                              ((or (string-suffix-p "རུ" word) (string= "རུ" word)) "རུ")
+                              ((or (string-suffix-p "ལ" word) (string= "ལ" word)) "ལ")
                               (t "ར")))
-               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
-          (when (> (length root) 0)
-            (push (list particle word "DATIVE (DAT)"
-                       (format "Marks '%s' as GOAL, RECIPIENT, or LOCATION" root)
-                       (format "Translation: 'to %s', 'for %s', 'in/at %s'" root root root)
-                       "Bialek: Dative for indirect objects and destinations")
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle))))
+               ;; Terminative particles often express manner/result
+               (is-terminative (member particle '("ར" "དུ" "ཏུ" "སུ" "རུ")))
+               (type (if is-terminative "TERMINATIVE/DATIVE (ALL/DAT)" "DATIVE (DAT)")))
+          (if (> (length root) 0)
+              (push (list particle word type
+                         (format "Marks '%s' as %s" root
+                                 (if is-terminative "GOAL, RESULT, or MANNER" "GOAL, RECIPIENT, or LOCATION"))
+                         (format "Translation: '%s %s' or 'in %s manner'"
+                                 (if is-terminative "becoming/as" "to/for") root root)
+                         (if is-terminative
+                             "Bialek: Terminative for result/manner transformation"
+                           "Bialek: Dative for indirect objects and destinations"))
+                    analysis)
+            ;; Standalone particle
+            (push (list particle word type
+                       (format "Marks preceding word as %s"
+                               (if is-terminative "GOAL or MANNER/RESULT" "GOAL or RECIPIENT"))
+                       (format "Translation: '%s [previous word]'"
+                               (if is-terminative "becoming/as" "to/for"))
+                       (if is-terminative
+                           "Bialek: Terminative (standalone)"
+                           "Bialek: Dative (standalone)"))
                   analysis))))
 
        ;; ========== ELATIVE/ABLATIVE (source, origin, starting point) ==========
@@ -108,6 +143,23 @@ Returns list of (particle word case function translation-guide bialek-ref)."
                        "Bialek: Elative in converbs")
                   analysis))))
 
+       ;; ========== LOCATIVE + CONCESSIVE: ནའང (even when/also in) ==========
+       ((or (string-suffix-p "ནའང" word) (string= "ནའང" word))
+        (let* ((particle "ནའང")
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
+          (if (> (length root) 0)
+              (push (list particle word "LOCATIVE+CONCESSIVE (LOC+CONC)"
+                         (format "Marks '%s' with locative+concessive meaning: 'even when/also in'" root)
+                         (format "Translation: 'even when %s' or 'also in %s'" root root)
+                         "Bialek: ན་ (locative) + འང་ (concessive 'also/even')")
+                    analysis)
+            ;; Standalone
+            (push (list particle word "LOCATIVE+CONCESSIVE (LOC+CONC)"
+                       "Concessive locative: 'even when/also in' preceding element"
+                       "Translation: 'even when [previous]' or 'also in [previous]'"
+                       "Bialek: ན་ (locative) + འང་ (concessive)")
+                  analysis))))
+
        ;; ========== LOCATIVE (location, condition) ==========
        ((string-suffix-p "ན" word)
         (let* ((particle "ན")
@@ -117,6 +169,40 @@ Returns list of (particle word case function translation-guide bialek-ref)."
                        (format "Marks '%s' as LOCATION or expresses CONDITION" root)
                        (format "Translation: 'in/at %s' or 'when %s'" root root)
                        "Bialek: Locative for location or temporal condition")
+                  analysis))))
+
+       ;; ========== TOPIC MARKER ནི ==========
+       ((or (string-suffix-p "ནི" word) (string= "ནི" word))
+        (let* ((particle "ནི")
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
+          (if (> (length root) 0)
+              (push (list particle word "TOPIC (TOP)"
+                         (format "Marks '%s' as TOPIC - the element being commented on" root)
+                         (format "Translation: 'as for %s...' or 'regarding %s...'" root root)
+                         "Bialek: Topic marker for thematic focus")
+                    analysis)
+            ;; Standalone ནི
+            (push (list particle word "TOPIC (TOP)"
+                       "Marks preceding word/phrase as TOPIC"
+                       "Translation: 'as for [previous]...' or 'regarding [previous]...'"
+                       "Bialek: Topic marker (standalone)")
+                  analysis))))
+
+       ;; ========== COMITATIVE/ASSOCIATIVE དང ==========
+       ((or (string-suffix-p "དང" word) (string= "དང" word))
+        (let* ((particle "དང")
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
+          (if (> (length root) 0)
+              (push (list particle word "COMITATIVE (COM)"
+                         (format "Marks '%s' as accompaniment or connection" root)
+                         (format "Translation: 'with %s', '%s and...', 'together with %s'" root root root)
+                         "Bialek: Comitative for accompaniment/coordination")
+                    analysis)
+            ;; Standalone དང
+            (push (list particle word "COMITATIVE (COM)"
+                       "Marks preceding word as accompaniment/coordination"
+                       "Translation: 'with [previous]', '[previous] and...'"
+                       "Bialek: Comitative (standalone)")
                   analysis))))))
 
     (nreverse analysis)))
@@ -204,6 +290,24 @@ Returns list of (particle word type function translation-guide bialek-ref)."
                        (format "Causal converb: '%s' is the REASON for main verb" root)
                        (format "Translation: 'because %s' or 'since %s'" root root)
                        "Bialek: པས་/བས་ converb - cause/reason")
+                  analysis))))
+
+       ;; ========== LOCATIVE+CONCESSIVE: ནའང (even when/also in) ==========
+       ;; Must check BEFORE general འང to catch the composite particle
+       ((or (string-suffix-p "ནའང" word) (string= "ནའང" word))
+        (let* ((particle "ནའང")
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
+          (if (> (length root) 0)
+              (push (list particle word "LOCATIVE+CONCESSIVE (LOC+CONC)"
+                         (format "Marks '%s' with locative+concessive meaning: 'even when/also in'" root)
+                         (format "Translation: 'even when %s' or 'also in %s'" root root)
+                         "Bialek: ན་ (locative) + འང་ (concessive 'also/even')")
+                    analysis)
+            ;; Standalone ནའང
+            (push (list particle word "LOCATIVE+CONCESSIVE (LOC+CONC)"
+                       "Concessive locative: 'even when/also in' preceding element"
+                       "Translation: 'even when [previous]' or 'also in [previous]'"
+                       "Bialek: ན་ (locative) + འང་ (concessive)")
                   analysis))))
 
        ;; ========== CONCESSIVE: ཀྱང/ཡང/འང (even, also, though) ==========

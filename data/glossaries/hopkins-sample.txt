@@ -1,0 +1,51 @@
+# Hopkins Glossary Sample
+# Format: Tibetan[TAB]English[TAB]Notes
+# This is a sample - you'll need to import your full Hopkins glossary
+
+རྟེན་འབྲེལ་	dependent origination	pratītyasamutpāda
+སྟོང་པ་ཉིད་	emptiness	śūnyatā
+བདག་མེད་	selflessness	anātman
+ཆོས་	dharma/phenomenon	multiple meanings
+སེམས་	mind	citta
+རྣམ་ཤེས་	consciousness	vijñāna
+ཡེ་ཤེས་	wisdom	jñāna
+བྱང་ཆུབ་སེམས་དཔའ་	bodhisattva
+ཐེག་པ་ཆེན་པོ་	Mahayana	Great Vehicle
+དཀོན་མཆོག་	Three Jewels	Buddha, Dharma, Sangha
+སངས་རྒྱས་	Buddha	Awakened One
+ཆོས་སྐུ་	dharmakāya	truth body
+གཟུགས་སྐུ་	rūpakāya	form body
+སྤྲུལ་སྐུ་	nirmāṇakāya	emanation body
+ལོངས་སྐུ་	sambhogakāya	enjoyment body
+རྒྱུ་	cause	hetu
+རྐྱེན་	condition	pratyaya
+འབྲས་བུ་	result/fruit	phala
+ལས་	karma/action
+སྐྱེ་བ་	birth	jāti
+འཆི་བ་	death	maraṇa
+སྡུག་བསྔལ་	suffering	duḥkha
+ཀུན་འབྱུང་	origin of suffering	samudaya
+འགོག་པ་	cessation	nirodha
+ལམ་	path	mārga
+བདེན་པ་	truth	satya
+ཀུན་རྫོབ་	conventional	saṃvṛti
+དོན་དམ་	ultimate	paramārtha
+ཕུང་པོ་	aggregate	skandha
+གཟུགས་	form	rūpa
+ཚོར་བ་	feeling	vedanā
+འདུ་ཤེས་	perception	saṃjñā
+འདུ་བྱེད་	formations	saṃskāra
+ཉོན་མོངས་	affliction	kleśa
+ཞི་བ་	peace	śānti
+མྱ་ངན་ལས་འདས་པ་	nirvana
+ཏིང་ངེ་འཛིན་	concentration	samādhi
+ལྷག་མཐོང་	insight	vipaśyanā
+ཞི་གནས་	calm abiding	śamatha
+སྤྱོད་པ་	conduct/practice	caryā
+ཚོགས་	accumulation	sambhāra
+སྦྱིན་པ་	giving	dāna
+ཚུལ་ཁྲིམས་	ethics	śīla
+བཟོད་པ་	patience	kṣānti
+བརྩོན་འགྲུས་	effort	vīrya
+བསམ་གཏན་	meditation	dhyāna
+ཤེས་རབ་	wisdom	prajñā

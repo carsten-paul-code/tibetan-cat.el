@@ -21,7 +21,11 @@
 ;; Format: (lemma . properties-alist)
 ;; ============================================================================
 
-(defvar tibetan-verb-database
+(defvar tibetan-verb-database nil
+  "Hash table of Tibetan verbs with grammatical information.")
+
+(defun tibetan-verb-database--initialize ()
+  "Initialize the verb database. Always rebuilds from scratch."
   (let ((db (make-hash-table :test 'equal)))
     ;; Common verbs with full Hill 2010 style entries
     ;; Format: present / past / future / imperative
@@ -590,8 +594,79 @@
                        (case_frame . "Erg-Abs")
                        (indigenous_class . "tha_dad_pa")) db)
 
-    db)
-  "Hash table of Tibetan verbs with grammatical information.")
+    ;; ============================================================================
+    ;; TIGRESS STORY VERBS (added for Tibetisch III WS25-26)
+    ;; ============================================================================
+
+    ;; བཀའ་སྩལ་ - to speak (honorific, of Buddha)
+    (puthash "བཀའ་སྩལ" '((lemma . "བཀའ་སྩལ")
+                           (meaning . "to speak, to say (hon. of Buddha)")
+                           (present_stem . "བཀའ་སྩལ")
+                           (past_stem . "བཀའ་སྩལ")
+                           (future_stem . "བཀའ་སྩལ")
+                           (imperative_stem . "བཀའ་སྩལ")
+                           (transitivity . "Transitive")
+                           (volitionality . "Volitional")
+                           (case_frame . "Erg-Abs")
+                           (indigenous_class . "tha_dad_pa")
+                           (note . "Honorific compound verb for Buddha's speech")) db)
+
+    ;; ཟད་ - to exhaust, to finish (in མ་ཟད = not only)
+    (puthash "ཟད" '((lemma . "ཟད")
+                     (meaning . "to exhaust, to finish, to be completed; in མ་ཟད: not only")
+                     (present_stem . "ཟད")
+                     (past_stem . "ཟད")
+                     (future_stem . "ཟད")
+                     (imperative_stem . "ཟད")
+                     (transitivity . "Intransitive")
+                     (volitionality . "Non-volitional")
+                     (case_frame . "Abs")
+                     (indigenous_class . "tha_mi_dad_pa")) db)
+
+    ;; གསོ་ - to nourish, to nurture
+    (puthash "གསོ" '((lemma . "གསོ")
+                      (meaning . "to nourish, to nurture, to sustain, to raise")
+                      (present_stem . "གསོ")
+                      (past_stem . "གསོས")
+                      (future_stem . "གསོ")
+                      (imperative_stem . "གསོས")
+                      (transitivity . "Transitive")
+                      (volitionality . "Volitional")
+                      (case_frame . "Erg-Abs")
+                      (indigenous_class . "tha_dad_pa")) db)
+    (puthash "གསོས" (gethash "གསོ" db) db)
+
+    ;; ལྡན་ - to be endowed with, to possess
+    (puthash "ལྡན" '((lemma . "ལྡན")
+                      (meaning . "to be endowed with, to possess, to have")
+                      (present_stem . "ལྡན")
+                      (past_stem . "ལྡན")
+                      (future_stem . "ལྡན")
+                      (imperative_stem . "ལྡན")
+                      (transitivity . "Intransitive")
+                      (volitionality . "Non-volitional")
+                      (case_frame . "Abs-Term")
+                      (indigenous_class . "tha_mi_dad_pa")
+                      (note . "Takes terminative case for what one is endowed with")) db)
+
+    ;; འདྲ་ - to be similar, to resemble
+    (puthash "འདྲ" '((lemma . "འདྲ")
+                      (meaning . "to be similar, to resemble, to be like")
+                      (present_stem . "འདྲ")
+                      (past_stem . "འདྲ")
+                      (future_stem . "འདྲ")
+                      (imperative_stem . "འདྲ")
+                      (transitivity . "Intransitive")
+                      (volitionality . "Non-volitional")
+                      (case_frame . "Abs-Term")
+                      (indigenous_class . "tha_mi_dad_pa")
+                      (note . "Takes terminative for what something is similar to")) db)
+
+    ;; Return the database
+    db))
+
+;; Initialize on load
+(setq tibetan-verb-database (tibetan-verb-database--initialize))
 
 ;; ============================================================================
 ;; LOOKUP FUNCTIONS

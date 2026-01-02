@@ -21,6 +21,11 @@
 (require 'org)
 (require 'md5)
 
+;; Require modules for verb analysis (soft load - main loading via tibetan-cat.el)
+(require 'tibetan-verb-classifier nil t)
+(require 'tibetan-enhanced-display nil t)
+(require 'tibetan-particles-bialek nil t)
+
 (defconst tibetan-analysis-version "1.0"
   "Version of the analysis file format.")
 
@@ -366,29 +371,41 @@ Returns alist with keys: meaning, wylie, is-verb, verb-info."
   "Generate auto-analysis content for TIBETAN-TEXT.
 Returns the analysis as a string (org-mode formatted).
 New compact format with inline annotations."
-  ;; Ensure vocabulary is loaded
-  (tibetan-analysis--ensure-vocabulary)
+  (condition-case err
+      (progn
+        ;; Ensure vocabulary is loaded
+        (tibetan-analysis--ensure-vocabulary)
 
-  (let* ((parsed (when (fboundp 'tibetan-parse-enhanced)
-                   (tibetan-parse-enhanced tibetan-text)))
-         (words (alist-get 'words parsed))
-         (analysis (alist-get 'analysis parsed))
-         (multiword-units (alist-get 'multiword-units parsed))
-         (wylie-full (when (fboundp 'tibetan-to-wylie-fixed)
-                       (condition-case nil
-                           (tibetan-to-wylie-fixed tibetan-text)
-                         (error "[Wylie conversion error]"))))
-         (verbs (when (fboundp 'tibetan-extract-verbs-compound-aware)
-                  (tibetan-extract-verbs-compound-aware tibetan-text words multiword-units)))
-         (zero-analysis (when (and verbs multiword-units (fboundp 'tibetan-analyze-zero-markers))
-                          (tibetan-analyze-zero-markers verbs multiword-units words)))
-         (translation (when (fboundp 'tibetan-get-dharmamitra-translation)
-                        (tibetan-get-dharmamitra-translation tibetan-text)))
-         (claimed-indices (when (fboundp 'tibetan-get-claimed-indices)
-                            (tibetan-get-claimed-indices multiword-units)))
-         (particles (when analysis (alist-get 'particles analysis)))
-         ;; Build verb lookup table
-         (verb-table (make-hash-table :test 'equal)))
+        (let* ((parsed (condition-case nil
+                           (when (fboundp 'tibetan-parse-enhanced)
+                             (tibetan-parse-enhanced tibetan-text))
+                         (error nil)))
+               (words (alist-get 'words parsed))
+               (analysis (alist-get 'analysis parsed))
+               (multiword-units (alist-get 'multiword-units parsed))
+               (wylie-full (condition-case nil
+                               (when (fboundp 'tibetan-to-wylie-fixed)
+                                 (tibetan-to-wylie-fixed tibetan-text))
+                             (error "[Wylie conversion error]")))
+               (verbs (condition-case nil
+                          (when (fboundp 'tibetan-extract-verbs-compound-aware)
+                            (tibetan-extract-verbs-compound-aware tibetan-text words multiword-units))
+                        (error nil)))
+               (zero-analysis (condition-case nil
+                                  (when (and verbs multiword-units (fboundp 'tibetan-analyze-zero-markers))
+                                    (tibetan-analyze-zero-markers verbs multiword-units words))
+                                (error nil)))
+               (translation (condition-case nil
+                                (when (fboundp 'tibetan-get-dharmamitra-translation)
+                                  (tibetan-get-dharmamitra-translation tibetan-text))
+                              (error nil)))
+               (claimed-indices (condition-case nil
+                                    (when (fboundp 'tibetan-get-claimed-indices)
+                                      (tibetan-get-claimed-indices multiword-units))
+                                  (error nil)))
+               (particles (when analysis (alist-get 'particles analysis)))
+               ;; Build verb lookup table
+               (verb-table (make-hash-table :test 'equal)))
 
     ;; Build verb lookup for quick access
     (dolist (verb verbs)
@@ -406,36 +423,46 @@ New compact format with inline annotations."
       (when (and words (fboundp 'tibetan-build-compound-aware-segments))
         (let ((segments (tibetan-build-compound-aware-segments words multiword-units)))
           (dolist (seg segments)
-            (let* ((info (tibetan-analysis--get-word-info seg multiword-units))
-                   (meaning (alist-get 'meaning info))
-                   (wylie-seg (alist-get 'wylie info))
-                   (particle-annot (tibetan-analysis--get-particle-annotation seg))
-                   (verb-info (gethash seg verb-table))
-                   (annotation-parts '()))
-              ;; Build annotation string
-              (when wylie-seg
-                (push (format "[%s]" wylie-seg) annotation-parts))
-              (when meaning
-                (push (format "\"%s\"" (if (> (length meaning) 30)
-                                           (concat (substring meaning 0 27) "...")
-                                         meaning))
-                      annotation-parts))
-              (when particle-annot
-                (push particle-annot annotation-parts))
-              (when verb-info
-                (let ((trans (alist-get 'transitivity verb-info)))
-                  (push (format "V:%s" (if (and trans (string-match-p "Transitive" trans))
-                                          "tr" "intr"))
-                        annotation-parts)))
-              ;; Output line
-              (insert (format "%s %s\n" seg
-                             (if annotation-parts
-                                 (string-join (nreverse annotation-parts) " ")
-                               "")))))))
+            ;; Wrap each segment in error handler so one failure doesn't break all
+            (condition-case seg-err
+                (let* ((info (tibetan-analysis--get-word-info seg multiword-units))
+                       (meaning (alist-get 'meaning info))
+                       (wylie-seg (alist-get 'wylie info))
+                       (particle-annot (tibetan-analysis--get-particle-annotation seg))
+                       (verb-info (gethash seg verb-table))
+                       (annotation-parts '()))
+                  ;; Build annotation string
+                  (when wylie-seg
+                    (push (format "[%s]" wylie-seg) annotation-parts))
+                  (when meaning
+                    (push (format "\"%s\"" (if (> (length meaning) 30)
+                                               (concat (substring meaning 0 (min 27 (length meaning))) "...")
+                                             meaning))
+                          annotation-parts))
+                  (when particle-annot
+                    (push particle-annot annotation-parts))
+                  (when verb-info
+                    (let ((trans (alist-get 'transitivity verb-info)))
+                      (push (format "V:%s" (if (and trans (string-match-p "Transitive" trans))
+                                              "tr" "intr"))
+                            annotation-parts)))
+                  ;; Output line
+                  (insert (format "%s %s\n" seg
+                                 (if annotation-parts
+                                     (string-join (nreverse annotation-parts) " ")
+                                   ""))))
+              (error
+               ;; On error, just output the segment without annotations
+               (insert (format "%s [error]\n" seg)))))))
       (insert "#+END_EXAMPLE\n\n")
 
-      ;; Full Wylie for reference
-      (insert "** Full Wylie\n")
+      ;; Wylie (for reading aloud in class) - shows the Tibetan text
+      (insert "** Wylie (for reading aloud)\n")
+      (insert tibetan-text)
+      (insert "\n\n")
+
+      ;; Transliteration for reference
+      (insert "** Transliteration\n")
       (insert (or wylie-full "[Not available]"))
       (insert "\n\n")
 
@@ -448,7 +475,31 @@ New compact format with inline annotations."
       (insert "\n")
 
       ;; ============================================================
-      ;; SECTION 3: Sentence Structure (grammatical analysis)
+      ;; SECTION 3: Grammatical Analysis (Bialek)
+      ;; ============================================================
+      (insert "** Grammatical Analysis (Bialek)\n")
+      (let ((bialek-analysis (condition-case nil
+                                (when (fboundp 'tibetan-analyze-grammar-bialek)
+                                  (tibetan-analyze-grammar-bialek tibetan-text))
+                              (error nil))))
+        (if bialek-analysis
+            (dolist (a bialek-analysis)
+              (let ((particle (nth 0 a))
+                    (word (nth 1 a))
+                    (type (nth 2 a))
+                    (function (nth 3 a))
+                    (trans-guide (nth 4 a))
+                    (reference (nth 5 a)))
+                (insert (format "- %s in '%s'\n" particle word))
+                (insert (format "  TYPE: %s\n" type))
+                (insert (format "  FUNCTION: %s\n" function))
+                (insert (format "  TRANSLATION: %s\n" trans-guide))
+                (insert (format "  REFERENCE: %s\n\n" reference))))
+          (insert "[No grammatical markers detected]\n")))
+      (insert "\n")
+
+      ;; ============================================================
+      ;; SECTION 4: Sentence Structure (verb-argument analysis)
       ;; ============================================================
       (insert "** Sentence Structure\n")
       (if (and verbs (fboundp 'tibetan-analyze-arguments))
@@ -487,9 +538,9 @@ New compact format with inline annotations."
       (insert "\n")
 
       ;; ============================================================
-      ;; SECTION 4: Verb Details (Hill 2010) - collapsed by default
+      ;; SECTION 5: Verb Classification (Hill 2010)
       ;; ============================================================
-      (insert "** Verb Details (Hill 2010)\n")
+      (insert "** Verb Classification (Hill 2010)\n")
       (if verbs
           (dolist (verb verbs)
             (when (and verb (listp verb) (consp (car verb)))
@@ -499,16 +550,26 @@ New compact format with inline annotations."
                      (past (or (alist-get 'past_stem verb) "—"))
                      (future (or (alist-get 'future_stem verb) "—"))
                      (imperative (or (alist-get 'imperative_stem verb) "—"))
-                     (frame (or (alist-get 'case_frame verb) "?")))
-                (insert (format "- %s: %s / %s / %s / %s [%s]\n"
-                               lemma present past future imperative frame))
+                     (vol (or (alist-get 'volitionality verb) "?"))
+                     (trans (or (alist-get 'transitivity verb) "?"))
+                     (frame (or (alist-get 'case_frame verb) "?"))
+                     (class (or (alist-get 'indigenous_class verb) "?")))
+                (insert (format "- %s" lemma))
                 (when meaning
-                  (insert (format "  %s\n" meaning))))))
+                  (insert (format " — %s" meaning)))
+                (insert "\n")
+                (insert (format "  STEMS: %s / %s / %s / %s\n" present past future imperative))
+                (insert (format "  CLASSIFICATION: %s, %s, %s\n" vol trans frame))
+                (insert (format "  TIBETAN CLASS: %s\n\n"
+                               (cond
+                                ((string= class "tha_dad_pa") "ཐ་དད་པ་ (transitive)")
+                                ((string= class "tha_mi_dad_pa") "ཐ་མི་དད་པ་ (intransitive)")
+                                (t "—")))))))
         (insert "[No verbs]\n"))
       (insert "\n")
 
       ;; ============================================================
-      ;; SECTION 5: Zero Markers & Special Notes
+      ;; SECTION 6: Zero Markers & Special Notes
       ;; ============================================================
       (when zero-analysis
         (insert "** Zero-Marked NPs\n")
@@ -522,6 +583,10 @@ New compact format with inline annotations."
         (insert "\n"))
 
       (buffer-string))))
+    (error
+     ;; On error, return minimal analysis with error info
+     (format "** Annotated Text\n%s\n\n** Full Wylie\n[Error during analysis]\n\n** Verb Details\n[Error: %s]\n\n** Sentence Structure\n[Analysis error]\n"
+             tibetan-text (error-message-string err)))))
 
 ;; ============================================================================
 ;; MAIN COMMANDS

@@ -18,12 +18,18 @@
   "Safely extract substring from STR between START and END.
 Returns empty string if indices are out of range or invalid."
   (condition-case nil
-      (let* ((len (length str))
-             (s (max 0 (min start len)))
-             (e (if end (max s (min end len)) len)))
-        (if (and (<= 0 s) (<= s e) (<= e len))
-            (substring str s e)
-          ""))
+      (if (not (stringp str))
+          ""
+        (let* ((len (length str))
+               (s (max 0 (min start len)))
+               (e (if end (max s (min end len)) len)))
+          (if (and (integerp s)
+                   (integerp e)
+                   (<= 0 s)
+                   (<= s e)
+                   (<= e len))
+              (substring str s e)
+            "")))
     (error "")))
 
 ;; ============================================================================
