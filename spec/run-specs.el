@@ -30,12 +30,16 @@
 (require 'tibetan-verb-classifier nil t)
 (require 'tibetan-enhanced-parser nil t)  ; For compound recognition
 (require 'tibetan-particles-bialek nil t) ; For Bialek particle analysis
+(require 'tibetan-org-structure nil t)    ; For document preparation
 ;; Skip heavy modules - test via individual functions
 (require 'tibetan-analysis-persist nil t)
 (require 'tibetan-compound-analysis nil t)
 (require 'tibetan-translation-engine nil t)
 (require 'tibetan-classroom nil t)  ; For auto-analysis mode
 (require 'tibetan-mitra-translation nil t)  ; For Mitra AI translation
+(require 'tibetan-clause-analysis nil t)    ; For clause analysis
+(require 'tibetan-auto-analysis nil t)       ; For auto-analysis batch processing
+(require 'tibetan-structure-reorg nil t)     ; For structure reorganization
 
 ;; Load BDD framework
 (require 'tibetan-bdd)
@@ -49,6 +53,11 @@
 (require 'tigress-story-spec)
 (require 'custom-vocab-spec)
 (require 'mitra-translation-spec)
+(require 'document-prep-spec)
+(require 'clause-analysis-spec)
+(require 'sentence-detection-spec)
+(require 'auto-analysis-spec)
+(require 'structure-reorg-spec)
 
 ;; Run specs when loaded in batch mode
 (when noninteractive

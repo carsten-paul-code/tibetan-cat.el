@@ -130,6 +130,11 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
         ;; Consonant + subscript ལ (la-btags) - missing stacks
         ("གླ" . "gl") ("བླ" . "bl") ("ཟླ" . "zl") ("སླ" . "sl")
         ("དབླ" . "dbl") ("ཀླ" . "kl")
+        ;; Consonant + subscript ྭ (wa-zur) - common combinations
+        ("རྭ" . "rw") ("ཀྭ" . "kw") ("གྭ" . "gw") ("ཁྭ" . "khw")
+        ("ཉྭ" . "nyw") ("ཏྭ" . "tw") ("ཐྭ" . "thw") ("ནྭ" . "nw")
+        ("ཙྭ" . "tsw") ("ཚྭ" . "tshw") ("ཞྭ" . "zhw") ("ཟྭ" . "zw")
+        ("ཤྭ" . "shw") ("སྭ" . "sw") ("ཧྭ" . "hw")
         ))
         (single-consonants '(
         ("ཀ" . "k") ("ཁ" . "kh") ("ག" . "g") ("ང" . "ng")
@@ -228,24 +233,39 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
 
                   ;; ===== STEP 1: Check if this consonant is a prefix =====
                   ;; Only single-character consonants can be prefixes
-                  ;; Prefixes can occur with 2+ consonants (prefix + root, or prefix + root + suffix)
+                  ;; A consonant is a prefix ONLY if:
+                  ;; 1. It's the first consonant
+                  ;; 2. It's a valid prefix for the next consonant
+                  ;; 3. Either: there are 3+ consonants, OR there's a vowel mark after position 2
+                  ;; This prevents treating root+suffix (like དང་ dang) as prefix+root
                   (when (and (< next-pos (length syllable))
                             is-first-consonant
                             (= match-length 1))
                     (let ((next-char (tibetan-safe-substring syllable next-pos (1+ next-pos)))
-                          (consonant-count 0))
+                          (consonant-count 0)
+                          (has-vowel-after-second nil))
                       ;; Count total consonants in syllable
-                      (let ((temp-pos 0))
+                      (let ((temp-pos 0)
+                            (seen-consonants 0))
                         (while (< temp-pos (length syllable))
                           (let ((temp-char (tibetan-safe-substring syllable temp-pos (1+ temp-pos))))
                             (when (and (>= (string-to-char temp-char) #x0F40)
                                       (<= (string-to-char temp-char) #x0F6C))
-                              (setq consonant-count (1+ consonant-count))))
+                              (setq consonant-count (1+ consonant-count))
+                              (setq seen-consonants (1+ seen-consonants)))
+                            ;; Check for vowel mark after second consonant
+                            (when (and (= seen-consonants 2)
+                                      (member temp-char '("ི" "ུ" "ེ" "ོ" "ཱ")))
+                              (setq has-vowel-after-second t)))
                           (setq temp-pos (1+ temp-pos))))
 
-                      ;; Prefix if 2+ consonants and valid prefix combination
-                      (when (and (>= consonant-count 2)
-                                (tibetan-is-prefix current-char next-char))
+                      ;; Prefix ONLY if:
+                      ;; - Valid prefix combination AND
+                      ;; - Either 3+ consonants OR vowel after second consonant
+                      ;; This ensures 2-consonant syllables without vowels (like དང) are root+suffix
+                      (when (and (tibetan-is-prefix current-char next-char)
+                                (or (>= consonant-count 3)
+                                    has-vowel-after-second))
                         (setq is-prefix t))))
 
                   ;; ===== STEP 2: Determine if this is ROOT or SUFFIX =====

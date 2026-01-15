@@ -36,6 +36,11 @@
 ;; Load additional test files if they exist
 (condition-case nil (require 'tibetan-compound-analysis-test) (error nil))
 (condition-case nil (require 'tibetan-doc-prep-test) (error nil))
+(condition-case nil (require 'tibetan-org-structure-test) (error nil))
+(condition-case nil (require 'tibetan-clause-analysis-test) (error nil))
+(condition-case nil (require 'tibetan-sentence-detection-test) (error nil))
+(condition-case nil (require 'tibetan-auto-analysis-test) (error nil))
+(condition-case nil (require 'tibetan-structure-reorg-test) (error nil))
 
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here

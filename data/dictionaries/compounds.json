@@ -9511,10 +9511,9 @@
   },
   "བྲམ་ཟེ": {
     "wylie": "bram ze",
-    "english": "Brahmin | Brahmin; brāhman",
-    "category": "general",
-    "source": "Bialek",
-    "sanskrit": "brahmin"
+    "english": "brahmin; brahman",
+    "category": "proper_noun",
+    "source": "RangjungYeshe"
   },
   "བྲམ་ཟེ་ཆང་མི་བཏུང་བ": {
     "wylie": "bram ze chang mi btung ba",
@@ -18689,9 +18688,9 @@
   },
   "ཅུང་ཟད": {
     "wylie": "cung zad",
-    "english": "a little, a bit | [little-only]; slight; only a little; a little; any",
+    "english": "a little; slightly; somewhat",
     "category": "general",
-    "source": "Bialek"
+    "source": "RangjungYeshe"
   },
   "ཅུང་ཟད་ཀྱང": {
     "wylie": "cung zad kyang",
@@ -28787,9 +28786,9 @@
   },
   "གནོད་སྦྱིན": {
     "wylie": "gnod sbyin",
-    "english": "demons in the earth, air, or lower heavens",
-    "category": "general",
-    "source": "Hopkins"
+    "english": "yaksha; harmful spirit; demon",
+    "category": "proper_noun",
+    "source": "RangjungYeshe"
   },
   "གནོད་སེམས": {
     "wylie": "gnod sems",
@@ -38158,9 +38157,9 @@
   },
   "ལེགས་པར": {
     "wylie": "legs par",
-    "english": "well | well; good; proper(ly); beautiful(ly)",
+    "english": "well; properly; thoroughly",
     "category": "general",
-    "source": "Bialek"
+    "source": "RangjungYeshe"
   },
   "ལེགས་པར་འདོམས": {
     "wylie": "legs par 'doms",
@@ -55908,6 +55907,12 @@
     "category": "general",
     "source": "Hopkins"
   },
+  "ར་སྐྱེས": {
+    "wylie": "ra skyes",
+    "english": "gelded male goat; goat",
+    "category": "general",
+    "source": "RangjungYeshe"
+  },
   "རབ་འབྲིང་ཐ": {
     "wylie": "rab 'bring tha",
     "english": "high, middling, low",
@@ -62564,9 +62569,9 @@
   },
   "རྐུན་པོ": {
     "wylie": "rkun po",
-    "english": "robber; thief",
+    "english": "thief; robber",
     "category": "general",
-    "source": "Hopkins"
+    "source": "RangjungYeshe"
   },
   "རྐྱང་མ": {
     "wylie": "rkyang ma",
@@ -92169,5 +92174,275 @@
     "english": "not even a phrase is said",
     "category": "general",
     "source": "Hopkins"
+  },
+  "ལྷ་མཆོད": {
+    "wylie": "lha mchod",
+    "english": "worship of gods; divine offering; sacrifice to the gods",
+    "category": "general",
+    "source": "RangjungYeshe"
+  },
+  "ལྷ་མཆོད་པ": {
+    "wylie": "lha mchod pa",
+    "english": "worship of gods, divine offering",
+    "category": "religious_term",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "ཡིད་མ་ཆེས་པ": {
+    "wylie": "yid ma ches pa",
+    "english": "to be uncertain, not to believe",
+    "category": "general",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "ཡིད་བརྟན་མེད": {
+    "wylie": "yid brtan med",
+    "english": "not trustworthy, unreliable",
+    "category": "general",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "མཆོད་སྦྱིན": {
+    "wylie": "mchod sbyin",
+    "english": "sacrifice, offering",
+    "category": "religious_term",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "སྒྱུ་ཐབས": {
+    "wylie": "sgyu thabs",
+    "english": "clever means, skillful method, trick",
+    "category": "general",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "ཁ་མཐུན": {
+    "wylie": "kha mthun",
+    "english": "to agree, to be in agreement",
+    "category": "general",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "སྔ་མ་བཞིན": {
+    "wylie": "snga ma bzhin",
+    "english": "as before, like the previous one",
+    "category": "adverb",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "ཅི་ཞིག་ཏུ་རུང་སྟེ": {
+    "wylie": "ci zhig tu rung ste",
+    "english": "whatever it may be",
+    "category": "phrase",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "ཚད་པ་ཙམ": {
+    "wylie": "tshad pa tsam",
+    "english": "to assign hardly any importance to",
+    "category": "phrase",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "སྐབས་དང་འཚམ་པ": {
+    "wylie": "skabs dang 'tsham pa",
+    "english": "suitable for the purpose/opportunity",
+    "category": "phrase",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "བླང་བར་བྱ": {
+    "wylie": "blang bar bya",
+    "english": "should take (necessitative)",
+    "category": "verb_phrase",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "ཡོང་དུས": {
+    "wylie": "yong dus",
+    "english": "when [one] comes/came",
+    "category": "temporal_phrase",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "བལྟས་ཏེ": {
+    "wylie": "bltas te",
+    "english": "having looked, after examining",
+    "category": "verb_phrase",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "ཐབས་ལ་བརྩོན་པ": {
+    "wylie": "thabs la brtson pa",
+    "english": "striving through [skillful] means",
+    "category": "phrase",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "ཁུར་བ": {
+    "wylie": "khur ba",
+    "english": "to carry along (Pf of འཁུར་བ)",
+    "category": "verb",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "བོར་བ": {
+    "wylie": "bor ba",
+    "english": "to abandon, to cast off (Pf of འབོར་བ)",
+    "category": "verb",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "འཕྱང་བ": {
+    "wylie": "'phyang ba",
+    "english": "hanging, drooping",
+    "category": "general",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "ཁྱིར་བཏགས": {
+    "wylie": "khyir btags",
+    "english": "designated as a dog",
+    "category": "phrase",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "དེ་སྐད་སྨྲས": {
+    "wylie": "de skad smras",
+    "english": "spoke thus, said that",
+    "category": "phrase",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "གཞན་ཐམས་ཅད": {
+    "wylie": "gzhan thams cad",
+    "english": "all others, everyone else",
+    "category": "phrase",
+    "source": "Sa-skya-legs-bshad"
+  },
+  "རྒྱ་མཚོའི་ལྷ": {
+    "wylie": "rgya mtsho'i lha",
+    "english": "ocean deity, sea god",
+    "category": "religious_term",
+    "source": "Padma-rnam-rgyal"
+  },
+  "མཉན་ཡོད": {
+    "wylie": "mnyan yod",
+    "english": "Śrāvastī (city name)",
+    "category": "place_name",
+    "source": "Padma-rnam-rgyal"
+  },
+  "ཁྲིམས་ལྔ་པ": {
+    "wylie": "khrims lnga pa",
+    "english": "one who observes the five precepts",
+    "category": "religious_term",
+    "source": "Padma-rnam-rgyal"
+  },
+  "དེད་དཔོན": {
+    "wylie": "ded dpon",
+    "english": "captain, ship's captain, navigator",
+    "category": "general",
+    "source": "Padma-rnam-rgyal"
+  },
+  "མི་དགེ་བའི་ལས": {
+    "wylie": "mi dge ba'i las",
+    "english": "non-virtuous action, unwholesome karma",
+    "category": "religious_term",
+    "source": "Padma-rnam-rgyal"
+  },
+  "ཟངས་ཁོལ": {
+    "wylie": "zangs khol",
+    "english": "molten copper, seething copper",
+    "category": "general",
+    "source": "Padma-rnam-rgyal"
+  },
+  "ཆབ་རོམ": {
+    "wylie": "chab rom",
+    "english": "ice, frozen water",
+    "category": "general",
+    "source": "Padma-rnam-rgyal"
+  },
+  "ངན་སྐྱུགས": {
+    "wylie": "ngan skyugs",
+    "english": "vomit",
+    "category": "general",
+    "source": "Padma-rnam-rgyal"
+  },
+  "རལ་གྲིའི་རི": {
+    "wylie": "ral gri'i ri",
+    "english": "mountain of swords",
+    "category": "religious_term",
+    "source": "Padma-rnam-rgyal"
+  },
+  "ཉམས་ཐག་པ": {
+    "wylie": "nyams thag pa",
+    "english": "exhausted, worn out, emaciated",
+    "category": "general",
+    "source": "Padma-rnam-rgyal"
+  },
+  "རྒྱ་ཁབ": {
+    "wylie": "rgya khab",
+    "english": "needle (Chinese needle)",
+    "category": "general",
+    "source": "Padma-rnam-rgyal"
+  },
+  "གཟུགས་བྱད": {
+    "wylie": "gzugs byad",
+    "english": "physical appearance, form and features",
+    "category": "general",
+    "source": "Padma-rnam-rgyal"
+  },
+  "བརྒྱ་འགྱུར": {
+    "wylie": "brgya 'gyur",
+    "english": "hundredfold",
+    "category": "general",
+    "source": "Padma-rnam-rgyal"
+  },
+  "སྟོང་འགྱུར": {
+    "wylie": "stong 'gyur",
+    "english": "thousandfold",
+    "category": "general",
+    "source": "Padma-rnam-rgyal"
+  },
+  "སྤྲེའུ": {
+    "wylie": "spre'u",
+    "english": "monkey",
+    "category": "general",
+    "source": "Padma-rnam-rgyal"
+  },
+  "བཀྲ་ཤིས་མ": {
+    "wylie": "bkra shis ma",
+    "english": "Maṅgalā (goddess Umā)",
+    "category": "religious_term",
+    "source": "Padma-rnam-rgyal"
+  },
+  "སྙིམ་པ": {
+    "wylie": "snyim pa",
+    "english": "two handfuls, cupped hands",
+    "category": "general",
+    "source": "Padma-rnam-rgyal"
+  },
+  "བསྐལ་པའི་མེ": {
+    "wylie": "bskal pa'i me",
+    "english": "the fire at the end of the eon",
+    "category": "religious_term",
+    "source": "Padma-rnam-rgyal"
+  },
+  "རི་རབ": {
+    "wylie": "ri rab",
+    "english": "Mount Meru",
+    "category": "religious_term",
+    "source": "Padma-rnam-rgyal"
+  },
+  "རྡོ་རྗེའི་མཐའ": {
+    "wylie": "rdo rje'i mtha'",
+    "english": "vajra boundary (outermost boundary of the world)",
+    "category": "religious_term",
+    "source": "Padma-rnam-rgyal"
+  },
+  "བཅོམ་ལྡན་འདས": {
+    "wylie": "bcom ldan 'das",
+    "english": "Bhagavat, Blessed One (epithet of Buddha)",
+    "category": "religious_term",
+    "source": "Padma-rnam-rgyal"
+  },
+  "ཤིན་ཏུ་ལྷག་པར": {
+    "wylie": "shin tu lhag par",
+    "english": "much more, far exceeding",
+    "category": "phrase",
+    "source": "Padma-rnam-rgyal"
+  },
+  "ཚེ་འཕོས་ནས": {
+    "wylie": "tshe 'phos nas",
+    "english": "after dying, having passed away",
+    "category": "phrase",
+    "source": "Padma-rnam-rgyal"
+  },
+  "ལོ་བརྒྱ་སྟོང": {
+    "wylie": "lo brgya stong",
+    "english": "a hundred thousand years",
+    "category": "phrase",
+    "source": "Padma-rnam-rgyal"
   }
 }

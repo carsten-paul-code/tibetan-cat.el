@@ -17,6 +17,9 @@
 (require 'json)
 (require 'cl-lib)
 
+;; Soft-require tibetan-vocabulary for comprehensive glossaries
+(require 'tibetan-vocabulary nil t)
+
 ;; ============================================================================
 ;; DICTIONARY LOADING
 ;; ============================================================================
@@ -84,6 +87,12 @@ Uses longest-match-first strategy.
 Returns list of (start-index . end-index . entry-data) tuples."
   ;; Ensure dictionaries are loaded
   (tibetan-load-dictionaries)
+  ;; Also load bundled glossaries (Rangjung Yeshe etc.) if available
+  (when (and (fboundp 'tibetan-bundled-load-all-glossaries)
+             (or (not (boundp 'tibetan-comprehensive-vocabulary))
+                 (not tibetan-comprehensive-vocabulary)
+                 (= (hash-table-count tibetan-comprehensive-vocabulary) 0)))
+    (tibetan-bundled-load-all-glossaries))
   (let ((matches '())
         (i 0))
     (while (< i (length words))

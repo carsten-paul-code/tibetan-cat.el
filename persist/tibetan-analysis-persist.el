@@ -82,7 +82,7 @@ Sets body text to 10pt and headings to max 12pt for Latin fonts."
 (defun tibetan-analysis-mode-hook ()
   "Hook to run when entering an analysis buffer."
   (when (and (buffer-file-name)
-             (string-match "analysis/seg-[0-9]+\\.org$" (buffer-file-name)))
+             (string-match "analysis/seg-[0-9]+" (buffer-file-name)))
     (tibetan-analysis-setup-faces)))
 
 (add-hook 'org-mode-hook 'tibetan-analysis-mode-hook)
@@ -103,22 +103,72 @@ Returns the folder path."
       (message "Created analysis folder: %s" analysis-dir))
     analysis-dir))
 
-(defun tibetan-analysis-segment-filename (seg-id)
+(defun tibetan-analysis-make-short-name (filename)
+  "Create a short identifier from FILENAME for use in segment filenames.
+E.g., 'Reading-Sa-skya-legs-bshad.org' -> 'saskya'
+      'Tigress-Story-BlockPrint-Class.org' -> 'tigress'"
+  (when filename
+    (let* ((base (file-name-sans-extension (file-name-nondirectory filename)))
+           ;; Convert to lowercase and extract key part
+           (lower (downcase base))
+           ;; Common patterns to extract
+           (short (cond
+                   ;; Tigress story
+                   ((string-match "tigress" lower) "tigress")
+                   ;; Sa skya legs bshad
+                   ((string-match "sa.?skya\\|saskya\\|legs.?bshad" lower) "saskya")
+                   ;; Reading files - use first meaningful word
+                   ((string-match "reading.?\\([0-9]+\\)" lower)
+                    (format "reading%s" (match-string 1 lower)))
+                   ;; Default: take first 8 chars of alphanumeric
+                   (t (let ((clean (replace-regexp-in-string "[^a-z0-9]" "" lower)))
+                        (substring clean 0 (min 8 (length clean))))))))
+      short)))
+
+(defun tibetan-analysis-segment-filename (seg-id &optional source-file)
   "Generate analysis filename for SEG-ID.
 SEG-ID can be a number or string like '1' or 'seg-001'.
-Returns filename like 'seg-001.org'."
-  (let ((num (cond
-              ((numberp seg-id) seg-id)
-              ((string-match "\\([0-9]+\\)" seg-id)
-               (string-to-number (match-string 1 seg-id)))
-              (t 1))))
-    (format "seg-%03d.org" num)))
+SOURCE-FILE, if provided, adds a short identifier suffix.
+Returns filename like 'seg-001-tigress.org' or 'seg-001.org'."
+  (let* ((num (cond
+               ((numberp seg-id) seg-id)
+               ;; Extract segment number specifically (not sentence number)
+               ((string-match "Segment \\([0-9]+\\)" seg-id)
+                (string-to-number (match-string 1 seg-id)))
+               ;; Fallback: try any number
+               ((string-match "\\([0-9]+\\)" seg-id)
+                (string-to-number (match-string 1 seg-id)))
+               (t 1)))
+         (short-name (tibetan-analysis-make-short-name source-file)))
+    (if short-name
+        (format "seg-%03d-%s.org" num short-name)
+      (format "seg-%03d.org" num))))
 
-(defun tibetan-analysis-get-filepath (seg-id)
-  "Get full filepath for analysis of SEG-ID."
-  (let ((folder (tibetan-analysis-get-folder))
-        (filename (tibetan-analysis-segment-filename seg-id)))
-    (expand-file-name filename folder)))
+(defun tibetan-analysis-get-filepath (seg-id &optional source-file)
+  "Get full filepath for analysis of SEG-ID.
+SOURCE-FILE, if provided, is used to generate a unique suffix.
+Also checks for legacy files without suffix for backward compatibility."
+  (let* ((folder (tibetan-analysis-get-folder))
+         (src (or source-file (buffer-file-name)))
+         (filename-new (tibetan-analysis-segment-filename seg-id src))
+         (filepath-new (expand-file-name filename-new folder))
+         ;; Legacy filename without suffix
+         (num (cond
+               ((numberp seg-id) seg-id)
+               ;; Extract segment number specifically (not sentence number)
+               ((string-match "Segment \\([0-9]+\\)" seg-id)
+                (string-to-number (match-string 1 seg-id)))
+               ;; Fallback: try any number
+               ((string-match "\\([0-9]+\\)" seg-id)
+                (string-to-number (match-string 1 seg-id)))
+               (t 1)))
+         (filename-old (format "seg-%03d.org" num))
+         (filepath-old (expand-file-name filename-old folder)))
+    ;; Return new path if it exists, else old path if it exists, else new path
+    (cond
+     ((file-exists-p filepath-new) filepath-new)
+     ((file-exists-p filepath-old) filepath-old)
+     (t filepath-new))))
 
 ;; ============================================================================
 ;; HASH FUNCTIONS
@@ -142,11 +192,17 @@ AUTO-CONTENT is the generated analysis content (string)."
          (date (format-time-string "%Y-%m-%d"))
          (source-name (file-name-nondirectory source-file))
          (seg-num (if (numberp seg-id) seg-id
-                    (if (string-match "\\([0-9]+\\)" seg-id)
-                        (string-to-number (match-string 1 seg-id))
-                      1))))
+                    (cond
+                     ;; Extract segment number specifically (not sentence number)
+                     ((string-match "Segment \\([0-9]+\\)" seg-id)
+                      (string-to-number (match-string 1 seg-id)))
+                     ;; Fallback: try any number
+                     ((string-match "\\([0-9]+\\)" seg-id)
+                      (string-to-number (match-string 1 seg-id)))
+                     (t 1)))))
     (with-temp-file filepath
       (insert (format "#+TITLE: Segment %d Analysis\n" seg-num))
+      (insert "#+STARTUP: overview\n")
       (insert (format "#+SOURCE: [[file:../%s::*Segment %d][%s / Segment %d]]\n"
                       source-name seg-num source-name seg-num))
       (insert (format "#+TIBETAN_HASH: %s\n" hash))
@@ -560,6 +616,13 @@ New compact format with inline annotations."
                 (insert "\n")
                 (insert (format "  STEMS: %s / %s / %s / %s\n" present past future imperative))
                 (insert (format "  CLASSIFICATION: %s, %s, %s\n" vol trans frame))
+                ;; Add controllability mapping (Schwieger/Bialek terminology)
+                (insert (format "  CONTROLLABILITY: %s\n"
+                               (cond
+                                ((string= vol "Volitional") "Controllable (བྱེད་པ་པོ་ can control)")
+                                ((string= vol "Non-volitional") "Uncontrollable (བྱེད་པ་པོ་ cannot control)")
+                                ((string= vol "Both") "Context-dependent")
+                                (t "?"))))
                 (insert (format "  TIBETAN CLASS: %s\n\n"
                                (cond
                                 ((string= class "tha_dad_pa") "ཐ་དད་པ་ (transitive)")
@@ -576,8 +639,14 @@ New compact format with inline annotations."
         (dolist (item zero-analysis)
           (let ((form (alist-get 'form item))
                 (function (alist-get 'function item))
+                (position (alist-get 'position item))
+                (distance (alist-get 'distance-from-verb item))
                 (gloss (alist-get 'gloss item)))
-            (insert (format "- %s (Ø): %s" form function))
+            (insert (format "- %s (Ø)" form))
+            ;; Show position info if available
+            (when (and position distance)
+              (insert (format " [word #%d, %d before verb]" position distance)))
+            (insert (format ": %s" function))
             (when gloss (insert (format " — %s" gloss)))
             (insert "\n")))
         (insert "\n"))
@@ -593,9 +662,35 @@ New compact format with inline annotations."
 ;; ============================================================================
 
 (defun tibetan-open-segment-analysis ()
-  "Open or create analysis for current segment in side window.
-If analysis exists, check if source has changed and warn."
+  "Open or create analysis based on current position.
+
+Context-aware behavior:
+- On *** Segment heading: word-by-word segment analysis
+- On ** Sentence heading: clause structure analysis (main verb, converbs)
+
+This is the main entry point for C-c u A."
   (interactive)
+  (require 'tibetan-org-structure nil t)
+
+  ;; Determine context: segment or sentence?
+  (cond
+   ;; At a segment (level 3) - do word-by-word analysis
+   ((and (fboundp 'tibetan-org-at-segment-p)
+         (tibetan-org-at-segment-p))
+    (tibetan--open-segment-word-analysis))
+
+   ;; At a sentence (level 2) - do clause analysis
+   ((and (fboundp 'tibetan-org-at-sentence-p)
+         (tibetan-org-at-sentence-p))
+    (tibetan--open-sentence-clause-analysis))
+
+   ;; Fallback to old behavior (try segment)
+   (t
+    (tibetan--open-segment-word-analysis))))
+
+(defun tibetan--open-segment-word-analysis ()
+  "Open or create word-by-word analysis for current segment.
+Called when cursor is on a *** Segment heading."
   (let* ((seg-data (tibetan-get-current-segment-any-format))
          (seg-id (car seg-data))
          (tibetan-text (cdr seg-data)))
@@ -628,6 +723,72 @@ If analysis exists, check if source has changed and warn."
             (display-buffer-in-side-window buf
                                            '((side . right)
                                              (window-width . 0.5)))))))))
+
+(defun tibetan--open-sentence-clause-analysis ()
+  "Open clause structure analysis for current sentence.
+Called when cursor is on a ** Sentence heading.
+Shows main verb, converbs, and clause dependencies."
+  (require 'tibetan-clause-analysis nil t)
+
+  (let* ((sent-data (tibetan-org-get-sentence-data))
+         (sent-id (car sent-data))
+         (tibetan-text (cdr sent-data)))
+
+    (unless sent-data
+      (error "Not in a sentence heading"))
+
+    ;; Generate clause analysis
+    (let* ((analysis-text
+            (if (fboundp 'tibetan-analyze-clause-structure)
+                (tibetan-analyze-clause-structure tibetan-text)
+              "Clause analysis module not loaded."))
+           (segments (tibetan-org-get-sentence-segments))
+           (buf-name (format "*Clause Analysis: %s*" sent-id)))
+
+      ;; Create or reuse buffer
+      (let ((buf (get-buffer-create buf-name)))
+        (with-current-buffer buf
+          (erase-buffer)
+          (org-mode)
+
+          ;; Header
+          (insert (format "#+TITLE: Clause Analysis - %s\n\n" sent-id))
+
+          ;; Original text
+          (insert "* Tibetan Text\n\n")
+          (insert tibetan-text)
+          (insert "\n\n")
+
+          ;; Segments breakdown
+          (insert "* Segments\n\n")
+          (let ((n 0))
+            (dolist (seg segments)
+              (setq n (1+ n))
+              (insert (format "%d. %s\n" n seg))))
+          (insert "\n")
+
+          ;; Clause analysis
+          (insert "* Clause Structure\n\n")
+          (insert analysis-text)
+
+          ;; Grammar notes placeholder
+          (insert "\n* Grammar Notes\n\n")
+          (insert "Add your notes about the sentence structure here.\n\n")
+
+          ;; Translation section
+          (insert "* Translation\n\n")
+          (insert "Your translation of the complete sentence:\n\n")
+
+          ;; Setup faces
+          (tibetan-analysis-setup-faces)
+          (goto-char (point-min)))
+
+        ;; Display in side window
+        (display-buffer-in-side-window buf
+                                       '((side . right)
+                                         (window-width . 0.5)))
+        (message "Showing clause analysis for %s (%d segments)"
+                 sent-id (length segments))))))
 
 (defun tibetan-reanalyze-segment ()
   "Re-analyze current segment, preserving user notes.

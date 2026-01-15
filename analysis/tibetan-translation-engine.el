@@ -60,10 +60,12 @@ Returns alist of (role . (form . english))."
 
 (defun tibetan-cat--gloss-word (tibetan-word &optional multiword-units)
   "Get English gloss for TIBETAN-WORD.
-Checks MULTIWORD-UNITS first, then vocabulary."
-  (let ((gloss nil))
-    ;; Check multiword units
-    (when multiword-units
+Checks MULTIWORD-UNITS first, then vocabulary.
+Returns nil for empty or nil input."
+  (when (and tibetan-word (stringp tibetan-word) (not (string-empty-p tibetan-word)))
+    (let ((gloss nil))
+      ;; Check multiword units
+      (when multiword-units
       (dolist (unit multiword-units)
         (when (string= (nth 2 unit) tibetan-word)
           (let ((data (nth 3 unit)))
@@ -84,7 +86,7 @@ Checks MULTIWORD-UNITS first, then vocabulary."
       (when (string-match "^\\([^;,]+\\)" gloss)
         (setq gloss (match-string 1 gloss)))
       (setq gloss (string-trim gloss)))
-    gloss))
+    gloss)))
 
 (defun tibetan-cat--build-verb-phrase (verb-form verb-meaning verb-info)
   "Build English verb phrase from VERB-FORM, VERB-MEANING, and VERB-INFO."

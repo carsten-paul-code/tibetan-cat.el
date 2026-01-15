@@ -55,9 +55,21 @@ Returns cons cell (seg-id . seg-text) or nil."
               (tibetan-org-at-segment-p))
      (let ((text (tibetan-org-get-segment-text))
            (seg-num (tibetan-org-get-segment-id))
-           (sent-num (tibetan-org-get-sentence-id)))
+           (sent-num (tibetan-org-get-sentence-id))
+           (section-name (tibetan-org-get-parent-section-name)))
        (when text
-         (cons (format "Sentence %d, Segment %d" sent-num seg-num) text))))
+         ;; Build segment ID: prefer "Sentence N, Segment M" if available,
+         ;; otherwise use section name or just segment number
+         (cons (cond
+                ((and sent-num seg-num)
+                 (format "Sentence %d, Segment %d" sent-num seg-num))
+                ((and section-name seg-num)
+                 (format "%s, Segment %d" section-name seg-num))
+                (seg-num
+                 (format "Segment %d" seg-num))
+                (t
+                 "Unknown Segment"))
+               text))))
 
    ;; Try old markers second
    (tibetan-get-current-segment)
