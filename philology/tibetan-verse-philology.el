@@ -205,21 +205,28 @@ APPARATUS-ENTRIES is list of (lemma reading-a reading-b note)."
   "Extract current verse block data from buffer.
 Returns (verse-number . verse-lines) or nil if not in a verse block."
   (save-excursion
-    (let ((start-pos (point))
-          verse-number verse-lines)
+    (let (verse-number verse-lines verse-start-line)
       ;; Find the verse marker before point
       (when (re-search-backward "〔verse:\\([0-9]+\\)〕" nil t)
         (setq verse-number (match-string 1))
+        (setq verse-start-line (line-number-at-pos))
         (forward-line 1)
-        ;; Collect all segment lines until next verse or section
-        (while (and (not (eobp))
-                    (not (looking-at "^\\*\\|〔verse:"))
-                    (< (point) (+ start-pos 1000)))
-          (when (looking-at ".*〔seg:[^〕]+〕\\([^〔〕]+\\)〔/seg〕")
-            (let ((line (match-string 1)))
-              (when (and line (not (string-empty-p (string-trim line))))
-                (push (string-trim line) verse-lines))))
-          (forward-line 1))
+        ;; Collect all segment lines until:
+        ;; - next verse marker
+        ;; - level 1 or 2 org heading (^* or ^**)
+        ;; - "Translation:" line (common in prepared documents)
+        ;; - max 50 lines from verse start
+        (let ((max-line (+ verse-start-line 50)))
+          (while (and (not (eobp))
+                      (not (looking-at "〔verse:"))
+                      (not (looking-at "^\\*\\*? [A-Z]"))  ; Level 1-2 headings
+                      (not (looking-at "^Translation:"))
+                      (< (line-number-at-pos) max-line))
+            (when (looking-at ".*〔seg:[^〕]+〕\\([^〔〕]+\\)〔/seg〕")
+              (let ((line (match-string 1)))
+                (when (and line (not (string-empty-p (string-trim line))))
+                  (push (string-trim line) verse-lines))))
+            (forward-line 1)))
         ;; Return verse data if we found lines
         (when verse-lines
           (cons verse-number (nreverse verse-lines)))))))
