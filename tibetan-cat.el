@@ -118,6 +118,9 @@
 
 (require 'tibetan-analysis-persist)    ; Persistent segment analysis (C-c u A / C-c u R)
 (require 'tibetan-compound-analysis)   ; Persistent compound analysis (C-c v A / C-c v R)
+(require 'tibetan-clause-analysis)     ; Clause analysis (converbs, main verbs)
+(require 'tibetan-auto-analysis)       ; Auto-analyze document (C-c u B)
+(require 'tibetan-structure-reorg)     ; Reorganize analysis files (C-c u O / C-c u U)
 
 ;; ============================================================================
 ;; LOAD DOCUMENT DISPLAY MODULES
@@ -157,6 +160,10 @@ Loads glossaries and prepares the system for use."
   (message "  C-c u T - Translate selected region")
   (message "")
   (message "DOCUMENT PREPARATION:")
+  (message "  C-c u P - Prepare document (segments + sentences)")
+  (message "  C-c u B - Auto-analyze all segments and sentences")
+  (message "  C-c u O - Reorganize analysis files (after structure changes)")
+  (message "  C-c u U - Preview reorganization (dry run)")
   (message "  M-x tibetan-doc-prep  - 3-step workflow (OCR → AI correct → format)")
   (message "")
   (message "OTHER:")
