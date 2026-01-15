@@ -41,6 +41,7 @@
 (condition-case nil (require 'tibetan-sentence-detection-test) (error nil))
 (condition-case nil (require 'tibetan-auto-analysis-test) (error nil))
 (condition-case nil (require 'tibetan-structure-reorg-test) (error nil))
+(condition-case nil (require 'tibetan-keybindings-test) (error nil))
 
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here
