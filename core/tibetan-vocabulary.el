@@ -57,6 +57,13 @@ Value: hash-table of (tibetan-term . definition)")
 ;; CUSTOM VOCABULARY FILE SUPPORT
 ;; ============================================================================
 
+(defvar tibetan-resources-vocab-cache (make-hash-table :test 'equal)
+  "Cache for Resources folder vocabulary.
+Key: directory path, Value: hash-table of (term . definition)")
+
+(defvar tibetan-current-resources-vocab nil
+  "Current buffer's Resources vocabulary hash-table, or nil if none.")
+
 (defun tibetan-get-custom-vocab-file ()
   "Get custom vocabulary file path from #+TIBETAN_VOCAB_FILE header.
 Returns absolute path or nil if not set."
@@ -69,6 +76,143 @@ Returns absolute path or nil if not set."
             path
           (when buffer-file-name
             (expand-file-name path (file-name-directory buffer-file-name))))))))
+
+(defun tibetan-find-resources-folder ()
+  "Find Resources folder relative to current buffer.
+Looks in: ./Resources, ../Resources, ../../Resources
+Returns absolute path or nil."
+  (when buffer-file-name
+    (let ((dir (file-name-directory buffer-file-name)))
+      (catch 'found
+        (dolist (rel '("Resources" "../Resources" "../../Resources"))
+          (let ((res-dir (expand-file-name rel dir)))
+            (when (file-directory-p res-dir)
+              (throw 'found res-dir))))))))
+
+(defun tibetan-parse-wordlist-pdf (pdf-path)
+  "Parse a Tibetan wordlist PDF (Wortliste format).
+Format: Wylie or Tibetan term followed by German // English definitions.
+Returns hash-table with both Wylie and Tibetan keys."
+  (let ((vocab-table (make-hash-table :test 'equal)))
+    (when (and pdf-path (file-exists-p pdf-path))
+      (condition-case err
+          (let* ((text (shell-command-to-string
+                        (format "pdftotext -layout %s -"
+                                (shell-quote-argument pdf-path))))
+                 (lines (split-string text "\n"))
+                 (current-term nil)
+                 (current-def "")
+                 (page-section nil))
+            (dolist (line lines)
+              (cond
+               ;; Page reference like "(30.6)" or "(31.3–4)"
+               ((string-match "^(\\([0-9]+\\.[0-9]\\)" line)
+                (setq page-section (match-string 1 line))
+                ;; Save previous entry
+                (when (and current-term (not (string-empty-p current-def)))
+                  (tibetan--store-vocab-entry vocab-table current-term current-def))
+                (setq current-term nil current-def ""))
+
+               ;; Page numbers to skip
+               ((string-match "^[0-9]+$" (string-trim line))
+                nil)
+
+               ;; Empty lines - save entry
+               ((string-empty-p (string-trim line))
+                (when (and current-term (not (string-empty-p current-def)))
+                  (tibetan--store-vocab-entry vocab-table current-term current-def))
+                (setq current-term nil current-def ""))
+
+               ;; Tibetan term line (starts with Tibetan character)
+               ((string-match "^\\([ༀ-࿿][^[:space:]]*\\(?:་[ༀ-࿿][^[:space:]]*\\)*\\)" line)
+                ;; Save previous entry
+                (when (and current-term (not (string-empty-p current-def)))
+                  (tibetan--store-vocab-entry vocab-table current-term current-def))
+                (setq current-term (match-string 1 line))
+                (setq current-def ""))
+
+               ;; Wylie term line (starts with lowercase, no indentation)
+               ((and (not (string-match "^\\s-" line))
+                     (string-match "^\\([a-z][a-z' ]*[a-z]\\)" (string-trim line)))
+                ;; Save previous entry
+                (when (and current-term (not (string-empty-p current-def)))
+                  (tibetan--store-vocab-entry vocab-table current-term current-def))
+                (let ((term (string-trim (match-string 1 (string-trim line)))))
+                  ;; Skip if it looks like a definition (contains "to ", "a ", etc.)
+                  (unless (string-match-p "^\\(to \\|a \\|the \\|one \\)" term)
+                    (setq current-term term)
+                    (setq current-def ""))))
+
+               ;; Definition line (indented or following term)
+               ((and current-term
+                     (string-match "\\(.+\\)" line))
+                (let ((content (string-trim (match-string 1 line))))
+                  (unless (string-empty-p content)
+                    (setq current-def (concat current-def
+                                             (if (string-empty-p current-def) "" " ")
+                                             content)))))))
+
+            ;; Save last entry
+            (when (and current-term (not (string-empty-p current-def)))
+              (tibetan--store-vocab-entry vocab-table current-term current-def)))
+        (error
+         (message "Warning: Could not parse wordlist PDF %s: %s" pdf-path err))))
+    vocab-table))
+
+(defun tibetan--store-vocab-entry (vocab-table term def)
+  "Store TERM with DEF in VOCAB-TABLE under both Wylie and Tibetan keys."
+  (let ((clean-def (string-trim def)))
+    ;; Store under original key
+    (puthash term clean-def vocab-table)
+    ;; If term is Wylie, also store under Tibetan
+    (when (string-match-p "^[a-z]" term)
+      (when (fboundp 'tibetan-wylie-to-tibetan)
+        (let ((tib (ignore-errors (tibetan-wylie-to-tibetan term))))
+          (when (and tib (not (string-empty-p tib)))
+            (puthash tib clean-def vocab-table)))))
+    ;; If term is Tibetan, also store under Wylie
+    (when (string-match-p "^[ༀ-࿿]" term)
+      (when (fboundp 'tibetan-to-wylie-fixed)
+        (let ((wylie (ignore-errors (tibetan-to-wylie-fixed term))))
+          (when (and wylie (not (string-empty-p wylie)))
+            (puthash wylie clean-def vocab-table)))))))
+
+(defun tibetan-load-resources-vocab ()
+  "Load vocabulary from Resources folder if present.
+Looks for PDF files containing 'Wortliste' or 'wordlist' in the name."
+  (let ((res-dir (tibetan-find-resources-folder)))
+    (when res-dir
+      (let ((cached (gethash res-dir tibetan-resources-vocab-cache)))
+        (if cached
+            (setq tibetan-current-resources-vocab cached)
+          ;; Find and parse wordlist PDFs
+          (let ((vocab-table (make-hash-table :test 'equal))
+                (pdfs (directory-files res-dir t "\\(Wortliste\\|wordlist\\|Word.?list\\).*\\.pdf$" t)))
+            (dolist (pdf pdfs)
+              (message "Loading Resources vocabulary from %s..." (file-name-nondirectory pdf))
+              (let ((entries (tibetan-parse-wordlist-pdf pdf)))
+                (maphash (lambda (k v) (puthash k v vocab-table)) entries)))
+            (when (> (hash-table-count vocab-table) 0)
+              (puthash res-dir vocab-table tibetan-resources-vocab-cache)
+              (setq tibetan-current-resources-vocab vocab-table)
+              (message "✓ Loaded %d entries from Resources" (hash-table-count vocab-table)))))))))
+
+(defun tibetan-lookup-word-in-resources-vocab (word)
+  "Look up WORD in current Resources vocabulary.
+Returns meaning if found, nil otherwise."
+  (when tibetan-current-resources-vocab
+    (let* ((root-form (tibetan-strip-particles word))
+           (entry (or
+                   (gethash word tibetan-current-resources-vocab)
+                   (gethash root-form tibetan-current-resources-vocab))))
+      ;; Try Wylie conversion
+      (unless entry
+        (when (fboundp 'tibetan-to-wylie-fixed)
+          (let* ((wylie (ignore-errors (tibetan-to-wylie-fixed word)))
+                 (wylie-root (ignore-errors (tibetan-to-wylie-fixed root-form))))
+            (setq entry (or (and wylie (gethash wylie tibetan-current-resources-vocab))
+                           (and wylie-root (gethash wylie-root tibetan-current-resources-vocab)))))))
+      entry)))
 
 (defun tibetan-parse-vocab-pdf (pdf-path)
   "Parse a vocabulary PDF file and return a hash-table of entries.
@@ -262,9 +406,10 @@ Returns meaning if found, nil otherwise."
 (defun tibetan-lookup-word (word &optional prev-word)
   "Look up WORD with optional PREV-WORD for compound detection.
 Priority order:
-1. Custom vocabulary (if #+TIBETAN_VOCAB_FILE is set)
-2. Local comprehensive glossary
-3. DharmaMitra API fallback
+1. Resources folder vocabulary (auto-detected)
+2. Custom vocabulary (if #+TIBETAN_VOCAB_FILE is set)
+3. Local comprehensive glossary
+4. DharmaMitra API fallback
 Returns meaning string or nil."
   (let ((meaning nil))
     ;; Try compound if prev-word provided
@@ -272,25 +417,32 @@ Returns meaning string or nil."
       (let* ((compound (concat prev-word "་" word))
              (compound-stripped (concat (tibetan-strip-particles prev-word) "་"
                                        (tibetan-strip-particles word))))
-        ;; 1. Try custom vocabulary first
-        (setq meaning (or (tibetan-lookup-word-in-custom-vocab compound)
-                         (tibetan-lookup-word-in-custom-vocab compound-stripped)))
-        ;; 2. Try local glossary
+        ;; 1. Try Resources vocabulary first (highest priority)
+        (setq meaning (or (tibetan-lookup-word-in-resources-vocab compound)
+                         (tibetan-lookup-word-in-resources-vocab compound-stripped)))
+        ;; 2. Try custom vocabulary
+        (unless meaning
+          (setq meaning (or (tibetan-lookup-word-in-custom-vocab compound)
+                           (tibetan-lookup-word-in-custom-vocab compound-stripped))))
+        ;; 3. Try local glossary
         (unless meaning
           (setq meaning (or (tibetan-lookup-word-in-local-glossary compound)
                            (tibetan-lookup-word-in-local-glossary compound-stripped))))
-        ;; 3. If not found, try DharmaMitra
+        ;; 4. If not found, try DharmaMitra
         (unless meaning
           (setq meaning (tibetan-lookup-word-in-dharmamitra compound)))))
 
     ;; Try single word if compound not found
     (unless meaning
-      ;; 1. Try custom vocabulary first
-      (setq meaning (tibetan-lookup-word-in-custom-vocab word))
-      ;; 2. Try local glossary
+      ;; 1. Try Resources vocabulary first
+      (setq meaning (tibetan-lookup-word-in-resources-vocab word))
+      ;; 2. Try custom vocabulary
+      (unless meaning
+        (setq meaning (tibetan-lookup-word-in-custom-vocab word)))
+      ;; 3. Try local glossary
       (unless meaning
         (setq meaning (tibetan-lookup-word-in-local-glossary word)))
-      ;; 3. If not found, try DharmaMitra
+      ;; 4. If not found, try DharmaMitra
       (unless meaning
         (setq meaning (tibetan-lookup-word-in-dharmamitra word))))
 
@@ -304,9 +456,10 @@ Returns meaning string or nil."
   "Extract vocabulary from TIBETAN-TEXT with meanings.
 Returns list of (word . meaning) pairs.
 Handles compound detection and particle stripping automatically.
-Checks custom vocabulary first if #+TIBETAN_VOCAB_FILE is set."
+Priority: Resources > Custom > Local glossary > DharmaMitra."
   (when tibetan-text
-    ;; Load custom vocabulary if available
+    ;; Load vocabularies
+    (tibetan-load-resources-vocab)
     (tibetan-load-custom-vocab)
     ;; First normalize: replace spaces with tsheg for consistent splitting
     (setq tibetan-text (replace-regexp-in-string " " "་" tibetan-text))
@@ -330,15 +483,19 @@ Checks custom vocabulary first if #+TIBETAN_VOCAB_FILE is set."
 
               ;; Check if compound exists
               (when next
-                ;; 1. Try custom vocabulary first
-                (setq meaning (or (tibetan-lookup-word-in-custom-vocab compound-raw)
-                                 (tibetan-lookup-word-in-custom-vocab compound-stripped)))
-                ;; 2. Try local glossary (raw first, then stripped)
+                ;; 1. Try Resources vocabulary first (highest priority)
+                (setq meaning (or (tibetan-lookup-word-in-resources-vocab compound-raw)
+                                 (tibetan-lookup-word-in-resources-vocab compound-stripped)))
+                ;; 2. Try custom vocabulary
+                (unless meaning
+                  (setq meaning (or (tibetan-lookup-word-in-custom-vocab compound-raw)
+                                   (tibetan-lookup-word-in-custom-vocab compound-stripped))))
+                ;; 3. Try local glossary (raw first, then stripped)
                 (unless meaning
                   (setq meaning (or (tibetan-lookup-word-in-local-glossary compound-raw)
                                    (tibetan-lookup-word-in-local-glossary compound-stripped))))
 
-                ;; 3. If not found, try DharmaMitra for compound
+                ;; 4. If not found, try DharmaMitra for compound
                 (unless meaning
                   (setq meaning (tibetan-lookup-word-in-dharmamitra compound-raw)))
 
@@ -350,17 +507,22 @@ Checks custom vocabulary first if #+TIBETAN_VOCAB_FILE is set."
 
               ;; If no compound, lookup single word
               (unless found-compound
-                ;; 1. Try custom vocabulary first
-                (setq meaning (tibetan-lookup-word-in-custom-vocab word))
+                ;; 1. Try Resources vocabulary first
+                (setq meaning (tibetan-lookup-word-in-resources-vocab word))
+                (unless meaning
+                  (setq meaning (tibetan-lookup-word-in-resources-vocab word-stripped)))
+                ;; 2. Try custom vocabulary
+                (unless meaning
+                  (setq meaning (tibetan-lookup-word-in-custom-vocab word)))
                 (unless meaning
                   (setq meaning (tibetan-lookup-word-in-custom-vocab word-stripped)))
-                ;; 2. Try local glossary
+                ;; 3. Try local glossary
                 (unless meaning
                   (setq meaning (or (tibetan-lookup-word-in-local-glossary word)
                                    (and (not (equal word word-stripped))
                                         (tibetan-lookup-word-in-local-glossary word-stripped)))))
 
-                ;; 3. If not found, try DharmaMitra
+                ;; 4. If not found, try DharmaMitra
                 (unless meaning
                   (setq meaning (tibetan-lookup-word-in-dharmamitra word)))
 
@@ -420,6 +582,80 @@ Called automatically when tibetan-vocabulary is loaded."
 
 ;; Auto-initialize glossaries when loaded
 (tibetan-vocabulary-initialize)
+
+;; ============================================================================
+;; VOCABULARY FORMATTING - Improved readable display
+;; ============================================================================
+
+(defun tibetan-vocab-extract-short-meaning (full-meaning)
+  "Extract a short, readable meaning from FULL-MEANING.
+Returns just the core translation without lengthy explanations."
+  (when (and full-meaning (stringp full-meaning))
+    (let ((meaning full-meaning))
+      ;; If it starts with "in tibetan..." or similar preamble, try to extract the core
+      (when (string-match "\\*\\([^*]+\\)\\*.*primarily refers to \"\\([^\"]+\\)\"" meaning)
+        (setq meaning (format "%s - %s" (match-string 1 meaning) (match-string 2 meaning))))
+      ;; If still too long and has multiple meanings, take first one
+      (when (and (> (length meaning) 80)
+                 (string-match "^\\([^.!?:]+[.!?]?\\)" meaning))
+        (setq meaning (match-string 1 meaning)))
+      ;; If it has numbered list (1. 2. etc), take up to first item
+      (when (string-match "^\\(.*?\\)\\s-*1\\." meaning)
+        (let ((preamble (string-trim (match-string 1 meaning))))
+          (when (> (length preamble) 10)
+            (setq meaning preamble))))
+      ;; Truncate if still too long
+      (when (> (length meaning) 100)
+        (setq meaning (concat (substring meaning 0 97) "...")))
+      (string-trim meaning))))
+
+(defun tibetan-vocab-has-extended-info-p (full-meaning)
+  "Check if FULL-MEANING has extended information worth showing."
+  (and full-meaning
+       (stringp full-meaning)
+       (> (length full-meaning) 120)))
+
+(defun tibetan-vocab-format-entry (tibetan-word full-meaning &optional for-org)
+  "Format a single vocabulary entry for display.
+TIBETAN-WORD is the Tibetan text.
+FULL-MEANING is the full dictionary meaning.
+FOR-ORG if non-nil, formats for org-mode file (persistent analysis).
+Returns formatted string."
+  (let* ((wylie (condition-case nil
+                    (when (fboundp 'tibetan-to-wylie-fixed)
+                      (tibetan-to-wylie-fixed tibetan-word))
+                  (error nil)))
+         (short-meaning (tibetan-vocab-extract-short-meaning full-meaning))
+         (has-extended (tibetan-vocab-has-extended-info-p full-meaning)))
+    (if for-org
+        ;; Org-mode format for persistent analysis files
+        (if (and has-extended full-meaning)
+            (format "- %s /*%s*/ — %s\n  #+BEGIN_QUOTE\n  %s\n  #+END_QUOTE"
+                    tibetan-word
+                    (or wylie "")
+                    (or short-meaning "[no meaning]")
+                    (string-trim full-meaning))
+          (format "- %s /*%s*/ — %s"
+                  tibetan-word
+                  (or wylie "")
+                  (or short-meaning "[look up]")))
+      ;; Plain text format for classroom display
+      (format "  %s *%s* — %s"
+              tibetan-word
+              (or wylie "")
+              (or short-meaning "[look up]")))))
+
+(defun tibetan-vocab-format-list (vocab-pairs &optional for-org)
+  "Format a list of vocabulary pairs for display.
+VOCAB-PAIRS is list of (tibetan . meaning) cons cells.
+FOR-ORG if non-nil, formats for org-mode files.
+Returns formatted string."
+  (let ((entries '()))
+    (dolist (pair vocab-pairs)
+      (let ((tib (car pair))
+            (meaning (cdr pair)))
+        (push (tibetan-vocab-format-entry tib meaning for-org) entries)))
+    (mapconcat 'identity (nreverse entries) "\n")))
 
 (provide 'tibetan-vocabulary)
 ;;; tibetan-vocabulary.el ends here

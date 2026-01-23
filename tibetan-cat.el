@@ -127,12 +127,19 @@
 ;; ============================================================================
 
 (require 'tibetan-doc-display)         ; Display settings for prepared documents
+(require 'tibetan-sentence-structure nil t) ; Sentence structure tools (soft-load)
 
 ;; ============================================================================
 ;; LOAD KEYBINDINGS
 ;; ============================================================================
 
 (require 'tibetan-keybindings)
+
+;; ============================================================================
+;; LOAD MENU
+;; ============================================================================
+
+(require 'tibetan-menu)
 
 ;; ============================================================================
 ;; INITIALIZATION
@@ -192,6 +199,8 @@ Loads glossaries and prepares the system for use."
       (insert "  #+TIBETAN_TEXT_TYPE: classical | madhyamaka-verse | kagyu-verse\n")
       (insert "  #+TIBETAN_CONTEXT: bhutan-kagyu-madhyamaka | gelug-madhyamaka\n")
       (insert "───────────────────────────────────────────────────────────────────\n")
+      (insert "\n")
+      (insert "All functions also available via the 'Tibetan' menu in the menu bar.\n")
 
       (goto-char (point-min))
       (read-only-mode 1)

@@ -193,14 +193,14 @@ If FAST is non-nil, skip slow DharmaMitra translation (for auto-mode)."
                 (insert (or translation "[Not available]"))
                 (insert "\n\n"))
 
-              ;; Vocabulary
+              ;; Vocabulary - improved formatting
               (insert "VOCABULARY:\n")
               (tibetan-insert-separator)
-              (when vocab
-                (insert "  ")
-                (dolist (word-pair vocab)
-                  (insert (format "%s (%s) " (car word-pair) (cdr word-pair))))
-                (insert "\n\n"))
+              (if vocab
+                  (progn
+                    (insert (tibetan-vocab-format-list vocab nil))
+                    (insert "\n\n"))
+                (insert "  [No vocabulary extracted]\n\n"))
 
               ;; Grammar Analysis (Bialek)
               (insert "GRAMMATICAL ANALYSIS (Bialek):\n")

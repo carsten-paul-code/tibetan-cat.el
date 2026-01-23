@@ -4,10 +4,42 @@
 ;; Provides font-lock rules and display settings for Tibetan prepared documents.
 ;; Makes segment markers (〔seg〕, 〔sent〕, etc.) smaller and less obtrusive
 ;; so the Tibetan text is more readable.
+;; Also provides larger font size for Tibetan script (superscript/subscript visibility).
 
 ;;; Code:
 
 (require 'org)
+
+;; ============================================================================
+;; TIBETAN SCRIPT FONT SIZE
+;; ============================================================================
+
+(defcustom tibetan-text-scale-factor 1.8
+  "Scale factor for Tibetan text display.
+Values > 1.0 make Tibetan text larger for better readability.
+Recommended: 1.6-2.0 for comfortable reading of stacked letters.
+Use C-c u + / C-c u - to adjust interactively."
+  :type 'number
+  :group 'tibetan-cat)
+
+(defface tibetan-script-face
+  '((t (:height 1.8)))
+  "Face for Tibetan script text.
+Makes Tibetan text larger for better visibility of superscript and subscript letters."
+  :group 'tibetan-cat)
+
+(defun tibetan-set-text-scale (factor)
+  "Set the scale factor for Tibetan text to FACTOR.
+Interactive: prompts for factor (default 1.4).
+Updates the face and re-fontifies current buffer."
+  (interactive
+   (list (read-number "Tibetan text scale factor (1.0-2.0): " 1.4)))
+  (setq tibetan-text-scale-factor factor)
+  (set-face-attribute 'tibetan-script-face nil :height factor)
+  (when (derived-mode-p 'org-mode)
+    (font-lock-flush)
+    (font-lock-ensure))
+  (message "Tibetan text scale set to %.1f" factor))
 
 ;; ============================================================================
 ;; FACES FOR SEGMENT MARKERS
@@ -63,25 +95,35 @@ Smaller and muted to not distract from Tibetan text."
      (3 'tibetan-doc-marker-face t)))
   "Font-lock keywords for Tibetan document segment markers.")
 
+(defvar tibetan-script-font-lock-keywords
+  '(;; Tibetan Unicode range U+0F00-U+0FFF (main Tibetan block)
+    ;; Match sequences of Tibetan characters
+    ("[ༀ-࿿]+" . 'tibetan-script-face))
+  "Font-lock keywords to apply larger font to Tibetan script.")
+
 ;; ============================================================================
 ;; MINOR MODE
 ;; ============================================================================
 
 (define-minor-mode tibetan-doc-display-mode
   "Minor mode for displaying Tibetan prepared documents.
-Makes segment markers smaller and less obtrusive."
+Makes segment markers smaller and less obtrusive.
+Makes Tibetan script larger for better readability (superscript/subscript)."
   :lighter " TibDoc"
   :group 'tibetan-cat
   (if tibetan-doc-display-mode
       (progn
-        ;; Add our font-lock keywords
+        ;; Add marker font-lock keywords
         (font-lock-add-keywords nil tibetan-doc-font-lock-keywords)
+        ;; Add Tibetan script font-lock keywords
+        (font-lock-add-keywords nil tibetan-script-font-lock-keywords)
         ;; Refontify the buffer
         (when font-lock-mode
           (font-lock-flush)
           (font-lock-ensure)))
     ;; Remove our font-lock keywords
     (font-lock-remove-keywords nil tibetan-doc-font-lock-keywords)
+    (font-lock-remove-keywords nil tibetan-script-font-lock-keywords)
     (when font-lock-mode
       (font-lock-flush)
       (font-lock-ensure))))
@@ -91,14 +133,14 @@ Makes segment markers smaller and less obtrusive."
 ;; ============================================================================
 
 (defun tibetan-doc-display--maybe-enable ()
-  "Enable tibetan-doc-display-mode if buffer contains Tibetan segment markers."
+  "Enable tibetan-doc-display-mode if buffer contains Tibetan text.
+Activates for any .org file with Tibetan Unicode characters (U+0F00-U+0FFF)."
   (when (and buffer-file-name
              (derived-mode-p 'org-mode)
              (save-excursion
                (goto-char (point-min))
-               (or (re-search-forward "〔seg" nil t)
-                   (re-search-forward "〔sent" nil t)
-                   (re-search-forward "〔verse" nil t))))
+               ;; Check for Tibetan Unicode characters
+               (re-search-forward "[ༀ-࿿]" nil t)))
     (tibetan-doc-display-mode 1)))
 
 ;; Hook into org-mode

@@ -48,10 +48,8 @@
     :given (setq test-text "སངས་རྒྱས།")
     :when (when (fboundp 'tibetan-analysis-generate-content)
             (tibetan-analysis-generate-content test-text))
-    :then ((tibetan-bdd-assert-contains result "** Wylie (for reading aloud)"
-            "Should have Wylie section for reading aloud")
-           (tibetan-bdd-assert-contains result "** Transliteration"
-            "Should have Transliteration section")
+    :then ((tibetan-bdd-assert-contains result "** Wylie Transliteration"
+            "Should have Wylie Transliteration section")
            ;; Accept either correct or minor typo in Wylie output
            (tibetan-bdd-assert-matches "sangs rg[ya]" result
             "Should have Wylie for Buddha"))

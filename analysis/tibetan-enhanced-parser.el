@@ -175,15 +175,59 @@ Returns alist with analysis data."
   "Return function description for PARTICLE."
   (cond
    ((string= particle "ན") "Locative: marks location or temporal/conditional setting")
-   ((string= particle "ལ") "Dative-locative: marks recipient, goal, or location")
-   ((string= particle "ར") "Allative: marks direction or goal")
-   ((string= particle "སུ") "Allative: marks direction or goal")
-   ((string= particle "ཏུ") "Allative: marks direction or goal; transforms to adverb")
-   ((string= particle "དུ") "Allative: marks direction or goal")
+   ((string= particle "ལ") "Dative: marks recipient, indirect object, or location")
+   ((string= particle "ར") "Terminative: marks direction, goal, manner, or result")
+   ((string= particle "སུ") "Terminative: marks direction, goal, manner, or result")
+   ((string= particle "ཏུ") "Terminative: marks direction, goal, manner, or result")
+   ((string= particle "དུ") "Terminative: marks direction, goal, manner, or result")
    ((string= particle "ནས") "Ablative/converb: marks source or 'after V-ing'")
    ((string= particle "ལས") "Ablative: marks source, origin, or comparison")
-   ((string= particle "དང") "Associative: marks accompaniment, conjunction")
+   ((string= particle "དང") "Comitative: marks accompaniment, conjunction")
    (t "Case particle")))
+
+;; ============================================================================
+;; VERB+NOMINALIZER DETECTION
+;; ============================================================================
+
+(defun tibetan-find-verb-nominalizer-units (words)
+  "Find verb+nominalizer constructions in WORDS list.
+Patterns like སྨྲས་པ (said + nominalizer) should be grouped together.
+Returns list of (start-index end-index form data) tuples."
+  (let ((matches '())
+        (i 0))
+    (while (< (1+ i) (length words))
+      (let* ((word1 (nth i words))
+             (word2 (nth (1+ i) words))
+             ;; Check if word1 is a verb and word2 is a nominalizer
+             (verb-entry (when (fboundp 'tibetan-verb-lookup)
+                           (tibetan-verb-lookup word1)))
+             (is-nominalizer (member word2 '("པ" "བ" "པོ" "བོ" "མ" "མོ"))))
+        (if (and verb-entry is-nominalizer)
+            (let* ((joined (concat word1 "་" word2))
+                   (meaning (alist-get 'meaning verb-entry))
+                   (lemma (alist-get 'lemma verb-entry))
+                   ;; Create appropriate English gloss
+                   (english-gloss (cond
+                                   ((member word2 '("པོ" "བོ"))
+                                    (format "one who %s (agent)" (or meaning lemma)))
+                                   ((member word2 '("མ" "མོ"))
+                                    (format "she who %s / female %s-er" (or meaning lemma) (or meaning lemma)))
+                                   (t  ; པ or བ
+                                    (format "the %s-ing / having %s-ed (nominalized verb)" (or meaning lemma) (or meaning lemma))))))
+              (push (list i (+ i 2) joined
+                         `((english . ,english-gloss)
+                           (wylie . ,(when (fboundp 'tibetan-to-wylie-fixed)
+                                       (condition-case nil
+                                           (tibetan-to-wylie-fixed joined)
+                                         (error nil))))
+                           (category . "verb+nominalizer")
+                           (verb-lemma . ,lemma)
+                           (verb-meaning . ,meaning)
+                           (nominalizer . ,word2)))
+                    matches)
+              (setq i (+ i 2)))  ; Skip both words
+          (setq i (1+ i)))))
+    (nreverse matches)))
 
 ;; ============================================================================
 ;; ENHANCED PARSING PIPELINE
@@ -193,13 +237,33 @@ Returns alist with analysis data."
   "Enhanced parsing of TEXT.
 Returns structured analysis with:
 - Multi-word units (compounds, proper nouns)
+- Verb+nominalizer constructions (སྨྲས་པ, etc.)
 - Word-level analysis
 - Particle identification (only at boundaries)
 - Context-aware verb identification."
   (let* ((words (tibetan-segment-text text))
          (multiword-units (tibetan-find-multiword-units words))
+         ;; Also find verb+nominalizer constructions
+         (verb-nom-units (tibetan-find-verb-nominalizer-units words))
          (analysis '())
          (covered-indices (make-hash-table :test 'equal)))
+
+    ;; Merge verb+nominalizer units with multiword units
+    ;; (verb-nom-units take precedence if not already covered by compounds)
+    (dolist (vn-unit verb-nom-units)
+      (let* ((start (nth 0 vn-unit))
+             (end (nth 1 vn-unit))
+             ;; Check if any index in this range is already claimed by a compound
+             (already-claimed (cl-some (lambda (mw-unit)
+                                         (let ((mw-start (nth 0 mw-unit))
+                                               (mw-end (nth 1 mw-unit)))
+                                           (or (and (>= start mw-start) (< start mw-end))
+                                               (and (> end mw-start) (<= end mw-end)))))
+                                       multiword-units)))
+        (unless already-claimed
+          (push vn-unit multiword-units))))
+    ;; Sort by start index
+    (setq multiword-units (sort multiword-units (lambda (a b) (< (nth 0 a) (nth 0 b)))))
 
     ;; Mark indices covered by multi-word units
     (dolist (unit multiword-units)

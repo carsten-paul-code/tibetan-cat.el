@@ -380,18 +380,25 @@ If SILENT is non-nil, return nil instead of error when not in segment."
                                (insert "FUNCTION: Creates noun from verb: 'the V-ing' or 'one who V-s'\n")
                                (insert "REFERENCE: Bialek: Nominalization\n\n")))
 
-                            ;; Check for dative/allative particles (attached)
+                            ;; Check for dative (ལ only) and terminative (ར/དུ/ཏུ/སུ) particles
                             ((and (string-match "\\(.+\\)\\(ལ\\|དུ\\|ཏུ\\|སུ\\|རུ\\|ར\\)$" word)
                                   (> (length (match-string 1 word)) 0)
                                   (not (gethash (concat word "-dat") seen-particles)))
                              (setq particles-found t)
                              (puthash (concat word "-dat") t seen-particles)
-                             (let ((base (match-string 1 word))
-                                   (particle (match-string 2 word)))
+                             (let* ((base (match-string 1 word))
+                                    (particle (match-string 2 word))
+                                    (is-terminative (member particle '("ར" "དུ" "ཏུ" "སུ" "རུ"))))
                                (insert (format "%s (after %s)\n" particle base))
-                               (insert "TYPE: Dative/Allative (DAT)\n")
-                               (insert "FUNCTION: Marks goal, recipient, or direction: 'to X', 'toward X'\n")
-                               (insert "REFERENCE: Bialek: Dative for indirect objects and destinations\n\n")))
+                               (if is-terminative
+                                   (progn
+                                     (insert "TYPE: Terminative (TERM)\n")
+                                     (insert "FUNCTION: Marks goal, direction, manner, or result: 'toward X', 'into X', 'as X'\n")
+                                     (insert "REFERENCE: Bialek: Terminative - NOT dative\n\n"))
+                                 (progn
+                                   (insert "TYPE: Dative (DAT)\n")
+                                   (insert "FUNCTION: Marks recipient, indirect object, or location: 'to/for X', 'at X'\n")
+                                   (insert "REFERENCE: Bialek: Dative for indirect objects and destinations\n\n")))))
 
                             ;; Check for standalone case particles
                             ((and (member word '("ན" "ལ" "ར" "སུ" "ཏུ" "དུ" "ནས" "ལས" "དང"))
@@ -399,15 +406,22 @@ If SILENT is non-nil, return nil instead of error when not in segment."
                              (setq particles-found t)
                              (puthash word t seen-particles)
                              (insert (format "%s\n" word))
-                             (insert "TYPE: Case particle\n")
+                             (insert (format "TYPE: %s\n"
+                                            (cond
+                                             ((string= word "ན") "Locative (LOC)")
+                                             ((string= word "ལ") "Dative (DAT)")
+                                             ((member word '("ར" "སུ" "ཏུ" "དུ")) "Terminative (TERM)")
+                                             ((member word '("ནས" "ལས")) "Ablative (ABL)")
+                                             ((string= word "དང") "Comitative (COM)")
+                                             (t "Case particle"))))
                              (insert (format "FUNCTION: %s\n"
                                             (cond
                                              ((string= word "ན") "Locative: marks location or temporal/conditional setting")
-                                             ((string= word "ལ") "Dative-locative: marks recipient, goal, or location")
-                                             ((string= word "ར") "Allative: marks direction or goal")
-                                             ((string= word "སུ") "Allative: marks direction or goal")
-                                             ((string= word "ཏུ") "Allative: marks direction or goal")
-                                             ((string= word "དུ") "Allative: marks direction or goal")
+                                             ((string= word "ལ") "Dative: marks recipient, indirect object, or location")
+                                             ((string= word "ར") "Terminative: marks direction, goal, manner, or result")
+                                             ((string= word "སུ") "Terminative: marks direction, goal, manner, or result")
+                                             ((string= word "ཏུ") "Terminative: marks direction, goal, manner, or result")
+                                             ((string= word "དུ") "Terminative: marks direction, goal, manner, or result")
                                              ((string= word "ནས") "Ablative/converb: marks source or 'after V-ing'")
                                              ((string= word "ལས") "Ablative: marks source, origin, or comparison")
                                              ((string= word "དང") "Comitative/connective: 'with' or 'and'")
@@ -425,17 +439,22 @@ If SILENT is non-nil, return nil instead of error when not in segment."
                     (setq particles-found t)
                     (let* ((particle (car (last syllables)))
                            (base-syllables (butlast syllables))
-                           (base (string-join base-syllables "་")))
+                           (base (string-join base-syllables "་"))
+                           (is-terminative (member particle '("ར" "སུ" "ཏུ" "དུ"))))
                       (insert (format "%s (after %s in compound %s)\n" particle base form))
-                      (insert "TYPE: Case particle (in lexical unit)\n")
+                      (insert (format "TYPE: %s (in lexical unit)\n"
+                                     (cond
+                                      ((string= particle "ན") "Locative (LOC)")
+                                      ((string= particle "ལ") "Dative (DAT)")
+                                      (is-terminative "Terminative (TERM)")
+                                      ((member particle '("ནས" "ལས")) "Ablative (ABL)")
+                                      ((string= particle "དང") "Comitative (COM)")
+                                      (t "Case particle"))))
                       (insert (format "FUNCTION: %s\n"
                                      (cond
                                       ((string= particle "ན") "Locative: marks location or temporal/conditional setting")
-                                      ((string= particle "ལ") "Dative-locative: marks recipient, goal, or location")
-                                      ((string= particle "ར") "Allative: marks direction or goal")
-                                      ((string= particle "སུ") "Allative: marks direction or goal")
-                                      ((string= particle "ཏུ") "Allative: marks direction or goal")
-                                      ((string= particle "དུ") "Allative: marks direction or goal")
+                                      ((string= particle "ལ") "Dative: marks recipient, indirect object, or location")
+                                      (is-terminative "Terminative: marks direction, goal, manner, or result")
                                       ((string= particle "ནས") "Ablative/converb: marks source or 'after V-ing'")
                                       ((string= particle "ལས") "Ablative: marks source, origin, or comparison")
                                       ((string= particle "དང") "Comitative/connective: 'with' or 'and'")

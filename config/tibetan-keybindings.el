@@ -101,6 +101,19 @@
   ;; - Updates hash and last-analyzed date
 
 ;; ============================================================================
+;; BATCH SEGMENT ANALYSIS - C-c u B
+;; ============================================================================
+
+(global-set-key (kbd "C-c u B") 'tibetan-analyze-all-segments)
+  ;; Analyze ALL segments in the current buffer:
+  ;; - Finds all *** Segment N headings
+  ;; - Creates analysis file for each (in analysis/ folder)
+  ;; - Prompts: [n] new only, [r] re-analyze existing, [c] cancel
+  ;; - Re-analyze preserves your notes, translation, footnotes
+  ;; - Shows progress and summary when done
+  ;; - Also available via Menu: Tibetan > Batch Analyze All Segments
+
+;; ============================================================================
 ;; PERSISTENT COMPOUND ANALYSIS - C-c v A / C-c v R
 ;; ============================================================================
 
@@ -123,7 +136,7 @@
   ;; - Updates hash and last-analyzed date
 
 ;; ============================================================================
-;; CAT TRANSLATION - C-c u t / C-c u T
+;; CAT TRANSLATION - C-c u t / C-c u T / C-c u g
 ;; ============================================================================
 
 (global-set-key (kbd "C-c u t") 'tibetan-cat-insert-translation)
@@ -132,6 +145,10 @@
   ;; - Reorders SOV → SVO for English word order
   ;; - Produces a "scholar's rough draft"
   ;; - Works in analysis buffers (C-c u A)
+
+(global-set-key (kbd "C-c u g") 'tibetan-cat-insert-translation)
+  ;; Alias for C-c u t - Generate translation
+  ;; "u g" = "utilities: generate translation"
 
 (global-set-key (kbd "C-c u T") 'tibetan-cat-translate-region)
   ;; Translate selected region:
@@ -154,6 +171,67 @@
   ;; - Helps debug connection issues
 
 ;; ============================================================================
+;; DHARMAMITRA IN ANALYSIS FILES - C-c u D
+;; ============================================================================
+
+(global-set-key (kbd "C-c u D") 'tibetan-refresh-dharmamitra-translation)
+  ;; Re-request DharmaMitra translation in an analysis file:
+  ;; - Run from within analysis file (seg-XXX.org)
+  ;; - Fetches fresh translation from DharmaMitra API
+  ;; - Updates the "- DharmaMitra:" line
+  ;; - Useful if original request failed or timed out
+
+(global-set-key (kbd "C-c u W") 'tibetan-copy-dharmamitra-to-working)
+  ;; Copy DharmaMitra translation to Working Translation section:
+  ;; - Copies DharmaMitra suggestion to your working area
+  ;; - Gives you a starting point for your own translation
+
+;; ============================================================================
+;; DISPLAY SETTINGS - C-c u +/- (font size)
+;; ============================================================================
+
+(global-set-key (kbd "C-c u +") 'tibetan-increase-text-scale)
+  ;; Increase Tibetan text size
+
+(global-set-key (kbd "C-c u -") 'tibetan-decrease-text-scale)
+  ;; Decrease Tibetan text size
+
+(global-set-key (kbd "C-c u =") 'tibetan-set-text-scale)
+  ;; Set exact Tibetan text scale factor
+
+(defun tibetan-increase-text-scale ()
+  "Increase Tibetan text scale by 0.1."
+  (interactive)
+  (tibetan-set-text-scale (+ (or tibetan-text-scale-factor 1.4) 0.1)))
+
+(defun tibetan-decrease-text-scale ()
+  "Decrease Tibetan text scale by 0.1 (minimum 1.0)."
+  (interactive)
+  (tibetan-set-text-scale (max 1.0 (- (or tibetan-text-scale-factor 1.4) 0.1))))
+
+;; ============================================================================
+;; SENTENCE STRUCTURE - C-c s S / C-c s s
+;; ============================================================================
+
+(global-set-key (kbd "C-c s S") 'tibetan-add-sentence-structure)
+  ;; Add sentence structure to document:
+  ;; - Analyzes segment endings to detect sentence boundaries
+  ;; - Inserts ** Sentence N headings above segments
+  ;; - Modifies segment headings from *** to ****
+  ;; - Works best with segments that end with sentence-final particles
+
+(global-set-key (kbd "C-c s s") 'tibetan-detect-sentence-boundaries)
+  ;; Preview where sentence boundaries would be:
+  ;; - Non-destructive analysis
+  ;; - Shows which segments would start new sentences
+  ;; - Run before tibetan-add-sentence-structure to review
+
+(global-set-key (kbd "C-c s m") 'tibetan-mark-sentence-start)
+  ;; Manually mark current segment as sentence start:
+  ;; - Use when automatic detection misses a boundary
+  ;; - Inserts sentence heading and demotes segment
+
+;; ============================================================================
 ;; FUTURE KEYBINDINGS (commented out - not yet implemented in modular system)
 ;; ============================================================================
 
@@ -162,11 +240,7 @@
 ;; (global-set-key (kbd "C-c u p") 'tibetan-previous-segment)
 
 ;; Segment manipulation
-;; (global-set-key (kbd "C-c u m") 'tibetan-merge-segments)
 ;; (global-set-key (kbd "C-c u d") 'tibetan-split-segment)
-
-;; Translation
-;; (global-set-key (kbd "C-c u t") 'tibetan-translate-segment)
 
 ;; File operations
 ;; (global-set-key (kbd "C-c u x") 'extract-any-tibetan-text)

@@ -89,8 +89,9 @@ Returns list of (particle word case function translation-guide bialek-ref)."
                        "Bialek: Genitive case for possession/modification")
                   analysis))))
 
-       ;; ========== DATIVE/TERMINATIVE (goal, recipient, manner) ==========
-       ;; Note: ར/དུ/ཏུ/སུ can be TERMINATIVE when expressing manner/result
+       ;; ========== TERMINATIVE (goal, direction, manner, result) ==========
+       ;; Note: ར/དུ/ཏུ/སུ are TERMINATIVE (not dative!) - marks goal/direction/manner
+       ;; ལ is DATIVE - marks indirect object, location, recipient
        ((or (string-suffix-p "ལ" word) (string-suffix-p "ར" word)
             (string-suffix-p "དུ" word) (string-suffix-p "ཏུ" word)
             (string-suffix-p "སུ" word) (string-suffix-p "རུ" word)
@@ -102,27 +103,27 @@ Returns list of (particle word case function translation-guide bialek-ref)."
                               ((or (string-suffix-p "ལ" word) (string= "ལ" word)) "ལ")
                               (t "ར")))
                (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle))))
-               ;; Terminative particles often express manner/result
+               ;; ར/དུ/ཏུ/སུ/རུ are TERMINATIVE; ལ is DATIVE
                (is-terminative (member particle '("ར" "དུ" "ཏུ" "སུ" "རུ")))
-               (type (if is-terminative "TERMINATIVE/DATIVE (ALL/DAT)" "DATIVE (DAT)")))
+               (type (if is-terminative "TERMINATIVE (ALL)" "DATIVE (DAT)")))
           (if (> (length root) 0)
               (push (list particle word type
                          (format "Marks '%s' as %s" root
-                                 (if is-terminative "GOAL, RESULT, or MANNER" "GOAL, RECIPIENT, or LOCATION"))
-                         (format "Translation: '%s %s' or 'in %s manner'"
-                                 (if is-terminative "becoming/as" "to/for") root root)
+                                 (if is-terminative "GOAL, DIRECTION, MANNER, or RESULT" "INDIRECT OBJECT, RECIPIENT, or LOCATION"))
+                         (format "Translation: '%s %s'"
+                                 (if is-terminative "toward/into/as" "to/for/at") root)
                          (if is-terminative
-                             "Bialek: Terminative for result/manner transformation"
+                             "Bialek: Terminative - goal/direction/manner/result (NOT dative)"
                            "Bialek: Dative for indirect objects and destinations"))
                     analysis)
             ;; Standalone particle
             (push (list particle word type
                        (format "Marks preceding word as %s"
-                               (if is-terminative "GOAL or MANNER/RESULT" "GOAL or RECIPIENT"))
+                               (if is-terminative "GOAL, DIRECTION, or MANNER" "INDIRECT OBJECT or RECIPIENT"))
                        (format "Translation: '%s [previous word]'"
-                               (if is-terminative "becoming/as" "to/for"))
+                               (if is-terminative "toward/into/as" "to/for/at"))
                        (if is-terminative
-                           "Bialek: Terminative (standalone)"
+                           "Bialek: Terminative (standalone) - NOT dative"
                            "Bialek: Dative (standalone)"))
                   analysis))))
 
