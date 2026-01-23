@@ -857,7 +857,10 @@ Called when cursor is on a *** Segment heading."
               (message "WARNING: Source text has changed since last analysis!"))
             (let ((buf (find-file-noselect filepath)))
               (with-current-buffer buf
-                (tibetan-analysis-setup-faces))
+                (tibetan-analysis-setup-faces)
+                ;; Apply startup visibility (collapse all sections per #+STARTUP: overview)
+                (when (derived-mode-p 'org-mode)
+                  (org-cycle-set-startup-visibility)))
               (display-buffer-in-side-window buf
                                              '((side . right)
                                                (window-width . 0.5)))))
@@ -867,7 +870,10 @@ Called when cursor is on a *** Segment heading."
           (message "Created analysis file: %s" new-filepath)
           (let ((buf (find-file-noselect new-filepath)))
             (with-current-buffer buf
-              (tibetan-analysis-setup-faces))
+              (tibetan-analysis-setup-faces)
+              ;; Apply startup visibility (collapse all sections per #+STARTUP: overview)
+              (when (derived-mode-p 'org-mode)
+                (org-cycle-set-startup-visibility)))
             (display-buffer-in-side-window buf
                                            '((side . right)
                                              (window-width . 0.5)))))))))
