@@ -256,7 +256,7 @@ AUTO-CONTENT is the generated analysis content (string)."
                      (t 1)))))
     (with-temp-file filepath
       (insert (format "#+TITLE: Segment %d Analysis\n" seg-num))
-      (insert "#+STARTUP: overview\n")
+      (insert "#+STARTUP: showall\n")
       (insert (format "#+SOURCE: [[file:../%s::*Segment %d][%s / Segment %d]]\n"
                       source-name seg-num source-name seg-num))
       (insert (format "#+TIBETAN_HASH: %s\n" hash))
@@ -858,9 +858,9 @@ Called when cursor is on a *** Segment heading."
             (let ((buf (find-file-noselect filepath)))
               (with-current-buffer buf
                 (tibetan-analysis-setup-faces)
-                ;; Apply startup visibility (collapse all sections per #+STARTUP: overview)
+                ;; Apply startup visibility (expand all sections per #+STARTUP: showall)
                 (when (derived-mode-p 'org-mode)
-                  (org-cycle-set-startup-visibility)))
+                  (org-show-all)))
               (display-buffer-in-side-window buf
                                              '((side . right)
                                                (window-width . 0.5)))))
@@ -871,9 +871,9 @@ Called when cursor is on a *** Segment heading."
           (let ((buf (find-file-noselect new-filepath)))
             (with-current-buffer buf
               (tibetan-analysis-setup-faces)
-              ;; Apply startup visibility (collapse all sections per #+STARTUP: overview)
+              ;; Apply startup visibility (expand all sections per #+STARTUP: showall)
               (when (derived-mode-p 'org-mode)
-                (org-cycle-set-startup-visibility)))
+                (org-show-all)))
             (display-buffer-in-side-window buf
                                            '((side . right)
                                              (window-width . 0.5)))))))))
