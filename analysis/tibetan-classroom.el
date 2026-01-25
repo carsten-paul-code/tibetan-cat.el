@@ -18,6 +18,7 @@
 (require 'tibetan-utils)
 (require 'tibetan-wylie)
 (require 'tibetan-vocabulary)
+(require 'tibetan-vocabulary-detailed nil t)  ; Detailed dictionary entries
 (require 'tibetan-particles-bialek)      ; New Bialek-based grammar analysis
 (require 'tibetan-translation-suggest)   ; Translation suggestion engine
 (require 'tibetan-org-structure)
@@ -193,14 +194,34 @@ If FAST is non-nil, skip slow DharmaMitra translation (for auto-mode)."
                 (insert (or translation "[Not available]"))
                 (insert "\n\n"))
 
-              ;; Vocabulary - improved formatting
+              ;; Vocabulary - use new detailed system for consistency with C-c u A
               (insert "VOCABULARY:\n")
               (tibetan-insert-separator)
-              (if vocab
-                  (progn
-                    (insert (tibetan-vocab-format-list vocab nil))
-                    (insert "\n\n"))
-                (insert "  [No vocabulary extracted]\n\n"))
+              (let ((detailed-vocab (condition-case nil
+                                        (when (fboundp 'tibetan-vocab-extract-detailed)
+                                          (tibetan-vocab-extract-detailed tibetan-text))
+                                      (error nil))))
+                (if detailed-vocab
+                    (progn
+                      (dolist (entry detailed-vocab)
+                        (let* ((tib (plist-get entry :tibetan))
+                               (wy (plist-get entry :wylie))
+                               (primary (plist-get entry :primary))
+                               (source (plist-get entry :source)))
+                          (insert (format "  %s [%s] — %s"
+                                          tib
+                                          (or wy "?")
+                                          (or primary "[not found]")))
+                          (when (and source (string= source "Resources"))
+                            (insert " ★"))
+                          (insert "\n")))
+                      (insert "\n"))
+                  ;; Fallback to old vocab system
+                  (if vocab
+                      (progn
+                        (insert (tibetan-vocab-format-list vocab nil))
+                        (insert "\n\n"))
+                    (insert "  [No vocabulary extracted]\n\n"))))
 
               ;; Grammar Analysis (Bialek)
               (insert "GRAMMATICAL ANALYSIS (Bialek):\n")
@@ -254,6 +275,16 @@ If FAST is non-nil, skip slow DharmaMitra translation (for auto-mode)."
             (if suggestion
                 (insert suggestion "\n\n")
               (insert "[Generate translation with full analysis]\n\n"))
+
+            ;; Detailed Vocabulary - full dictionary entries at the end
+            (insert "DETAILED VOCABULARY:\n")
+            (tibetan-insert-separator)
+            (insert "Full dictionary entries for reference:\n\n")
+            (if vocab
+                (progn
+                  (insert (tibetan-vocab-format-detailed-list vocab nil))
+                  (insert "\n\n"))
+              (insert "  [No vocabulary]\n\n"))
 
             (insert "[Press q to close]\n")
 

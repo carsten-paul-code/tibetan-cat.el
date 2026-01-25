@@ -79,6 +79,7 @@
 (require 'tibetan-utils)          ; Utility functions
 (require 'tibetan-wylie)          ; Wylie transliteration
 (require 'tibetan-vocabulary)     ; Vocabulary lookup with DharmaMitra
+(require 'tibetan-vocabulary-detailed nil t) ; Detailed dictionary entries
 (require 'tibetan-org-structure)  ; Org-mode structure support (new format)
 (require 'tibetan-text-classifier) ; Text type classification (NEW)
 

@@ -367,15 +367,25 @@ Only strips unambiguous multi-character particles to avoid false positives."
 
 (defun tibetan-lookup-word-in-local-glossary (word)
   "Look up WORD in local comprehensive glossary.
+Tries Tibetan script first, then converts to Wylie for lookup.
 Returns meaning if found, nil otherwise."
   (when (and (boundp 'tibetan-comprehensive-vocabulary)
              tibetan-comprehensive-vocabulary)
     (let* ((root-form (tibetan-strip-particles word))
            (entry (or
-                   ;; Try full word as-is
+                   ;; Try full word as-is (Tibetan script)
                    (gethash word tibetan-comprehensive-vocabulary)
-                   ;; Try word with particles stripped
+                   ;; Try word with particles stripped (Tibetan script)
                    (gethash root-form tibetan-comprehensive-vocabulary))))
+      ;; If not found with Tibetan script, try Wylie conversion
+      ;; (glossaries are often keyed by Wylie like "'jig rten")
+      (unless entry
+        (when (fboundp 'tibetan-to-wylie-fixed)
+          (let* ((wylie (ignore-errors (tibetan-to-wylie-fixed word)))
+                 (wylie-root (ignore-errors (tibetan-to-wylie-fixed root-form))))
+            (setq entry (or
+                         (and wylie (gethash wylie tibetan-comprehensive-vocabulary))
+                         (and wylie-root (gethash wylie-root tibetan-comprehensive-vocabulary)))))))
       (when entry
         (if (listp entry) (car entry) entry)))))
 
@@ -615,47 +625,72 @@ Returns just the core translation without lengthy explanations."
        (stringp full-meaning)
        (> (length full-meaning) 120)))
 
-(defun tibetan-vocab-format-entry (tibetan-word full-meaning &optional for-org)
+(defun tibetan-vocab-format-entry (tibetan-word full-meaning &optional format-type)
   "Format a single vocabulary entry for display.
 TIBETAN-WORD is the Tibetan text.
 FULL-MEANING is the full dictionary meaning.
-FOR-ORG if non-nil, formats for org-mode file (persistent analysis).
+FORMAT-TYPE controls output style:
+  nil or 'compact  - Short one-line format: Tibetan *wylie* — short-meaning
+  'org-compact     - Org format with short meaning (for vocab section)
+  'org-detailed    - Org format with full meaning (for detailed section)
+  'full            - Plain text with full meaning (for classroom detailed)
 Returns formatted string."
   (let* ((wylie (condition-case nil
                     (when (fboundp 'tibetan-to-wylie-fixed)
                       (tibetan-to-wylie-fixed tibetan-word))
                   (error nil)))
          (short-meaning (tibetan-vocab-extract-short-meaning full-meaning))
-         (has-extended (tibetan-vocab-has-extended-info-p full-meaning)))
-    (if for-org
-        ;; Org-mode format for persistent analysis files
-        (if (and has-extended full-meaning)
-            (format "- %s /*%s*/ — %s\n  #+BEGIN_QUOTE\n  %s\n  #+END_QUOTE"
-                    tibetan-word
-                    (or wylie "")
-                    (or short-meaning "[no meaning]")
-                    (string-trim full-meaning))
-          (format "- %s /*%s*/ — %s"
-                  tibetan-word
-                  (or wylie "")
-                  (or short-meaning "[look up]")))
-      ;; Plain text format for classroom display
-      (format "  %s *%s* — %s"
-              tibetan-word
-              (or wylie "")
-              (or short-meaning "[look up]")))))
+         (display-meaning (or full-meaning "[look up]")))
+    (pcase format-type
+      ;; Org-mode compact: short meaning, no extended block
+      ('org-compact
+       (format "- %s /*%s*/ — %s"
+               tibetan-word
+               (or wylie "")
+               (or short-meaning "[look up]")))
+      ;; Org-mode detailed: full dictionary entry
+      ('org-detailed
+       (format "- %s /*%s*/\n  %s"
+               tibetan-word
+               (or wylie "")
+               (string-trim display-meaning)))
+      ;; Plain text full: for classroom detailed section
+      ('full
+       (format "  %s *%s*\n    %s"
+               tibetan-word
+               (or wylie "")
+               (string-trim display-meaning)))
+      ;; Default compact: short one-liner
+      (_
+       (format "  %s *%s* — %s"
+               tibetan-word
+               (or wylie "")
+               (or short-meaning "[look up]"))))))
 
-(defun tibetan-vocab-format-list (vocab-pairs &optional for-org)
+(defun tibetan-vocab-format-list (vocab-pairs &optional format-type)
   "Format a list of vocabulary pairs for display.
 VOCAB-PAIRS is list of (tibetan . meaning) cons cells.
-FOR-ORG if non-nil, formats for org-mode files.
+FORMAT-TYPE is passed to `tibetan-vocab-format-entry'.
 Returns formatted string."
   (let ((entries '()))
     (dolist (pair vocab-pairs)
       (let ((tib (car pair))
             (meaning (cdr pair)))
-        (push (tibetan-vocab-format-entry tib meaning for-org) entries)))
+        (push (tibetan-vocab-format-entry tib meaning format-type) entries)))
     (mapconcat 'identity (nreverse entries) "\n")))
+
+(defun tibetan-vocab-format-detailed-list (vocab-pairs &optional for-org)
+  "Format vocabulary list with FULL dictionary entries.
+VOCAB-PAIRS is list of (tibetan . meaning) cons cells.
+FOR-ORG if non-nil, uses org-mode formatting.
+Returns formatted string with complete dictionary information."
+  (let ((entries '()))
+    (dolist (pair vocab-pairs)
+      (let* ((tib (car pair))
+             (meaning (cdr pair))
+             (format-type (if for-org 'org-detailed 'full)))
+        (push (tibetan-vocab-format-entry tib meaning format-type) entries)))
+    (mapconcat 'identity (nreverse entries) "\n\n")))
 
 (provide 'tibetan-vocabulary)
 ;;; tibetan-vocabulary.el ends here

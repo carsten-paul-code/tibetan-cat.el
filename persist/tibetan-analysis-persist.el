@@ -25,6 +25,7 @@
 (require 'tibetan-verb-classifier nil t)
 (require 'tibetan-enhanced-display nil t)
 (require 'tibetan-particles-bialek nil t)
+(require 'tibetan-vocabulary-detailed nil t)
 
 (defconst tibetan-analysis-version "1.0"
   "Version of the analysis file format.")
@@ -264,18 +265,28 @@ AUTO-CONTENT is the generated analysis content (string)."
       (insert (format "#+CREATED: %s\n" date))
       (insert (format "#+LAST_ANALYZED: %s\n" date))
       (insert "\n")
+      ;; Tibetan Text section with Wylie subsection
       (insert "* Tibetan Text\n")
       (insert tibetan-text)
       (insert "\n\n")
-      (insert "* Auto-Analysis\n")
-      (insert ":PROPERTIES:\n")
-      (insert ":GENERATED: t\n")
-      (insert ":END:\n\n")
+      ;; Auto-generated analysis content (no wrapper section)
       (insert auto-content)
-      (insert "\n\n")
+      (insert "\n")
+      ;; User sections
       (insert "* My Notes\n\n\n")
       (insert "* Working Translation\n\n\n")
-      (insert "* Footnotes\n\n"))
+      (insert "* Footnotes\n\n")
+      ;; Detailed vocabulary with full dictionary entries (auto-generated)
+      (insert "* Detailed Vocabulary\n")
+      (insert "Full dictionary entries for reference:\n\n")
+      (let ((vocab (condition-case nil
+                       (when (fboundp 'tibetan-extract-vocabulary)
+                         (tibetan-extract-vocabulary tibetan-text))
+                     (error nil))))
+        (if vocab
+            (insert (tibetan-vocab-format-detailed-list vocab t))
+          (insert "[No vocabulary]")))
+      (insert "\n\n"))
     filepath))
 
 ;; ============================================================================
@@ -553,53 +564,14 @@ New compact format with inline annotations."
 
     (with-temp-buffer
       ;; ============================================================
-      ;; SECTION 1: Annotated Text (compact format with inline info)
+      ;; SECTION 1: Wylie Transliteration (subsection under Tibetan Text)
       ;; ============================================================
-      (insert "** Annotated Text\n")
-      (insert "#+BEGIN_EXAMPLE\n")
-      (when (and words (fboundp 'tibetan-build-compound-aware-segments))
-        (let ((segments (tibetan-build-compound-aware-segments words multiword-units)))
-          (dolist (seg segments)
-            ;; Wrap each segment in error handler so one failure doesn't break all
-            (condition-case seg-err
-                (let* ((info (tibetan-analysis--get-word-info seg multiword-units))
-                       (meaning (alist-get 'meaning info))
-                       (wylie-seg (alist-get 'wylie info))
-                       (particle-annot (tibetan-analysis--get-particle-annotation seg))
-                       (verb-info (gethash seg verb-table))
-                       (annotation-parts '()))
-                  ;; Build annotation string
-                  (when wylie-seg
-                    (push (format "[%s]" wylie-seg) annotation-parts))
-                  (when meaning
-                    (push (format "\"%s\"" (if (> (length meaning) 30)
-                                               (concat (substring meaning 0 (min 27 (length meaning))) "...")
-                                             meaning))
-                          annotation-parts))
-                  (when particle-annot
-                    (push particle-annot annotation-parts))
-                  (when verb-info
-                    (let ((trans (alist-get 'transitivity verb-info)))
-                      (push (format "V:%s" (if (and trans (string-match-p "Transitive" trans))
-                                              "tr" "intr"))
-                            annotation-parts)))
-                  ;; Output line
-                  (insert (format "%s %s\n" seg
-                                 (if annotation-parts
-                                     (string-join (nreverse annotation-parts) " ")
-                                   ""))))
-              (error
-               ;; On error, just output the segment without annotations
-               (insert (format "%s [error]\n" seg)))))))
-      (insert "#+END_EXAMPLE\n\n")
-
-      ;; Wylie Transliteration (for reading aloud in class)
       (insert "** Wylie Transliteration\n")
       (insert (or wylie-full "[Not available]"))
       (insert "\n\n")
 
       ;; ============================================================
-      ;; SECTION 2: Translations (immediately visible)
+      ;; SECTION 2: Translations
       ;; ============================================================
       (insert "** Translations\n")
       (insert (format "- DharmaMitra: %s\n" (or translation "[Not available]")))
@@ -612,7 +584,76 @@ New compact format with inline annotations."
       (insert "\n")
 
       ;; ============================================================
-      ;; SECTION 3: Grammatical Analysis (Bialek)
+      ;; SECTION 3: Vocabulary (short format - primary meanings)
+      ;; ============================================================
+      (insert "** Vocabulary\n")
+      (let ((vocab-list (condition-case nil
+                            (when (fboundp 'tibetan-vocab-extract-detailed)
+                              (tibetan-vocab-extract-detailed tibetan-text))
+                          (error nil))))
+        (if vocab-list
+            (progn
+              (dolist (entry vocab-list)
+                (let* ((tibetan (plist-get entry :tibetan))
+                       (wylie (plist-get entry :wylie))
+                       (primary (plist-get entry :primary))
+                       (source (plist-get entry :source)))
+                  (insert (format "- %s /*%s*/ — %s"
+                                  tibetan
+                                  (or wylie "?")
+                                  (or primary "[not found]")))
+                  (when (and source (string= source "Resources"))
+                    (insert " ★"))
+                  (insert "\n")))
+              (insert "\n"))
+          ;; Fallback to old system
+          (let ((vocab (condition-case nil
+                           (when (fboundp 'tibetan-extract-vocabulary)
+                             (tibetan-extract-vocabulary tibetan-text))
+                         (error nil))))
+            (if vocab
+                (dolist (word-pair vocab)
+                  (insert (format "- %s — %s\n" (car word-pair) (cdr word-pair))))
+              (insert "[Vocabulary lookup failed]\n")))
+          (insert "\n")))
+
+      ;; ============================================================
+      ;; SECTION 3b: Detailed Dictionary (full entries)
+      ;; ============================================================
+      (insert "** Detailed Dictionary\n")
+      (let ((vocab-list (condition-case nil
+                            (when (fboundp 'tibetan-vocab-extract-detailed)
+                              (tibetan-vocab-extract-detailed tibetan-text))
+                          (error nil))))
+        (if vocab-list
+            (dolist (entry vocab-list)
+              (let* ((tibetan (plist-get entry :tibetan))
+                     (wylie (plist-get entry :wylie))
+                     (primary (plist-get entry :primary))
+                     (detailed (plist-get entry :detailed))
+                     (sanskrit (plist-get entry :sanskrit))
+                     (source (plist-get entry :source)))
+                (insert (format "*** %s" tibetan))
+                (when wylie (insert (format "  [%s]" wylie)))
+                (when (and source (string= source "Resources"))
+                  (insert " ★"))
+                (insert "\n")
+                (insert (format "  %s\n" (or primary "[not found]")))
+                (when (and detailed
+                           (not (string= detailed primary))
+                           (> (length detailed) (length primary)))
+                  (insert (format "  Full: %s\n"
+                                  (if (> (length detailed) 300)
+                                      (concat (substring detailed 0 297) "...")
+                                    detailed))))
+                (when sanskrit
+                  (insert (format "  Sanskrit: %s\n" sanskrit)))
+                (insert "\n")))
+          (insert "[Detailed dictionary not available]\n"))
+        (insert "\n"))
+
+      ;; ============================================================
+      ;; SECTION 4: Grammatical Analysis (Bialek)
       ;; ============================================================
       (insert "** Grammatical Analysis (Bialek)\n")
       (let ((bialek-analysis (condition-case nil
@@ -636,7 +677,7 @@ New compact format with inline annotations."
       (insert "\n")
 
       ;; ============================================================
-      ;; SECTION 4: Sentence Structure (enhanced verb-argument analysis)
+      ;; SECTION 5: Sentence Structure (enhanced verb-argument analysis)
       ;; ============================================================
       (insert "** Sentence Structure\n")
       (if (and verbs (fboundp 'tibetan-analyze-arguments))
@@ -686,7 +727,7 @@ New compact format with inline annotations."
       (insert "\n")
 
       ;; ============================================================
-      ;; SECTION 4b: Converb/Dependent Clause Analysis
+      ;; SECTION 5b: Converb/Dependent Clause Analysis
       ;; ============================================================
       (let ((converbs (condition-case nil
                           (when (fboundp 'tibetan-analyze-converbs-bialek)
@@ -708,7 +749,7 @@ New compact format with inline annotations."
           (insert "\n")))
 
       ;; ============================================================
-      ;; SECTION 5: Verb Classification (Hill 2010)
+      ;; SECTION 6: Verb Classification (Hill 2010)
       ;; ============================================================
       (insert "** Verb Classification (Hill 2010)\n")
       (if verbs
@@ -744,60 +785,6 @@ New compact format with inline annotations."
                                 (t "—")))))))
         (insert "[No verbs]\n"))
       (insert "\n")
-
-      ;; ============================================================
-      ;; SECTION 5c: Vocabulary List (with Resources integration)
-      ;; ============================================================
-      (insert "** Vocabulary\n")
-      ;; Load Resources vocabulary if available
-      (let ((resources-vocab (tibetan-analysis-load-resources-vocab))
-            (vocab (condition-case nil
-                       (when (fboundp 'tibetan-extract-vocabulary)
-                         (tibetan-extract-vocabulary tibetan-text))
-                     (error nil)))
-            (resources-found nil))
-        (if vocab
-            (progn
-              (dolist (word-pair vocab)
-                (let* ((tib (car word-pair))
-                       (meaning (cdr word-pair))
-                       ;; Check if this term is in Resources vocabulary
-                       (resources-entry (gethash tib resources-vocab)))
-                  (if resources-entry
-                      ;; Term found in Resources - mark with ★ and show source
-                      (progn
-                        (setq resources-found t)
-                        (insert (format "%s ★ [%s]\n"
-                                       (tibetan-vocab-format-entry tib (car resources-entry) t)
-                                       (cdr resources-entry))))
-                    ;; Not in Resources - use new formatting
-                    (insert (tibetan-vocab-format-entry tib meaning t))
-                    (insert "\n"))))
-              ;; Note about resources integration
-              (when resources-found
-                (insert "\n★ = from provided vocabulary (../Resources/)\n"))
-              (insert "\n"))
-          (insert "[Vocabulary lookup failed - check dictionary loading]\n\n")))
-
-      ;; ============================================================
-      ;; SECTION 6: Zero Markers & Special Notes
-      ;; ============================================================
-      (when zero-analysis
-        (insert "** Zero-Marked NPs\n")
-        (dolist (item zero-analysis)
-          (let ((form (alist-get 'form item))
-                (function (alist-get 'function item))
-                (position (alist-get 'position item))
-                (distance (alist-get 'distance-from-verb item))
-                (gloss (alist-get 'gloss item)))
-            (insert (format "- %s (Ø)" form))
-            ;; Show position info if available
-            (when (and position distance)
-              (insert (format " [word #%d, %d before verb]" position distance)))
-            (insert (format ": %s" function))
-            (when gloss (insert (format " — %s" gloss)))
-            (insert "\n")))
-        (insert "\n"))
 
       (buffer-string))))
     (error
