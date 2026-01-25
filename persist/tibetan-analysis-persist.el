@@ -618,41 +618,6 @@ New compact format with inline annotations."
           (insert "\n")))
 
       ;; ============================================================
-      ;; SECTION 3b: Detailed Dictionary (full entries)
-      ;; ============================================================
-      (insert "** Detailed Dictionary\n")
-      (let ((vocab-list (condition-case nil
-                            (when (fboundp 'tibetan-vocab-extract-detailed)
-                              (tibetan-vocab-extract-detailed tibetan-text))
-                          (error nil))))
-        (if vocab-list
-            (dolist (entry vocab-list)
-              (let* ((tibetan (plist-get entry :tibetan))
-                     (wylie (plist-get entry :wylie))
-                     (primary (plist-get entry :primary))
-                     (detailed (plist-get entry :detailed))
-                     (sanskrit (plist-get entry :sanskrit))
-                     (source (plist-get entry :source)))
-                (insert (format "*** %s" tibetan))
-                (when wylie (insert (format "  [%s]" wylie)))
-                (when (and source (string= source "Resources"))
-                  (insert " ★"))
-                (insert "\n")
-                (insert (format "  %s\n" (or primary "[not found]")))
-                (when (and detailed
-                           (not (string= detailed primary))
-                           (> (length detailed) (length primary)))
-                  (insert (format "  Full: %s\n"
-                                  (if (> (length detailed) 300)
-                                      (concat (substring detailed 0 297) "...")
-                                    detailed))))
-                (when sanskrit
-                  (insert (format "  Sanskrit: %s\n" sanskrit)))
-                (insert "\n")))
-          (insert "[Detailed dictionary not available]\n"))
-        (insert "\n"))
-
-      ;; ============================================================
       ;; SECTION 4: Grammatical Analysis (Bialek)
       ;; ============================================================
       (insert "** Grammatical Analysis (Bialek)\n")
@@ -727,7 +692,41 @@ New compact format with inline annotations."
       (insert "\n")
 
       ;; ============================================================
-      ;; SECTION 5b: Converb/Dependent Clause Analysis
+      ;; SECTION 5b: Zero Markers (unmarked arguments)
+      ;; ============================================================
+      (insert "** Zero Markers (Ø)\n")
+      (insert "Unmarked noun phrases - their grammatical role depends on context:\n\n")
+      (if (and verbs (fboundp 'tibetan-analyze-arguments))
+          (let ((zero-found nil))
+            (dolist (verb verbs)
+              (when (and verb (listp verb) (consp (car verb)))
+                (let* ((arg-analysis (condition-case nil
+                                         (tibetan-analyze-arguments verb multiword-units words)
+                                       (error nil))))
+                  (dolist (arg arg-analysis)
+                    (let ((marker (alist-get 'marker arg))
+                          (form (alist-get 'form arg))
+                          (role (alist-get 'role arg))
+                          (english (alist-get 'english arg)))
+                      (when (string= marker "Ø")
+                        (setq zero-found t)
+                        (insert (format "- %s" form))
+                        (when english (insert (format " \"%s\"" english)))
+                        (insert (format " → %s (zero-marked)\n" role))
+                        (insert (format "  Context: %s\n\n"
+                                       (cond
+                                        ((string= role "ABSOLUTIVE")
+                                         "Subject of intransitive or object of transitive")
+                                        ((string= role "ERGATIVE")
+                                         "Unmarked agent (rare, usually marked with -གིས/-ས)")
+                                        (t "Determined by verb frame"))))))))))
+            (unless zero-found
+              (insert "[No zero-marked arguments detected]\n")))
+        (insert "[Analysis not available]\n"))
+      (insert "\n")
+
+      ;; ============================================================
+      ;; SECTION 5c: Converb/Dependent Clause Analysis
       ;; ============================================================
       (let ((converbs (condition-case nil
                           (when (fboundp 'tibetan-analyze-converbs-bialek)
@@ -785,6 +784,42 @@ New compact format with inline annotations."
                                 (t "—")))))))
         (insert "[No verbs]\n"))
       (insert "\n")
+
+      ;; ============================================================
+      ;; SECTION 7: Detailed Dictionary (full entries) - LAST SECTION
+      ;; ============================================================
+      (insert "** Detailed Dictionary\n")
+      (insert "Full dictionary entries for reference:\n\n")
+      (let ((vocab-list (condition-case nil
+                            (when (fboundp 'tibetan-vocab-extract-detailed)
+                              (tibetan-vocab-extract-detailed tibetan-text))
+                          (error nil))))
+        (if vocab-list
+            (dolist (entry vocab-list)
+              (let* ((tibetan (plist-get entry :tibetan))
+                     (wylie (plist-get entry :wylie))
+                     (primary (plist-get entry :primary))
+                     (detailed (plist-get entry :detailed))
+                     (sanskrit (plist-get entry :sanskrit))
+                     (source (plist-get entry :source)))
+                (insert (format "*** %s" tibetan))
+                (when wylie (insert (format "  [%s]" wylie)))
+                (when (and source (string= source "Resources"))
+                  (insert " ★"))
+                (insert "\n")
+                (insert (format "  %s\n" (or primary "[not found]")))
+                (when (and detailed
+                           (not (string= detailed primary))
+                           (> (length detailed) (length primary)))
+                  (insert (format "  Full: %s\n"
+                                  (if (> (length detailed) 300)
+                                      (concat (substring detailed 0 297) "...")
+                                    detailed))))
+                (when sanskrit
+                  (insert (format "  Sanskrit: %s\n" sanskrit)))
+                (insert "\n")))
+          (insert "[Detailed dictionary not available]\n"))
+        (insert "\n"))
 
       (buffer-string))))
     (error
