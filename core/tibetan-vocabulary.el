@@ -177,25 +177,122 @@ Returns hash-table with both Wylie and Tibetan keys."
           (when (and wylie (not (string-empty-p wylie)))
             (puthash wylie clean-def vocab-table)))))))
 
+(defun tibetan-parse-wordlist-txt (txt-path)
+  "Parse a plain text Tibetan wordlist file.
+Format: One entry per line, Tibetan/Wylie term followed by definition.
+Supports formats:
+  - TAB-separated: term<TAB>definition
+  - Colon-separated: term: definition
+  - Dash-separated: term - definition
+Returns hash-table with both Wylie and Tibetan keys."
+  (let ((vocab-table (make-hash-table :test 'equal)))
+    (when (and txt-path (file-exists-p txt-path))
+      (with-temp-buffer
+        (insert-file-contents txt-path)
+        (goto-char (point-min))
+        (while (not (eobp))
+          (let ((line (buffer-substring-no-properties
+                       (line-beginning-position) (line-end-position))))
+            ;; Skip empty lines and comments
+            (unless (or (string-empty-p (string-trim line))
+                        (string-match-p "^[#;/]" line))
+              (let ((term nil) (def nil))
+                (cond
+                 ;; TAB-separated
+                 ((string-match "^\\([^\t]+\\)\t+\\(.+\\)$" line)
+                  (setq term (string-trim (match-string 1 line)))
+                  (setq def (string-trim (match-string 2 line))))
+                 ;; Colon-separated (but not URL patterns)
+                 ((string-match "^\\([^:]+\\):\\s-+\\(.+\\)$" line)
+                  (setq term (string-trim (match-string 1 line)))
+                  (setq def (string-trim (match-string 2 line))))
+                 ;; Dash-separated
+                 ((string-match "^\\([^ -]+\\)\\s-+-\\s-+\\(.+\\)$" line)
+                  (setq term (string-trim (match-string 1 line)))
+                  (setq def (string-trim (match-string 2 line)))))
+                (when (and term def (not (string-empty-p term)) (not (string-empty-p def)))
+                  (tibetan--store-vocab-entry vocab-table term def)))))
+          (forward-line 1))))
+    vocab-table))
+
+(defun tibetan-parse-wordlist-org (org-path)
+  "Parse an org-mode Tibetan wordlist file.
+Format: Headings are terms, content below is definition.
+  * term
+    definition
+Or table format:
+  | term | definition |
+Returns hash-table with both Wylie and Tibetan keys."
+  (let ((vocab-table (make-hash-table :test 'equal)))
+    (when (and org-path (file-exists-p org-path))
+      (with-temp-buffer
+        (insert-file-contents org-path)
+        (goto-char (point-min))
+        ;; Check for table format first
+        (if (re-search-forward "^|" nil t)
+            (progn
+              (goto-char (point-min))
+              (while (re-search-forward "^|\\s-*\\([^|]+\\)|\\s-*\\([^|]+\\)|" nil t)
+                (let ((term (string-trim (match-string 1)))
+                      (def (string-trim (match-string 2))))
+                  (unless (or (string-match-p "^-+$" term)  ; Skip separator lines
+                              (string= term "Term")        ; Skip header
+                              (string-empty-p term))
+                    (tibetan--store-vocab-entry vocab-table term def)))))
+          ;; Heading format
+          (while (re-search-forward "^\\*+\\s-+\\(.+\\)$" nil t)
+            (let ((term (string-trim (match-string 1)))
+                  (def-start (point))
+                  (def-end nil))
+              ;; Find definition (text until next heading or end)
+              (if (re-search-forward "^\\*" nil t)
+                  (setq def-end (line-beginning-position))
+                (setq def-end (point-max)))
+              (let ((def (string-trim (buffer-substring-no-properties def-start def-end))))
+                (unless (string-empty-p def)
+                  (tibetan--store-vocab-entry vocab-table term def))))))))
+    vocab-table))
+
 (defun tibetan-load-resources-vocab ()
   "Load vocabulary from Resources folder if present.
-Looks for PDF files containing 'Wortliste' or 'wordlist' in the name."
+Looks for wordlist files (PDF, TXT, ORG) in the Resources folder.
+Priority: TXT > ORG > PDF (PDF requires pdftotext)."
   (let ((res-dir (tibetan-find-resources-folder)))
     (when res-dir
       (let ((cached (gethash res-dir tibetan-resources-vocab-cache)))
         (if cached
             (setq tibetan-current-resources-vocab cached)
-          ;; Find and parse wordlist PDFs
+          ;; Find wordlist files in priority order
           (let ((vocab-table (make-hash-table :test 'equal))
-                (pdfs (directory-files res-dir t "\\(Wortliste\\|wordlist\\|Word.?list\\).*\\.pdf$" t)))
-            (dolist (pdf pdfs)
-              (message "Loading Resources vocabulary from %s..." (file-name-nondirectory pdf))
-              (let ((entries (tibetan-parse-wordlist-pdf pdf)))
+                (txt-files (directory-files res-dir t "\\(Wortliste\\|wordlist\\|Word.?list\\|vocab\\).*\\.txt$" t))
+                (org-files (directory-files res-dir t "\\(Wortliste\\|wordlist\\|Word.?list\\|vocab\\).*\\.org$" t))
+                (pdf-files (directory-files res-dir t "\\(Wortliste\\|wordlist\\|Word.?list\\).*\\.pdf$" t)))
+            ;; Load TXT files first (highest priority)
+            (dolist (txt txt-files)
+              (message "Loading Resources vocabulary from %s..." (file-name-nondirectory txt))
+              (let ((entries (tibetan-parse-wordlist-txt txt)))
                 (maphash (lambda (k v) (puthash k v vocab-table)) entries)))
-            (when (> (hash-table-count vocab-table) 0)
-              (puthash res-dir vocab-table tibetan-resources-vocab-cache)
-              (setq tibetan-current-resources-vocab vocab-table)
-              (message "✓ Loaded %d entries from Resources" (hash-table-count vocab-table)))))))))
+            ;; Load ORG files
+            (dolist (org org-files)
+              (message "Loading Resources vocabulary from %s..." (file-name-nondirectory org))
+              (let ((entries (tibetan-parse-wordlist-org org)))
+                (maphash (lambda (k v) (puthash k v vocab-table)) entries)))
+            ;; Load PDF files (requires pdftotext)
+            (dolist (pdf pdf-files)
+              (if (executable-find "pdftotext")
+                  (progn
+                    (message "Loading Resources vocabulary from %s..." (file-name-nondirectory pdf))
+                    (let ((entries (tibetan-parse-wordlist-pdf pdf)))
+                      (maphash (lambda (k v) (puthash k v vocab-table)) entries)))
+                (message "⚠ Cannot load %s - pdftotext not installed. Export to .txt or install poppler."
+                         (file-name-nondirectory pdf))))
+            (if (> (hash-table-count vocab-table) 0)
+                (progn
+                  (puthash res-dir vocab-table tibetan-resources-vocab-cache)
+                  (setq tibetan-current-resources-vocab vocab-table)
+                  (message "✓ Loaded %d entries from Resources" (hash-table-count vocab-table)))
+              (when pdf-files
+                (message "⚠ No vocabulary loaded from Resources. Create a wordlist.txt or install pdftotext."))))))))))
 
 (defun tibetan-lookup-word-in-resources-vocab (word)
   "Look up WORD in current Resources vocabulary.
