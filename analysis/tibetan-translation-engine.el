@@ -14,6 +14,35 @@
 (require 'cl-lib)
 
 ;; ============================================================================
+;; COMMON TIBETAN CONSTRUCTIONS
+;; ============================================================================
+
+(defvar tibetan-cat-constructions
+  '(;; Temporal constructions
+    ("པའི་ཚེ" . "at the time when ... %s")
+    ("བའི་ཚེ" . "at the time when ... %s")
+    ("པའི་དུས" . "at the time when ... %s")
+    ("བའི་དུས" . "at the time when ... %s")
+    ("ན" . "when %s")
+    ("ནས" . "after %s-ing / from %s")
+    ("ཏེ" . "having %s-ed, ...")
+    ;; Locative
+    ("དུ" . "in/to %s")
+    ("ལ" . "to/for %s")
+    ("ར" . "to/for %s")
+    ;; Genitive
+    ("གི" . "%s's")
+    ("གྱི" . "%s's")
+    ("ཀྱི" . "%s's")
+    ("འི" . "%s's")
+    ;; Ergative/Instrumental
+    ("གིས" . "by %s")
+    ("ཀྱིས" . "by %s")
+    ("ས" . "by %s"))
+  "Common Tibetan grammatical constructions and their English patterns.
+%s is replaced with the relevant noun or verb phrase.")
+
+;; ============================================================================
 ;; WORD ORDER MAPPING
 ;; ============================================================================
 
@@ -21,6 +50,7 @@
   '((Erg-Abs . (AGENT PATIENT VERB))
     (Erg-Abs-Dat . (AGENT PATIENT GOAL VERB))
     (Abs . (SUBJECT VERB))
+    (Abs-Loc . (SUBJECT LOCATION VERB))
     (Abs-Dat . (SUBJECT GOAL VERB))
     (? . (TOPIC VERB)))
   "Mapping of Tibetan case frames to English word order.
@@ -111,9 +141,24 @@ Returns nil for empty or nil input."
      ((eq role 'GOAL) (format "to %s" base))
      ((eq role 'SOURCE) (format "from %s" base))
      ((eq role 'LOCATION) (format "in %s" base))
+     ((eq role 'ALLATIVE) (format "in %s" base))
      ((eq role 'INSTRUMENT) (format "by %s" base))
      ((eq role 'BENEFICIARY) (format "for %s" base))
+     ((eq role 'TOPIC) base)
      (t base))))
+
+;; ============================================================================
+;; SENTENCE-INITIAL PARTICLES
+;; ============================================================================
+
+(defvar tibetan-cat-sentence-particles
+  '(("ཡང" . "Again, ")
+    ("དེ་ནས" . "Then, ")
+    ("དེའི་ཚེ" . "At that time, ")
+    ("འདི་ལྟར" . "Thus, ")
+    ("གང་གི་ཚེ" . "When ")
+    ("ཇི་ལྟར" . "Just as "))
+  "Sentence-initial particles and their English translations.")
 
 (defun tibetan-cat-generate-translation (tibetan-text &optional parsed verbs)
   "Generate CAT-suggested translation for TIBETAN-TEXT.
@@ -203,21 +248,126 @@ Returns a string with the suggested translation."
           (when clause-parts
             (push (string-join (nreverse clause-parts) " ") translation-parts)))))
 
-    ;; If no verbs found, do word-by-word gloss
+    ;; If no verbs found or translation is incomplete, build structured translation
     (unless translation-parts
-      (let ((glosses '()))
-        (when (fboundp 'tibetan-build-compound-aware-segments)
-          (let ((segments (tibetan-build-compound-aware-segments words multiword-units)))
-            (dolist (seg segments)
-              (let ((gloss (tibetan-cat--gloss-word seg multiword-units)))
-                (push (or gloss (format "[%s]" seg)) glosses)))))
-        (when glosses
-          (push (string-join (nreverse glosses) " ") translation-parts))))
+      (setq translation-parts
+            (list (tibetan-cat--build-structured-translation
+                   tibetan-text words multiword-units))))
 
       ;; Join clauses
       (if translation-parts
           (string-join (nreverse translation-parts) "; ")
         "[Unable to generate translation]")))))
+
+;; ============================================================================
+;; STRUCTURED TRANSLATION BUILDER
+;; ============================================================================
+
+(defun tibetan-cat--build-structured-translation (tibetan-text words multiword-units)
+  "Build a structured English translation from TIBETAN-TEXT.
+Uses WORDS and MULTIWORD-UNITS for vocabulary lookup.
+Analyzes grammatical structure to produce proper English word order."
+  (let ((segments (when (fboundp 'tibetan-build-compound-aware-segments)
+                    (tibetan-build-compound-aware-segments words multiword-units)))
+        (bialek (when (fboundp 'tibetan-analyze-grammar-bialek)
+                  (tibetan-analyze-grammar-bialek tibetan-text)))
+        (sentence-parts '())
+        (subject nil)
+        (location nil)
+        (verb-phrase nil)
+        (temporal-clause nil)
+        (topic nil)
+        (sentence-initial nil))
+
+    ;; Check for sentence-initial particles
+    (dolist (particle-pair tibetan-cat-sentence-particles)
+      (when (string-match-p (concat "^" (car particle-pair)) tibetan-text)
+        (setq sentence-initial (cdr particle-pair))))
+
+    ;; Analyze grammatical markers to identify sentence components
+    (dolist (gram bialek)
+      (let* ((particle (nth 0 gram))
+             (word (nth 1 gram))
+             (gram-type (nth 2 gram))
+             (word-gloss (tibetan-cat--gloss-word
+                          (replace-regexp-in-string particle "$" "" word))))
+        (cond
+         ;; Terminative/Allative (དུ/ལ/ར) - location or goal
+         ((string-match-p "TERMINATIVE\\|ALLATIVE\\|DATIVE" gram-type)
+          (let ((np (tibetan-cat--gloss-word
+                     (replace-regexp-in-string "[དལར]$" "" word))))
+            (setq location (format "in %s" (or np word)))))
+
+         ;; Genitive with temporal marker (པའི་ཚེ, etc.)
+         ((and (string-match-p "GENITIVE" gram-type)
+               (string-match-p "ཚེ\\|དུས" tibetan-text))
+          ;; This is part of a temporal clause
+          (setq temporal-clause t))
+
+         ;; Ergative - agent/subject
+         ((string-match-p "ERGATIVE" gram-type)
+          (let ((np (tibetan-cat--gloss-word
+                     (replace-regexp-in-string "[གཀས]\\(ིས\\)?$" "" word))))
+            (setq subject (or np word)))))))
+
+    ;; Get verb and meaning
+    (let ((verb-info (when (fboundp 'tibetan-extract-verbs-compound-aware)
+                       (car (tibetan-extract-verbs-compound-aware
+                             tibetan-text words multiword-units)))))
+      (when (and verb-info (listp verb-info) (consp (car verb-info)))
+        (let ((meaning (alist-get 'meaning verb-info))
+              (lemma (alist-get 'lemma verb-info)))
+          (setq verb-phrase (or meaning
+                                (tibetan-cat--gloss-word lemma)
+                                lemma)))))
+
+    ;; Build glosses for words not yet identified
+    (let ((glosses '()))
+      (dolist (seg segments)
+        (let ((gloss (tibetan-cat--gloss-word seg multiword-units)))
+          (when (and gloss
+                     (not (string= gloss (or subject "")))
+                     (not (string-match-p "^in " (or location ""))))
+            (push gloss glosses))))
+      (when (and glosses (not verb-phrase))
+        (setq verb-phrase (car glosses))
+        (setq glosses (cdr glosses)))
+      ;; Remaining glosses could be topic/subject
+      (when (and glosses (not subject))
+        (setq subject (car (last glosses)))))
+
+    ;; Build the English sentence
+    ;; Check for temporal construction (པའི་ཚེ)
+    (if (string-match-p "པའི་ཚེ\\|བའི་ཚེ" tibetan-text)
+        ;; Temporal clause: "At the time when [subject] [verb] in [location]..."
+        (let ((parts '()))
+          (when sentence-initial (push sentence-initial parts))
+          (push "at the time when" parts)
+          (when subject (push (format "the %s" subject) parts))
+          (when (and verb-phrase (not (string-match-p "^to " verb-phrase)))
+            (push "was" parts))
+          (when verb-phrase
+            (push (replace-regexp-in-string "^to " "" (replace-regexp-in-string " (hon\\.)" "" verb-phrase)) parts))
+          (when location (push location parts))
+          (concat (string-join (nreverse parts) " ") ", ..."))
+
+      ;; Regular sentence: [Sentence-initial] [Subject] [Verb] [Location/Object]
+      (let ((parts '()))
+        (when sentence-initial (push sentence-initial parts))
+        (when subject (push subject parts))
+        (when verb-phrase
+          (push (replace-regexp-in-string "^to " "" verb-phrase) parts))
+        (when location (push location parts))
+        (if parts
+            (string-join (nreverse parts) " ")
+          ;; Fallback to simple gloss
+          (let ((glosses '()))
+            (dolist (seg segments)
+              (let ((gloss (tibetan-cat--gloss-word seg multiword-units)))
+                (push (or gloss (format "[%s]" seg)) glosses)))
+            (when sentence-initial
+              (push sentence-initial glosses))
+            (string-join (nreverse glosses) " ")))))))
 
 ;; ============================================================================
 ;; INTERACTIVE COMMAND
