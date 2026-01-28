@@ -34,10 +34,6 @@
 ;; RESOURCES FOLDER VOCABULARY INTEGRATION
 ;; ============================================================================
 
-(defvar tibetan-analysis-resources-vocab nil
-  "Hash table of vocabulary from Resources folder.
-Loaded when analysis is opened, keyed by Tibetan text.")
-
 (defun tibetan-analysis-find-resources-folder ()
   "Find the Resources folder relative to current buffer.
 Looks for ../Resources/ relative to the Work in progress folder."
@@ -48,36 +44,6 @@ Looks for ../Resources/ relative to the Work in progress folder."
         (when (file-directory-p resources-dir)
           resources-dir)))))
 
-(defun tibetan-analysis-load-resources-vocab ()
-  "Load vocabulary from Resources folder if available.
-Parses PDF word lists and org vocabulary files.
-Returns hash table of tibetan -> (meaning . source) pairs."
-  (let ((resources-dir (tibetan-analysis-find-resources-folder))
-        (vocab-hash (make-hash-table :test 'equal)))
-    (when resources-dir
-      ;; Look for org files with vocabulary lists
-      (dolist (file (directory-files resources-dir t "\\.org$"))
-        (with-temp-buffer
-          (insert-file-contents file)
-          (goto-char (point-min))
-          ;; Parse org description lists: - tibetan :: meaning
-          (while (re-search-forward "^- \\*?\\([^:*]+\\)\\*? *:: *\\(.+\\)$" nil t)
-            (let ((term (string-trim (match-string 1)))
-                  (meaning (string-trim (match-string 2))))
-              (puthash term (cons meaning (file-name-nondirectory file)) vocab-hash)))))
-      ;; Also check for Wortliste/word list text files
-      (dolist (file (directory-files resources-dir t "\\(Wortliste\\|word.*list\\).*\\.txt$"))
-        (with-temp-buffer
-          (insert-file-contents file)
-          (goto-char (point-min))
-          ;; Try common formats:
-          ;; tibetan = meaning
-          ;; tibetan: meaning
-          (while (re-search-forward "^\\([^=:\n]+\\)[=:] *\\(.+\\)$" nil t)
-            (let ((term (string-trim (match-string 1)))
-                  (meaning (string-trim (match-string 2))))
-              (puthash term (cons meaning (file-name-nondirectory file)) vocab-hash))))))
-    vocab-hash))
 
 ;; ============================================================================
 ;; DISPLAY SETTINGS - Smaller roman text

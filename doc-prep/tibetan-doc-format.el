@@ -78,10 +78,6 @@ Returns list of marked lines."
                 (setq n (1+ n))))
             lines)))
 
-(defun tibetan-doc-format--segment-count (lines)
-  "Count number of non-empty segments in LINES."
-  (length (seq-filter (lambda (l) (not (string-empty-p (string-trim l)))) lines)))
-
 ;; ============================================================================
 ;; FOLIO MARKERS
 ;; ============================================================================
@@ -97,14 +93,6 @@ Returns list of marked lines."
 (defun tibetan-doc-format--folio-as-property (folio-num)
   "Format FOLIO-NUM as property drawer opener."
   (format ":PROPERTIES:\n:FOLIO: %s\n:END:\n" folio-num))
-
-(defun tibetan-doc-format--insert-folio (folio-num style)
-  "Generate folio marker for FOLIO-NUM in STYLE."
-  (pcase style
-    ('heading (tibetan-doc-format--folio-as-heading folio-num))
-    ('inline (tibetan-doc-format--folio-inline folio-num))
-    ('property (tibetan-doc-format--folio-as-property folio-num))
-    (_ (tibetan-doc-format--folio-as-heading folio-num))))
 
 (defun tibetan-doc-format--extract-folio-markers (text)
   "Extract folio markers from TEXT.
@@ -289,19 +277,6 @@ Removes extra spaces, normalizes punctuation, etc."
     ;; Remove trailing tshegs before punctuation
     (setq result (replace-regexp-in-string "་།" "།" result))
     (setq result (replace-regexp-in-string "་༎" "༎" result))
-    result))
-
-(defun tibetan-doc-format-normalize-text (text)
-  "Normalize TEXT for consistent processing.
-Converts various Unicode forms, normalizes spacing."
-  (let ((result text))
-    ;; Replace regular spaces with tshegs in Tibetan context
-    (setq result (replace-regexp-in-string
-                  "\\([ༀ-࿿]\\) +\\([ༀ-࿿]\\)"
-                  "\\1་\\2"
-                  result))
-    ;; Clean OCR artifacts
-    (setq result (tibetan-doc-format-clean-ocr-artifacts result))
     result))
 
 (provide 'tibetan-doc-format)

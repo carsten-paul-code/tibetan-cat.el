@@ -50,6 +50,94 @@ Returns empty string if indices are out of range or invalid."
 Key: absolute path to vocab file
 Value: hash-table of (tibetan-term . definition)")
 
+;; ============================================================================
+;; RANGJUNG YESHE FALLBACK DICTIONARY (162k entries, lazy-loaded)
+;; ============================================================================
+
+(defvar tibetan-rangjung-yeshe-vocabulary nil
+  "Hash table for Rangjung Yeshe dictionary entries.
+Lazy-loaded on first lookup to avoid slow startup.")
+
+(defvar tibetan-rangjung-yeshe-loaded nil
+  "Whether Rangjung Yeshe dictionary has been loaded.")
+
+(defun tibetan-rangjung-yeshe-get-path ()
+  "Get path to Rangjung Yeshe dictionary file.
+Returns the Tibetan-keyed version if it exists, otherwise Wylie version."
+  (let* ((base-dir (or (file-name-directory
+                        (or load-file-name
+                            (locate-library "tibetan-cat")
+                            default-directory))
+                       default-directory))
+         (tib-path (expand-file-name "data/glossaries/rangjung-yeshe-tibetan.txt" base-dir))
+         (wylie-path (expand-file-name "data/glossaries/rangjung-yeshe-wylie.txt" base-dir)))
+    (cond
+     ((file-exists-p tib-path) tib-path)
+     ((file-exists-p wylie-path) wylie-path)
+     ;; Try alternative location
+     (t (let ((alt-tib "/Users/cp/tibetan-cat.el/data/glossaries/rangjung-yeshe-tibetan.txt"))
+          (when (file-exists-p alt-tib) alt-tib))))))
+
+(defun tibetan-rangjung-yeshe-load ()
+  "Load Rangjung Yeshe dictionary (lazy, called on first lookup).
+This is a large dictionary (162k entries) so we load it on-demand.
+Stores entries under both Tibetan and Wylie keys for flexible lookup."
+  (unless tibetan-rangjung-yeshe-loaded
+    (let ((dict-path (tibetan-rangjung-yeshe-get-path)))
+      (if (not dict-path)
+          (progn
+            (setq tibetan-rangjung-yeshe-loaded t)
+            (message "⚠ Rangjung Yeshe dictionary not found"))
+        (message "Loading Rangjung Yeshe dictionary (162k entries)...")
+        (setq tibetan-rangjung-yeshe-vocabulary (make-hash-table :test 'equal :size 350000))
+        (with-temp-buffer
+          (insert-file-contents dict-path)
+          (goto-char (point-min))
+          (let ((count 0))
+            (while (not (eobp))
+              (let ((line (buffer-substring-no-properties
+                           (line-beginning-position) (line-end-position))))
+                ;; Skip comments and empty lines
+                (unless (or (string-empty-p (string-trim line))
+                            (string-prefix-p "#" line))
+                  (let* ((parts (split-string line "\t"))
+                         (term (when (car parts) (string-trim (car parts))))
+                         (def (when (cadr parts) (string-trim (cadr parts))))
+                         (wylie (when (nth 2 parts) (string-trim (nth 2 parts)))))
+                    (when (and term def (not (string-empty-p term)) (not (string-empty-p def)))
+                      ;; Store under primary key (Tibetan or Wylie depending on file)
+                      (puthash term def tibetan-rangjung-yeshe-vocabulary)
+                      ;; Also store under Wylie if available (third column)
+                      (when (and wylie (not (string-empty-p wylie)))
+                        (puthash wylie def tibetan-rangjung-yeshe-vocabulary))
+                      (setq count (1+ count))))))
+              (forward-line 1))
+            (setq tibetan-rangjung-yeshe-loaded t)
+            (message "✓ Loaded Rangjung Yeshe dictionary: %d entries" count)))))))
+
+(defun tibetan-lookup-word-in-rangjung-yeshe (word)
+  "Look up WORD in Rangjung Yeshe dictionary (lazy-loads if needed).
+Tries Tibetan script first, then Wylie conversion.
+Returns meaning if found, nil otherwise."
+  ;; Lazy-load the dictionary on first use
+  (tibetan-rangjung-yeshe-load)
+  (when tibetan-rangjung-yeshe-vocabulary
+    (let* ((root-form (tibetan-strip-particles word))
+           (entry (or
+                   ;; Try full word as-is
+                   (gethash word tibetan-rangjung-yeshe-vocabulary)
+                   ;; Try with particles stripped
+                   (gethash root-form tibetan-rangjung-yeshe-vocabulary))))
+      ;; If not found, try Wylie conversion
+      (unless entry
+        (when (fboundp 'tibetan-to-wylie-fixed)
+          (let* ((wylie (ignore-errors (tibetan-to-wylie-fixed word)))
+                 (wylie-root (ignore-errors (tibetan-to-wylie-fixed root-form))))
+            (setq entry (or
+                         (and wylie (gethash wylie tibetan-rangjung-yeshe-vocabulary))
+                         (and wylie-root (gethash wylie-root tibetan-rangjung-yeshe-vocabulary)))))))
+      entry)))
+
 (defvar tibetan-current-custom-vocab nil
   "Current buffer's custom vocabulary hash-table, or nil if none.")
 
@@ -292,7 +380,7 @@ Priority: TXT > ORG > PDF (PDF requires pdftotext)."
                   (setq tibetan-current-resources-vocab vocab-table)
                   (message "✓ Loaded %d entries from Resources" (hash-table-count vocab-table)))
               (when pdf-files
-                (message "⚠ No vocabulary loaded from Resources. Create a wordlist.txt or install pdftotext."))))))))))
+                (message "⚠ No vocabulary loaded from Resources. Create a wordlist.txt or install pdftotext.")))))))))
 
 (defun tibetan-lookup-word-in-resources-vocab (word)
   "Look up WORD in current Resources vocabulary.
@@ -516,7 +604,8 @@ Priority order:
 1. Resources folder vocabulary (auto-detected)
 2. Custom vocabulary (if #+TIBETAN_VOCAB_FILE is set)
 3. Local comprehensive glossary
-4. DharmaMitra API fallback
+4. Rangjung Yeshe dictionary (162k entries, lazy-loaded)
+5. DharmaMitra API fallback
 Returns meaning string or nil."
   (let ((meaning nil))
     ;; Try compound if prev-word provided
@@ -535,7 +624,11 @@ Returns meaning string or nil."
         (unless meaning
           (setq meaning (or (tibetan-lookup-word-in-local-glossary compound)
                            (tibetan-lookup-word-in-local-glossary compound-stripped))))
-        ;; 4. If not found, try DharmaMitra
+        ;; 4. Try Rangjung Yeshe (lazy-loaded)
+        (unless meaning
+          (setq meaning (or (tibetan-lookup-word-in-rangjung-yeshe compound)
+                           (tibetan-lookup-word-in-rangjung-yeshe compound-stripped))))
+        ;; 5. If not found, try DharmaMitra
         (unless meaning
           (setq meaning (tibetan-lookup-word-in-dharmamitra compound)))))
 
@@ -549,7 +642,10 @@ Returns meaning string or nil."
       ;; 3. Try local glossary
       (unless meaning
         (setq meaning (tibetan-lookup-word-in-local-glossary word)))
-      ;; 4. If not found, try DharmaMitra
+      ;; 4. Try Rangjung Yeshe (lazy-loaded)
+      (unless meaning
+        (setq meaning (tibetan-lookup-word-in-rangjung-yeshe word)))
+      ;; 5. If not found, try DharmaMitra
       (unless meaning
         (setq meaning (tibetan-lookup-word-in-dharmamitra word))))
 
@@ -562,8 +658,9 @@ Returns meaning string or nil."
 (defun tibetan-extract-vocabulary (tibetan-text)
   "Extract vocabulary from TIBETAN-TEXT with meanings.
 Returns list of (word . meaning) pairs.
+Uses greedy matching: tries longer compounds first (4, 3, 2 syllables) before single.
 Handles compound detection and particle stripping automatically.
-Priority: Resources > Custom > Local glossary > DharmaMitra."
+Priority: Resources > Custom > Local glossary > Rangjung Yeshe > DharmaMitra."
   (when tibetan-text
     ;; Load vocabularies
     (tibetan-load-resources-vocab)
@@ -571,49 +668,57 @@ Priority: Resources > Custom > Local glossary > DharmaMitra."
     ;; First normalize: replace spaces with tsheg for consistent splitting
     (setq tibetan-text (replace-regexp-in-string " " "་" tibetan-text))
     (let* ((words (split-string tibetan-text "་" t))
+           (num-words (length words))
            (vocab '())
            (i 0))
-      (while (< i (length words))
+      (while (< i num-words)
         (let* ((word (string-trim (nth i words)))
-               (next (when (< (+ i 1) (length words))
-                      (string-trim (nth (+ i 1) words)))))
+               (word-stripped (tibetan-strip-particles word))
+               (found nil)
+               (matched-len 1))
+
           (if (or (string-empty-p word) (string-match-p "^[།༎༏]+$" word))
               (setq i (+ i 1))
 
-            ;; Try to find a 2-syllable compound first
-            (let* ((compound-raw (when next (concat word "་" next)))
-                   (word-stripped (tibetan-strip-particles word))
-                   (next-stripped (when next (tibetan-strip-particles next)))
-                   (compound-stripped (when next (concat word-stripped "་" next-stripped)))
-                   (found-compound nil)
-                   (meaning nil))
+            ;; Greedy matching: try 4, 3, 2 syllable compounds first
+            (cl-loop for compound-len from 4 downto 2
+                     until found
+                     when (<= (+ i compound-len) num-words)
+                     do
+                     (let* ((syls-raw (cl-loop for j from i below (+ i compound-len)
+                                               collect (string-trim (nth j words))))
+                            (syls-stripped (mapcar #'tibetan-strip-particles syls-raw))
+                            (compound-raw (mapconcat #'identity syls-raw "་"))
+                            (compound-stripped (mapconcat #'identity syls-stripped "་"))
+                            (meaning nil))
+                       ;; Try all vocabulary sources for compound
+                       ;; 1. Try Resources vocabulary first (highest priority)
+                       (setq meaning (or (tibetan-lookup-word-in-resources-vocab compound-raw)
+                                         (tibetan-lookup-word-in-resources-vocab compound-stripped)))
+                       ;; 2. Try custom vocabulary
+                       (unless meaning
+                         (setq meaning (or (tibetan-lookup-word-in-custom-vocab compound-raw)
+                                           (tibetan-lookup-word-in-custom-vocab compound-stripped))))
+                       ;; 3. Try local glossary
+                       (unless meaning
+                         (setq meaning (or (tibetan-lookup-word-in-local-glossary compound-raw)
+                                           (tibetan-lookup-word-in-local-glossary compound-stripped))))
+                       ;; 4. Try Rangjung Yeshe (lazy-loaded)
+                       (unless meaning
+                         (setq meaning (or (tibetan-lookup-word-in-rangjung-yeshe compound-raw)
+                                           (tibetan-lookup-word-in-rangjung-yeshe compound-stripped))))
+                       ;; 5. Try DharmaMitra for compound
+                       (unless meaning
+                         (setq meaning (tibetan-lookup-word-in-dharmamitra compound-raw)))
+                       ;; If found, record and skip forward
+                       (when meaning
+                         (push (cons compound-raw meaning) vocab)
+                         (setq found t)
+                         (setq matched-len compound-len))))
 
-              ;; Check if compound exists
-              (when next
-                ;; 1. Try Resources vocabulary first (highest priority)
-                (setq meaning (or (tibetan-lookup-word-in-resources-vocab compound-raw)
-                                 (tibetan-lookup-word-in-resources-vocab compound-stripped)))
-                ;; 2. Try custom vocabulary
-                (unless meaning
-                  (setq meaning (or (tibetan-lookup-word-in-custom-vocab compound-raw)
-                                   (tibetan-lookup-word-in-custom-vocab compound-stripped))))
-                ;; 3. Try local glossary (raw first, then stripped)
-                (unless meaning
-                  (setq meaning (or (tibetan-lookup-word-in-local-glossary compound-raw)
-                                   (tibetan-lookup-word-in-local-glossary compound-stripped))))
-
-                ;; 4. If not found, try DharmaMitra for compound
-                (unless meaning
-                  (setq meaning (tibetan-lookup-word-in-dharmamitra compound-raw)))
-
-                ;; If compound found, add to vocab and skip next word
-                (when meaning
-                  (setq found-compound t)
-                  (push (cons (concat word "་" next) meaning) vocab)
-                  (setq i (+ i 2))))
-
-              ;; If no compound, lookup single word
-              (unless found-compound
+            ;; If no compound found, lookup single word
+            (unless found
+              (let ((meaning nil))
                 ;; 1. Try Resources vocabulary first
                 (setq meaning (tibetan-lookup-word-in-resources-vocab word))
                 (unless meaning
@@ -628,14 +733,20 @@ Priority: Resources > Custom > Local glossary > DharmaMitra."
                   (setq meaning (or (tibetan-lookup-word-in-local-glossary word)
                                    (and (not (equal word word-stripped))
                                         (tibetan-lookup-word-in-local-glossary word-stripped)))))
-
-                ;; 4. If not found, try DharmaMitra
+                ;; 4. Try Rangjung Yeshe (lazy-loaded)
+                (unless meaning
+                  (setq meaning (or (tibetan-lookup-word-in-rangjung-yeshe word)
+                                   (and (not (equal word word-stripped))
+                                        (tibetan-lookup-word-in-rangjung-yeshe word-stripped)))))
+                ;; 5. If not found, try DharmaMitra
                 (unless meaning
                   (setq meaning (tibetan-lookup-word-in-dharmamitra word)))
 
                 ;; Add to vocab (even if meaning is nil, to show [look up] message)
-                (push (cons word (or meaning "[look up]")) vocab)
-                (setq i (+ i 1)))))))
+                (push (cons word (or meaning "[look up]")) vocab)))
+
+            ;; Advance by the number of words matched
+            (setq i (+ i matched-len)))))
 
       (nreverse vocab))))
 
@@ -645,24 +756,27 @@ Priority: Resources > Custom > Local glossary > DharmaMitra."
 
 (defun tibetan-vocabulary-initialize ()
   "Initialize vocabulary by loading bundled glossaries.
-Called automatically when tibetan-vocabulary is loaded."
-  (let ((bundled-glossary (expand-file-name
-                           "data/tibetan-bundled-glossary.el"
-                           (file-name-directory
-                            (or load-file-name
-                                (locate-library "tibetan-cat")
-                                default-directory)))))
-    ;; Try bundled glossary first (for standalone package use)
-    (if (file-exists-p bundled-glossary)
-        (progn
-          (load bundled-glossary)
-          (when (fboundp 'tibetan-bundled-load-all-glossaries)
-            (tibetan-bundled-load-all-glossaries)))
-      ;; Fall back to external glossary path (legacy support)
-      (let ((external-glossary (expand-file-name
-                                "~/buddhist-studies/translation-tools/load-comprehensive-glossaries.el")))
-        (when (file-exists-p external-glossary)
-          (load-file external-glossary))))))
+Called automatically when tibetan-vocabulary is loaded.
+Set `tibetan-skip-external-glossaries' to non-nil to skip loading."
+  ;; Skip if testing flag is set
+  (when (not (bound-and-true-p tibetan-skip-external-glossaries))
+    (let ((bundled-glossary (expand-file-name
+                             "data/tibetan-bundled-glossary.el"
+                             (file-name-directory
+                              (or load-file-name
+                                  (locate-library "tibetan-cat")
+                                  default-directory)))))
+      ;; Try bundled glossary first (for standalone package use)
+      (if (file-exists-p bundled-glossary)
+          (progn
+            (load bundled-glossary)
+            (when (fboundp 'tibetan-bundled-load-all-glossaries)
+              (tibetan-bundled-load-all-glossaries)))
+        ;; Fall back to external glossary path (legacy support)
+        (let ((external-glossary (expand-file-name
+                                  "~/buddhist-studies/translation-tools/load-comprehensive-glossaries.el")))
+          (when (file-exists-p external-glossary)
+            (load-file external-glossary)))))))
 
 (defun reload-all-glossaries ()
   "Reload all glossaries including bundled and external sources."

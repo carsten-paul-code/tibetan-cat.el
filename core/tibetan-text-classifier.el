@@ -162,52 +162,6 @@ Looks for:
 Returns plist with :description, :features, :tools."
   (cdr (assq text-type tibetan-text-types)))
 
-(defun tibetan-get-tools-for-text-type (text-type)
-  "Get list of appropriate tools for TEXT-TYPE.
-Returns list of tool symbols."
-  (plist-get (tibetan-get-text-type-info text-type) :tools))
-
-(defun tibetan-display-text-type-info ()
-  "Display information about current text type."
-  (interactive)
-  (let* ((text-type (tibetan-detect-text-type))
-         (info (tibetan-get-text-type-info text-type))
-         (description (plist-get info :description))
-         (tools (plist-get info :tools)))
-    (message "Text type: %s\n%s\nTools: %s"
-             text-type
-             description
-             (mapconcat 'symbol-name tools ", "))))
-
-;; ============================================================================
-;; FILE HEADER INSERTION
-;; ============================================================================
-
-(defun tibetan-insert-text-type-header (text-type)
-  "Insert TEXT-TYPE classification header at top of buffer.
-Prompts for text type if not provided."
-  (interactive
-   (list (intern (completing-read
-                  "Text type: "
-                  '("classical" "madhyamaka-verse" "kagyu-verse"
-                    "gelug-verse" "bhutanese" "prose")
-                  nil t))))
-  (save-excursion
-    (goto-char (point-min))
-    ;; Check if already has classification
-    (if (re-search-forward "^#\\+?TIBETAN_TEXT_TYPE:"
-                          (min (point-max) 2000) t)
-        (progn
-          (beginning-of-line)
-          (kill-line)
-          (insert (format "#+TIBETAN_TEXT_TYPE: %s" text-type)))
-      ;; Insert new header
-      (goto-char (point-min))
-      (when (looking-at "^#\\+")  ; After existing org headers
-        (while (and (looking-at "^#\\+") (not (eobp)))
-          (forward-line 1)))
-      (insert (format "#+TIBETAN_TEXT_TYPE: %s\n" text-type))))
-  (message "Text type set to: %s" text-type))
 
 (provide 'tibetan-text-classifier)
 ;;; tibetan-text-classifier.el ends here

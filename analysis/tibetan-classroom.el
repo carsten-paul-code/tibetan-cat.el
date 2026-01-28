@@ -47,11 +47,6 @@ Value: (wylie translation vocabulary grammar suggestion)")
   (let ((key (tibetan-cache-key seg-id tibetan-text)))
     (puthash key (list wylie translation vocab grammar suggestion) tibetan-analysis-cache)))
 
-(defun tibetan-clear-cache ()
-  "Clear the analysis cache."
-  (interactive)
-  (clrhash tibetan-analysis-cache)
-  (message "✓ Analysis cache cleared"))
 
 ;; ============================================================================
 ;; DHARMAMITRA INTEGRATION

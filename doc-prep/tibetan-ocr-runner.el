@@ -43,27 +43,6 @@ On macOS this is the .app bundle."
   :type 'file
   :group 'tibetan-ocr-runner)
 
-(defcustom tibetan-ocr-default-model 'woodblock
-  "Default OCR model to use."
-  :type '(choice (const :tag "Woodblock (traditional prints)" woodblock)
-                 (const :tag "Woodblock-Stacks (complex stacking)" woodblock-stacks)
-                 (const :tag "Modern print" modern)
-                 (const :tag "Ume Druma (dbu-med cursive)" ume-druma)
-                 (const :tag "Ume Petsuk (dbu-med petsuk)" ume-petsuk))
-  :group 'tibetan-ocr-runner)
-
-(defcustom tibetan-ocr-output-dir nil
-  "Directory to save OCR output files.
-If nil, prompts user or uses source directory."
-  :type '(choice (const :tag "Prompt" nil)
-                 (directory :tag "Specific directory"))
-  :group 'tibetan-ocr-runner)
-
-(defcustom tibetan-ocr-watch-clipboard t
-  "If non-nil, watch clipboard for OCR results after launching app."
-  :type 'boolean
-  :group 'tibetan-ocr-runner)
-
 ;; ============================================================================
 ;; APP DETECTION
 ;; ============================================================================
@@ -138,25 +117,6 @@ If nil, prompts user or uses source directory."
       (message "BDRC OCR not found. Please install from:
 https://github.com/buda-base/tibetan-ocr-app/releases"))))
 
-;;;###autoload
-(defun tibetan-ocr-list-models ()
-  "List available OCR models."
-  (interactive)
-  (let ((models-dir (tibetan-ocr--get-models-dir)))
-    (if (and models-dir (file-directory-p models-dir))
-        (let ((models (directory-files models-dir nil "^[^.]")))
-          (message "Available OCR models in %s:\n%s"
-                   models-dir
-                   (mapconcat (lambda (m)
-                               (format "  - %s" m))
-                             models "\n")))
-      (message "Available OCR models:
-  - Woodblock: Traditional woodblock prints (most common)
-  - Woodblock-Stacks: Woodblock with complex stacking
-  - Modern: Modern printed texts
-  - Ume_Druma: dbu-med cursive script
-  - Ume_Petsuk: dbu-med petsuk style"))))
-
 ;; ============================================================================
 ;; LAUNCH APP
 ;; ============================================================================
@@ -178,12 +138,6 @@ If FILE is provided, the app opens with that file ready for OCR."
       (shell-command (format "open -a %s" (shell-quote-argument app))))
     (message "BDRC Tibetan OCR app launched%s"
              (if file (format " with %s" (file-name-nondirectory file)) ""))))
-
-;;;###autoload
-(defun tibetan-ocr-open-with-file (file)
-  "Open BDRC OCR app with FILE loaded."
-  (interactive "fSelect PDF or image: ")
-  (tibetan-ocr-open-app file))
 
 ;; ============================================================================
 ;; IMPORT RESULTS
@@ -330,20 +284,6 @@ Returns plist: (:text \"...\" :source \"...\" :model ...)"
 ;; ============================================================================
 ;; FALLBACK: MANUAL TEXT INPUT
 ;; ============================================================================
-
-;;;###autoload
-(defun tibetan-ocr-manual-input ()
-  "Manually input OCR'd text when BDRC OCR is not available.
-Returns result in same format as `tibetan-ocr-run'."
-  (interactive)
-  (let ((text (read-string "Paste OCR text (or leave empty to use buffer): ")))
-    (when (string-empty-p text)
-      (setq text (if (use-region-p)
-                    (buffer-substring-no-properties (region-beginning) (region-end))
-                  (buffer-substring-no-properties (point-min) (point-max)))))
-    (list :text text
-          :source "manual-input"
-          :model nil)))
 
 ;; ============================================================================
 ;; KEYBINDINGS

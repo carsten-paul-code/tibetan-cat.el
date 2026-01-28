@@ -301,60 +301,8 @@ Returns structured analysis with:
       (multiword-units . ,multiword-units))))
 
 ;; ============================================================================
-;; VERB FILTERING (Context-Aware)
-;; ============================================================================
-
-(defun tibetan-filter-verb-matches (verbs analysis-data)
-  "Filter VERBS list to remove false positives using ANALYSIS-DATA context.
-Remove verbs that are:
-- Part of compound terms
-- Part of proper nouns
-- Particles misidentified as verbs
-- Unlikely to be verbs based on position"
-  (let ((compound-words (make-hash-table :test 'equal))
-        (filtered '()))
-
-    ;; Build set of words that are part of compounds
-    (dolist (unit (alist-get 'multiword-units analysis-data))
-      (let ((form (nth 2 unit)))
-        (dolist (word (split-string form "་"))
-          (puthash word t compound-words))))
-
-    ;; Filter verb list
-    (dolist (verb verbs)
-      (let* ((lemma (alist-get 'lemma verb))
-             (is-compound-part (gethash lemma compound-words))
-             (is-particle (member lemma '("ན" "ལ" "ར"))))  ; Common particles
-        (unless (or is-compound-part is-particle)
-          (push verb filtered))))
-
-    (nreverse filtered)))
-
-;; ============================================================================
 ;; HELPER FUNCTIONS
 ;; ============================================================================
-
-(defun tibetan-lookup-compound (text)
-  "Look up TEXT in compound dictionary."
-  (gethash text tibetan-compounds-dict))
-
-(defun tibetan-lookup-proper-noun (text)
-  "Look up TEXT in proper noun dictionary."
-  (gethash text tibetan-proper-nouns-dict))
-
-(defun tibetan-format-multiword-unit (unit)
-  "Format UNIT data for display.
-UNIT is (start-index end-index form data)."
-  (let* ((form (nth 2 unit))
-         (data (nth 3 unit))
-         (wylie (alist-get 'wylie data))
-         (english (alist-get 'english data))
-         (sanskrit (alist-get 'sanskrit data))
-         (category (alist-get 'category data)))
-    (concat form " [" wylie "]"
-            "\n  TYPE: " category
-            "\n  MEANING: " english
-            (when sanskrit (concat "\n  SANSKRIT: " sanskrit)))))
 
 (provide 'tibetan-enhanced-parser)
 ;;; tibetan-enhanced-parser.el ends here

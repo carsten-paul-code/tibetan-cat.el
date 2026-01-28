@@ -80,20 +80,18 @@ Returns nil if not in a segment (no error raised)."
           (unless (org-at-heading-p)
             (org-back-to-heading t))
 
-          ;; Get the subtree content
-          (let ((element (org-element-at-point)))
-            (when element
-              ;; Get the content between heading and next heading/end
-              (let* ((begin (org-element-property :contents-begin element))
-                     (end (org-element-property :contents-end element)))
-                ;; Safety check: ensure positions are valid before accessing buffer
-                (when (and begin end
-                           (>= begin (point-min))
-                           (<= end (point-max))
-                           (< begin end))
-                  (let ((content (buffer-substring-no-properties begin end)))
-                    (when content
-                      (string-trim content)))))))))
+          ;; Use narrowing approach which is more reliable than org-element
+          ;; especially when called from org-map-entries
+          (save-restriction
+            (org-narrow-to-subtree)
+            (let ((text (buffer-substring-no-properties
+                         (save-excursion
+                           (forward-line 1)  ; Skip the heading line
+                           (point))
+                         (point-max))))
+              (widen)
+              (when (and text (not (string-empty-p (string-trim text))))
+                (string-trim text))))))
     (error nil)))
 
 (defun tibetan-org-get-segment-id ()

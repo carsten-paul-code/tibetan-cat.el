@@ -688,21 +688,7 @@ Returns verb entry alist if found, nil otherwise."
   "Return non-nil if WORD is a recognized verb."
   (not (null (tibetan-verb-lookup word))))
 
-(defun tibetan-get-verb-transitivity (word)
-  "Get transitivity of WORD if it's a verb."
-  (let ((entry (tibetan-verb-lookup word)))
-    (when entry
-      (alist-get 'transitivity entry))))
 
-(defun tibetan-get-verb-stems (word)
-  "Get all stems of WORD if it's a verb.
-Returns list: (present past future imperative)."
-  (let ((entry (tibetan-verb-lookup word)))
-    (when entry
-      (list (alist-get 'present_stem entry)
-            (alist-get 'past_stem entry)
-            (alist-get 'future_stem entry)
-            (alist-get 'imperative_stem entry)))))
 
 (provide 'tibetan-verb-classifier)
 ;;; tibetan-verb-classifier.el ends here

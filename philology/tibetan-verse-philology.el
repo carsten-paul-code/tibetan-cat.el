@@ -39,16 +39,6 @@ Returns list of syllables."
          (syllables (split-string clean "་" t)))
     syllables))
 
-(defun tibetan-validate-verse-meter (verse-lines)
-  "Validate that VERSE-LINES follow 7-syllable meter.
-VERSE-LINES is a list of verse lines.
-Returns list of (line syllable-count valid-p)."
-  (mapcar
-   (lambda (line)
-     (let ((count (tibetan-count-syllables line)))
-       (list line count (= count 7))))
-   verse-lines))
-
 (defun tibetan-format-syllables-numbered (tibetan-text)
   "Format TIBETAN-TEXT with numbered syllables.
 Example output:
@@ -111,37 +101,9 @@ Returns list of integers."
 Example: '2.2.1' → 3"
   (length (tibetan-parse-sa-bcad-number sa-bcad-str)))
 
-(defun tibetan-format-sa-bcad-outline (sa-bcad-str subject)
-  "Format sa bcad outline entry with proper indentation.
-Example:
-  2.2.1.2.1.2.4 → '        Definition (mtshan nyid)'"
-  (let* ((depth (tibetan-sa-bcad-depth sa-bcad-str))
-         (indent (make-string (* 2 (1- depth)) ?\s)))
-    (format "%s%s %s" indent sa-bcad-str subject)))
-
 ;; ============================================================================
 ;; VERSE DISPLAY & ANALYSIS
 ;; ============================================================================
-
-(defun tibetan-analyze-verse-line (verse-line verse-number)
-  "Analyze a single VERSE-LINE with VERSE-NUMBER.
-Returns formatted analysis string."
-  (let* ((syllables (tibetan-syllable-breakdown verse-line))
-         (count (length syllables))
-         (valid (= count 7))
-         (fillers (tibetan-identify-metrical-fillers verse-line))
-         (core (tibetan-extract-core-meaning verse-line))
-         (numbered (tibetan-format-syllables-numbered verse-line)))
-    (concat
-     (format "Verse %s: %s\n" verse-number verse-line)
-     (format "  Syllable count: %d %s\n" count (if valid "✓" "✗ IRREGULAR"))
-     (format "  Breakdown:\n    %s\n" numbered)
-     (format "  Core meaning: %s\n" core)
-     (when (cl-some (lambda (x) (nth 2 x)) fillers)
-       (format "  Likely fillers: %s\n"
-               (mapconcat (lambda (x)
-                           (when (nth 2 x) (nth 0 x)))
-                         fillers ", "))))))
 
 (defun tibetan-analyze-verse-block (verse-lines verse-number)
   "Analyze a block of VERSE-LINES with VERSE-NUMBER.
@@ -331,56 +293,6 @@ Bound to C-c v v."
 ;; ============================================================================
 ;; VERSE WORKSPACE
 ;; ============================================================================
-
-(defun tibetan-create-verse-workspace (verse-data)
-  "Create philological workspace for VERSE-DATA.
-VERSE-DATA is plist with :number, :sa-bcad, :subject, :lines, :page, :apparatus."
-  (let ((verse-num (plist-get verse-data :number))
-        (sa-bcad (plist-get verse-data :sa-bcad))
-        (subject (plist-get verse-data :subject))
-        (lines (plist-get verse-data :lines))
-        (page (plist-get verse-data :page))
-        (apparatus (plist-get verse-data :apparatus))
-        (buffer-name (format "*Verse %s Analysis*" (plist-get verse-data :number))))
-
-    (with-current-buffer (get-buffer-create buffer-name)
-      (erase-buffer)
-      (insert "╔══════════════════════════════════════════════════════════════╗\n")
-      (insert "║     TIBETAN VERSE PHILOLOGY - CRITICAL EDITION              ║\n")
-      (insert "╚══════════════════════════════════════════════════════════════╝\n\n")
-
-      ;; Metadata
-      (insert (format "VERSE: %s\n" verse-num))
-      (insert (format "SA BCAD: %s\n" sa-bcad))
-      (insert (format "SUBJECT: %s\n" subject))
-      (insert (format "PAGE(S): %s\n\n" page))
-
-      ;; Verse text
-      (insert "ROOT TEXT:\n")
-      (insert "──────────────────────────────────────\n")
-      (dolist (line lines)
-        (insert (format "%s\n" line)))
-      (insert "\n")
-
-      ;; Metrical analysis
-      (insert (tibetan-analyze-verse-block lines verse-num))
-
-      ;; Critical apparatus
-      (when apparatus
-        (insert (tibetan-display-apparatus apparatus)))
-
-      ;; Translation space
-      (insert "\n\nTRANSLATION:\n")
-      (insert "──────────────────────────────────────\n")
-      (insert "[Your translation here]\n\n")
-
-      ;; Notes space
-      (insert "PHILOLOGICAL NOTES:\n")
-      (insert "──────────────────────────────────────\n")
-      (insert "[Your notes here]\n\n")
-
-      (goto-char (point-min))
-      (current-buffer))))
 
 (provide 'tibetan-verse-philology)
 ;;; tibetan-verse-philology.el ends here

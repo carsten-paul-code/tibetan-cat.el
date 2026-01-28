@@ -78,9 +78,6 @@ If nil, uses same directory as source file."
 (defvar tibetan-doc-prep--current-source nil
   "Current source file/text being processed.")
 
-(defvar tibetan-doc-prep--current-options nil
-  "Current processing options.")
-
 (defvar tibetan-doc-prep--raw-text nil
   "Raw OCR/input text.")
 
@@ -106,14 +103,6 @@ Returns selected value."
   "Ask yes/no question with PROMPT."
   (yes-or-no-p prompt))
 
-(defun tibetan-doc-prep--read-file-or-directory (prompt &optional dir-ok)
-  "Read file path with PROMPT. If DIR-OK, also accept directories."
-  (if dir-ok
-      (read-file-name prompt nil nil t)
-    (read-file-name prompt nil nil t nil
-                    (lambda (f) (or (file-directory-p f)
-                                   (member (file-name-extension f)
-                                           '("pdf" "png" "jpg" "jpeg" "tiff" "tif")))))))
 
 ;; ============================================================================
 ;; STEP 1: SOURCE SELECTION
@@ -502,69 +491,6 @@ FILE is the PDF or image to process."
 ;; BATCH PROCESSING
 ;; ============================================================================
 
-;;;###autoload
-(defun tibetan-doc-prep-batch (source-path output-path &optional options)
-  "Process SOURCE-PATH to OUTPUT-PATH with OPTIONS.
-For scripting/automation without interactive prompts.
-
-OPTIONS is plist:
-  :ocr-model     `pecha' | `modern' | `manuscript'
-  :line-break    `shad' | `double-shad' | `preserve'
-  :segments      t | nil
-  :folio-style   `heading' | `inline' | `property'
-  :text-type     `classical' | `madhyamaka-verse' | `sutra'
-  :ai-correct    t | nil | `auto' (only if errors found)"
-  (let* ((source-type (cond
-                       ((string-suffix-p ".pdf" source-path t) 'pdf)
-                       ((file-directory-p source-path) 'directory)
-                       (t 'image)))
-         (source (list :type source-type :path source-path))
-
-         ;; OCR
-         (raw-text (if (fboundp 'tibetan-ocr-run)
-                      (plist-get (tibetan-ocr-run source-path
-                                                  (or (plist-get options :ocr-model) 'pecha))
-                                :text)
-                    (user-error "OCR module not loaded")))
-
-         ;; Validate
-         (validation (if (fboundp 'tibetan-ocr-validate-text)
-                        (tibetan-ocr-validate-text raw-text)
-                      '(:skipped t)))
-
-         ;; AI correct
-         (corrected (let ((ai-opt (plist-get options :ai-correct)))
-                     (cond
-                      ((eq ai-opt nil) raw-text)
-                      ((eq ai-opt t)
-                       (if (fboundp 'tibetan-ocr-correct)
-                           (plist-get (tibetan-ocr-correct raw-text validation) :text)
-                         raw-text))
-                      ((eq ai-opt 'auto)
-                       (if (and (fboundp 'tibetan-ocr-correct)
-                               (> (+ (length (plist-get validation :unknown))
-                                    (length (plist-get validation :suspicious)))
-                                  0))
-                           (plist-get (tibetan-ocr-correct raw-text validation) :text)
-                         raw-text))
-                      (t raw-text))))
-
-         ;; Format
-         (format-options (list :line-break (or (plist-get options :line-break) 'shad)
-                              :segments (if (plist-member options :segments)
-                                           (plist-get options :segments)
-                                         t)
-                              :folio-style (or (plist-get options :folio-style) 'heading)
-                              :text-type (or (plist-get options :text-type) 'classical))))
-
-    (if (fboundp 'tibetan-doc-format)
-        (tibetan-doc-format corrected
-                           (list :source-file source-path
-                                 :title (file-name-base source-path))
-                           format-options
-                           output-path)
-      (tibetan-doc-prep--basic-format corrected output-path format-options
-                                      (file-name-base source-path)))))
 
 ;; ============================================================================
 ;; KEYBINDINGS

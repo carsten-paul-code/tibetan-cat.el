@@ -137,7 +137,7 @@ Returns plist with :primary :detailed :sanskrit :wylie :source, or nil."
                                        :wylie wylie
                                        :source "Custom")))))))
 
-          ;; Try bundled glossaries (Rangjung Yeshe, Hopkins, etc.)
+          ;; Try bundled glossaries (Hopkins, etc.)
           (unless result
             (when (and (boundp 'tibetan-comprehensive-vocabulary)
                        tibetan-comprehensive-vocabulary)
@@ -150,6 +150,18 @@ Returns plist with :primary :detailed :sanskrit :wylie :source, or nil."
                                        :sanskrit (plist-get parsed :sanskrit)
                                        :wylie wylie
                                        :source "Bundled")))))))
+
+          ;; Try Rangjung Yeshe dictionary (162k entries, lazy-loaded)
+          (unless result
+            (when (fboundp 'tibetan-lookup-word-in-rangjung-yeshe)
+              (let ((ry-result (tibetan-lookup-word-in-rangjung-yeshe (or tibetan word))))
+                (when ry-result
+                  (let ((parsed (tibetan-vocab--parse-entry ry-result)))
+                    (setq result (list :primary (plist-get parsed :primary)
+                                       :detailed (plist-get parsed :detailed)
+                                       :sanskrit (plist-get parsed :sanskrit)
+                                       :wylie wylie
+                                       :source "Rangjung Yeshe")))))))
 
           ;; Try DharmaMitra as fallback
           (unless result
@@ -175,6 +187,7 @@ Returns plist with :primary :detailed :sanskrit :wylie :source, or nil."
 (defun tibetan-vocab-extract-detailed (tibetan-text)
   "Extract detailed vocabulary from TIBETAN-TEXT.
 Returns list of plists, each with :tibetan :wylie :primary :detailed :sanskrit :source.
+Uses greedy matching: tries longer compounds first (4, 3, 2 syllables) before single.
 Handles compound detection and provides consistent format for C-c u i and C-c u A."
   (when (and tibetan-text (not (string-empty-p tibetan-text)))
     ;; Load vocabularies
@@ -188,39 +201,45 @@ Handles compound detection and provides consistent format for C-c u i and C-c u 
     (setq tibetan-text (replace-regexp-in-string "།+" "།" tibetan-text))
 
     (let* ((syllables (split-string tibetan-text "་" t))
+           (num-syllables (length syllables))
            (vocab-list '())
            (i 0)
            (seen (make-hash-table :test 'equal)))  ; Avoid duplicates
 
-      (while (< i (length syllables))
+      (while (< i num-syllables)
         (let* ((syl (string-trim (nth i syllables)))
                (syl-clean (replace-regexp-in-string "[།༎༏]" "" syl))
-               (next-syl (when (< (1+ i) (length syllables))
-                           (replace-regexp-in-string "[།༎༏]" ""
-                                                     (string-trim (nth (1+ i) syllables)))))
-               (found nil))
+               (found nil)
+               (matched-len 1))  ; How many syllables were matched
 
           (unless (or (string-empty-p syl-clean)
                       (gethash syl-clean seen))
 
-            ;; Try 2-syllable compound first
-            (when next-syl
-              (let* ((compound (concat syl-clean "་" next-syl))
-                     (entry (tibetan-vocab-lookup-detailed compound)))
-                (when entry
-                  (puthash compound t seen)
-                  (push (list :tibetan compound
-                              :wylie (plist-get entry :wylie)
-                              :primary (plist-get entry :primary)
-                              :detailed (plist-get entry :detailed)
-                              :sanskrit (plist-get entry :sanskrit)
-                              :source (plist-get entry :source)
-                              :compound-p t)
-                        vocab-list)
-                  (setq found t)
-                  (setq i (1+ i)))))  ; Skip next syllable
+            ;; Greedy matching: try 4, 3, 2 syllable compounds first
+            (cl-loop for compound-len from 4 downto 2
+                     until found
+                     when (<= (+ i compound-len) num-syllables)
+                     do
+                     (let* ((syls (cl-loop for j from i below (+ i compound-len)
+                                           collect (replace-regexp-in-string
+                                                    "[།༎༏]" ""
+                                                    (string-trim (nth j syllables)))))
+                            (compound (mapconcat #'identity syls "་"))
+                            (entry (tibetan-vocab-lookup-detailed compound)))
+                       (when entry
+                         (puthash compound t seen)
+                         (push (list :tibetan compound
+                                     :wylie (plist-get entry :wylie)
+                                     :primary (plist-get entry :primary)
+                                     :detailed (plist-get entry :detailed)
+                                     :sanskrit (plist-get entry :sanskrit)
+                                     :source (plist-get entry :source)
+                                     :compound-p t)
+                               vocab-list)
+                         (setq found t)
+                         (setq matched-len compound-len))))
 
-            ;; Try single syllable
+            ;; Try single syllable if no compound found
             (unless found
               (let ((entry (tibetan-vocab-lookup-detailed syl-clean)))
                 (when entry
@@ -246,7 +265,8 @@ Handles compound detection and provides consistent format for C-c u i and C-c u 
                                 :compound-p nil)
                           vocab-list))))))
 
-          (setq i (1+ i))))
+          ;; Advance by the number of syllables matched
+          (setq i (+ i matched-len))))
 
       (nreverse vocab-list))))
 
@@ -304,16 +324,6 @@ Format:
 ;; INTEGRATION FUNCTION - For analysis generation
 ;; ============================================================================
 
-(defun tibetan-generate-vocabulary-section (tibetan-text &optional full-p)
-  "Generate vocabulary section for TIBETAN-TEXT.
-If FULL-P is non-nil, include full detailed entries.
-Returns formatted string for insertion in analysis."
-  (let ((vocab-list (tibetan-vocab-extract-detailed tibetan-text)))
-    (if vocab-list
-        (if full-p
-            (tibetan-vocab-format-list-full vocab-list)
-          (tibetan-vocab-format-list-short vocab-list))
-      "[No vocabulary extracted]")))
 
 (provide 'tibetan-vocabulary-detailed)
 ;;; tibetan-vocabulary-detailed.el ends here

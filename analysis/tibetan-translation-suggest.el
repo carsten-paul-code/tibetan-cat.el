@@ -111,19 +111,6 @@ This helps students understand HOW to translate converbs correctly."
 ;; COMPREHENSIVE TRANSLATION ASSISTANT
 ;; ============================================================================
 
-(defun tibetan-translation-assistant (tibetan-text)
-  "Complete translation assistant: vocabulary + grammar + suggestion.
-Returns formatted string with all translation aids."
-  (let* ((vocab (tibetan-extract-vocabulary tibetan-text))
-         (grammar (tibetan-analyze-grammar-bialek tibetan-text))
-         (suggestion (tibetan-suggest-translation tibetan-text vocab grammar))
-         (converb-guide (tibetan-explain-converb-translation grammar)))
-    (concat
-     "╔════════════════════════════════════════════════════════════╗\n"
-     "║           TRANSLATION ASSISTANT (Bialek Framework)         ║\n"
-     "╚════════════════════════════════════════════════════════════╝\n\n"
-     suggestion
-     converb-guide)))
 
 (provide 'tibetan-translation-suggest)
 ;;; tibetan-translation-suggest.el ends here

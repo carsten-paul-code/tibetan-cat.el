@@ -230,29 +230,6 @@ Returns plist: (:text \"corrected\" :changes (list))"
 
     result))
 
-;;;###autoload
-(defun tibetan-ocr-correct-async (text validation callback)
-  "Async version: correct TEXT using VALIDATION, call CALLBACK with result."
-  (unless (tibetan-ocr-correct--gptel-available-p)
-    (funcall callback (list :text text :changes nil :error "gptel not configured")))
-
-  (let ((prompt (tibetan-ocr-correct--build-prompt text validation)))
-    (message "Sending to Claude for OCR correction...")
-
-    (tibetan-ocr-correct--call-claude
-     prompt
-     (lambda (response info)
-       (if (not response)
-           (funcall callback (list :text text
-                                  :changes nil
-                                  :error (plist-get info :status)))
-         (let ((result (tibetan-ocr-correct--parse-response response)))
-           (when (and tibetan-ocr-correct-show-diff
-                     (plist-get result :changes))
-             (tibetan-ocr-correct--show-diff text (plist-get result :text)
-                                            (plist-get result :changes)))
-           (funcall callback result)))))))
-
 ;; ============================================================================
 ;; DIFF DISPLAY
 ;; ============================================================================
@@ -343,66 +320,9 @@ Returns plist: (:text \"corrected\" :changes (list))"
         (insert (plist-get result :text))
         (message "Applied %d corrections" (length (plist-get result :changes)))))))
 
-;;;###autoload
-(defun tibetan-ocr-correct-dwim ()
-  "Correct OCR errors in region if active, otherwise buffer."
-  (interactive)
-  (if (use-region-p)
-      (tibetan-ocr-correct-region (region-beginning) (region-end))
-    (tibetan-ocr-correct-buffer)))
-
 ;; ============================================================================
 ;; STANDALONE CORRECTION (without validation)
 ;; ============================================================================
-
-;;;###autoload
-(defun tibetan-ocr-correct-simple (text)
-  "Simple correction of TEXT without pre-validation.
-Useful when validation data is not available."
-  (unless (tibetan-ocr-correct--gptel-available-p)
-    (user-error "gptel not configured for Claude API"))
-
-  (let ((prompt (format "Please correct any OCR errors in this Classical Tibetan text.
-Be conservative - only change syllables that are clearly erroneous.
-
-## Text
-%s
-
-## Common OCR Errors
-- Letter confusion: ག/ད, བ/པ, ང/ཅ
-- Missing vowels: ི, ུ, ེ, ོ
-- Subscript confusion: ྱ/ྲ
-- Stack splitting: རྒ → ར་ག
-
-## Output Format
-CORRECTED_TEXT_START
-[corrected text]
-CORRECTED_TEXT_END
-
-CHANGES_START
-[original → corrected: reason]
-CHANGES_END"
-                       text))
-        (result nil)
-        (done nil))
-
-    (message "Sending to Claude for correction...")
-
-    (tibetan-ocr-correct--call-claude
-     prompt
-     (lambda (response info)
-       (if response
-           (setq result (tibetan-ocr-correct--parse-response response))
-         (setq result (list :text text :changes nil :error (plist-get info :status))))
-       (setq done t)))
-
-    ;; Wait
-    (let ((timeout 60) (waited 0))
-      (while (and (not done) (< waited timeout))
-        (sleep-for 0.5)
-        (setq waited (+ waited 0.5))))
-
-    (or result (list :text text :changes nil :error "Timeout"))))
 
 (provide 'tibetan-ocr-correct)
 ;;; tibetan-ocr-correct.el ends here

@@ -357,6 +357,239 @@ Line three")
     (should (search-forward "Line two" nil t))))
 
 ;; ============================================================================
+;; NAVIGATION TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-org-next-segment-basic ()
+  "Test moving to next segment."
+  (with-temp-buffer
+    (org-mode)
+    (insert tibetan-org-test--sample-org-buffer)
+    (goto-char (point-min))
+    (search-forward "*** Segment 1")
+    (beginning-of-line)
+    (tibetan-org-next-segment)
+    (should (looking-at-p "\\*\\*\\* Segment 2"))))
+
+(ert-deftest tibetan-org-next-segment-at-last ()
+  "Test next segment at last segment returns nil or stays."
+  (with-temp-buffer
+    (org-mode)
+    (insert tibetan-org-test--sample-org-buffer)
+    (goto-char (point-min))
+    (search-forward "*** Segment 3")
+    (beginning-of-line)
+    (let ((pos (point)))
+      (tibetan-org-next-segment)
+      ;; Either stays at same position or returns nil
+      (should (or (= (point) pos)
+                  (not (looking-at-p "\\*\\*\\* Segment")))))))
+
+(ert-deftest tibetan-org-previous-segment-basic ()
+  "Test moving to previous segment."
+  (with-temp-buffer
+    (org-mode)
+    (insert tibetan-org-test--sample-org-buffer)
+    (goto-char (point-min))
+    (search-forward "*** Segment 2")
+    (beginning-of-line)
+    (tibetan-org-previous-segment)
+    (should (looking-at-p "\\*\\*\\* Segment 1"))))
+
+(ert-deftest tibetan-org-previous-segment-at-first ()
+  "Test previous segment at first segment."
+  (with-temp-buffer
+    (org-mode)
+    (insert tibetan-org-test--sample-org-buffer)
+    (goto-char (point-min))
+    (search-forward "*** Segment 1")
+    (beginning-of-line)
+    (let ((pos (point)))
+      (tibetan-org-previous-segment)
+      ;; Should stay at same position or move to start
+      (should (<= (point) pos)))))
+
+(ert-deftest tibetan-org-next-sentence-basic ()
+  "Test moving to next sentence."
+  (with-temp-buffer
+    (org-mode)
+    (insert tibetan-org-test--sentence-org-buffer)
+    (goto-char (point-min))
+    (search-forward "** Sentence 1")
+    (beginning-of-line)
+    (tibetan-org-next-sentence)
+    (should (looking-at-p "\\*\\* Sentence 2"))))
+
+(ert-deftest tibetan-org-previous-sentence-basic ()
+  "Test moving to previous sentence."
+  (with-temp-buffer
+    (org-mode)
+    (insert tibetan-org-test--sentence-org-buffer)
+    (goto-char (point-min))
+    (search-forward "** Sentence 2")
+    (beginning-of-line)
+    (tibetan-org-previous-sentence)
+    (should (looking-at-p "\\*\\* Sentence 1"))))
+
+;; ============================================================================
+;; SENTENCE DATA EXTRACTION TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-org-get-sentence-segments-basic ()
+  "Test getting all segments in a sentence."
+  (with-temp-buffer
+    (org-mode)
+    (insert tibetan-org-test--sentence-org-buffer)
+    (goto-char (point-min))
+    (search-forward "** Sentence 1")
+    (beginning-of-line)  ; Ensure we're at the heading
+    (let ((segments (tibetan-org-get-sentence-segments)))
+      (should (listp segments))
+      (should (= 2 (length segments))))))
+
+(ert-deftest tibetan-org-get-sentence-text-basic ()
+  "Test getting combined text of a sentence."
+  (with-temp-buffer
+    (org-mode)
+    (insert tibetan-org-test--sentence-org-buffer)
+    (goto-char (point-min))
+    (search-forward "** Sentence 1")
+    (beginning-of-line)  ; Ensure we're at the heading
+    (let ((text (tibetan-org-get-sentence-text)))
+      (should (stringp text))
+      (should (string-match-p "First segment" text))
+      (should (string-match-p "Second segment" text)))))
+
+(ert-deftest tibetan-org-get-sentence-data-basic ()
+  "Test getting sentence metadata."
+  (with-temp-buffer
+    (org-mode)
+    (insert tibetan-org-test--sentence-org-buffer)
+    (goto-char (point-min))
+    (search-forward "** Sentence 1")
+    (let ((data (tibetan-org-get-sentence-data)))
+      (should data)
+      (should (listp data)))))
+
+;; ============================================================================
+;; INFO DISPLAY TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-org-show-segment-info-callable ()
+  "Test that show-segment-info is callable."
+  (should (fboundp 'tibetan-org-show-segment-info)))
+
+(ert-deftest tibetan-org-show-sentence-info-callable ()
+  "Test that show-sentence-info is callable."
+  (should (fboundp 'tibetan-org-show-sentence-info)))
+
+;; ============================================================================
+;; ANALYSIS HELPERS TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-org-segment-for-analysis-basic ()
+  "Test getting segment data for analysis."
+  (with-temp-buffer
+    (org-mode)
+    (insert tibetan-org-test--sample-org-buffer)
+    (goto-char (point-min))
+    (search-forward "བཀྲ་ཤིས")
+    (let ((data (tibetan-org-segment-for-analysis)))
+      ;; Function returns segment text (string), not a list
+      (should data)
+      (should (stringp data))
+      (should (string-match-p "བཀྲ་ཤིས" data)))))
+
+(ert-deftest tibetan-org-segments-for-workspace-basic ()
+  "Test getting segments for workspace creation."
+  (with-temp-buffer
+    (org-mode)
+    (insert tibetan-org-test--sentence-org-buffer)
+    (goto-char (point-min))
+    (search-forward "** Sentence 1")
+    (let ((segments (tibetan-org-segments-for-workspace)))
+      (should (listp segments)))))
+
+;; ============================================================================
+;; SENTENCE GROUPING TESTS
+;; Note: tibetan--group-into-sentences expects TEXT (string), not a list.
+;; It internally calls tibetan--segment-text to split the text.
+;; ============================================================================
+
+(ert-deftest tibetan--group-into-sentences-basic ()
+  "Test grouping segments into sentences."
+  ;; Pass text, not list - function internally segments
+  (let ((text "First།Second།Third།།Fourth།"))
+    (let ((sentences (tibetan--group-into-sentences text)))
+      (should (listp sentences))
+      ;; Double shad should end a sentence
+      (should (>= (length sentences) 1)))))
+
+(ert-deftest tibetan--group-into-sentences-empty ()
+  "Test grouping with empty input."
+  (let ((sentences (tibetan--group-into-sentences "")))
+    (should (or (null sentences)
+                (and (listp sentences) (= 0 (length sentences)))))))
+
+(ert-deftest tibetan--group-into-sentences-single ()
+  "Test grouping single segment."
+  (let ((sentences (tibetan--group-into-sentences "Only one།")))
+    (should (listp sentences))
+    (should (= 1 (length sentences)))))
+
+;; ============================================================================
+;; PREPARE FROM REGION TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-prepare-document-from-region-callable ()
+  "Test that prepare-document-from-region is callable."
+  (should (fboundp 'tibetan-prepare-document-from-region)))
+
+(ert-deftest tibetan-prepare-new-document-callable ()
+  "Test that prepare-new-document is callable."
+  (should (fboundp 'tibetan-prepare-new-document)))
+
+;; ============================================================================
+;; MAIN VERB DETECTION TESTS (clause analysis integration)
+;; ============================================================================
+
+(ert-deftest tibetan--segment-has-main-verb-p-copula ()
+  "Test main verb detection for copula ཡིན།"
+  (should (tibetan--segment-has-main-verb-p "དེ་ནི་ཆོས་ཡིན།")))
+
+(ert-deftest tibetan--segment-has-main-verb-p-existential ()
+  "Test main verb detection for existential ཡོད།"
+  (should (tibetan--segment-has-main-verb-p "དེ་ཡོད་དོ།")))
+
+(ert-deftest tibetan--segment-has-main-verb-p-final-particle ()
+  "Test main verb detection by final particle."
+  (should (tibetan--segment-has-main-verb-p "བྱས་སོ།")))
+
+(ert-deftest tibetan--segment-has-main-verb-p-double-shad ()
+  "Test main verb detection by double shad."
+  (should (tibetan--segment-has-main-verb-p "བྱས།།")))
+
+(ert-deftest tibetan--segment-is-converb-only-p-coordinative ()
+  "Test converb-only detection for coordinative -ste."
+  (should (tibetan--segment-is-converb-only-p "བྱས་ནས་སྟེ")))
+
+(ert-deftest tibetan--segment-is-converb-only-p-false-for-main-verb ()
+  "Test that main verb segments are not converb-only."
+  (should-not (tibetan--segment-is-converb-only-p "བྱས་སོ།")))
+
+(ert-deftest tibetan--segment-ends-sentence-p-double-shad ()
+  "Test sentence ending detection by double shad."
+  (should (tibetan--segment-ends-sentence-p "བྱས།།")))
+
+(ert-deftest tibetan--segment-ends-sentence-p-final-particle ()
+  "Test sentence ending detection by final particle."
+  (should (tibetan--segment-ends-sentence-p "བྱས་སོ།")))
+
+(ert-deftest tibetan--segment-ends-sentence-p-not-converb ()
+  "Test that converb doesn't end sentence."
+  (should-not (tibetan--segment-ends-sentence-p "བྱས་ནས")))
+
+;; ============================================================================
 ;; HELPER FUNCTION
 ;; ============================================================================
 

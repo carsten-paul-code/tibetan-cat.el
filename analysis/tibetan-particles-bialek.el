@@ -351,47 +351,11 @@ Returns list of all grammatical features detected."
 ;; FORMATTING FOR DISPLAY
 ;; ============================================================================
 
-(defun tibetan-format-grammar-bialek (analysis-list)
-  "Format Bialek grammar analysis for classroom display.
-Shows particle, word, type, function, translation guide, and Bialek reference."
-  (if (not analysis-list)
-      "  [No grammatical markers detected]\n"
-    (let ((result ""))
-      (dolist (a analysis-list)
-        (let ((particle (nth 0 a))
-              (word (nth 1 a))
-              (type (nth 2 a))
-              (function (nth 3 a))
-              (translation (nth 4 a))
-              (reference (nth 5 a)))
-          (setq result (concat result
-                              (format "  • %s in '%s'\n" particle word)
-                              (format "    TYPE: %s\n" type)
-                              (format "    FUNCTION: %s\n" function)
-                              (format "    TRANSLATION: %s\n" translation)
-                              (format "    REFERENCE: %s\n\n" reference)))))
-      result)))
 
 ;; ============================================================================
 ;; CONVERBIAL CONSTRUCTION SUMMARY (for teaching)
 ;; ============================================================================
 
-(defun tibetan-summarize-converbs (analysis-list)
-  "Generate a summary of converbial constructions found.
-Useful for classroom teaching to highlight these important structures."
-  (let ((converbs (cl-remove-if-not
-                   (lambda (item) (string-match-p "CONVERBIAL" (nth 2 item)))
-                   analysis-list)))
-    (if (not converbs)
-        "  [No converbial constructions detected in this segment]\n"
-      (concat
-       "  CONVERBIAL CONSTRUCTIONS FOUND:\n"
-       (mapconcat
-        (lambda (item)
-          (format "    - %s: %s" (nth 1 item) (nth 3 item)))
-        converbs
-        "\n")
-       "\n\n  These are DEPENDENT CLAUSES that modify the main verb!\n"))))
 
 (provide 'tibetan-particles-bialek)
 ;;; tibetan-particles-bialek.el ends here

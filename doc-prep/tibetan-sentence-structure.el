@@ -218,14 +218,6 @@ Inserts a ** Sentence heading above the current segment."
           (replace-match "**** Segment"))
         (message "Marked as start of Sentence %d" sent-num)))))
 
-(defun tibetan-insert-sentence-heading ()
-  "Interactively insert a sentence heading at point.
-Prompts for sentence number."
-  (interactive)
-  (let ((sent-num (read-number "Sentence number: ")))
-    (beginning-of-line)
-    (insert (format "** Sentence %d\n" sent-num))
-    (message "Inserted Sentence %d heading" sent-num)))
 
 (provide 'tibetan-sentence-structure)
 ;;; tibetan-sentence-structure.el ends here

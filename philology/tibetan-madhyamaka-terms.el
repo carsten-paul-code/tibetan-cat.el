@@ -192,12 +192,6 @@
 ;; VOCABULARY LOOKUP
 ;; ============================================================================
 
-(defun tibetan-lookup-madhyamaka-term (tibetan-term)
-  "Look up TIBETAN-TERM in Madhyamaka vocabulary.
-Returns English explanation or nil."
-  (or (cdr (assoc tibetan-term tibetan-madhyamaka-core-terms))
-      (cdr (assoc tibetan-term tibetan-gelugpa-specific-usage))))
-
 (defun tibetan-extract-madhyamaka-vocabulary (tibetan-text)
   "Extract Madhyamaka technical terms from TIBETAN-TEXT.
 Returns list of (tibetan-term . english-explanation)."
@@ -209,21 +203,6 @@ Returns list of (tibetan-term . english-explanation)."
       (when (string-match-p (car term-pair) tibetan-text)
         (push term-pair found-terms)))
     (nreverse found-terms)))
-
-(defun tibetan-display-madhyamaka-terms (tibetan-text)
-  "Display Madhyamaka terms found in TIBETAN-TEXT with explanations."
-  (let ((terms (tibetan-extract-madhyamaka-vocabulary tibetan-text)))
-    (if (not terms)
-        "No Madhyamaka technical terms detected.\n"
-      (concat
-       "MADHYAMAKA TECHNICAL TERMS:\n"
-       "──────────────────────────────────────\n"
-       (mapconcat
-        (lambda (term-pair)
-          (format "  • %s\n    → %s" (car term-pair) (cdr term-pair)))
-        terms
-        "\n\n")
-       "\n"))))
 
 (provide 'tibetan-madhyamaka-terms)
 ;;; tibetan-madhyamaka-terms.el ends here

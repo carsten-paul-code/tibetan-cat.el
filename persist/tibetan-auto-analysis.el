@@ -300,10 +300,6 @@ Progress is shown in the echo area."
     (message "Auto-analysis complete: %d segment files, %d sentence files created (%d skipped)"
              created-segs created-sents skipped)))
 
-(defun tibetan-auto-analyze-document-force ()
-  "Force regenerate all analysis files, overwriting existing ones."
-  (interactive)
-  (tibetan-auto-analyze-document t))
 
 ;; ============================================================================
 ;; KEYBINDINGS

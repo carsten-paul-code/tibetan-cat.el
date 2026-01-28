@@ -396,39 +396,5 @@ Returns plist:
 ;; INTERACTIVE COMMANDS
 ;; ============================================================================
 
-;;;###autoload
-(defun tibetan-ocr-validate-buffer ()
-  "Validate current buffer and show report."
-  (interactive)
-  (let* ((text (buffer-substring-no-properties (point-min) (point-max)))
-         (result (tibetan-ocr-validate-text text))
-         (report (tibetan-ocr-validation-report result)))
-    (with-current-buffer (get-buffer-create "*Tibetan OCR Validation*")
-      (erase-buffer)
-      (insert report)
-      (goto-char (point-min)))
-    (display-buffer "*Tibetan OCR Validation*")))
-
-;;;###autoload
-(defun tibetan-ocr-validate-region (start end)
-  "Validate region between START and END."
-  (interactive "r")
-  (let* ((text (buffer-substring-no-properties start end))
-         (result (tibetan-ocr-validate-text text))
-         (report (tibetan-ocr-validation-report result)))
-    (with-current-buffer (get-buffer-create "*Tibetan OCR Validation*")
-      (erase-buffer)
-      (insert report)
-      (goto-char (point-min)))
-    (display-buffer "*Tibetan OCR Validation*")))
-
-;;;###autoload
-(defun tibetan-ocr-validate-reload-data ()
-  "Reload validation data from files."
-  (interactive)
-  (setq tibetan-ocr-validate--loaded nil)
-  (tibetan-ocr-validate--ensure-loaded)
-  (message "Validation data reloaded"))
-
 (provide 'tibetan-ocr-validate)
 ;;; tibetan-ocr-validate.el ends here

@@ -299,56 +299,6 @@ Uses the backend specified in `tibetan-mitra-backend'."
     (princ "-------------------------------------\n")
     (princ "Set tibetan-mitra-backend to 'huggingface and provide your API token.\n")))
 
-(defun tibetan-mitra-setup-local-server ()
-  "Display instructions for setting up local Python server."
-  (interactive)
-  (with-help-window "*Mitra Local Server Setup*"
-    (princ "Setting up Local Mitra Translation Server\n")
-    (princ "=========================================\n\n")
-    (princ "1. Install dependencies:\n")
-    (princ "   pip install transformers torch flask\n\n")
-    (princ "2. Create server.py:\n\n")
-    (princ "```python
-from flask import Flask, request, jsonify
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import torch
-
-app = Flask(__name__)
-
-model_name = 'billingsmoore/gemma-2-2b-mitra-e'
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(
-    model_name,
-    torch_dtype=torch.float16,
-    device_map='auto'
-)
-
-@app.route('/translate', methods=['POST'])
-def translate():
-    data = request.json
-    tibetan_text = data.get('text', '')
-
-    prompt = f'Translate Tibetan to English: {tibetan_text}'
-    inputs = tokenizer(prompt, return_tensors='pt').to(model.device)
-
-    outputs = model.generate(
-        **inputs,
-        max_new_tokens=256,
-        temperature=0.1,
-        do_sample=True
-    )
-
-    translation = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    # Extract just the translation part
-    translation = translation.replace(prompt, '').strip()
-
-    return jsonify({'translation': translation})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-```\n\n")
-    (princ "3. Run: python server.py\n\n")
-    (princ "4. Set tibetan-mitra-backend to 'local-server\n")))
 
 (defun tibetan-mitra-check-status ()
   "Check status of Mitra translation backend."
@@ -378,15 +328,6 @@ if __name__ == '__main__':
 ;; INTEGRATION WITH TIBETAN-CAT ANALYSIS
 ;; ============================================================================
 
-(defun tibetan-mitra-add-to-analysis (analysis-alist tibetan-text)
-  "Add Mitra translation to ANALYSIS-ALIST for TIBETAN-TEXT."
-  (let ((mitra-translation (condition-case nil
-                               (tibetan-mitra-translate tibetan-text)
-                             (error nil))))
-    (if mitra-translation
-        (append analysis-alist
-                `((mitra-translation . ,mitra-translation)))
-      analysis-alist)))
 
 (defun tibetan-mitra-format-for-display (translation)
   "Format Mitra TRANSLATION for display in analysis buffer."

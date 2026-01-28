@@ -11,6 +11,10 @@
 
 ;;; Code:
 
+;; Skip slow external glossary loading during tests
+(defvar tibetan-skip-external-glossaries t
+  "When non-nil, skip loading external glossaries during tests.")
+
 ;; Setup load path
 (let ((base-dir (file-name-directory (or load-file-name buffer-file-name))))
   (add-to-list 'load-path base-dir)
@@ -42,6 +46,16 @@
 (condition-case nil (require 'tibetan-auto-analysis-test) (error nil))
 (condition-case nil (require 'tibetan-structure-reorg-test) (error nil))
 (condition-case nil (require 'tibetan-keybindings-test) (error nil))
+(condition-case nil (require 'tibetan-menu-test) (error nil))
+(condition-case nil (require 'tibetan-vocabulary-test) (error nil))
+(condition-case nil (require 'tibetan-analysis-persist-test) (error nil))
+
+;; New tests added for open source release
+(condition-case nil (require 'tibetan-wylie-test) (error nil))
+(condition-case nil (require 'tibetan-text-classifier-test) (error nil))
+(condition-case nil (require 'tibetan-sentence-workspace-test) (error nil))
+(condition-case nil (require 'tibetan-verse-philology-test) (error nil))
+(condition-case nil (require 'tibetan-madhyamaka-terms-test) (error nil))
 
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here
