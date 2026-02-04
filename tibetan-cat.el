@@ -67,10 +67,15 @@
   (add-to-list 'load-path (expand-file-name "philology" base-dir))
   (add-to-list 'load-path (expand-file-name "doc-prep" base-dir))   ; Document preparation
   (add-to-list 'load-path (expand-file-name "config" base-dir))
+  (add-to-list 'load-path (expand-file-name "setup" base-dir))      ; Setup & installer
+  (add-to-list 'load-path (expand-file-name "data" base-dir))       ; Bundled glossary loader
 
   ;; Set data directory for glossaries
   (defvar tibetan-cat-data-dir (expand-file-name "data" base-dir)
-    "Directory containing Tibetan CAT data files (glossaries, etc.)"))
+    "Directory containing Tibetan CAT data files (glossaries, etc.)")
+
+  ;; Load bundled glossaries (self-contained, no external paths needed)
+  (require 'tibetan-glossary-loader))
 
 ;; ============================================================================
 ;; LOAD CORE MODULES

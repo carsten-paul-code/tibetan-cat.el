@@ -1,0 +1,111 @@
+# Common Tibetan Vocabulary
+# Everyday words for narrative and descriptive texts
+# Format: Tibetan[TAB]English[TAB]Notes
+
+# === BODY PARTS & ACTIONS ===
+སྙིམ་པ	handful	cupped hands; amount held in cupped hands
+ལག་པ	hand
+རྐང་པ	foot/leg
+མགོ	head
+མིག	eye
+རྣ་བ	ear
+སྣ	nose
+ཁ	mouth
+ལྕེ	tongue
+སོ	tooth
+སྤུ	hair (body)
+སྐྲ	hair (head)
+
+# === WATER & LIQUIDS ===
+ཆུ	water	also: river
+ཆུ་བོ	river
+མཚོ	lake
+རྒྱ་མཚོ	ocean	great lake
+ཆུ་ཀླུང	stream
+འཐུང	drink	to drink
+འཁྲུ	wash	to wash
+རླན་པ	wet/moist
+
+# === VERBS OF TAKING/GIVING ===
+བཅུས	scooped	past of འཆུ་བ: to scoop/gather
+འཆུ་བ	to scoop	to gather with hands
+ལེན	take	to take/receive
+བླངས	took	past of ལེན
+སྟེར	give	to give
+བྱིན	gave	past of སྟེར (honorific: གནང)
+འབུལ	offer	to offer/present
+ཕུལ	offered	past of འབུལ
+
+# === QUANTITY & MEASUREMENT ===
+གང	full/one	amount that fills; which?/what?
+ཕྱེད	half
+ཐམས་ཅད	all
+མང་པོ	many
+ཉུང་ངུ	few
+ཆུང་ངུ	small
+ཆེན་པོ	big/great
+
+# === DEITIES & BEINGS ===
+ལྷ	deity/god
+ལྷ་མོ	goddess
+ཀླུ	naga	water spirit/serpent deity
+གནོད་སྦྱིན	yaksha	nature spirit
+དྲི་ཟ	gandharva	celestial musician
+མི་འམ་ཅི	kinnara	half-human celestial
+ལྷ་མ་ཡིན	asura	demigod/titan
+བདུད	mara	demon/evil one
+
+# === NARRATIVE CONNECTORS ===
+དེ་ནས	then	after that
+དེ་ལ	to that/there
+དེ་ལྟར	thus/so	in that way
+འདི་ལྟར	thus/like this	in this way
+ཅི་སྟེ	if/what if
+གལ་ཏེ	if	conditional
+ན	when/if	locative or conditional particle
+
+# === HONORIFIC VOCABULARY ===
+གསུང	say (hon.)	honorific for speak
+གསོལ	request/eat (hon.)	honorific request; honorific for eat
+གཟིགས	see (hon.)	honorific for look
+བཞུགས	stay/sit (hon.)	honorific for dwell
+མཛད	do (hon.)	honorific for act
+བཀའ	word/speech (hon.)	honorific for speech/command
+ཞབས	feet (hon.)	honorific for feet
+ཕྱག	hand (hon.)	honorific for hand
+དབུ	head (hon.)	honorific for head
+སྐུ	body (hon.)	honorific for body
+
+# === COMMON VERBS ===
+བྱེད	do/make	present stem
+བྱས	did/made	past stem
+བྱ	will do	future stem
+བྱོས	do! (imperative)
+འགྲོ	go	present/future
+སོང	went	past
+ཕྱིན	went (hon.)	past honorific
+འོང	come	future
+ཡོང	came	past (in some dialects)
+ཤོག	come! (imperative)
+བལྟ	look	present
+བལྟས	looked	past
+བལྟ་བ	to look	infinitive
+སྡོད	stay/sit
+བསྡད	stayed	past
+འདུག	is/exists	existential (witnessed)
+ཡོད	is/exists	existential (general)
+རེད	is	copula (Lhasa)
+ཡིན	is	copula (identity)
+
+# === ADJECTIVES & QUALITIES ===
+བཟང་པོ	good/excellent
+ངན་པ	bad/evil
+དཀར་པོ	white
+ནག་པོ	black
+དམར་པོ	red
+སེར་པོ	yellow
+སྔོན་པོ	blue/green
+རིང་པོ	long
+ཐུང་ངུ	short
+ཞི་བ	peaceful
+དྲག་པོ	fierce/wrathful
