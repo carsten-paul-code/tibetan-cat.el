@@ -598,58 +598,159 @@ Returns meaning if found, nil otherwise."
                 dm-trans))
           (error nil))))))
 
+(defun tibetan-format-bilingual-meaning (english german)
+  "Format ENGLISH and GERMAN meanings, English first, German in brackets.
+If only one is available, return that. If both, format as 'english (DE: german)'."
+  (cond
+   ((and english german
+         (not (string= english german))
+         (not (string-match-p "^[A-Z]" german)))  ; German often starts with capital
+    ;; Both available and different
+    (format "%s (DE: %s)" english german))
+   ((and english german (not (string= english german)))
+    (format "%s (DE: %s)" english german))
+   (english english)
+   (german german)
+   (t nil)))
+
+(defun tibetan-extract-english-from-bilingual (meaning)
+  "Extract English part from a bilingual meaning string.
+Handles formats like 'German // English' or 'German (English)'."
+  (when (and meaning (stringp meaning))
+    (cond
+     ;; Format: "German // English"
+     ((string-match "// *\\(.+\\)$" meaning)
+      (string-trim (match-string 1 meaning)))
+     ;; Format: "German (English)" - but not "(DE: ...)"
+     ((and (string-match "(\\([^)]+\\)) *$" meaning)
+           (let ((matched (match-string 0 meaning)))
+             (not (string-match-p "^(DE:" matched))))
+      (string-trim (match-string 1 meaning)))
+     ;; Already English (starts with lowercase or common English words)
+     ((string-match-p "^\\(to \\|a \\|the \\|[a-z]\\)" meaning)
+      meaning)
+     (t meaning))))
+
 (defun tibetan-lookup-word (word &optional prev-word)
   "Look up WORD with optional PREV-WORD for compound detection.
-Priority order:
-1. Resources folder vocabulary (auto-detected)
-2. Custom vocabulary (if #+TIBETAN_VOCAB_FILE is set)
-3. Local comprehensive glossary
-4. Rangjung Yeshe dictionary (162k entries, lazy-loaded)
-5. DharmaMitra API fallback
-Returns meaning string or nil."
+Returns meaning with English first, German in brackets if available.
+Priority: Rangjung Yeshe (English) > Resources (German) > others."
   (let ((meaning nil))
     ;; Try compound if prev-word provided
     (when prev-word
       (let* ((compound (concat prev-word "་" word))
              (compound-stripped (concat (tibetan-strip-particles prev-word) "་"
-                                       (tibetan-strip-particles word))))
-        ;; 1. Try Resources vocabulary first (highest priority)
-        (setq meaning (or (tibetan-lookup-word-in-resources-vocab compound)
-                         (tibetan-lookup-word-in-resources-vocab compound-stripped)))
-        ;; 2. Try custom vocabulary
-        (unless meaning
-          (setq meaning (or (tibetan-lookup-word-in-custom-vocab compound)
-                           (tibetan-lookup-word-in-custom-vocab compound-stripped))))
-        ;; 3. Try local glossary
-        (unless meaning
-          (setq meaning (or (tibetan-lookup-word-in-local-glossary compound)
-                           (tibetan-lookup-word-in-local-glossary compound-stripped))))
-        ;; 4. Try Rangjung Yeshe (lazy-loaded)
-        (unless meaning
-          (setq meaning (or (tibetan-lookup-word-in-rangjung-yeshe compound)
-                           (tibetan-lookup-word-in-rangjung-yeshe compound-stripped))))
-        ;; 5. If not found, try DharmaMitra
+                                       (tibetan-strip-particles word)))
+             (english-meaning nil)
+             (german-meaning nil))
+        ;; Get English from Rangjung Yeshe/local glossary
+        (setq english-meaning (or (tibetan-lookup-word-in-rangjung-yeshe compound)
+                                  (tibetan-lookup-word-in-rangjung-yeshe compound-stripped)
+                                  (tibetan-lookup-word-in-local-glossary compound)
+                                  (tibetan-lookup-word-in-local-glossary compound-stripped)))
+        ;; Get German from Resources/custom
+        (setq german-meaning (or (tibetan-lookup-word-in-resources-vocab compound)
+                                 (tibetan-lookup-word-in-resources-vocab compound-stripped)
+                                 (tibetan-lookup-word-in-custom-vocab compound)
+                                 (tibetan-lookup-word-in-custom-vocab compound-stripped)))
+        ;; Handle "German // English" format
+        (when (and german-meaning (string-match-p "//" german-meaning))
+          (let ((parts (split-string german-meaning "//" t)))
+            (when (>= (length parts) 2)
+              (setq german-meaning (string-trim (car parts)))
+              (unless english-meaning
+                (setq english-meaning (string-trim (cadr parts)))))))
+        ;; Merge bilingual
+        (setq meaning (tibetan-format-bilingual-meaning
+                       (tibetan-extract-english-from-bilingual english-meaning)
+                       german-meaning))
+        ;; Fallback to DharmaMitra
         (unless meaning
           (setq meaning (tibetan-lookup-word-in-dharmamitra compound)))))
 
     ;; Try single word if compound not found
     (unless meaning
-      ;; 1. Try Resources vocabulary first
-      (setq meaning (tibetan-lookup-word-in-resources-vocab word))
-      ;; 2. Try custom vocabulary
-      (unless meaning
-        (setq meaning (tibetan-lookup-word-in-custom-vocab word)))
-      ;; 3. Try local glossary
-      (unless meaning
-        (setq meaning (tibetan-lookup-word-in-local-glossary word)))
-      ;; 4. Try Rangjung Yeshe (lazy-loaded)
-      (unless meaning
-        (setq meaning (tibetan-lookup-word-in-rangjung-yeshe word)))
-      ;; 5. If not found, try DharmaMitra
-      (unless meaning
-        (setq meaning (tibetan-lookup-word-in-dharmamitra word))))
+      ;; Strategy: Get English from Rangjung Yeshe, German from Resources, merge
+      (let ((english-meaning nil)
+            (german-meaning nil)
+            (word-stripped (tibetan-strip-particles word)))
+
+        ;; 1. Get English meaning (Rangjung Yeshe is primarily English)
+        (setq english-meaning (or (tibetan-lookup-word-in-rangjung-yeshe word)
+                                  (tibetan-lookup-word-in-rangjung-yeshe word-stripped)
+                                  (tibetan-lookup-word-in-local-glossary word)
+                                  (tibetan-lookup-word-in-local-glossary word-stripped)))
+
+        ;; 2. Get German meaning from Resources/Custom vocab
+        (setq german-meaning (or (tibetan-lookup-word-in-resources-vocab word)
+                                 (tibetan-lookup-word-in-resources-vocab word-stripped)
+                                 (tibetan-lookup-word-in-custom-vocab word)
+                                 (tibetan-lookup-word-in-custom-vocab word-stripped)))
+
+        ;; 3. If German has "// English" format, extract both parts
+        (when (and german-meaning (string-match-p "//" german-meaning))
+          (let ((parts (split-string german-meaning "//" t)))
+            (when (>= (length parts) 2)
+              (setq german-meaning (string-trim (car parts)))
+              (unless english-meaning
+                (setq english-meaning (string-trim (cadr parts)))))))
+
+        ;; 4. Merge: English first, German in brackets
+        (setq meaning (tibetan-format-bilingual-meaning
+                       (tibetan-extract-english-from-bilingual english-meaning)
+                       german-meaning))
+
+        ;; 5. Fallback to DharmaMitra if nothing found
+        (unless meaning
+          (setq meaning (tibetan-lookup-word-in-dharmamitra word)))))
 
     meaning))
+
+;; ============================================================================
+;; CONVERB PATTERN DETECTION
+;; ============================================================================
+
+(defconst tibetan-converb-particles
+  '("ཅིང" "ཞིང" "ཤིང"    ; simultaneous converbs
+    "སྟེ" "ཏེ" "དེ"       ; sequential converbs
+    "ནས"                   ; "after" converb
+    )
+  "List of converb particles that attach to verb stems.")
+
+(defconst tibetan-nominalized-suffixes
+  '("བར" "པར"             ; terminative on nominalizer (for purpose/goal)
+    "བའི" "པའི"           ; genitive on nominalizer
+    "བས" "པས"             ; instrumental/causal on nominalizer
+    "བ" "པ"               ; plain nominalizer
+    )
+  "List of nominalized verb suffixes.")
+
+(defun tibetan-detect-verb-with-suffix (syllables start-idx)
+  "Detect if SYLLABLES starting at START-IDX form a verb+suffix pattern.
+Returns (COMBINED-FORM BASE-VERB SUFFIX MEANING) or nil.
+Handles: verb་ཅིང་, verb་སྟེ་, verb་བར་, verb་བའི་, etc."
+  (let ((num-syls (length syllables)))
+    (when (< (1+ start-idx) num-syls)
+      (let* ((syl1 (nth start-idx syllables))
+             (syl2 (nth (1+ start-idx) syllables))
+             (combined (concat syl1 "་" syl2)))
+        (cond
+         ;; Check if syl2 is a converb particle
+         ((member syl2 tibetan-converb-particles)
+          (let ((base-meaning (or (tibetan-lookup-word-in-rangjung-yeshe syl1)
+                                  (tibetan-lookup-word-in-local-glossary syl1)
+                                  (tibetan-lookup-word-in-resources-vocab syl1)
+                                  (tibetan-lookup-word-in-custom-vocab syl1))))
+            (when base-meaning
+              (list combined syl1 syl2 base-meaning))))
+         ;; Check if syl2 is a nominalized suffix
+         ((member syl2 tibetan-nominalized-suffixes)
+          (let ((base-meaning (or (tibetan-lookup-word-in-rangjung-yeshe syl1)
+                                  (tibetan-lookup-word-in-local-glossary syl1)
+                                  (tibetan-lookup-word-in-resources-vocab syl1)
+                                  (tibetan-lookup-word-in-custom-vocab syl1))))
+            (when base-meaning
+              (list combined syl1 syl2 base-meaning)))))))))
 
 ;; ============================================================================
 ;; VOCABULARY EXTRACTION
@@ -680,68 +781,53 @@ Priority: Resources > Custom > Local glossary > Rangjung Yeshe > DharmaMitra."
           (if (or (string-empty-p word) (string-match-p "^[།༎༏]+$" word))
               (setq i (+ i 1))
 
-            ;; Greedy matching: try 4, 3, 2 syllable compounds first
-            (cl-loop for compound-len from 4 downto 2
-                     until found
-                     when (<= (+ i compound-len) num-words)
-                     do
-                     (let* ((syls-raw (cl-loop for j from i below (+ i compound-len)
-                                               collect (string-trim (nth j words))))
-                            (syls-stripped (mapcar #'tibetan-strip-particles syls-raw))
-                            (compound-raw (mapconcat #'identity syls-raw "་"))
-                            (compound-stripped (mapconcat #'identity syls-stripped "་"))
-                            (meaning nil))
-                       ;; Try all vocabulary sources for compound
-                       ;; 1. Try Resources vocabulary first (highest priority)
-                       (setq meaning (or (tibetan-lookup-word-in-resources-vocab compound-raw)
-                                         (tibetan-lookup-word-in-resources-vocab compound-stripped)))
-                       ;; 2. Try custom vocabulary
-                       (unless meaning
-                         (setq meaning (or (tibetan-lookup-word-in-custom-vocab compound-raw)
-                                           (tibetan-lookup-word-in-custom-vocab compound-stripped))))
-                       ;; 3. Try local glossary
-                       (unless meaning
-                         (setq meaning (or (tibetan-lookup-word-in-local-glossary compound-raw)
-                                           (tibetan-lookup-word-in-local-glossary compound-stripped))))
-                       ;; 4. Try Rangjung Yeshe (lazy-loaded)
-                       (unless meaning
-                         (setq meaning (or (tibetan-lookup-word-in-rangjung-yeshe compound-raw)
-                                           (tibetan-lookup-word-in-rangjung-yeshe compound-stripped))))
-                       ;; 5. Try DharmaMitra for compound
-                       (unless meaning
-                         (setq meaning (tibetan-lookup-word-in-dharmamitra compound-raw)))
-                       ;; If found, record and skip forward
-                       (when meaning
-                         (push (cons compound-raw meaning) vocab)
-                         (setq found t)
-                         (setq matched-len compound-len))))
+            ;; FIRST: Check for verb+converb or verb+nominalized patterns
+            ;; This handles ཚིག་ཅིང་ (burning), འབར་བར་ (to blaze), etc.
+            (let ((verb-pattern (tibetan-detect-verb-with-suffix words i)))
+              (when verb-pattern
+                (let* ((combined (nth 0 verb-pattern))
+                       (base-verb (nth 1 verb-pattern))
+                       (suffix (nth 2 verb-pattern))
+                       (base-meaning (nth 3 verb-pattern))
+                       ;; Build meaning description based on suffix type
+                       (suffix-desc (cond
+                                     ((member suffix '("ཅིང" "ཞིང" "ཤིང"))
+                                      (format "%s [converb: and/while]" base-meaning))
+                                     ((member suffix '("སྟེ" "ཏེ" "དེ"))
+                                      (format "%s [converb: and then]" base-meaning))
+                                     ((member suffix '("བར" "པར"))
+                                      (format "%s [nominalized: in order to]" base-meaning))
+                                     ((member suffix '("བའི" "པའི"))
+                                      (format "%s [nominalized genitive: of -ing]" base-meaning))
+                                     ((member suffix '("བས" "པས"))
+                                      (format "%s [causal: because of -ing]" base-meaning))
+                                     ((member suffix '("བ" "པ"))
+                                      (format "%s [nominalized]" base-meaning))
+                                     (t base-meaning))))
+                  (push (cons combined suffix-desc) vocab)
+                  (setq found t)
+                  (setq matched-len 2)))) ;; close setq, let*, when, outer let
 
-            ;; If no compound found, lookup single word
+            ;; SECOND: Greedy matching - try 4, 3, 2 syllable compounds
             (unless found
-              (let ((meaning nil))
-                ;; 1. Try Resources vocabulary first
-                (setq meaning (tibetan-lookup-word-in-resources-vocab word))
-                (unless meaning
-                  (setq meaning (tibetan-lookup-word-in-resources-vocab word-stripped)))
-                ;; 2. Try custom vocabulary
-                (unless meaning
-                  (setq meaning (tibetan-lookup-word-in-custom-vocab word)))
-                (unless meaning
-                  (setq meaning (tibetan-lookup-word-in-custom-vocab word-stripped)))
-                ;; 3. Try local glossary
-                (unless meaning
-                  (setq meaning (or (tibetan-lookup-word-in-local-glossary word)
-                                   (and (not (equal word word-stripped))
-                                        (tibetan-lookup-word-in-local-glossary word-stripped)))))
-                ;; 4. Try Rangjung Yeshe (lazy-loaded)
-                (unless meaning
-                  (setq meaning (or (tibetan-lookup-word-in-rangjung-yeshe word)
-                                   (and (not (equal word word-stripped))
-                                        (tibetan-lookup-word-in-rangjung-yeshe word-stripped)))))
-                ;; 5. If not found, try DharmaMitra
-                (unless meaning
-                  (setq meaning (tibetan-lookup-word-in-dharmamitra word)))
+              (cl-loop for compound-len from 4 downto 2
+                       until found
+                       when (<= (+ i compound-len) num-words)
+                       do
+                       (let* ((syls-raw (cl-loop for j from i below (+ i compound-len)
+                                                 collect (string-trim (nth j words))))
+                              (compound-raw (mapconcat #'identity syls-raw "་"))
+                              ;; Use bilingual lookup for compounds
+                              (meaning (tibetan-lookup-word compound-raw)))
+                         ;; If found, record and skip forward
+                         (when meaning
+                           (push (cons compound-raw meaning) vocab)
+                           (setq found t)
+                           (setq matched-len compound-len)))))
 
+            ;; THIRD: If no compound found, lookup single word using bilingual lookup
+            (unless found
+              (let ((meaning (tibetan-lookup-word word)))
                 ;; Add to vocab (even if meaning is nil, to show [look up] message)
                 (push (cons word (or meaning "[look up]")) vocab)))
 

@@ -17,7 +17,9 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'org)
+;; Only require org when not in batch mode (can hang in batch)
+(unless noninteractive
+  (require 'org))
 
 ;; Load dependencies
 (require 'tibetan-org-structure nil t)

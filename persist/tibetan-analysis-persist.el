@@ -18,32 +18,18 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'org)
+;; Only require org when not in batch mode (can hang in batch)
+(unless noninteractive
+  (require 'org))
 (require 'md5)
 
 ;; Require modules for verb analysis (soft load - main loading via tibetan-cat.el)
 (require 'tibetan-verb-classifier nil t)
 (require 'tibetan-enhanced-display nil t)
 (require 'tibetan-particles-bialek nil t)
-(require 'tibetan-vocabulary-detailed nil t)
 
 (defconst tibetan-analysis-version "1.0"
   "Version of the analysis file format.")
-
-;; ============================================================================
-;; RESOURCES FOLDER VOCABULARY INTEGRATION
-;; ============================================================================
-
-(defun tibetan-analysis-find-resources-folder ()
-  "Find the Resources folder relative to current buffer.
-Looks for ../Resources/ relative to the Work in progress folder."
-  (let* ((buf-file (buffer-file-name))
-         (buf-dir (when buf-file (file-name-directory buf-file))))
-    (when buf-dir
-      (let ((resources-dir (expand-file-name "../Resources" buf-dir)))
-        (when (file-directory-p resources-dir)
-          resources-dir)))))
-
 
 ;; ============================================================================
 ;; DISPLAY SETTINGS - Smaller roman text
@@ -65,45 +51,32 @@ Values less than 1.0 make text smaller, e.g. 0.65 = 65% size."
   "Face for roman (non-Tibetan) text in analysis buffers."
   :group 'tibetan-cat)
 
+(defvar-local tibetan-analysis--faces-setup nil
+  "Non-nil if faces have already been set up for this buffer.")
+
 (defun tibetan-analysis-setup-faces ()
-  "Setup faces for analysis buffers with specific point sizes.
-Sets body text to 10pt, headings to max 12pt for Latin fonts,
-and Tibetan script significantly larger for better readability."
-  ;; Set default (body) text to 10pt
-  ;; In Emacs, :height 100 = 10pt (each 10 units = 1pt)
-  (face-remap-add-relative 'default :height 100)
+  "Setup faces for analysis buffers.
+Ensures Tibetan text remains readable at all heading levels and in
+verbatim/code blocks which otherwise might use smaller fonts.
+Only applies once per buffer to prevent accumulation."
+  (unless tibetan-analysis--faces-setup
+    ;; Ensure headings don't get too small (level 3+ used for dictionary entries)
+    (face-remap-add-relative 'org-level-1 :height 1.1)
+    (face-remap-add-relative 'org-level-2 :height 1.05)
+    (face-remap-add-relative 'org-level-3 :height 1.0)  ; Keep readable for Tibetan headings
 
-  ;; Set heading sizes (12pt max for level 1-2, smaller for others)
-  (face-remap-add-relative 'org-level-1 :height 120)  ; 12pt
-  (face-remap-add-relative 'org-level-2 :height 120)  ; 12pt
-  (face-remap-add-relative 'org-level-3 :height 110)  ; 11pt
-  (face-remap-add-relative 'org-level-4 :height 100)  ; 10pt
-  (face-remap-add-relative 'org-level-5 :height 100)  ; 10pt
-  (face-remap-add-relative 'org-level-6 :height 100)  ; 10pt
-  (face-remap-add-relative 'org-level-7 :height 100)  ; 10pt
-  (face-remap-add-relative 'org-level-8 :height 100)  ; 10pt
+    ;; Ensure verbatim (=...=) and code (~...~) don't shrink - they contain Tibetan particles
+    ;; Use variable-pitch to allow proper Tibetan font rendering
+    (face-remap-add-relative 'org-verbatim :height 1.0)
+    (face-remap-add-relative 'org-code :height 1.0)
 
-  ;; Set other org elements to body size (10pt)
-  (face-remap-add-relative 'org-block :height 100)
-  (face-remap-add-relative 'org-code :height 100)
-  (face-remap-add-relative 'org-table :height 100)
-  (face-remap-add-relative 'org-verbatim :height 100)
-  (face-remap-add-relative 'org-special-keyword :height 100)
-  (face-remap-add-relative 'org-meta-line :height 100)
-  (face-remap-add-relative 'org-drawer :height 100)
-  (face-remap-add-relative 'org-property-value :height 100)
-
-  ;; Make Tibetan script significantly larger (180 = 1.8x)
-  ;; This uses a font-lock rule to detect Tibetan Unicode range
-  (font-lock-add-keywords nil
-    '(("[ༀ-࿿]+" . 'tibetan-analysis-tibetan-face)))
-  (face-remap-add-relative 'tibetan-analysis-tibetan-face :height 180))
+    (setq tibetan-analysis--faces-setup t)))
 
 ;; Hook to apply faces when buffer is displayed
 (defun tibetan-analysis-mode-hook ()
   "Hook to run when entering an analysis buffer."
   (when (and (buffer-file-name)
-             (string-match "analysis/seg-[0-9]+" (buffer-file-name)))
+             (string-match "analysis/seg-[0-9]+\\.org$" (buffer-file-name)))
     (tibetan-analysis-setup-faces)))
 
 (add-hook 'org-mode-hook 'tibetan-analysis-mode-hook)
@@ -124,72 +97,67 @@ Returns the folder path."
       (message "Created analysis folder: %s" analysis-dir))
     analysis-dir))
 
-(defun tibetan-analysis-make-short-name (filename)
-  "Create a short identifier from FILENAME for use in segment filenames.
-E.g., 'Reading-Sa-skya-legs-bshad.org' -> 'saskya'
-      'Tigress-Story-BlockPrint-Class.org' -> 'tigress'"
-  (when filename
-    (let* ((base (file-name-sans-extension (file-name-nondirectory filename)))
-           ;; Convert to lowercase and extract key part
-           (lower (downcase base))
-           ;; Common patterns to extract
-           (short (cond
-                   ;; Tigress story
-                   ((string-match "tigress" lower) "tigress")
-                   ;; Sa skya legs bshad
-                   ((string-match "sa.?skya\\|saskya\\|legs.?bshad" lower) "saskya")
-                   ;; Reading files - use first meaningful word
-                   ((string-match "reading.?\\([0-9]+\\)" lower)
-                    (format "reading%s" (match-string 1 lower)))
-                   ;; Default: take first 8 chars of alphanumeric
-                   (t (let ((clean (replace-regexp-in-string "[^a-z0-9]" "" lower)))
-                        (substring clean 0 (min 8 (length clean))))))))
-      short)))
+(defun tibetan-analysis--extract-segment-number (seg-id)
+  "Extract segment number from SEG-ID.
+SEG-ID can be:
+- A number: 5
+- A simple string: \"5\" or \"seg-005\"
+- A compound string: \"Segment 5\" or \"Sentence 1, Segment 5\"
+Returns the segment number as an integer."
+  (cond
+   ((numberp seg-id) seg-id)
+   ((stringp seg-id)
+    (cond
+     ;; "Segment N" or "Sentence X, Segment N" - extract N after "Segment"
+     ((string-match "Segment \\([0-9]+\\)" seg-id)
+      (string-to-number (match-string 1 seg-id)))
+     ;; "seg-NNN" format
+     ((string-match "seg-\\([0-9]+\\)" seg-id)
+      (string-to-number (match-string 1 seg-id)))
+     ;; Plain number string
+     ((string-match "^\\([0-9]+\\)$" seg-id)
+      (string-to-number (match-string 1 seg-id)))
+     ;; Any number as fallback
+     ((string-match "\\([0-9]+\\)" seg-id)
+      (string-to-number (match-string 1 seg-id)))
+     (t 1)))
+   (t 1)))
 
-(defun tibetan-analysis-segment-filename (seg-id &optional source-file)
+(defun tibetan-analysis-segment-filename (seg-id)
   "Generate analysis filename for SEG-ID.
 SEG-ID can be a number or string like '1' or 'seg-001'.
-SOURCE-FILE, if provided, adds a short identifier suffix.
-Returns filename like 'seg-001-tigress.org' or 'seg-001.org'."
-  (let* ((num (cond
-               ((numberp seg-id) seg-id)
-               ;; Extract segment number specifically (not sentence number)
-               ((string-match "Segment \\([0-9]+\\)" seg-id)
-                (string-to-number (match-string 1 seg-id)))
-               ;; Fallback: try any number
-               ((string-match "\\([0-9]+\\)" seg-id)
-                (string-to-number (match-string 1 seg-id)))
-               (t 1)))
-         (short-name (tibetan-analysis-make-short-name source-file)))
-    (if short-name
-        (format "seg-%03d-%s.org" num short-name)
-      (format "seg-%03d.org" num))))
+Returns filename like 'seg-001.org'."
+  (let ((num (tibetan-analysis--extract-segment-number seg-id)))
+    (format "seg-%03d.org" num)))
 
 (defun tibetan-analysis-get-filepath (seg-id &optional source-file)
   "Get full filepath for analysis of SEG-ID.
-SOURCE-FILE, if provided, is used to generate a unique suffix.
-Also checks for legacy files without suffix for backward compatibility."
+If SOURCE-FILE is provided, includes short name suffix."
   (let* ((folder (tibetan-analysis-get-folder))
-         (src (or source-file (buffer-file-name)))
-         (filename-new (tibetan-analysis-segment-filename seg-id src))
-         (filepath-new (expand-file-name filename-new folder))
-         ;; Legacy filename without suffix
-         (num (cond
-               ((numberp seg-id) seg-id)
-               ;; Extract segment number specifically (not sentence number)
-               ((string-match "Segment \\([0-9]+\\)" seg-id)
-                (string-to-number (match-string 1 seg-id)))
-               ;; Fallback: try any number
-               ((string-match "\\([0-9]+\\)" seg-id)
-                (string-to-number (match-string 1 seg-id)))
-               (t 1)))
-         (filename-old (format "seg-%03d.org" num))
-         (filepath-old (expand-file-name filename-old folder)))
-    ;; Return new path if it exists, else old path if it exists, else new path
-    (cond
-     ((file-exists-p filepath-new) filepath-new)
-     ((file-exists-p filepath-old) filepath-old)
-     (t filepath-new))))
+         (short-name (when source-file
+                       (tibetan-analysis-make-short-name source-file)))
+         (num (tibetan-analysis--extract-segment-number seg-id))
+         (filename (if short-name
+                       (format "seg-%03d-%s.org" num short-name)
+                     (format "seg-%03d.org" num))))
+    (expand-file-name filename folder)))
+
+(defun tibetan-analysis-make-short-name (source-file)
+  "Generate a short name suffix from SOURCE-FILE for analysis filenames.
+E.g., 'Tigress-Story-BlockPrint-Class.org' -> 'tigress'
+      'Reading-Sa-skya-legs-bshad.org' -> 'saskya'
+      'Reading-05-Padma.org' -> 'padma'"
+  (when source-file
+    (let* ((basename (file-name-sans-extension
+                      (file-name-nondirectory source-file)))
+           ;; Remove common prefixes
+           (name (replace-regexp-in-string "^Reading-[0-9]*-?" "" basename))
+           (name (replace-regexp-in-string "^Tigress-Story-" "" name))
+           ;; Take first meaningful word
+           (parts (split-string name "[-_]" t))
+           (first-word (car parts)))
+      (when first-word
+        (downcase (substring first-word 0 (min 8 (length first-word))))))))
 
 ;; ============================================================================
 ;; HASH FUNCTIONS
@@ -213,14 +181,9 @@ AUTO-CONTENT is the generated analysis content (string)."
          (date (format-time-string "%Y-%m-%d"))
          (source-name (file-name-nondirectory source-file))
          (seg-num (if (numberp seg-id) seg-id
-                    (cond
-                     ;; Extract segment number specifically (not sentence number)
-                     ((string-match "Segment \\([0-9]+\\)" seg-id)
-                      (string-to-number (match-string 1 seg-id)))
-                     ;; Fallback: try any number
-                     ((string-match "\\([0-9]+\\)" seg-id)
-                      (string-to-number (match-string 1 seg-id)))
-                     (t 1)))))
+                    (if (string-match "\\([0-9]+\\)" seg-id)
+                        (string-to-number (match-string 1 seg-id))
+                      1))))
     (with-temp-file filepath
       (insert (format "#+TITLE: Segment %d Analysis\n" seg-num))
       (insert "#+STARTUP: showall\n")
@@ -231,28 +194,18 @@ AUTO-CONTENT is the generated analysis content (string)."
       (insert (format "#+CREATED: %s\n" date))
       (insert (format "#+LAST_ANALYZED: %s\n" date))
       (insert "\n")
-      ;; Tibetan Text section with Wylie subsection
       (insert "* Tibetan Text\n")
       (insert tibetan-text)
       (insert "\n\n")
-      ;; Auto-generated analysis content (no wrapper section)
+      (insert "* Auto-Analysis\n")
+      (insert ":PROPERTIES:\n")
+      (insert ":GENERATED: t\n")
+      (insert ":END:\n\n")
       (insert auto-content)
-      (insert "\n")
-      ;; User sections
+      (insert "\n\n")
       (insert "* My Notes\n\n\n")
       (insert "* Working Translation\n\n\n")
-      (insert "* Footnotes\n\n")
-      ;; Detailed vocabulary with full dictionary entries (auto-generated)
-      (insert "* Detailed Vocabulary\n")
-      (insert "Full dictionary entries for reference:\n\n")
-      (let ((vocab (condition-case nil
-                       (when (fboundp 'tibetan-extract-vocabulary)
-                         (tibetan-extract-vocabulary tibetan-text))
-                     (error nil))))
-        (if vocab
-            (insert (tibetan-vocab-format-detailed-list vocab t))
-          (insert "[No vocabulary]")))
-      (insert "\n\n"))
+      (insert "* Footnotes\n\n"))
     filepath))
 
 ;; ============================================================================
@@ -379,27 +332,25 @@ Updates hash and last-analyzed date."
         (when (file-exists-p (expand-file-name glossary-file))
           (load-file (expand-file-name glossary-file)))))))
 
-(defun tibetan-analysis--get-particle-annotation (word &optional context)
+(defun tibetan-analysis--get-particle-annotation (word)
   "Get compact particle annotation for WORD.
-CONTEXT, if provided, helps determine the specific function.
-Returns string like '(ERG)' or '(LOC: if/when)' or nil.
-Note: Particles like པ/བ are handled in context as suffixes, not standalone."
+Returns string like '(ERG)' or '(LOC: if/when)' or nil."
   (cond
-   ;; Ergative/Instrumental
+   ;; Ergative
    ((member word '("ས" "གིས" "ཀྱིས" "གྱིས" "ཡིས"))
-    "(ERG/INST: by/with)")
+    "(ERG: by)")
    ;; Genitive
    ((member word '("འི" "གི" "ཀྱི" "གྱི" "ཡི"))
-    "(GEN: of/'s)")
+    "(GEN: of)")
    ;; Locative/Conditional
    ((string= word "ན")
     "(LOC: in/if/when)")
-   ;; Dative (only ལ)
+   ;; Dative
    ((string= word "ལ")
-    "(DAT: to/for/at)")
-   ;; Terminative (NOT dative!) - ར/སུ/ཏུ/དུ mark goal/direction/manner
+    "(DAT: to/at)")
+   ;; Allative
    ((member word '("ར" "སུ" "ཏུ" "དུ"))
-    "(TERM: toward/into/as)")
+    "(ALL: toward)")
    ;; Ablative
    ((string= word "ནས")
     "(ABL: from/after)")
@@ -408,37 +359,27 @@ Note: Particles like པ/བ are handled in context as suffixes, not standalone.
    ;; Comitative
    ((string= word "དང")
     "(COM: and/with)")
-   ;; Converbs - provide translation hints
+   ;; Converbs
    ((member word '("སྟེ" "ཏེ" "དེ"))
-    "(CONV: and/then/since)")
+    "(CONV: and then)")
    ((member word '("ཅིང" "ཞིང" "ཤིང"))
-    "(CONV: while/-ing)")
-   ;; Note: པ/བ as standalone words are rarely particles
-   ;; They're usually part of verb forms like བཞུགས་པའི - these are handled contextually
-   ;; Don't annotate standalone པ/བ to avoid confusion
-   ;; ((member word '("པ" "བ"))
-   ;;  nil)  ; Skip - handled in context
-   ;; Agent nominalizer (one who does X)
+    "(CONV: while)")
+   ;; Nominalizers
+   ((member word '("པ" "བ"))
+    "(NOM)")
    ((member word '("པོ" "བོ"))
     "(AGT: one who)")
-   ;; Imperative/Indefinite markers
+   ;; Imperative
    ((member word '("ཅིག" "ཤིག" "ཞིག"))
-    "(IMP/INDEF: a/one)")
+    "(IMP)")
    ;; Topic
    ((string= word "ནི")
     "(TOP: as for)")
-   ;; Comparative particle
-   ((string= word "བས")
-    "(COMP: than)")
-   ;; Sentence-final particles - don't annotate, they're punctuation-like
-   ((member word '("སོ" "ཏོ" "ནོ" "དོ" "རོ" "འོ" "ངོ"))
-    nil)
    (t nil)))
 
 (defun tibetan-analysis--get-word-info (word multiword-units)
   "Get meaning and info for WORD, checking MULTIWORD-UNITS first.
-Returns alist with keys: meaning, wylie, is-verb, verb-info.
-Also handles common suffixed forms like པའི་ཚེ (when/at the time)."
+Returns alist with keys: meaning, wylie, is-verb, verb-info."
   (let ((info '())
         (meaning nil)
         (wylie nil))
@@ -448,30 +389,15 @@ Also handles common suffixed forms like པའི་ཚེ (when/at the time)."
         (let ((data (nth 3 unit)))
           (setq meaning (alist-get 'english data))
           (setq wylie (alist-get 'wylie data)))))
-    ;; Special handling for common suffixed constructions
-    (unless meaning
-      (cond
-       ;; པའི་ཚེ / བའི་ཚེ = "when/at the time of"
-       ((or (string-suffix-p "པའི་ཚེ" word) (string-suffix-p "བའི་ཚེ" word))
-        (setq meaning "when/at the time when"))
-       ;; པའི / བའི after verb = "the one who / that which"
-       ((and (> (length word) 3)
-             (or (string-suffix-p "པའི" word) (string-suffix-p "བའི" word)))
-        nil)  ; Let regular lookup handle it
-       ;; ཅན = "having/possessing"
-       ((string-suffix-p "ཅན" word)
-        (let ((root (substring word 0 (- (length word) 2))))
-          (when (> (length root) 0)
-            (setq meaning (format "having %s" (or (tibetan-lookup-word root) root))))))))
-    ;; If not found, try Resources vocabulary first (via tibetan-lookup-word)
-    (unless meaning
-      (when (fboundp 'tibetan-lookup-word)
-        (setq meaning (tibetan-lookup-word word))))
-    ;; If not found, try comprehensive vocabulary directly
+    ;; If not found, try vocabulary
     (unless meaning
       (when (and (boundp 'tibetan-comprehensive-vocabulary)
                  tibetan-comprehensive-vocabulary)
         (setq meaning (gethash word tibetan-comprehensive-vocabulary))))
+    ;; If still not found, try tibetan-lookup-word
+    (unless meaning
+      (when (fboundp 'tibetan-lookup-word)
+        (setq meaning (tibetan-lookup-word word))))
     ;; Get wylie if not already set
     (unless wylie
       (when (fboundp 'tibetan-to-wylie-fixed)
@@ -481,10 +407,185 @@ Also handles common suffixed forms like པའི་ཚེ (when/at the time)."
     `((meaning . ,meaning)
       (wylie . ,wylie))))
 
+(defun tibetan-analysis--get-grammatical-role (word root-form verb-table)
+  "Determine grammatical role description for WORD with ROOT-FORM.
+Uses VERB-TABLE for verb detection.
+Returns a string like 'Noun', 'Verb in conjunctive form', 'Genitive particle', etc."
+  (let ((role nil)
+        (verb-info (or (gethash word verb-table) (gethash root-form verb-table))))
+    (cond
+     ;; Check if it's a recognized verb
+     (verb-info
+      (let ((trans (or (alist-get 'transitivity verb-info) ""))
+            (suffix-type (tibetan-analysis--detect-verb-suffix word root-form)))
+        (setq role (concat (if (string-match-p "Transitive" trans) "Transitive verb" "Verb")
+                          (or suffix-type "")))))
+
+     ;; Sentence-final particles
+     ((member word '("རོ" "སོ" "ཏོ" "ནོ" "དོ" "འོ" "ངོ"))
+      (setq role "Sentence-final particle"))
+
+     ;; Topic marker
+     ((string= word "ནི")
+      (setq role "Topic particle"))
+
+     ;; Converbs (standalone)
+     ((member word '("ཅིང" "ཞིང" "ཤིང"))
+      (setq role "Simultaneous converb"))
+     ((member word '("སྟེ" "ཏེ" "དེ"))
+      (setq role "Sequential converb"))
+
+     ;; Genitive particles
+     ((or (member word '("གི" "ཀྱི" "གྱི" "ཡི"))
+          (string-suffix-p "འི" word))
+      (setq role "Genitive particle"))
+
+     ;; Ergative/instrumental particles
+     ((member word '("གིས" "ཀྱིས" "གྱིས" "ཡིས" "ས"))
+      (setq role "Ergative/instrumental particle"))
+
+     ;; Dative/locative particles
+     ((member word '("ལ" "ར" "དུ" "ཏུ" "སུ" "རུ"))
+      (setq role "Locative particle"))
+
+     ;; Ablative
+     ((member word '("ནས" "ལས"))
+      (setq role "Ablative particle"))
+
+     ;; Conditional
+     ((string= word "ན")
+      (setq role "Conditional/locative particle"))
+
+     ;; Concessive
+     ((member word '("ཀྱང" "ཡང" "འང"))
+      (setq role "Concessive particle"))
+
+     ;; Nominalizers
+     ((member word '("པ" "བ"))
+      (setq role "Nominalizer"))
+     ((member word '("པོ" "བོ"))
+      (setq role "Agentive nominalizer"))
+
+     ;; Question particles
+     ((member word '("དམ" "གམ" "ངམ" "ནམ" "བམ" "འམ"))
+      (setq role "Question particle"))
+
+     ;; Imperative particles
+     ((member word '("ཅིག" "ཤིག" "ཞིག"))
+      (setq role "Imperative particle"))
+
+     ;; Default: noun
+     (t (setq role "Noun")))
+
+    role))
+
+(defun tibetan-analysis--detect-verb-suffix (word root-form)
+  "Detect verb suffix type by comparing WORD to ROOT-FORM.
+Returns a suffix description string or nil."
+  (cond
+   ;; Word ends with converb particle
+   ((string-suffix-p "ཅིང" word) ", conjunctive form (simultaneous)")
+   ((string-suffix-p "ཞིང" word) ", conjunctive form (simultaneous)")
+   ((string-suffix-p "སྟེ" word)  ", sequential converb form")
+   ((string-suffix-p "ཏེ" word)  ", sequential converb form")
+   ;; Word ends with nominalized + case
+   ((string-suffix-p "བར" word)  ", nominalized form with terminative")
+   ((string-suffix-p "པར" word)  ", nominalized form with terminative")
+   ;; Word ends with genitive on nominalized form
+   ((string-suffix-p "པའི" word) ", nominalized genitive form")
+   ((string-suffix-p "བའི" word) ", nominalized genitive form")
+   ;; Word ends with causal converb
+   ((string-suffix-p "པས" word)  ", causal converb form")
+   ((string-suffix-p "བས" word)  ", causal converb form")
+   ;; Sentence-final ro/so etc.
+   ((string-suffix-p "རོ" word)  ", with assertive sentence-final particle")
+   ((string-suffix-p "སོ" word)  ", with assertive sentence-final particle")
+   (t nil)))
+
+(defun tibetan-analysis--build-cat-translation (vocab-pairs)
+  "Build a CAT-suggested translation from VOCAB-PAIRS.
+VOCAB-PAIRS is a list of (word . meaning) pairs.
+Returns a rough English gloss string."
+  (let ((parts '()))
+    (dolist (pair vocab-pairs)
+      (let ((meaning (cdr pair)))
+        (when (and meaning (not (string= meaning "[look up]"))
+                   (not (string= meaning "[not found]")))
+          ;; Extract first short meaning
+          (let ((short (car (split-string meaning "[;|,]" t))))
+            (when short
+              (push (string-trim short) parts))))))
+    (if parts
+        (string-join (nreverse parts) " ")
+      "[Generate with C-c t g]")))
+
+(defun tibetan-analysis--generate-particle-map (tibetan-text particles verbs)
+  "Generate a visual particle map for TIBETAN-TEXT.
+PARTICLES is the parsed particles list, VERBS is the verb list.
+Returns an org-formatted string with particles highlighted:
+- =PARTICLE= for case markers (genitive, dative, etc.)
+- ~CONVERB~ for converb particles
+- [Ø ROLE] for zero-marked arguments"
+  (let* ((wylie (condition-case nil
+                    (when (fboundp 'tibetan-to-wylie-fixed)
+                      (tibetan-to-wylie-fixed tibetan-text))
+                  (error tibetan-text)))
+         ;; Define particle patterns to mark
+         (case-particles '("'i" "gi" "kyi" "gyi" "yi"      ; genitive
+                          "s" "gis" "kyis" "gyis" "yis"    ; ergative
+                          "la" "r" "du" "tu" "su" "ru"     ; dative/terminative
+                          "nas" "las"                       ; ablative
+                          "dang"))                          ; comitative
+         (converb-particles '("cing" "zhing" "shing"       ; simultaneous
+                             "ste" "te" "de"               ; sequential
+                             "nas"))                        ; after-converb
+         (final-particles '("ro" "so" "to" "no" "do" "'o" "ngo"))
+         (result wylie))
+
+    ;; Mark case particles with =...=
+    (dolist (p case-particles)
+      (setq result (replace-regexp-in-string
+                    (format "\\b%s\\b" (regexp-quote p))
+                    (format "=%s=" p)
+                    result)))
+
+    ;; Mark converb particles with ~...~
+    (dolist (p converb-particles)
+      (setq result (replace-regexp-in-string
+                    (format "\\b%s\\b" (regexp-quote p))
+                    (format "~%s~" p)
+                    result)))
+
+    ;; Mark sentence-final particles with *...*
+    (dolist (p final-particles)
+      (setq result (replace-regexp-in-string
+                    (format "\\b%s\\(/\\|$\\)" (regexp-quote p))
+                    (format "*%s*\\1" p)
+                    result)))
+
+    ;; Add zero-marker annotations for verbs that expect unmarked arguments
+    (let ((zero-notes '()))
+      (dolist (verb verbs)
+        (when (and verb (listp verb) (consp (car verb)))
+          (let* ((lemma (alist-get 'lemma verb))
+                 (trans (alist-get 'transitivity verb))
+                 (frame (alist-get 'case_frame verb)))
+            (when (and lemma (or (string-match-p "Transitive" (or trans ""))
+                                 (string-match-p "Erg" (or frame ""))))
+              (push (format "[Ø AGENT expected before %s]"
+                           (condition-case nil
+                               (tibetan-to-wylie-fixed lemma)
+                             (error lemma)))
+                    zero-notes)))))
+      (when zero-notes
+        (setq result (concat result "\n\n" (string-join (nreverse zero-notes) "\n")))))
+
+    result))
+
 (defun tibetan-analysis-generate-content (tibetan-text)
   "Generate auto-analysis content for TIBETAN-TEXT.
 Returns the analysis as a string (org-mode formatted).
-New compact format with inline annotations."
+DharmaMitra-style vocabulary with lemma forms and grammatical roles."
   (condition-case err
       (progn
         ;; Ensure vocabulary is loaded
@@ -519,10 +620,15 @@ New compact format with inline annotations."
                                   (error nil)))
                (particles (when analysis (alist-get 'particles analysis)))
                ;; Build verb lookup table
-               (verb-table (make-hash-table :test 'equal)))
+               (verb-table (make-hash-table :test 'equal))
+               ;; Extract vocabulary for DharmaMitra-style display
+               (vocab-pairs (condition-case nil
+                                (when (fboundp 'tibetan-extract-vocabulary)
+                                  (tibetan-extract-vocabulary tibetan-text))
+                              (error nil))))
 
-    ;; Build verb lookup for quick access
-    (dolist (verb verbs)
+          ;; Build verb lookup for quick access
+          (dolist (verb verbs)
       (when (and verb (listp verb) (consp (car verb)))
         (let ((lemma (alist-get 'lemma verb)))
           (when lemma
@@ -530,7 +636,7 @@ New compact format with inline annotations."
 
     (with-temp-buffer
       ;; ============================================================
-      ;; SECTION 1: Wylie Transliteration (subsection under Tibetan Text)
+      ;; SECTION 1: Wylie Transliteration
       ;; ============================================================
       (insert "** Wylie Transliteration\n")
       (insert (or wylie-full "[Not available]"))
@@ -540,53 +646,73 @@ New compact format with inline annotations."
       ;; SECTION 2: Translations
       ;; ============================================================
       (insert "** Translations\n")
-      (insert (format "- DharmaMitra: %s\n" (or translation "[Not available]")))
-      ;; Auto-generate CAT translation if function is available
-      (let ((cat-translation (condition-case nil
-                                 (when (fboundp 'tibetan-cat-generate-translation)
-                                   (tibetan-cat-generate-translation tibetan-text))
-                               (error nil))))
-        (insert (format "- CAT Suggested: %s\n" (or cat-translation "[Generate with C-c u t]"))))
+      (when (and translation
+                 (not (string= translation "[Translation not available]"))
+                 (not (string= translation "[DharmaMitra not loaded]")))
+        (insert (format "- DharmaMitra: %s\n" translation)))
+      ;; Build CAT suggested translation from vocabulary
+      (let ((cat-trans (when vocab-pairs
+                         (tibetan-analysis--build-cat-translation vocab-pairs))))
+        (insert (format "- CAT Suggested: %s\n" (or cat-trans "[Generate with C-c t g]"))))
       (insert "\n")
 
       ;; ============================================================
-      ;; SECTION 3: Vocabulary (short format - primary meanings)
+      ;; SECTION 3: Vocabulary (DharmaMitra style - clean table format)
       ;; ============================================================
       (insert "** Vocabulary\n")
-      (let ((vocab-list (condition-case nil
-                            (when (fboundp 'tibetan-vocab-extract-detailed)
-                              (tibetan-vocab-extract-detailed tibetan-text))
-                          (error nil))))
-        (if vocab-list
-            (progn
-              (dolist (entry vocab-list)
-                (let* ((tibetan (plist-get entry :tibetan))
-                       (wylie (plist-get entry :wylie))
-                       (primary (plist-get entry :primary))
-                       (source (plist-get entry :source)))
-                  (insert (format "- %s /*%s*/ — %s"
-                                  tibetan
-                                  (or wylie "?")
-                                  (or primary "[not found]")))
-                  (when (and source (string= source "Resources"))
-                    (insert " ★"))
-                  (insert "\n")))
-              (insert "\n"))
-          ;; Fallback to old system
-          (let ((vocab (condition-case nil
-                           (when (fboundp 'tibetan-extract-vocabulary)
-                             (tibetan-extract-vocabulary tibetan-text))
-                         (error nil))))
-            (if vocab
-                (dolist (word-pair vocab)
-                  (insert (format "- %s — %s\n" (car word-pair) (cdr word-pair))))
-              (insert "[Vocabulary lookup failed]\n")))
-          (insert "\n")))
+      (if vocab-pairs
+          (progn
+            ;; DharmaMitra format: word, lemma, wylie, grammatical role, 'meaning'
+            (dolist (pair vocab-pairs)
+              (let* ((word (car pair))
+                     (meaning (cdr pair))
+                     (root-form (tibetan-strip-particles word))
+                     ;; Get Wylie for the word form
+                     (wylie-word (condition-case nil
+                                     (when (fboundp 'tibetan-to-wylie-fixed)
+                                       (tibetan-to-wylie-fixed word))
+                                   (error nil)))
+                     ;; Determine grammatical role
+                     (gram-role (tibetan-analysis--get-grammatical-role
+                                 word root-form verb-table))
+                     ;; Lemma (root form) - same as word if no particles stripped
+                     (lemma (if (and root-form
+                                     (not (string= root-form word))
+                                     (not (string-empty-p root-form)))
+                                root-form
+                              word))
+                     ;; Clean meaning: extract first short definition
+                     (short-meaning (when (and meaning
+                                               (not (string= meaning "[look up]"))
+                                               (not (string= meaning "[not found]")))
+                                      (let ((m (car (split-string meaning "[;,]" t))))
+                                        (when m (format "'%s'" (string-trim m)))))))
+                ;; Format: word, lemma, wylie, role, 'meaning'
+                (insert (format "- %s, %s, %s, %s"
+                                word
+                                lemma
+                                (or wylie-word "?")
+                                (or gram-role "?")))
+                (when short-meaning
+                  (insert (format ", %s" short-meaning)))
+                (insert "\n"))))
+        (insert "[Vocabulary extraction not available]\n"))
+      (insert "\n")
 
       ;; ============================================================
-      ;; SECTION 4: Grammatical Analysis (Bialek)
+      ;; SECTION 3b: Particle Map - visual particle identification
       ;; ============================================================
-      (insert "** Grammatical Analysis (Bialek)\n")
+      (insert "** Particle Map\n")
+      (insert "Wylie with particles marked: =CASE= for case markers, ~CONVERB~ for converbs, Ø for zero-marked agents/patients\n\n")
+      ;; Generate annotated Wylie showing particles
+      (let ((annotated-wylie (tibetan-analysis--generate-particle-map tibetan-text particles verbs)))
+        (insert annotated-wylie)
+        (insert "\n\n"))
+
+      ;; ============================================================
+      ;; SECTION 4: Grammatical Analysis (Bialek) - compact format
+      ;; ============================================================
+      (insert "** Grammatical Markers\n")
       (let ((bialek-analysis (condition-case nil
                                 (when (fboundp 'tibetan-analyze-grammar-bialek)
                                   (tibetan-analyze-grammar-bialek tibetan-text))
@@ -597,18 +723,17 @@ New compact format with inline annotations."
                     (word (nth 1 a))
                     (type (nth 2 a))
                     (function (nth 3 a))
-                    (trans-guide (nth 4 a))
-                    (reference (nth 5 a)))
-                (insert (format "- %s in '%s'\n" particle word))
-                (insert (format "  TYPE: %s\n" type))
-                (insert (format "  FUNCTION: %s\n" function))
-                (insert (format "  TRANSLATION: %s\n" trans-guide))
-                (insert (format "  REFERENCE: %s\n\n" reference))))
+                    (trans-guide (nth 4 a)))
+                ;; Format: particle in "word" → TYPE: translation
+                ;; Don't use =...= for Tibetan as it forces monospace font
+                (insert (format "- %s in «%s» → %s: %s\n"
+                                particle word type
+                                (or trans-guide function)))))
           (insert "[No grammatical markers detected]\n")))
       (insert "\n")
 
       ;; ============================================================
-      ;; SECTION 5: Sentence Structure (enhanced verb-argument analysis)
+      ;; SECTION 4: Sentence Structure - compact argument analysis
       ;; ============================================================
       (insert "** Sentence Structure\n")
       (if (and verbs (fboundp 'tibetan-analyze-arguments))
@@ -617,104 +742,32 @@ New compact format with inline annotations."
               (when (and verb (listp verb) (consp (car verb)))
                 (let* ((lemma (alist-get 'lemma verb))
                        (meaning (alist-get 'meaning verb))
-                       (frame (or (alist-get 'case_frame verb) "?"))
-                       (trans (alist-get 'transitivity verb))
                        (arg-analysis (tibetan-analyze-arguments verb multiword-units words)))
                   (when (or arg-analysis lemma)
                     (setq any-structure t)
-                    ;; Display predicate first
-                    (insert (format "- PREDICATE: %s" lemma))
+                    ;; Show verb with arguments inline
+                    (insert (format "- %s" lemma))
                     (when meaning
-                      (insert (format " \"%s\"" (car (split-string meaning "," t)))))
-                    (when trans
-                      (insert (format " [%s]" (if (string-match-p "Transitive" trans) "tr" "intr"))))
-                    (insert "\n")
-                    ;; Display arguments with grammatical function labels
-                    (dolist (arg arg-analysis)
-                      (let* ((role (alist-get 'role arg))
-                             (marker (alist-get 'marker arg))
-                             (form (alist-get 'form arg))
-                             (english (alist-get 'english arg))
-                             (function (alist-get 'function arg))
-                             (is-topic (alist-get 'is-topic arg))
-                             ;; Determine grammatical function (SUBJECT/DIRECT OBJECT/INDIRECT OBJECT)
-                             (gram-function (cond
-                                            ((string= role "ERGATIVE") "SUBJECT (agent)")
-                                            ((string= role "ABSOLUTIVE")
-                                             (if (string-match-p "Transitive" (or trans ""))
-                                                 "DIRECT OBJECT (patient)"
-                                               "SUBJECT (experiencer)"))
-                                            ((string= role "DATIVE") "INDIRECT OBJECT (recipient/goal)")
-                                            ((string= role "TOPIC") "TOPIC (discourse focus)")
-                                            (t role))))
-                        (unless is-topic
-                          (insert (format "  - %s: %s" gram-function form))
-                          (when english (insert (format " \"%s\"" english)))
-                          (insert (format " (%s)\n" (if (string= marker "Ø") "Ø - zero-marked" marker))))))
+                      (insert (format " '%s'" (car (split-string meaning "," t)))))
+                    (insert ":")
+                    ;; Arguments on same line if few
+                    (let ((args-shown 0))
+                      (dolist (arg arg-analysis)
+                        (let ((role (alist-get 'role arg))
+                              (marker (alist-get 'marker arg))
+                              (form (alist-get 'form arg))
+                              (is-topic (alist-get 'is-topic arg)))
+                          (unless is-topic
+                            (insert (format " %s(%s)" form (or marker "Ø")))
+                            (setq args-shown (1+ args-shown))))))
                     (insert "\n")))))
             (unless any-structure
-              (insert "[Structure analysis pending]\n")))
-        (insert "[No verb-based structure detected]\n"))
+              (insert "[No argument structure detected]\n")))
+        (insert "[No verbs detected]\n"))
       (insert "\n")
 
       ;; ============================================================
-      ;; SECTION 5b: Zero Markers (unmarked arguments)
-      ;; ============================================================
-      (insert "** Zero Markers (Ø)\n")
-      (insert "Unmarked noun phrases - their grammatical role depends on context:\n\n")
-      (if (and verbs (fboundp 'tibetan-analyze-arguments))
-          (let ((zero-found nil))
-            (dolist (verb verbs)
-              (when (and verb (listp verb) (consp (car verb)))
-                (let* ((arg-analysis (condition-case nil
-                                         (tibetan-analyze-arguments verb multiword-units words)
-                                       (error nil))))
-                  (dolist (arg arg-analysis)
-                    (let ((marker (alist-get 'marker arg))
-                          (form (alist-get 'form arg))
-                          (role (alist-get 'role arg))
-                          (english (alist-get 'english arg)))
-                      (when (string= marker "Ø")
-                        (setq zero-found t)
-                        (insert (format "- %s" form))
-                        (when english (insert (format " \"%s\"" english)))
-                        (insert (format " → %s (zero-marked)\n" role))
-                        (insert (format "  Context: %s\n\n"
-                                       (cond
-                                        ((string= role "ABSOLUTIVE")
-                                         "Subject of intransitive or object of transitive")
-                                        ((string= role "ERGATIVE")
-                                         "Unmarked agent (rare, usually marked with -གིས/-ས)")
-                                        (t "Determined by verb frame"))))))))))
-            (unless zero-found
-              (insert "[No zero-marked arguments detected]\n")))
-        (insert "[Analysis not available]\n"))
-      (insert "\n")
-
-      ;; ============================================================
-      ;; SECTION 5c: Converb/Dependent Clause Analysis
-      ;; ============================================================
-      (let ((converbs (condition-case nil
-                          (when (fboundp 'tibetan-analyze-converbs-bialek)
-                            (tibetan-analyze-converbs-bialek tibetan-text))
-                        (error nil))))
-        (when converbs
-          (insert "** Converbial Constructions\n")
-          (insert "  (These are DEPENDENT CLAUSES that modify the main verb)\n\n")
-          (dolist (conv converbs)
-            (let ((particle (nth 0 conv))
-                  (word (nth 1 conv))
-                  (type (nth 2 conv))
-                  (function (nth 3 conv))
-                  (translation (nth 4 conv)))
-              (insert (format "- %s (%s)\n" word particle))
-              (insert (format "  TYPE: %s\n" type))
-              (insert (format "  FUNCTION: %s\n" function))
-              (insert (format "  TRANSLATION: %s\n\n" translation))))
-          (insert "\n")))
-
-      ;; ============================================================
-      ;; SECTION 6: Verb Classification (Hill 2010)
+      ;; SECTION 5: Verb Classification (Hill 2010) - detailed format
       ;; ============================================================
       (insert "** Verb Classification (Hill 2010)\n")
       (if verbs
@@ -735,98 +788,69 @@ New compact format with inline annotations."
                   (insert (format " — %s" meaning)))
                 (insert "\n")
                 (insert (format "  STEMS: %s / %s / %s / %s\n" present past future imperative))
-                (insert (format "  CLASSIFICATION: %s, %s, %s\n" vol trans frame))
-                ;; Add controllability mapping (Schwieger/Bialek terminology)
-                (insert (format "  CONTROLLABILITY: %s\n"
-                               (cond
-                                ((string= vol "Volitional") "Controllable (བྱེད་པ་པོ་ can control)")
-                                ((string= vol "Non-volitional") "Uncontrollable (བྱེད་པ་པོ་ cannot control)")
-                                ((string= vol "Both") "Context-dependent")
-                                (t "?"))))
-                (insert (format "  TIBETAN CLASS: %s\n\n"
+                (insert (format "  CLASS: %s, %s, %s\n" vol trans frame))
+                (insert (format "  TIBETAN: %s\n\n"
                                (cond
                                 ((string= class "tha_dad_pa") "ཐ་དད་པ་ (transitive)")
                                 ((string= class "tha_mi_dad_pa") "ཐ་མི་དད་པ་ (intransitive)")
                                 (t "—")))))))
-        (insert "[No verbs]\n"))
+        (insert "[No verbs detected]\n"))
       (insert "\n")
 
+      ;; NOTE: Zero-Marked NPs section removed - was producing confusing output
+
       ;; ============================================================
-      ;; SECTION 7: Detailed Dictionary (full entries) - LAST SECTION
+      ;; SECTION 7: Detailed Dictionary
       ;; ============================================================
-      (insert "** Detailed Dictionary\n")
-      (insert "Full dictionary entries for reference:\n\n")
-      (let ((vocab-list (condition-case nil
-                            (when (fboundp 'tibetan-vocab-extract-detailed)
-                              (tibetan-vocab-extract-detailed tibetan-text))
-                          (error nil))))
-        (if vocab-list
-            (dolist (entry vocab-list)
-              (let* ((tibetan (plist-get entry :tibetan))
-                     (wylie (plist-get entry :wylie))
-                     (primary (plist-get entry :primary))
-                     (detailed (plist-get entry :detailed))
-                     (sanskrit (plist-get entry :sanskrit))
-                     (source (plist-get entry :source)))
-                (insert (format "*** %s" tibetan))
-                (when wylie (insert (format "  [%s]" wylie)))
-                (when (and source (string= source "Resources"))
-                  (insert " ★"))
-                (insert "\n")
-                (insert (format "  %s\n" (or primary "[not found]")))
-                (when (and detailed
-                           (not (string= detailed primary))
-                           (> (length detailed) (length primary)))
-                  (insert (format "  Full: %s\n"
-                                  (if (> (length detailed) 300)
-                                      (concat (substring detailed 0 297) "...")
-                                    detailed))))
-                (when sanskrit
-                  (insert (format "  Sanskrit: %s\n" sanskrit)))
-                (insert "\n")))
-          (insert "[Detailed dictionary not available]\n"))
+      (when vocab-pairs
+        (insert "** Detailed Dictionary\n")
+        (insert "Full dictionary entries for reference:\n\n")
+        (dolist (pair vocab-pairs)
+          (let* ((word (car pair))
+                 (meaning (cdr pair))
+                 (root-form (tibetan-strip-particles word))
+                 (wylie-word (condition-case nil
+                                 (when (fboundp 'tibetan-to-wylie-fixed)
+                                   (tibetan-to-wylie-fixed
+                                    (if (and root-form (not (string-empty-p root-form))
+                                             (not (string= root-form word)))
+                                        root-form word)))
+                               (error nil)))
+                 ;; Try to get fuller entry from glossary
+                 (full-entry (when (and (boundp 'tibetan-comprehensive-vocabulary)
+                                       tibetan-comprehensive-vocabulary)
+                               (or (gethash word tibetan-comprehensive-vocabulary)
+                                   (gethash root-form tibetan-comprehensive-vocabulary))))
+                 (full-meaning (cond
+                                ((and full-entry (listp full-entry))
+                                 (mapconcat #'identity full-entry "; "))
+                                ((stringp full-entry) full-entry)
+                                (t nil)))
+                 (display-form (if (and root-form
+                                       (not (string= root-form word))
+                                       (not (string-empty-p root-form)))
+                                  root-form word)))
+            (insert (format "*** %s  [%s]\n" display-form (or wylie-word "?")))
+            (insert (format "  %s\n" (or meaning "[not found]")))
+            (when (and full-meaning (not (string= full-meaning (or meaning ""))))
+              (insert (format "  Full: %s\n" full-meaning)))
+            (insert "\n")))
         (insert "\n"))
 
       (buffer-string))))
     (error
      ;; On error, return minimal analysis with error info
-     (format "** Annotated Text\n%s\n\n** Full Wylie\n[Error during analysis]\n\n** Verb Details\n[Error: %s]\n\n** Sentence Structure\n[Analysis error]\n"
-             tibetan-text (error-message-string err)))))
+     (format "** Wylie Transliteration\n[Error during analysis]\n\n** Translations\n- [Error: %s]\n\n** Vocabulary\n[Error]\n"
+             (error-message-string err)))))
 
 ;; ============================================================================
 ;; MAIN COMMANDS
 ;; ============================================================================
 
 (defun tibetan-open-segment-analysis ()
-  "Open or create analysis based on current position.
-
-Context-aware behavior:
-- On *** Segment heading: word-by-word segment analysis
-- On ** Sentence heading: clause structure analysis (main verb, converbs)
-
-This is the main entry point for C-c u A."
+  "Open or create analysis for current segment in side window.
+If analysis exists, check if source has changed and warn."
   (interactive)
-  (require 'tibetan-org-structure nil t)
-
-  ;; Determine context: segment or sentence?
-  (cond
-   ;; At a segment (level 3) - do word-by-word analysis
-   ((and (fboundp 'tibetan-org-at-segment-p)
-         (tibetan-org-at-segment-p))
-    (tibetan--open-segment-word-analysis))
-
-   ;; At a sentence (level 2) - do clause analysis
-   ((and (fboundp 'tibetan-org-at-sentence-p)
-         (tibetan-org-at-sentence-p))
-    (tibetan--open-sentence-clause-analysis))
-
-   ;; Fallback to old behavior (try segment)
-   (t
-    (tibetan--open-segment-word-analysis))))
-
-(defun tibetan--open-segment-word-analysis ()
-  "Open or create word-by-word analysis for current segment.
-Called when cursor is on a *** Segment heading."
   (let* ((seg-data (tibetan-get-current-segment-any-format))
          (seg-id (car seg-data))
          (tibetan-text (cdr seg-data)))
@@ -845,10 +869,7 @@ Called when cursor is on a *** Segment heading."
               (message "WARNING: Source text has changed since last analysis!"))
             (let ((buf (find-file-noselect filepath)))
               (with-current-buffer buf
-                (tibetan-analysis-setup-faces)
-                ;; Apply startup visibility (expand all sections per #+STARTUP: showall)
-                (when (derived-mode-p 'org-mode)
-                  (org-show-all)))
+                (tibetan-analysis-setup-faces))
               (display-buffer-in-side-window buf
                                              '((side . right)
                                                (window-width . 0.5)))))
@@ -858,79 +879,10 @@ Called when cursor is on a *** Segment heading."
           (message "Created analysis file: %s" new-filepath)
           (let ((buf (find-file-noselect new-filepath)))
             (with-current-buffer buf
-              (tibetan-analysis-setup-faces)
-              ;; Apply startup visibility (expand all sections per #+STARTUP: showall)
-              (when (derived-mode-p 'org-mode)
-                (org-show-all)))
+              (tibetan-analysis-setup-faces))
             (display-buffer-in-side-window buf
                                            '((side . right)
                                              (window-width . 0.5)))))))))
-
-(defun tibetan--open-sentence-clause-analysis ()
-  "Open clause structure analysis for current sentence.
-Called when cursor is on a ** Sentence heading.
-Shows main verb, converbs, and clause dependencies."
-  (require 'tibetan-clause-analysis nil t)
-
-  (let* ((sent-data (tibetan-org-get-sentence-data))
-         (sent-id (car sent-data))
-         (tibetan-text (cdr sent-data)))
-
-    (unless sent-data
-      (error "Not in a sentence heading"))
-
-    ;; Generate clause analysis
-    (let* ((analysis-text
-            (if (fboundp 'tibetan-analyze-clause-structure)
-                (tibetan-analyze-clause-structure tibetan-text)
-              "Clause analysis module not loaded."))
-           (segments (tibetan-org-get-sentence-segments))
-           (buf-name (format "*Clause Analysis: %s*" sent-id)))
-
-      ;; Create or reuse buffer
-      (let ((buf (get-buffer-create buf-name)))
-        (with-current-buffer buf
-          (erase-buffer)
-          (org-mode)
-
-          ;; Header
-          (insert (format "#+TITLE: Clause Analysis - %s\n\n" sent-id))
-
-          ;; Original text
-          (insert "* Tibetan Text\n\n")
-          (insert tibetan-text)
-          (insert "\n\n")
-
-          ;; Segments breakdown
-          (insert "* Segments\n\n")
-          (let ((n 0))
-            (dolist (seg segments)
-              (setq n (1+ n))
-              (insert (format "%d. %s\n" n seg))))
-          (insert "\n")
-
-          ;; Clause analysis
-          (insert "* Clause Structure\n\n")
-          (insert analysis-text)
-
-          ;; Grammar notes placeholder
-          (insert "\n* Grammar Notes\n\n")
-          (insert "Add your notes about the sentence structure here.\n\n")
-
-          ;; Translation section
-          (insert "* Translation\n\n")
-          (insert "Your translation of the complete sentence:\n\n")
-
-          ;; Setup faces
-          (tibetan-analysis-setup-faces)
-          (goto-char (point-min)))
-
-        ;; Display in side window
-        (display-buffer-in-side-window buf
-                                       '((side . right)
-                                         (window-width . 0.5)))
-        (message "Showing clause analysis for %s (%d segments)"
-                 sent-id (length segments))))))
 
 (defun tibetan-reanalyze-segment ()
   "Re-analyze current segment, preserving user notes.
@@ -955,217 +907,6 @@ Regenerates the Auto-Analysis section only."
             (when buf
               (with-current-buffer buf
                 (revert-buffer t t)))))))))
-
-;; ============================================================================
-;; BATCH ANALYSIS - Analyze all segments in a file
-;; ============================================================================
-
-(defun tibetan-collect-all-segments ()
-  "Collect all segments from current buffer.
-Returns list of (seg-id . tibetan-text) cons cells."
-  (require 'tibetan-org-structure nil t)
-  (let ((segments '()))
-    (save-excursion
-      (goto-char (point-min))
-      ;; Find all *** Segment headings
-      (while (re-search-forward "^\\*\\*\\* Segment \\([0-9]+\\)" nil t)
-        (let* ((seg-num (string-to-number (match-string 1)))
-               (heading-text (org-get-heading t t t t)))
-          ;; Move into the segment to get the text
-          (when (tibetan-org-at-segment-p)
-            (let ((text (tibetan-org-get-segment-text))
-                  (sent-num (tibetan-org-get-sentence-id))
-                  (section-name (tibetan-org-get-parent-section-name)))
-              (when text
-                ;; Build segment ID
-                (let ((seg-id (cond
-                               ((and sent-num seg-num)
-                                (format "Sentence %d, Segment %d" sent-num seg-num))
-                               ((and section-name seg-num)
-                                (format "%s, Segment %d" section-name seg-num))
-                               (t
-                                (format "Segment %d" seg-num)))))
-                  (push (cons seg-id text) segments))))))))
-    (nreverse segments)))
-
-(defun tibetan-analyze-all-segments ()
-  "Analyze all segments in the current buffer and create analysis files.
-
-Prompts whether to regenerate existing analysis files.
-Creates an analysis file for each *** Segment heading found.
-Shows progress in the echo area.
-
-This is also available via Menu: Tibetan > Batch Analyze All Segments"
-  (interactive)
-  (require 'tibetan-org-structure nil t)
-  (unless (derived-mode-p 'org-mode)
-    (error "This command only works in org-mode buffers"))
-
-  (let* ((source-file (buffer-file-name))
-         (segments (tibetan-collect-all-segments))
-         (total (length segments))
-         (created 0)
-         (updated 0)
-         (skipped 0)
-         (errors '())
-         ;; Count existing files
-         (existing-count 0))
-
-    (unless segments
-      (error "No segments found in buffer"))
-
-    ;; Count how many analysis files already exist
-    (dolist (seg segments)
-      (let* ((seg-id (car seg))
-             (filepath (tibetan-analysis-get-filepath seg-id source-file)))
-        (when (file-exists-p filepath)
-          (setq existing-count (1+ existing-count)))))
-
-    ;; Prompt user about what to do with existing files
-    (let ((reanalyze nil))
-      (when (> existing-count 0)
-        (let ((choice (read-char-choice
-                       (format "Found %d segments (%d already have analysis files).
-[n] Create new only (skip existing)
-[r] Re-analyze existing (preserve notes)
-[c] Cancel
-Choice: " total existing-count)
-                       '(?n ?r ?c))))
-          (cond
-           ((eq choice ?c)
-            (user-error "Cancelled"))
-           ((eq choice ?r)
-            (setq reanalyze t)))))
-
-      (message "Analyzing %d segments..." total)
-
-      ;; Ensure analysis folder exists
-      (let ((folder (tibetan-analysis-get-folder)))
-        (unless (file-exists-p folder)
-          (make-directory folder t)))
-
-      ;; Process each segment
-      (let ((n 0))
-        (dolist (seg segments)
-          (setq n (1+ n))
-          (let* ((seg-id (car seg))
-                 (tibetan-text (cdr seg))
-                 (filepath (tibetan-analysis-get-filepath seg-id source-file))
-                 (exists (file-exists-p filepath)))
-
-            (message "Processing %d/%d: %s..." n total seg-id)
-
-            (condition-case err
-                (if exists
-                    ;; File exists
-                    (if reanalyze
-                        ;; Regenerate auto-analysis section
-                        (let ((auto-content (tibetan-analysis-generate-content tibetan-text)))
-                          (tibetan-analysis-regenerate-auto filepath tibetan-text auto-content)
-                          (setq updated (1+ updated)))
-                      ;; Skip existing files
-                      (setq skipped (1+ skipped)))
-                  ;; Create new file
-                  (let ((auto-content (tibetan-analysis-generate-content tibetan-text)))
-                    (tibetan-analysis-create-file seg-id tibetan-text source-file auto-content)
-                    (setq created (1+ created))))
-              (error
-               (push (format "%s: %s" seg-id (error-message-string err)) errors)))))))
-
-    ;; Report results
-    (if errors
-        (message "Done. Created: %d, Updated: %d, Skipped: %d, ERRORS: %d\n%s"
-                 created updated skipped (length errors)
-                 (mapconcat 'identity errors "\n"))
-      (message "Done! Created: %d, Updated: %d, Skipped: %d" created updated skipped))))
-
-;; Keep alias for backwards compatibility
-(defalias 'tibetan-reanalyze-all-segments 'tibetan-analyze-all-segments)
-
-;; ============================================================================
-;; DHARMAMITRA RE-REQUEST
-;; ============================================================================
-
-(defun tibetan-refresh-dharmamitra-translation ()
-  "Re-request DharmaMitra translation for the current analysis file.
-Works when called from within an analysis buffer.
-Updates the DharmaMitra line in the ** Translations section."
-  (interactive)
-  ;; Check we're in an analysis file
-  (unless (and buffer-file-name
-               (string-match-p "/analysis/" buffer-file-name)
-               (string-match-p "\\.org$" buffer-file-name))
-    (error "This command must be run from within an analysis file"))
-
-  ;; Get the Tibetan text from the file
-  (let ((tibetan-text nil))
-    (save-excursion
-      (goto-char (point-min))
-      (when (re-search-forward "^\\* Tibetan Text$" nil t)
-        (forward-line 1)
-        (let ((start (point)))
-          (if (re-search-forward "^\\* " nil t)
-              (setq tibetan-text (string-trim
-                                  (buffer-substring-no-properties
-                                   start (line-beginning-position))))
-            (setq tibetan-text (string-trim
-                                (buffer-substring-no-properties
-                                 start (point-max))))))))
-
-    (unless tibetan-text
-      (error "Could not find Tibetan text in this analysis file"))
-
-    ;; Request new translation
-    (message "Requesting DharmaMitra translation...")
-    (let ((new-translation
-           (if (fboundp 'tibetan-get-dharmamitra-translation)
-               (tibetan-get-dharmamitra-translation tibetan-text)
-             "[DharmaMitra not available]")))
-
-      ;; Update the DharmaMitra line in the file
-      (save-excursion
-        (goto-char (point-min))
-        (if (re-search-forward "^- DharmaMitra: .*$" nil t)
-            (replace-match (format "- DharmaMitra: %s" new-translation))
-          ;; If no DharmaMitra line exists, add it after ** Translations
-          (goto-char (point-min))
-          (when (re-search-forward "^\\*\\* Translations$" nil t)
-            (forward-line 1)
-            (insert (format "- DharmaMitra: %s\n" new-translation)))))
-
-      (save-buffer)
-      (message "DharmaMitra translation updated: %s"
-               (if (> (length new-translation) 60)
-                   (concat (substring new-translation 0 57) "...")
-                 new-translation)))))
-
-(defun tibetan-copy-dharmamitra-to-working ()
-  "Copy DharmaMitra translation to the Working Translation section.
-Useful as a starting point for your own translation."
-  (interactive)
-  ;; Get DharmaMitra translation
-  (let ((dm-trans nil))
-    (save-excursion
-      (goto-char (point-min))
-      (when (re-search-forward "^- DharmaMitra: \\(.+\\)$" nil t)
-        (setq dm-trans (match-string 1))))
-
-    (unless dm-trans
-      (error "No DharmaMitra translation found. Try C-c u D to request one."))
-
-    ;; Find Working Translation section and insert
-    (save-excursion
-      (goto-char (point-min))
-      (if (re-search-forward "^\\* Working Translation$" nil t)
-          (progn
-            (forward-line 1)
-            ;; Skip any existing content markers
-            (when (looking-at "^$")
-              (forward-line 1))
-            (insert (format "\n[DharmaMitra suggestion:]\n%s\n\n" dm-trans))
-            (save-buffer)
-            (message "DharmaMitra translation copied to Working Translation section"))
-        (error "Could not find Working Translation section")))))
 
 (provide 'tibetan-analysis-persist)
 ;;; tibetan-analysis-persist.el ends here

@@ -104,7 +104,7 @@
 ;; BATCH SEGMENT ANALYSIS - C-c u B
 ;; ============================================================================
 
-(global-set-key (kbd "C-c u B") 'tibetan-analyze-all-segments)
+(global-set-key (kbd "C-c u B") 'tibetan-auto-analyze-document)
   ;; Analyze ALL segments in the current buffer:
   ;; - Finds all *** Segment N headings
   ;; - Creates analysis file for each (in analysis/ folder)

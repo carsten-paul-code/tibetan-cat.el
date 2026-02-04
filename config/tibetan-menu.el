@@ -25,7 +25,7 @@
       :help "Open or create persistent analysis file for current segment"]
      ["Re-analyze Segment (C-c u R)" tibetan-reanalyze-segment
       :help "Regenerate analysis while preserving your notes"]
-     ["Batch Analyze All Segments (C-c u B)" tibetan-analyze-all-segments
+     ["Batch Analyze All Segments (C-c u B)" tibetan-auto-analyze-document
       :help "Analyze all segments in buffer, with option to skip or regenerate existing"]
      "---"
      ["Refresh DharmaMitra (C-c u D)" tibetan-refresh-dharmamitra-translation
