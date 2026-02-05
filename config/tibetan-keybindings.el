@@ -232,6 +232,24 @@
   ;; - Inserts sentence heading and demotes segment
 
 ;; ============================================================================
+;; DOCUMENT PREPARATION - C-c u P / C-c u Y
+;; ============================================================================
+
+(global-set-key (kbd "C-c u P") 'tibetan-prepare-document)
+  ;; Prepare a new Tibetan document for translation:
+  ;; - Paste raw Tibetan text into a buffer
+  ;; - Run C-c u P to create org structure:
+  ;;   ** Sentence N
+  ;;   *** Segment N
+  ;;   tibetan text...
+  ;; - Automatically groups segments into sentences
+  ;; - Then use C-c u B to batch-analyze all segments
+
+(global-set-key (kbd "C-c u Y") 'tibetan-prepare-document)
+  ;; Alias for C-c u P (mnemonic: "Y" = clean/Yes, prepare this)
+  ;; Replaces old tibetan-clean-auto-segment function
+
+;; ============================================================================
 ;; FUTURE KEYBINDINGS (commented out - not yet implemented in modular system)
 ;; ============================================================================
 
