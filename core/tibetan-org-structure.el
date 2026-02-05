@@ -310,7 +310,9 @@ With prefix arg or TITLE, prompts for document title."
                     (read-string "Document title (or press Enter for default): "
                                  nil nil "Tibetan Text"))))
          (raw-text (string-trim (buffer-string)))
+         (_ (message "Segmenting text..."))
          (sentences (tibetan--group-into-sentences raw-text))
+         (_ (message "Creating document structure..."))
          (total-segments 0))
 
     ;; Clear buffer
@@ -370,14 +372,14 @@ With prefix arg or TITLE, prompts for document title."
   "Group Tibetan TEXT into sentences, each containing multiple segments.
 Returns list of lists: ((seg1 seg2) (seg3 seg4 seg5) ...).
 
-Uses intelligent sentence boundary detection:
+Uses fast heuristic sentence boundary detection:
 1. Double-shad (།།) - always ends sentence
 2. Final particles (སོ། འོ། etc.) - ends sentence
-3. Main verb detection - segment with main verb (not converb) ends sentence
-4. Converb segments (ནས། ཏེ། etc.) - do NOT end sentence, chain to next
+3. Copula/existentials at end (ཡིན། མེད། etc.) - ends sentence
+4. Converb particles (ནས། ཏེ། ཅིང། etc.) - do NOT end sentence
 
-When clause analysis module is available, uses tibetan-find-main-verb
-and tibetan-detect-converbs for accurate detection."
+This is the FAST version used during document preparation.
+For more accurate analysis, use C-c u A on individual segments."
   (let ((segments (tibetan--segment-text text)))
     (if (null segments)
         nil
@@ -387,8 +389,8 @@ and tibetan-detect-converbs for accurate detection."
         (dolist (seg segments)
           (push seg current-sentence)
 
-          ;; Use smart sentence boundary detection
-          (when (tibetan--segment-ends-sentence-p seg)
+          ;; Use FAST sentence boundary detection (no verb analysis)
+          (when (tibetan--segment-ends-sentence-fast-p seg)
             (push (nreverse current-sentence) sentences)
             (setq current-sentence '())))
 
@@ -397,6 +399,28 @@ and tibetan-detect-converbs for accurate detection."
           (push (nreverse current-sentence) sentences))
 
         (nreverse sentences)))))
+
+(defun tibetan--segment-ends-sentence-fast-p (segment)
+  "Fast check if SEGMENT ends a sentence (no verb analysis).
+Uses simple pattern matching - much faster than full verb analysis."
+  (when (and segment (stringp segment) (not (string-empty-p segment)))
+    (let ((seg (string-trim segment)))
+      (or
+       ;; Double-shad always marks sentence end
+       (string-match-p "།།[ \t]*$" seg)
+       ;; Final particles always mark sentence end
+       (string-match-p "[སའཏདནབམགངརལ]ོ།[ \t]*$" seg)  ; -o finals
+       ;; Copulas and existentials at end
+       (string-match-p "ཡིན།[ \t]*$\\|མིན།[ \t]*$\\|ཡོད།[ \t]*$\\|མེད།[ \t]*$\\|འདུག།[ \t]*$\\|རེད།[ \t]*$" seg)
+       ;; Honorific verbs at end
+       (string-match-p "གསུངས།[ \t]*$\\|བཞུགས།[ \t]*$\\|མཛད།[ \t]*$\\|གཟིགས།[ \t]*$" seg)
+       ;; NOT a converb ending (converbs chain to next clause)
+       (and (not (string-match-p "ནས།[ \t]*$\\|ཏེ།[ \t]*$\\|སྟེ།[ \t]*$\\|དེ།[ \t]*$" seg))
+            (not (string-match-p "ཅིང།[ \t]*$\\|ཞིང།[ \t]*$\\|ཤིང།[ \t]*$" seg))
+            (not (string-match-p "པས།[ \t]*$\\|བས།[ \t]*$" seg))
+            ;; If none of the above, check if it just ends with shad (simple clause)
+            ;; Group every 3 simple clauses into a sentence as fallback
+            nil)))))
 
 (defun tibetan--segment-has-main-verb-p (segment)
   "Check if SEGMENT likely contains a main verb (sentence-final).
