@@ -344,6 +344,29 @@ silently fails to influence parsing."
                            "to become the wife of"))
           (should (string= (alist-get 'category data) "resources")))))))
 
+(ert-deftest tibetan-enhanced-parser-mwu-includes-steinert-only ()
+  "`tibetan-find-multiword-units' also consults Steinert so compounds
+like `ནམ་ཞིག' / `ཀློག་སློབ' that live only in Steinert reach
+`multiword-units'.  This keeps the parser in sync with
+`tibetan-extract-vocabulary' (the Word/Particle List path), which
+already finds them through `tibetan-lookup-word'."
+  (cl-letf (((symbol-function 'tibetan-load-resources-vocab) (lambda () nil))
+            ((symbol-function 'tibetan-load-custom-vocab) (lambda () nil))
+            ((symbol-function 'tibetan-lookup-word-in-steinert)
+             (lambda (w)
+               (when (string= w "ནམ་ཞིག") "at the time"))))
+    (let ((tibetan-current-resources-vocab nil)
+          (tibetan-current-custom-vocab nil))
+      (let* ((mwus (tibetan-find-multiword-units '("ནམ" "ཞིག" "X")))
+             (nam-zhig (cl-find-if (lambda (m) (string= (nth 2 m) "ནམ་ཞིག"))
+                                   mwus)))
+        (should nam-zhig)
+        (should (= (nth 0 nam-zhig) 0))
+        (should (= (nth 1 nam-zhig) 2))
+        (let ((data (nth 3 nam-zhig)))
+          (should (string= (alist-get 'english data) "at the time"))
+          (should (string= (alist-get 'category data) "steinert")))))))
+
 (defun tibetan-enhanced-parser-run-tests ()
   "Run all enhanced parser tests interactively."
   (interactive)

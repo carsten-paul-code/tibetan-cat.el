@@ -380,6 +380,13 @@ directional / terminative glosses like `to Ko ron sa' or
            (or (string-match-p "\\`[ \t]*to[ \t]+[a-z]" english)
                (string-match-p
                 "\\`[ \t]*\\(pf\\|pres\\|fut\\|ft\\|imp\\)\\." english)
+               ;; Sanskrit absolutive (`bhuktvā', `pītvā', `jñāpayitvā',
+               ;; `prāpya', etc.) — Steinert's bilingual entries for
+               ;; converb-marked compound verbs like `གསོལ་ནས' typically
+               ;; gloss them with the Sanskrit absolutive form.  Without
+               ;; this pattern, `གསོལ་ནས' would be treated as a noun
+               ;; NP and the head verb `གསོལ' never surfaces as a clause.
+               (string-match-p "[a-zāīūṛēō][a-zāīūṛēō]+tvā\\b" english)
                (string-match-p "\\b[Vv]erb\\b" english))))))
 
 (defun tibetan-clause-seg--mwu-span-at (pos mwu)

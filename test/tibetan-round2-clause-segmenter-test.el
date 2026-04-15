@@ -440,5 +440,22 @@ those positions into surrounding NPs."
     (should-not (cl-some (lambda (h) (string-match-p "དགོས" h)) heads))
     (should-not (cl-some (lambda (h) (string-match-p "ཟེར" h)) heads))))
 
+(ert-deftest tibetan-round2-mwu-verbal-p-recognizes-sanskrit-absolutive ()
+  "Steinert bilingual glosses for converb-marked verbs like `གསོལ་ནས'
+are typically Sanskrit absolutives (`bhuktvā', `pītvā',
+`jñāpayitvā').  `tibetan-clause-seg--mwu-verbal-p' must recognise
+that pattern so these MWUs are correctly classified as verbal."
+  (should (tibetan-clause-seg--mwu-verbal-p
+           '(0 2 "གསོལ་ནས"
+               ((english . "bhuktvā — having eaten (honorific)")))))
+  (should (tibetan-clause-seg--mwu-verbal-p
+           '(0 3 "FAKE་པ་ནས"
+               ((english . "jñāpayitvā")))))
+  ;; Non-verb glosses that happen to contain Latin letters must NOT
+  ;; false-match (e.g. ordinary noun glosses).
+  (should-not (tibetan-clause-seg--mwu-verbal-p
+               '(0 2 "FAKE་NOUN"
+                   ((english . "instructor; teacher [Hopkins2015]"))))))
+
 (provide 'tibetan-round2-clause-segmenter-test)
 ;;; tibetan-round2-clause-segmenter-test.el ends here

@@ -121,14 +121,10 @@ Returns list of (start-index . end-index . entry-data) tuples."
                  do
                  (let* ((slice (cl-subseq words i (+ i len)))
                         (joined (string-join slice "་"))
-                        ;; Per-document Resources / Custom vocab — these
-                        ;; carry the user's hand-written multiword
-                        ;; entries (e.g. `ཆུང་མ་བྱེད', `ཀློག་སློབ').
-                        ;; Without checking them here, the MWU never
-                        ;; reaches `multiword-units' and downstream
-                        ;; MWU-aware logic in the verb extractor /
-                        ;; clause segmenter cannot see it.  Highest
-                        ;; priority: user's wordlist trumps everything.
+                        ;; Per-document Resources / Custom vocab — the
+                        ;; user's hand-written multiword entries
+                        ;; (`ཆུང་མ་བྱེད', `ཀློག་སློབ').  Highest priority;
+                        ;; consulted for width > 1 only.
                         (resources-vocab
                          (when (and (boundp 'tibetan-current-resources-vocab)
                                     tibetan-current-resources-vocab
@@ -139,16 +135,33 @@ Returns list of (start-index . end-index . entry-data) tuples."
                                     tibetan-current-custom-vocab
                                     (> len 1))
                            (gethash joined tibetan-current-custom-vocab)))
-                        ;; Check comprehensive vocabulary first (new!)
+                        ;; Comprehensive vocabulary (bundled).
                         (comp-vocab (when (boundp 'tibetan-comprehensive-vocabulary)
                                      (gethash joined tibetan-comprehensive-vocabulary)))
-                        ;; Then check JSON dictionaries
+                        ;; JSON compound/proper-noun dictionaries.
                         (compound (when tibetan-compounds-dict
                                    (gethash joined tibetan-compounds-dict)))
                         (proper-noun (when tibetan-proper-nouns-dict
-                                      (gethash joined tibetan-proper-nouns-dict))))
+                                      (gethash joined tibetan-proper-nouns-dict)))
+                        ;; Steinert fallback — the user's multi-syllable
+                        ;; compounds (`ནམ་ཞིག', `ཀློག་སློབ') often live
+                        ;; only here, not in comprehensive-vocab or
+                        ;; Resources.  `tibetan-extract-vocabulary' (the
+                        ;; Word/Particle List code path) already picks
+                        ;; them up via `tibetan-lookup-word'; per the
+                        ;; DRY rule, we need to see the same inventory
+                        ;; so `multiword-units' stays in sync.
+                        ;; Width > 1 only: we don't want single-syllable
+                        ;; Steinert entries polluting `multiword-units'.
+                        (steinert-hit
+                         (when (and (> len 1)
+                                    (not (or resources-vocab custom-vocab
+                                             comp-vocab compound proper-noun))
+                                    (fboundp 'tibetan-lookup-word-in-steinert))
+                           (ignore-errors
+                             (tibetan-lookup-word-in-steinert joined)))))
                    (when (or resources-vocab custom-vocab
-                             comp-vocab compound proper-noun)
+                             comp-vocab compound proper-noun steinert-hit)
                      ;; Build data structure for display.  Resources /
                      ;; Custom take precedence over the bundled sources.
                      (let ((data (cond
@@ -161,9 +174,11 @@ Returns list of (start-index . end-index . entry-data) tuples."
                                  (compound compound)
                                  (proper-noun proper-noun)
                                  (comp-vocab
-                                  ;; Convert simple string to alist format
                                   `((english . ,comp-vocab)
-                                    (category . "vocabulary"))))))
+                                    (category . "vocabulary")))
+                                 (steinert-hit
+                                  `((english . ,steinert-hit)
+                                    (category . "steinert"))))))
                        (push (list i (+ i len) joined data) matches))
                      (setq found t)
                      (setq i (+ i len)))))
