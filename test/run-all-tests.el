@@ -94,5 +94,8 @@
 ;; Source-aware Claude prompt (reads #+TIBETAN_CLAUDE_CONTEXT: and friends)
 (condition-case nil (require 'tibetan-analysis-claude-prompt-test) (error nil))
 
+;; Inline segment → Org heading migration
+(condition-case nil (require 'tibetan-segment-migrate-test) (error nil))
+
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here
