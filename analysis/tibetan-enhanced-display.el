@@ -12,7 +12,190 @@
 (require 'tibetan-enhanced-parser)
 (require 'tibetan-wylie)
 (require 'tibetan-verb-classifier nil t)  ; Soft load - main loading via tibetan-cat.el
+(require 'tibetan-clause-segmenter nil t) ; Soft load - shared case-detection helpers
 (require 'tibetan-mitra-translation nil t)  ; Optional: Gemma-2-Mitra-E integration
+
+(declare-function tibetan-get-dharmamitra-translation "tibetan-classroom" (tibetan-text))
+
+;; ============================================================================
+;; VERB DETECTION — ROUND 1 (broader detection for compound/modal/report chains)
+;; ============================================================================
+;;
+;; The previous extractor looked verbs up in the Hill 2010 database only,
+;; which missed many classical verbs (ཁྲོས, བྱུང, ཕྲོགས, དགོས, ཟེར…) and
+;; couldn't see through nominalization / converb suffixes (པས ཏེ པར བ ལ).
+;; It also dropped verbs that were the head of a light-verb multiword unit
+;; (ཆུང་མ་བྱེད).  The helpers below add:
+;;   • A closed "minor verb" set covering common non-Hill verbs.
+;;   • A modal set (དགོས ཆོག ཐུབ ཤེས ནུས སྲིད འོས) linked as auxiliary chain.
+;;   • A reporting set (ཟེར གསུང གསུངས བཤད སྨྲ སྨྲས ཞུ ཞུས བརྗོད) linked as
+;;     reported-speech chain.
+;;   • A safe negation stripper (only fires on ma/mi + tsheg + stem, so it
+;;     never mis-analyses monosyllables like མཐོང).
+;;   • Progressive strip-particles so verbs wearing nominalizers / converbs
+;;     (བྱུང་བ, ཁྲོས་ཏེ, ཉན་པས, ཉེན་པར…) still resolve to their lemma.
+
+(defvar tibetan-verb-detect--modal-set
+  '("དགོས" "ཆོག" "ཐུབ" "ཤེས" "ནུས" "སྲིད" "འོས")
+  "Modal / auxiliary verbs that typically follow a main verb.
+dgos=must, chog=may, thub=be able, shes=know-how, nus=be-able,
+srid=be-possible, 'os=be-appropriate.")
+
+(defvar tibetan-verb-detect--reporting-set
+  '("ཟེར" "གསུང" "གསུངས" "བཤད" "སྨྲ" "སྨྲས" "ཞུ" "ཞུས" "བརྗོད")
+  "Reporting verbs — introduce preceding clause as reported speech.")
+
+(defvar tibetan-verb-detect--minor-verb-set
+  '("ཁྲོ" "ཁྲོས" "བྱུང" "འབྱུང" "ཕྲོགས" "འཕྲོག"
+    "ལེན" "བླངས" "བཞག" "འཇོག"
+    "བཅད" "གཅོད" "ཤོར" "ཕུད"
+    "ལྟ" "བལྟ" "སྐྱེ" "སྐྱེས" "ཤི" "འཆི"
+    "གཏོང" "བཏང" "སྦྱིན" "བསྐུལ"
+    "ཁས་ལེན" "ཞུགས" "འཇུག" "སླེབ" "ཕམ"
+    "སྐྱིད" "དགའ" "སྡུག" "ཉམས"
+    "ཉལ" "བསད" "གསོད" "ལྟུང" "འབབ"
+    "ཕྱིན" "ཚོགས" "བཀུར"
+    ;; biographical narrative verbs (born, died, arose, attained…)
+    "བལྟམས" "སྟོན" "བཙས" "གྲུབ" "འགྲུབ"
+    "ཐོབ" "འཐོབ" "རྙེད" "བཞུགས" "བཞེངས"
+    "འབྱོན" "བྱོན" "གཤེགས" "གཤེགས་སོ"
+    "གནང" "མཛད")
+  "Classical verbs not present in the Hill 2010 DB but worth detecting.
+Entries produced from this set lack full case-frame data; they are
+rendered as minimal verb entries so Sentence Structure still shows them.")
+
+(defun tibetan-verb-detect--minimal-entry (word &optional meaning)
+  "Minimal verb-entry alist for WORD when the Hill DB has no full record.
+Compatible with the `alist-get' consumers used throughout the analyzer."
+  `((lemma . ,word)
+    (meaning . ,(or meaning ""))
+    (present_stem . ,word)
+    (past_stem . nil)
+    (future_stem . nil)
+    (imperative_stem . nil)
+    (transitivity . "?")
+    (volitionality . "?")
+    (case_frame . "?")
+    (indigenous_class . "?")
+    (minimal . t)))
+
+(defun tibetan-verb-detect--vocab-says-verb-p (word)
+  "Return the gloss string if `tibetan-vocab-lookup-detailed' for WORD
+looks like a verb (primary gloss starts with `to ', `pf.', `pres.',
+`fut.', `imp.', or contains the word `verb')."
+  (when (and word (fboundp 'tibetan-vocab-lookup-detailed))
+    (let* ((entry (ignore-errors (tibetan-vocab-lookup-detailed word)))
+           (text (and entry (or (plist-get entry :primary)
+                                (plist-get entry :detailed)))))
+      (when (and text (stringp text))
+        (let ((case-fold-search t))
+          (when (or (string-match-p "\\`[ \t\n]*to[ \t]" text)
+                    (string-match-p "\\`[ \t\n]*\\(pf\\|pres\\|fut\\|ft\\|imp\\)\\."
+                                    text)
+                    (string-match-p "\\`[ \t\n]*verb:" text)
+                    (string-match-p "\\b[Vv]erb\\b" text)
+                    ;; Passive / resultative English glosses common in
+                    ;; Tibetan dictionaries: "be born", "be full",
+                    ;; "become X", "is/was V-ed".  Require a second word
+                    ;; after `be'/`become' so bare "be" adjectives like
+                    ;; "be good" still don't trip (conservative: also
+                    ;; require the second word to start lowercase, which
+                    ;; filters proper-noun glosses).
+                    (string-match-p
+                     "\\`[ \t\n]*be\\(come\\)?[ \t]+[a-z]" text))
+            text))))))
+
+(defconst tibetan-verb-detect--nominalizer-set
+  '("པ" "བ" "པོ" "བོ" "མ" "མོ"
+    "པའི" "བའི" "པོའི" "བོའི"
+    "པར" "བར" "པས" "བས" "པའོ" "བའོ")
+  "Words that are nominalisers or noun-forming enclitic particles only —
+never standalone verbs.  `tibetan-verb-detect--lookup' returns nil for
+these even if a vocabulary dictionary entry happens to carry verbal
+glosses (P1: seg-4 regression; see test file).")
+
+(defun tibetan-verb-detect--lookup (candidate)
+  "Try to resolve CANDIDATE to a verb entry.
+Search order:
+ 0. Reject if CANDIDATE is a bare nominaliser/enclitic particle.
+ 1. Hill 2010 DB (full record via `tibetan-verb-lookup').
+ 2. Closed minor-verb / modal / reporting set (minimal record).
+ 3. Vocabulary dictionary — only when the gloss looks verbal."
+  (when (and candidate (stringp candidate) (not (string-empty-p candidate)))
+    (let ((c (replace-regexp-in-string "[།༎༔ \t]+\\'" "" (string-trim candidate))))
+      (and
+       (not (member c tibetan-verb-detect--nominalizer-set))
+       (or
+       (and (fboundp 'tibetan-verb-lookup) (tibetan-verb-lookup c))
+       (and (member c (append tibetan-verb-detect--minor-verb-set
+                              tibetan-verb-detect--modal-set
+                              tibetan-verb-detect--reporting-set))
+            ;; Try to pull a gloss out of the vocab DB so the Sentence
+            ;; Structure line reads `- ཕྲོགས 'to take away' ...' rather
+            ;; than a lemma with no meaning.  Since we already know this
+            ;; word is a verb (it's in our closed set), any vocab primary
+            ;; field is good enough — no verbal-marker filter needed.
+            (let* ((entry (and (fboundp 'tibetan-vocab-lookup-detailed)
+                               (ignore-errors
+                                 (tibetan-vocab-lookup-detailed c))))
+                   (gloss (and entry
+                               (or (plist-get entry :primary)
+                                   (plist-get entry :detailed)))))
+              (tibetan-verb-detect--minimal-entry c gloss)))
+       (let ((gloss (tibetan-verb-detect--vocab-says-verb-p c)))
+         (and gloss (tibetan-verb-detect--minimal-entry c gloss))))))))
+
+(defun tibetan-verb-detect--strip-negation (word)
+  "If WORD starts with `མ་' or `མི་' followed by at least one more syllable,
+return (BARE . t).  Otherwise (WORD . nil).  The tsheg boundary is
+mandatory so monosyllabic verbs (མཐོང, མི) are never mis-analysed."
+  (cond
+   ((and word (stringp word)
+         (string-match "\\`\\(?:མ\\|མི\\)་\\(.+\\)" word))
+    (cons (match-string 1 word) t))
+   (t (cons word nil))))
+
+(defun tibetan-verb-detect--progressive (word)
+  "Try to locate a verb hit for WORD, stripping negation and particles.
+Returns a plist (:entry E :source-form WORD :negated BOOL :suffix-type S)
+or nil.  The progressive candidate list is:
+  (stripped word, strip-particles once, strip-particles twice, head syllable)."
+  (when (and word (stringp word) (not (string-empty-p word)))
+    (let* ((orig word)
+           (neg (tibetan-verb-detect--strip-negation word))
+           (start (car neg))
+           (negated (cdr neg))
+           (candidates (list start)))
+      (when (fboundp 'tibetan-strip-particles)
+        (let* ((s1 (ignore-errors (tibetan-strip-particles start)))
+               (s2 (and s1 (not (string= s1 start))
+                        (not (string-empty-p s1))
+                        (ignore-errors (tibetan-strip-particles s1)))))
+          (when (and s1 (not (string= s1 start)) (not (string-empty-p s1)))
+            (setq candidates (append candidates (list s1))))
+          (when (and s2 (not (string= s2 s1)) (not (string-empty-p s2)))
+            (setq candidates (append candidates (list s2))))))
+      ;; Head syllable as last-ditch candidate (for compounds the strip
+      ;; function can't reduce, like `ཆུང་མ་བྱེད').  We DON'T use the head
+      ;; if a longer candidate already hit, because the head might be a
+      ;; non-verb prefix (e.g. ཁས in ཁས་ལེན).
+      (let ((head (car (split-string start "་" t))))
+        (when (and head (not (member head candidates)))
+          (setq candidates (append candidates (list head)))))
+      (let (entry hit-cand)
+        (catch 'found
+          (dolist (c candidates)
+            (let ((e (tibetan-verb-detect--lookup c)))
+              (when e
+                (setq entry e hit-cand c)
+                (throw 'found t)))))
+        (when entry
+          (let ((suffix (when (fboundp 'tibetan-analysis--detect-verb-suffix)
+                          (tibetan-analysis--detect-verb-suffix orig hit-cand))))
+            (list :entry entry
+                  :source-form orig
+                  :negated negated
+                  :suffix-type suffix)))))))
 
 ;; ============================================================================
 ;; HELPER FUNCTIONS (must be defined before main display function)
@@ -30,11 +213,12 @@ Returns nil if no zero markers found or if inputs are invalid."
                                   verbs)))
       ;; Analyze each unmarked multiword unit
       (dolist (unit multiword-units)
-        (let* ((start-idx (nth 0 unit))
-               (form (nth 2 unit))
-               (data (nth 3 unit))
-               (english (alist-get 'english data))
-               (syllables (split-string form "་" t))
+        (when (and unit (listp unit) (>= (length unit) 4))
+          (let* ((start-idx (nth 0 unit))
+                 (form (nth 2 unit))
+                 (data (nth 3 unit))
+                 (english (alist-get 'english data))
+                 (syllables (split-string form "་" t))
                (last-syl (car (last syllables)))
                (has-marker (or (string-match "\\(ས\\|གིས\\|ཀྱིས\\|གྱིས\\)$" last-syl)
                                (string= last-syl "ན")
@@ -69,7 +253,11 @@ Returns nil if no zero markers found or if inputs are invalid."
                           (gloss . ,(format "\"%s\" — agent/experiencer" (or english form)))
                           (note . nil))
                         zero-markers))
-                 ((and is-immediately-preverbal trans (string-match-p "Transitive" trans) frame (string-match-p "Erg" frame))
+                 ((and is-immediately-preverbal trans
+                       ;; Match "Transitive" but NOT "Intransitive".
+                       (not (string-match-p "[Ii]ntransitive" trans))
+                       (string-match-p "[Tt]ransitive" trans)
+                       frame (string-match-p "Erg" frame))
                   (push `((form . ,form)
                           (function . "ABSOLUTIVE OBJECT")
                           (position . ,start-idx)
@@ -99,14 +287,19 @@ Returns nil if no zero markers found or if inputs are invalid."
                             (english . ,english)
                             (gloss . nil)
                             (note . "Zero-marked NP"))
-                          zero-markers)))))))))
+                          zero-markers))))))))))
       ;; Return the collected markers
       (nreverse zero-markers))))
 
-(defun tibetan-analyze-arguments (verb multiword-units words)
+(defun tibetan-analyze-arguments (verb multiword-units words &optional all-verbs)
   "Analyze argument structure for VERB given MULTIWORD-UNITS and WORDS.
-Returns list of argument alists with keys: role, marker, form, english, function."
-  (condition-case err
+Returns list of argument alists with keys: role, marker, form,
+english, function.
+When ALL-VERBS is given, arguments are restricted to the clause ending
+at VERB — i.e. only units positioned AFTER the previous verb in the
+sentence and BEFORE (or at) this verb.  Without ALL-VERBS, falls back
+to the legacy behaviour of collecting every unit before VERB."
+  (condition-case _err
   (let* ((frame (or (alist-get 'case_frame verb) ""))
          (lemma (alist-get 'lemma verb))
          (arguments '()))
@@ -114,61 +307,110 @@ Returns list of argument alists with keys: role, marker, form, english, function
     ;; Only analyze if we have a frame
     (when (and frame (not (string-empty-p frame)) (not (string= frame "?")))
 
-      ;; Find verb position in text (approximate by finding lemma in words)
-      (let ((verb-pos (cl-position-if (lambda (w) (string= w lemma)) words)))
+      ;; Find verb position in text.  Prefer the `source-pos' recorded by
+      ;; the Round-1 extractor (authoritative — handles duplicate syllables
+      ;; correctly); fall back to the first-match heuristic for callers
+      ;; that still hand us plain verb records.
+      (let* ((verb-pos (or (alist-get 'source-pos verb)
+                           (cl-position-if (lambda (w) (string= w lemma)) words)))
+             ;; Determine the previous verb's position so we only pick up
+             ;; arguments belonging to *this* clause rather than the whole
+             ;; preceding sentence.  Walk ALL-VERBS in order and remember
+             ;; the highest lemma-position strictly less than VERB-POS.
+             (prev-verb-pos
+              (when (and verb-pos all-verbs)
+                (let ((best -1))
+                  (dolist (v all-verbs)
+                    (when (and v (listp v) (consp (car v)))
+                      (let* ((other-lemma (alist-get 'lemma v))
+                             (other-pos (alist-get 'source-pos v))
+                             (p (or other-pos
+                                    (and other-lemma
+                                         (not (string= other-lemma lemma))
+                                         (cl-position-if
+                                          (lambda (w)
+                                            (string= w other-lemma))
+                                          words)))))
+                        (when (and p (not (equal p verb-pos))
+                                   (< p verb-pos) (> p best))
+                          (setq best p)))))
+                  (and (>= best 0) best)))))
 
-        ;; Analyze each multiword unit BEFORE the verb
+        ;; Analyze each multiword unit BEFORE the verb (and AFTER any
+        ;; previous verb that terminates an earlier clause).
         (dolist (unit multiword-units)
           (let* ((start-idx (nth 0 unit))
-                 (end-idx (nth 1 unit))
+                 (_end-idx (nth 1 unit))
                  (form (nth 2 unit))
                  (data (nth 3 unit))
                  (english (alist-get 'english data))
-                 ;; Check if unit is before verb (or no verb position found)
-                 (before-verb (or (not verb-pos) (< start-idx verb-pos))))
+                 (before-verb (or (not verb-pos) (< start-idx verb-pos)))
+                 (after-prev (or (not prev-verb-pos)
+                                 (> start-idx prev-verb-pos))))
 
-            (when before-verb
-              ;; Check for case markers
+            (when (and before-verb after-prev)
+              ;; Check for case markers — route through the segmenter's
+              ;; case helpers so single-char `ས/ལ/ར/ན' don't get
+              ;; mistaken for particles when they're the syllable's
+              ;; final consonant (e.g. རྒྱལ "king" was being mis-tagged
+              ;; as DATIVE because of its trailing ལ).  This is the same
+              ;; standalone-only rule the Round-2 NP chunker uses; both
+              ;; renderers now share one source of truth.
               (let* ((syllables (split-string form "་" t))
                      (last-syl (car (last syllables)))
+                     (kase (and (fboundp 'tibetan-clause-seg--case-of)
+                                (tibetan-clause-seg--case-of last-syl)))
+                     (particle (and kase
+                                    (fboundp 'tibetan-clause-seg--case-particle)
+                                    (tibetan-clause-seg--case-particle
+                                     last-syl)))
                      (marker nil)
                      (role nil)
                      (function nil)
                      (is-topic nil))
 
                 (cond
-                 ;; Check for ergative
-                 ((string-match "\\(ས\\|གིས\\|ཀྱིས\\|གྱིས\\)$" last-syl)
-                  (setq marker (match-string 1 last-syl))
+                 ;; Ergative / Instrumental
+                 ((eq kase 'ERG)
+                  (setq marker particle)
                   (setq role "ERGATIVE")
                   (setq function "SUBJECT (who does)"))
 
-                 ;; Check for locative/oblique
-                 ((or (string= last-syl "ན")
-                      (string-match "ན$" last-syl))
-                  (setq marker "ན")
+                 ;; Locative
+                 ((eq kase 'LOC)
+                  (setq marker particle)
                   (setq role "OBLIQUE")
                   (setq function "LOCATION (where)"))
 
-                 ;; Check for dative
-                 ((or (string= last-syl "ལ")
-                      (string-match "ལ$" last-syl))
-                  (setq marker "ལ")
+                 ;; Dative
+                 ((eq kase 'DAT)
+                  (setq marker particle)
                   (setq role "DATIVE")
                   (setq function "RECIPIENT/GOAL"))
 
-                 ;; Check for allative
-                 ((member last-syl '("ར" "སུ" "ཏུ" "དུ"))
-                  ;; Standalone allative particle - use directly
-                  (setq marker last-syl)
+                 ;; Terminative / Allative (`ར' standalone, plus `སུ/ཏུ/དུ/རུ')
+                 ((eq kase 'TERM)
+                  (setq marker particle)
                   (setq role "ALLATIVE")
                   (setq function "DIRECTION (toward)"))
 
-                 ;; Check for allative suffix on longer word
-                 ((string-match "\\(ར\\|སུ\\|ཏུ\\|དུ\\)$" last-syl)
-                  (setq marker (match-string 1 last-syl))
-                  (setq role "ALLATIVE")
-                  (setq function "DIRECTION (toward)"))
+                 ;; Ablative / Elative (`ནས', `ལས')
+                 ((eq kase 'ABL)
+                  (setq marker particle)
+                  (setq role "ABLATIVE")
+                  (setq function "SOURCE (from/after)"))
+
+                 ;; Genitive
+                 ((eq kase 'GEN)
+                  (setq marker particle)
+                  (setq role "GENITIVE")
+                  (setq function "POSSESSOR/MODIFIER"))
+
+                 ;; Comitative
+                 ((eq kase 'COM)
+                  (setq marker particle)
+                  (setq role "COMITATIVE")
+                  (setq function "ACCOMPANIMENT"))
 
                  ;; No marker = absolutive candidate (or topic)
                  (t
@@ -213,6 +455,7 @@ Returns list of argument alists with keys: role, marker, form, english, function
 ;; ENHANCED SEGMENT ANALYSIS DISPLAY
 ;; ============================================================================
 
+;;;###autoload
 (defun tibetan-segment-info-enhanced (&optional silent)
   "Show enhanced segment analysis.
 Uses compound/proper noun recognition and accurate particle detection.
@@ -231,7 +474,7 @@ If SILENT is non-nil, return nil instead of error when not in segment."
              ;; Enhanced parsing
              (parsed (tibetan-parse-enhanced tibetan-text))
              (words (alist-get 'words parsed))
-             (analysis (alist-get 'analysis parsed))
+             (_analysis (alist-get 'analysis parsed))
              (multiword-units (alist-get 'multiword-units parsed))
              ;; Wylie
              (wylie (condition-case err
@@ -532,7 +775,7 @@ If SILENT is non-nil, return nil instead of error when not in segment."
                           (gloss (alist-get 'gloss item))
                           (note (alist-get 'note item))
                           (verb (alist-get 'verb item))
-                          (english (alist-get 'english item)))
+                          (_english (alist-get 'english item)))
                       (insert (format "%s (Ø)\n" form))
                       (insert (format "FUNCTION: %s\n" function))
                       (when verb
@@ -554,7 +797,7 @@ If SILENT is non-nil, return nil instead of error when not in segment."
                        (frame (or (alist-get 'case_frame verb) "?"))
                        (meaning (alist-get 'meaning verb))
                        ;; Analyze argument structure (excludes topics)
-                       (arg-analysis (tibetan-analyze-arguments verb multiword-units words)))
+                       (arg-analysis (tibetan-analyze-arguments verb multiword-units words verbs)))
                   (when arg-analysis
                     (insert (format "%s [%s]" lemma frame))
                     (when meaning
@@ -746,50 +989,181 @@ Returns hash table for fast lookup."
     claimed))
 
 (defun tibetan-extract-verbs-compound-aware (tibetan-text words multiword-units)
-  "Extract and analyze verbs from TIBETAN-TEXT, excluding multi-word compound parts.
-WORDS is the syllable list, MULTIWORD-UNITS are recognized compounds.
-Checks both single syllables AND multi-syllable compound verbs."
+  "Extract verbs from TIBETAN-TEXT, compound-, particle-, and chain-aware.
+
+Returns a list of verb-entry alists.  Each entry carries the usual
+Hill 2010 fields (lemma, meaning, stems, transitivity, volitionality,
+case_frame, indigenous_class) plus Round-1/Round-3 annotations:
+  source-form    as-appears-in-text
+  source-pos     first syllable index in WORDS (nil if unknown)
+  negated        t when ma-/mi- negation applies (stripped from within
+                 the form, preceding separate syllable, or intrinsic for
+                 `མེད' / `མིན')
+  suffix-type    morphological suffix description, or nil
+  minimal        t when only a closed-set / vocab fallback gave the hit
+  is-modal       t for auxiliary verbs (dgos, chog, thub…)
+  is-reporter    t for reporting verbs (zer, gsungs…)
+  modal-of       lemma of a following modal, when this verb chains into one
+  reports-p      lemma of a following reporting verb, when chained
+  conditional    t when the verb is negated AND a `ན' conditional follows
+                 within 1–2 positions (pattern `མ་X་ན')
+
+Strategy:
+ 1. Scan 3- and 2-syllable windows for multi-syllable Hill DB entries.
+ 2. For each multiword unit try progressive verb detection on the whole
+    unit; if that fails, try its head-with-strip, then each constituent.
+ 3. For each unclaimed single syllable, try progressive detection.
+ 4. Link modal / reporting chains based on adjacent syllable positions.
+ 5. Tag conditional negations (`མ་X་ན')."
   (when (and tibetan-text
              (fboundp 'tibetan-verb-lookup)
              (not (string-empty-p tibetan-text)))
-    (let ((verbs '())
-          (claimed-indices (tibetan-get-claimed-indices multiword-units)))
+    (let* ((n (length words))
+           (verbs '())
+           (seen (make-hash-table :test 'equal)))
+      (cl-labels
+          ((prev-word-negates-p (idx)
+             ;; t when words[idx-1] is a standalone `མ' or `མི' negation.
+             ;; Segmentation may split `མ་ཉན' into two words, so step-wise
+             ;; verb detection alone misses the negation — check siblings.
+             (and (numberp idx) (> idx 0)
+                  (let ((prev (string-trim (nth (1- idx) words))))
+                    (or (string= prev "མ") (string= prev "མི")))))
+           (intrinsic-neg-p (lemma)
+             ;; `མེད' and `མིན' are inherently negated copulas; nothing
+             ;; needs to precede them for the clause to be negated.
+             (and lemma (or (string= lemma "མེད") (string= lemma "མིན"))))
+           (record (entry source-form source-pos negated suffix)
+             (let ((key (format "%s@%s" (alist-get 'lemma entry)
+                                (or source-pos "-"))))
+               (unless (gethash key seen)
+                 (puthash key t seen)
+                 (let* ((lemma (alist-get 'lemma entry))
+                        (eff-negated (or negated
+                                         (and (numberp source-pos)
+                                              (prev-word-negates-p source-pos))
+                                         (intrinsic-neg-p lemma)))
+                        (is-modal (and lemma (member lemma
+                                               tibetan-verb-detect--modal-set)))
+                        (is-reporter (and lemma
+                                          (member lemma
+                                             tibetan-verb-detect--reporting-set)))
+                        (enriched
+                         (append entry
+                                 `((source-form . ,source-form)
+                                   (source-pos . ,source-pos)
+                                   (negated . ,eff-negated)
+                                   (suffix-type . ,suffix)
+                                   (is-modal . ,(and is-modal t))
+                                   (is-reporter . ,(and is-reporter t))))))
+                   (push enriched verbs))))))
 
-      ;; First, check for multi-syllable compound verbs (e.g., བཀའ་སྩལ)
-      (cl-loop for idx from 0 below (1- (length words))
-               do (let* ((two-syl (string-join (cl-subseq words idx (+ idx 2)) "་"))
-                        (verb-entry (tibetan-verb-lookup two-syl)))
-                    (when verb-entry
-                      (let ((lemma (alist-get 'lemma verb-entry)))
-                        (unless (cl-find lemma verbs
-                                        :key (lambda (v) (alist-get 'lemma v))
-                                        :test 'string=)
-                          (push verb-entry verbs))))))
+        ;; 1. Multi-syllable Hill-DB compound verbs.
+        (dolist (width '(3 2))
+          (cl-loop
+           for idx from 0 to (max -1 (- n width))
+           do (let* ((chunk (string-join
+                             (cl-subseq words idx (+ idx width)) "་"))
+                     (entry (and (fboundp 'tibetan-verb-lookup)
+                                 (tibetan-verb-lookup chunk))))
+                (when entry (record entry chunk idx nil nil)))))
 
-      ;; Then check each single syllable NOT in a TRUE multi-word compound
-      (cl-loop for idx from 0 below (length words)
-               do (let* ((syl (nth idx words))
-                        (syl-clean (string-trim syl))
-                        ;; Check if this syllable is part of a multi-word unit
-                        (in-multiword (and (gethash idx claimed-indices)
-                                          (cl-some (lambda (unit)
-                                                    (and (>= idx (nth 0 unit))
-                                                         (< idx (nth 1 unit))
-                                                         ;; Only skip if TRUE compound (length > 1)
-                                                         (> (- (nth 1 unit) (nth 0 unit)) 1)))
-                                                  multiword-units))))
-                   ;; Only check for verbs if NOT in a multi-word compound
-                   (unless in-multiword
-                     (when (not (string-empty-p syl-clean))
-                       (let ((verb-entry (tibetan-verb-lookup syl-clean)))
-                         (when verb-entry
-                           ;; Avoid duplicates by lemma
-                           (let ((lemma (alist-get 'lemma verb-entry)))
-                             (unless (cl-find lemma verbs
-                                            :key (lambda (v) (alist-get 'lemma v))
-                                            :test 'string=)
-                               (push verb-entry verbs)))))))))
-      (nreverse verbs))))
+        ;; 2. Multiword units.
+        (dolist (unit multiword-units)
+          (when (and unit (listp unit) (>= (length unit) 3))
+            (let* ((start (nth 0 unit))
+                   (form  (nth 2 unit))
+                   (hit   (tibetan-verb-detect--progressive form)))
+              (if hit
+                  (record (plist-get hit :entry)
+                          (plist-get hit :source-form)
+                          start
+                          (plist-get hit :negated)
+                          (plist-get hit :suffix-type))
+                ;; Fallback: try each constituent syllable so the verb
+                ;; head of a light-verb multiword (ཆུང་མ་བྱེད) is seen.
+                (let ((syls (split-string form "་" t))
+                      (i 0))
+                  (dolist (s syls)
+                    (let ((h (tibetan-verb-detect--progressive s)))
+                      (when h
+                        (record (plist-get h :entry)
+                                (plist-get h :source-form)
+                                (+ start i)
+                                (plist-get h :negated)
+                                (plist-get h :suffix-type))))
+                    (cl-incf i)))))))
+
+        ;; 3. Single syllables not inside any multiword unit.
+        ;; Cross-word negation is handled centrally inside `record' via
+        ;; `prev-word-negates-p', so all three detection paths benefit.
+        (let ((claimed (tibetan-get-claimed-indices multiword-units)))
+          (cl-loop for idx from 0 below n
+                   do (unless (gethash idx claimed)
+                        (let* ((syl (string-trim (nth idx words)))
+                               (h (tibetan-verb-detect--progressive syl)))
+                          (when h
+                            (record (plist-get h :entry)
+                                    (plist-get h :source-form)
+                                    idx
+                                    (plist-get h :negated)
+                                    (plist-get h :suffix-type)))))))
+
+        ;; 4. Link modal / reporting chains (by adjacent source-pos).
+        (setq verbs (nreverse verbs))
+        (let ((lemma-at-pos (make-hash-table :test 'eql)))
+          (dolist (v verbs)
+            (let ((p (alist-get 'source-pos v)))
+              (when p (puthash p (alist-get 'lemma v) lemma-at-pos))))
+          (setq verbs
+                (mapcar
+                 (lambda (v)
+                   (let* ((pos (alist-get 'source-pos v))
+                          (candidates
+                           (and pos
+                                (list (gethash (1+ pos) lemma-at-pos)
+                                      (gethash (+ 2 pos) lemma-at-pos)
+                                      (gethash (+ 3 pos) lemma-at-pos))))
+                          (modal (cl-find-if
+                                  (lambda (l)
+                                    (and l (member
+                                            l tibetan-verb-detect--modal-set)))
+                                  candidates))
+                          (reporter (cl-find-if
+                                     (lambda (l)
+                                       (and l (member
+                                               l tibetan-verb-detect--reporting-set)))
+                                     candidates)))
+                     (append v
+                             (and modal `((modal-of . ,modal)))
+                             (and reporter `((reports-p . ,reporter))))))
+                 verbs)))
+
+        ;; 5. Conditional negation (`མ་X་ན' pattern).
+        ;; When a negated verb is followed by the conditional `ན' within
+        ;; 1–2 syllables, tag it `(conditional . t)'. We cap the look-ahead
+        ;; at 2 so an intervening suffix particle (e.g. `པར') is tolerated
+        ;; but longer gaps (which usually mean a new clause) are not.
+        (setq verbs
+              (mapcar
+               (lambda (v)
+                 (let* ((pos (alist-get 'source-pos v))
+                        (negated (alist-get 'negated v))
+                        (followed-by-na
+                         (and (numberp pos) negated
+                              (cl-some
+                               (lambda (k)
+                                 (let ((i (+ pos k)))
+                                   (and (< i n)
+                                        (let ((w (string-trim (nth i words))))
+                                          (or (string= w "ན")
+                                              (string= w "ན་"))))))
+                               '(1 2)))))
+                   (if followed-by-na
+                       (append v '((conditional . t)))
+                     v)))
+               verbs))
+        verbs))))
 
 (provide 'tibetan-enhanced-display)
 ;;; tibetan-enhanced-display.el ends here
