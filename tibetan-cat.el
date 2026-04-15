@@ -104,6 +104,7 @@
 ;; Enhanced parsing (Phase 1 improvements)
 (require 'tibetan-enhanced-parser)      ; Multi-word units, accurate particle detection
 (require 'tibetan-enhanced-display)     ; Enhanced analysis display
+(require 'tibetan-clause-segmenter)     ; Round-2: clauses + NPs + argument structure
 
 ;; AI Translation (optional - soft load)
 (require 'tibetan-mitra-translation nil t)  ; Gemma-2-Mitra-E integration (Ollama/HuggingFace)
@@ -129,11 +130,15 @@
 (require 'tibetan-structure-reorg)     ; Reorganize analysis files (C-c u O / C-c u U)
 
 ;; ============================================================================
-;; LOAD DOCUMENT DISPLAY MODULES
+;; LOAD DOCUMENT DISPLAY & PREPARATION MODULES
 ;; ============================================================================
 
 (require 'tibetan-doc-display)         ; Display settings for prepared documents
-(require 'tibetan-sentence-structure nil t) ; Sentence structure tools (soft-load)
+(require 'tibetan-doc-format nil t)    ; Document formatting (segmentation at shad)
+(condition-case err
+    (require 'tibetan-doc-prep)        ; Document preparation wizard (OCR, validate, format)
+  (error (message "⚠ tibetan-doc-prep failed: %s" (error-message-string err))))
+(require 'tibetan-sentence-structure)      ; Sentence structure tools
 
 ;; ============================================================================
 ;; LOAD KEYBINDINGS
@@ -151,6 +156,7 @@
 ;; INITIALIZATION
 ;; ============================================================================
 
+;;;###autoload
 (defun tibetan-cat-setup ()
   "Setup Tibetan CAT system.
 Loads glossaries and prepares the system for use."
@@ -224,6 +230,7 @@ Loads glossaries and prepares the system for use."
 (defconst tibetan-cat-version "2.1.0"
   "Version of Tibetan CAT system.")
 
+;;;###autoload
 (defun tibetan-cat-version ()
   "Display Tibetan CAT version and feature summary."
   (interactive)

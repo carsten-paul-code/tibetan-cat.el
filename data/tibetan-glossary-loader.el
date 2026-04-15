@@ -73,6 +73,7 @@ Lines starting with # are comments."
 ;; INDIVIDUAL GLOSSARY LOADERS
 ;; ============================================================================
 
+;;;###autoload
 (defun load-hopkins-glossary ()
   "Load Hopkins glossary from bundled data."
   (interactive)
@@ -80,6 +81,7 @@ Lines starting with # are comments."
     (let ((n (tibetan-glossary--load-tsv file)))
       (when n (message "  Loaded Hopkins glossary: %d entries" n)))))
 
+;;;###autoload
 (defun load-unified-glossary ()
   "Load unified Tibetan glossary from bundled data."
   (interactive)
@@ -87,6 +89,7 @@ Lines starting with # are comments."
     (let ((n (tibetan-glossary--load-tsv file t)))
       (when n (message "  Loaded unified glossary: %d new entries" n)))))
 
+;;;###autoload
 (defun load-madhyamaka-glossary ()
   "Load specialized Madhyamaka glossary from bundled data."
   (interactive)
@@ -94,6 +97,7 @@ Lines starting with # are comments."
     (let ((n (tibetan-glossary--load-tsv file t)))
       (when n (message "  Loaded Madhyamaka glossary: %d new entries" n)))))
 
+;;;###autoload
 (defun load-common-vocabulary ()
   "Load common vocabulary from bundled data."
   (interactive)
@@ -101,6 +105,7 @@ Lines starting with # are comments."
     (let ((n (tibetan-glossary--load-tsv file t)))
       (when n (message "  Loaded common vocabulary: %d new entries" n)))))
 
+;;;###autoload
 (defun load-tibetan-english-glossary ()
   "Load the large tibetan-english glossary (TSV format)."
   (interactive)
@@ -112,6 +117,7 @@ Lines starting with # are comments."
 ;; RANGJUNG YESHE (LAZY LOAD)
 ;; ============================================================================
 
+;;;###autoload
 (defun tibetan-load-rangjung-yeshe ()
   "Load Rangjung Yeshe dictionary (~162K entries).
 Called automatically on first vocabulary lookup."
@@ -146,22 +152,37 @@ Called automatically on first vocabulary lookup."
 ;; MASTER LOADER
 ;; ============================================================================
 
-(defun load-all-glossaries ()
+(defvar tibetan-glossaries-loaded nil
+  "Non-nil after `load-all-glossaries' has populated
+`tibetan-comprehensive-vocabulary'.  Guards against repeated reloads
+when callers (e.g. `tibetan-analysis--ensure-vocabulary' invoked on
+every reanalysis) trigger the function defensively.  Set to nil and
+call `load-all-glossaries' again to force a fresh load.")
+
+;;;###autoload
+(defun load-all-glossaries (&optional force)
   "Load all available glossaries into the comprehensive vocabulary.
-Rangjung Yeshe is loaded separately on first use."
-  (interactive)
-  (clrhash tibetan-comprehensive-vocabulary)
-  (message "Loading glossaries...")
-  (load-hopkins-glossary)
-  (load-tibetan-english-glossary)
-  (load-unified-glossary)
-  (load-madhyamaka-glossary)
-  (load-common-vocabulary)
-  ;; Also load user's custom vocabulary if it exists
-  (when (fboundp 'tibetan-load-custom-vocabularies)
-    (tibetan-load-custom-vocabularies))
-  (message "Loaded %d total vocabulary entries from all glossaries"
-           (hash-table-count tibetan-comprehensive-vocabulary)))
+Rangjung Yeshe is loaded separately on first use.
+
+Idempotent: returns immediately if `tibetan-glossaries-loaded' is
+already non-nil.  Pass FORCE non-nil (interactively, with a prefix
+argument) to discard the existing hash and reload everything."
+  (interactive "P")
+  (when force (setq tibetan-glossaries-loaded nil))
+  (unless tibetan-glossaries-loaded
+    (clrhash tibetan-comprehensive-vocabulary)
+    (message "Loading glossaries...")
+    (load-hopkins-glossary)
+    (load-tibetan-english-glossary)
+    (load-unified-glossary)
+    (load-madhyamaka-glossary)
+    (load-common-vocabulary)
+    ;; Also load user's custom vocabulary if it exists
+    (when (fboundp 'tibetan-load-custom-vocabularies)
+      (tibetan-load-custom-vocabularies))
+    (setq tibetan-glossaries-loaded t)
+    (message "Loaded %d total vocabulary entries from all glossaries"
+             (hash-table-count tibetan-comprehensive-vocabulary))))
 
 ;; ============================================================================
 ;; LOOKUP FUNCTIONS
@@ -172,6 +193,7 @@ Rangjung Yeshe is loaded separately on first use."
   (or (gethash word tibetan-comprehensive-vocabulary)
       (format "[Not found: %s]" word)))
 
+;;;###autoload
 (defun add-to-tibetan-vocabulary (tibetan english)
   "Add TIBETAN term with ENGLISH translation to vocabulary."
   (interactive "sTibetan term: \nsEnglish translation: ")
