@@ -254,5 +254,53 @@ still come back as ERGATIVE so we don't regress the working path."
     (should bdag)
     (should (string= (alist-get 'role bdag) "ERGATIVE"))))
 
+;; ============================================================================
+;; MWU-aware verb extraction (seg-11 / seg-14 regressions)
+;; ============================================================================
+
+(ert-deftest tibetan-extract-verbs-skip-multisyl-window-overlapping-mwu ()
+  "A 2-/3-syllable Hill DB window that overlaps any parser-detected
+MWU is skipped — the MWU's own analysis (or the strategy-2 fallback)
+handles it.  Otherwise a noun compound like `ཀློག་སློབ' would emit a
+spurious `ཀློག་སློབ' verb compound entry."
+  (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
+  (let* ((words '("ཀློག" "སློབ" "པའི" "སློབ" "དཔོན"))
+         (mwu '((0 2 "ཀློག་སློབ" ((english . "instructor")))
+                (3 5 "སློབ་དཔོན" ((english . "master, teacher")))))
+         (verbs (tibetan-extract-verbs-compound-aware
+                 "ཀློག་སློབ་པའི་སློབ་དཔོན" words mwu))
+         (lemmas (mapcar (lambda (v) (alist-get 'lemma v)) verbs)))
+    ;; Neither MWU's metadata says `to …' / `verb' / `pf./pres.', so
+    ;; the strategy-2 fallback must NOT add the last syllable as a verb.
+    (should-not (member "སློབ" lemmas))
+    (should-not (member "ཀློག" lemmas))))
+
+(ert-deftest tibetan-extract-verbs-mwu-fallback-fires-for-verbal-meta ()
+  "When the MWU's `english' meta describes a verb, the strategy-2
+fallback DOES record the head verb (`ཆུང་མ་བྱེད' → `བྱེད').  This is
+the light-verb path the fallback was originally introduced for."
+  (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
+  (let* ((words '("ཆུང" "མ" "བྱེད"))
+         (mwu '((0 3 "ཆུང་མ་བྱེད" ((english . "to become the wife of")))))
+         (verbs (tibetan-extract-verbs-compound-aware
+                 "ཆུང་མ་བྱེད" words mwu))
+         (lemmas (mapcar (lambda (v) (alist-get 'lemma v)) verbs)))
+    (should (member "བྱེད" lemmas))))
+
+(ert-deftest tibetan-extract-verbs-mwu-suppresses-pseudo-negation ()
+  "When `མ' sits inside an MWU together with the verb that follows,
+it is part of the compound (e.g. `ཆུང་མ' = wife) and must NOT be
+treated as the negation prefix.  Pre-fix, `ཆུང་མ་བྱེད' was producing
+a spuriously-negated `བྱེད' entry."
+  (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
+  (let* ((words '("ཆུང" "མ" "བྱེད"))
+         (mwu '((0 3 "ཆུང་མ་བྱེད" ((english . "to become the wife of")))))
+         (verbs (tibetan-extract-verbs-compound-aware
+                 "ཆུང་མ་བྱེད" words mwu))
+         (byed (cl-find-if (lambda (v) (string= (alist-get 'lemma v) "བྱེད"))
+                           verbs)))
+    (should byed)
+    (should-not (alist-get 'negated byed))))
+
 (provide 'tibetan-enhanced-display-test)
 ;;; tibetan-enhanced-display-test.el ends here

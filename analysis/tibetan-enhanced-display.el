@@ -1022,13 +1022,33 @@ Strategy:
            (verbs '())
            (seen (make-hash-table :test 'equal)))
       (cl-labels
-          ((prev-word-negates-p (idx)
-             ;; t when words[idx-1] is a standalone `མ' or `མི' negation.
-             ;; Segmentation may split `མ་ཉན' into two words, so step-wise
-             ;; verb detection alone misses the negation — check siblings.
+          ((pos-inside-mwu-p (pos)
+             ;; t when POS sits inside a parser-detected MWU span (start
+             ;; inclusive, end exclusive — the loop in
+             ;; `tibetan-get-claimed-indices' uses the same convention).
+             (and (numberp pos)
+                  (cl-some (lambda (u)
+                             (and (>= pos (nth 0 u))
+                                  (< pos (nth 1 u))))
+                           multiword-units)))
+           (same-mwu-p (a b)
+             ;; t when positions A and B both fall inside the same MWU.
+             (and (numberp a) (numberp b)
+                  (cl-some (lambda (u)
+                             (and (>= (min a b) (nth 0 u))
+                                  (< (max a b) (nth 1 u))))
+                           multiword-units)))
+           (prev-word-negates-p (idx)
+             ;; t when words[idx-1] is a standalone `མ' or `མི' negation —
+             ;; UNLESS that `མ' is part of the same MWU as the verb (e.g.
+             ;; `ཆུང་མ་བྱེད', where `མ' is the noun-tail of `ཆུང་མ' "wife",
+             ;; not a free negator).  Segmentation may split `མ་ཉན' into
+             ;; two words, so step-wise verb detection alone misses the
+             ;; negation — check siblings, but respect MWU boundaries.
              (and (numberp idx) (> idx 0)
                   (let ((prev (string-trim (nth (1- idx) words))))
-                    (or (string= prev "མ") (string= prev "མི")))))
+                    (and (or (string= prev "མ") (string= prev "མི"))
+                         (not (same-mwu-p (1- idx) idx))))))
            (intrinsic-neg-p (lemma)
              ;; `མེད' and `མིན' are inherently negated copulas; nothing
              ;; needs to precede them for the clause to be negated.
@@ -1058,41 +1078,75 @@ Strategy:
                                    (is-reporter . ,(and is-reporter t))))))
                    (push enriched verbs))))))
 
-        ;; 1. Multi-syllable Hill-DB compound verbs.
+        ;; 1. Multi-syllable Hill-DB compound verbs.  Skip windows that
+        ;; overlap any parser-detected MWU — those are handled by step 2
+        ;; and treating them as candidate verbs here would produce
+        ;; spurious matches inside noun compounds (e.g. `ཀློག་སློབ' inside
+        ;; `ཀློག་སློབ་པའི་སློབ་དཔོན').
         (dolist (width '(3 2))
           (cl-loop
            for idx from 0 to (max -1 (- n width))
-           do (let* ((chunk (string-join
+           do (let* ((overlaps-mwu
+                      (cl-loop for k from idx below (+ idx width)
+                               thereis (pos-inside-mwu-p k)))
+                     (chunk (string-join
                              (cl-subseq words idx (+ idx width)) "་"))
-                     (entry (and (fboundp 'tibetan-verb-lookup)
+                     (entry (and (not overlaps-mwu)
+                                 (fboundp 'tibetan-verb-lookup)
                                  (tibetan-verb-lookup chunk))))
                 (when entry (record entry chunk idx nil nil)))))
 
-        ;; 2. Multiword units.
+        ;; 2. Multiword units.  Verb extraction from an MWU is gated on
+        ;; the MWU's metadata: an MWU is treated as verb-bearing only
+        ;; when its `english' meta describes a verb (starts with `to ',
+        ;; carries `pf./pres./fut./imp.', or contains `verb').  Without
+        ;; this guard, noun compounds like `ཀློག་སློབ' "instructor" or
+        ;; `སློབ་དཔོན' "master" would be tagged as verbs (because their
+        ;; head syllable, `སློབ', happens to match a Hill-DB verb stem
+        ;; `to train').  The exception path below covers MWUs that lack
+        ;; useful meta but match the Hill DB as a whole compound — those
+        ;; are unambiguously verbal regardless of meta wording.
         (dolist (unit multiword-units)
           (when (and unit (listp unit) (>= (length unit) 3))
             (let* ((start (nth 0 unit))
                    (form  (nth 2 unit))
-                   (hit   (tibetan-verb-detect--progressive form)))
-              (if hit
-                  (record (plist-get hit :entry)
-                          (plist-get hit :source-form)
-                          start
-                          (plist-get hit :negated)
-                          (plist-get hit :suffix-type))
-                ;; Fallback: try each constituent syllable so the verb
-                ;; head of a light-verb multiword (ཆུང་མ་བྱེད) is seen.
-                (let ((syls (split-string form "་" t))
-                      (i 0))
-                  (dolist (s syls)
-                    (let ((h (tibetan-verb-detect--progressive s)))
+                   ;; Single source of truth for "is this MWU verbal?"
+                   ;; — see `tibetan-clause-seg--mwu-verbal-p'.
+                   (verbal-meta-p
+                    (and (fboundp 'tibetan-clause-seg--mwu-verbal-p)
+                         (tibetan-clause-seg--mwu-verbal-p unit)))
+                   ;; Whole-MWU Hill DB hit is unambiguous — a verb
+                   ;; compound the dictionary itself recognises.
+                   (whole-hit (and (fboundp 'tibetan-verb-lookup)
+                                   (tibetan-verb-lookup form))))
+              (cond
+               (whole-hit
+                (record whole-hit form start nil nil))
+               (verbal-meta-p
+                (let ((hit (tibetan-verb-detect--progressive form)))
+                  (if hit
+                      (record (plist-get hit :entry)
+                              (plist-get hit :source-form)
+                              start
+                              (plist-get hit :negated)
+                              (plist-get hit :suffix-type))
+                    ;; Fallback: try only the LAST constituent (Tibetan
+                    ;; compounds are head-final — `ཆུང་མ་བྱེད' → `བྱེད').
+                    (let* ((syls (split-string form "་" t))
+                           (last-i (1- (length syls)))
+                           (last-syl (and (>= last-i 0) (nth last-i syls)))
+                           (h (and last-syl
+                                   (tibetan-verb-detect--progressive
+                                    last-syl))))
                       (when h
                         (record (plist-get h :entry)
                                 (plist-get h :source-form)
-                                (+ start i)
+                                (+ start last-i)
                                 (plist-get h :negated)
-                                (plist-get h :suffix-type))))
-                    (cl-incf i)))))))
+                                (plist-get h :suffix-type))))))))
+              ;; If neither path applied, the MWU is non-verbal and we
+              ;; emit no verb entry for it.
+              )))
 
         ;; 3. Single syllables not inside any multiword unit.
         ;; Cross-word negation is handled centrally inside `record' via

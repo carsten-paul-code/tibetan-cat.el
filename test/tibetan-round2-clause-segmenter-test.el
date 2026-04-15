@@ -351,5 +351,42 @@ preceding piece is still emitted as an NP head."
     (should (member "ཀོ་རོན" heads))
     (should-not (member "ཀོ་རོན་འཐོན" heads))))
 
+(ert-deftest tibetan-round2-np-glue-stops-at-mwu-boundary ()
+  "Content-word gluing stops when the next position starts an MWU,
+so the MWU branch can take over.  Without this, the chunker would
+absorb the MWU's first syllable into the preceding NP."
+  (let* ((words '("ཨ" "ཀྱང་ཕོ" "ཀོ་རོན" "སར"))
+         ;; Non-verbal MWU at positions 2-3 ("ཀོ་རོན་སར" place-name);
+         ;; chunker should treat it as one NP, not glue ཀྱང་ཕོ + ཀོ་རོན.
+         (mwu '((2 4 "ཀོ་རོན་སར" ((english . "to Ko ron sa")))))
+         (verbs '())
+         (clauses '(((start . 0) (end . 3) (type . main)
+                     (verb . ((lemma . "x") (source-pos . 99))))))
+         (nps (tibetan-np-chunk words clauses mwu))
+         (heads (mapcar (lambda (np) (alist-get 'head np)) nps)))
+    (should (member "ཀོ་རོན་སར" heads))
+    ;; ཨ and ཀྱང་ཕོ should remain separate from the MWU, not glued.
+    (should-not (cl-some (lambda (h) (string-match-p "ཀྱང་ཕོ་ཀོ་རོན" h))
+                         heads))))
+
+(ert-deftest tibetan-round2-np-skips-verbal-mwu ()
+  "A verb-bearing MWU (light-verb compound like `ཆུང་མ་བྱེད') IS the
+clause's predicate — it must not surface as an NP at all.  The
+verb extractor records the head verb separately."
+  (let* ((words '("ཨ་ཁུའི" "ཆུང" "མ" "བྱེད"))
+         ;; Verbal MWU: english starts with "to " → verbal-meta-p.
+         (mwu '((1 4 "ཆུང་མ་བྱེད" ((english . "to become wife of")))))
+         (verbs (list (tibetan-round2-test--verb "བྱེད" 3)))
+         (clauses (tibetan-clause-segment words verbs mwu))
+         (nps (tibetan-np-chunk words clauses mwu))
+         (heads (mapcar (lambda (np) (alist-get 'head np)) nps)))
+    ;; The verbal MWU is NOT emitted as an NP head.
+    (should-not (member "ཆུང་མ་བྱེད" heads))
+    (should-not (member "ཆུང་མ" heads))
+    (should-not (member "ཆུང" heads))
+    ;; The preceding NP is intact (not glued past the MWU start);
+    ;; case-suffix GEN `འི' is stripped so the head reads `ཨ་ཁུ'.
+    (should (member "ཨ་ཁུ" heads))))
+
 (provide 'tibetan-round2-clause-segmenter-test)
 ;;; tibetan-round2-clause-segmenter-test.el ends here

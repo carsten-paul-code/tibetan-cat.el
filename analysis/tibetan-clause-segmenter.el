@@ -320,6 +320,30 @@ consonants."
 (defun tibetan-clause-seg--verb-position-p (pos verbs)
   (cl-some (lambda (v) (equal pos (alist-get 'source-pos v))) verbs))
 
+(defun tibetan-clause-seg--mwu-verbal-p (mwu-entry)
+  "Return non-nil when an MWU entry's `english' meta describes a verb.
+
+MWU-ENTRY has the shape `(start end form meta)' where META is an
+alist (typically containing an `english' key).  An MWU is treated as
+verb-bearing when its English gloss starts with `to <lowercase>',
+`pf./pres./fut./ft./imp.', or contains the word `verb' / `Verb'.
+Single source of truth used by both the NP chunker (which then
+SKIPS the MWU entirely — verbal MWUs are predicates, not NPs) and
+the verb extractor (which then attempts head-verb detection).
+
+The lowercase-letter requirement after `to ' is intentional:
+directional / terminative glosses like `to Ko ron sa' or
+`to the temple' would otherwise spuriously match."
+  (let* ((meta (and mwu-entry (listp mwu-entry) (>= (length mwu-entry) 4)
+                    (nth 3 mwu-entry)))
+         (english (and (listp meta) (alist-get 'english meta))))
+    (and english (stringp english)
+         (let ((case-fold-search nil))
+           (or (string-match-p "\\`[ \t]*to[ \t]+[a-z]" english)
+               (string-match-p
+                "\\`[ \t]*\\(pf\\|pres\\|fut\\|ft\\|imp\\)\\." english)
+               (string-match-p "\\b[Vv]erb\\b" english))))))
+
 (defun tibetan-clause-seg--mwu-span-at (pos mwu)
   "Return (start . end) if POS starts an MWU in MWU, else nil.
 MWU entries are (start end form meta)."
@@ -364,34 +388,62 @@ MWU spans are treated as atomic heads.  Returns a list of NP alists
                     ;; skip).
                     ((eq cls 'case-standalone)
                      (cl-incf i))
-                    ;; An MWU span: absorb as a single head — but never
-                    ;; cross a verb position.  A user-supplied vocab MWU
-                    ;; like `ཡུལ་འཐོན' (homeland + go-out) would otherwise
-                    ;; pull the verb into the NP head.  Truncate the MWU
-                    ;; end to just before the first verb position it
-                    ;; overlaps; if that leaves an empty span, fall back
+                    ;; A verb-bearing MWU (light-verb compound like
+                    ;; `ཆུང་མ་བྱེད') is the clause's predicate — it must
+                    ;; not surface as an NP at all.  Detect it via the
+                    ;; MWU meta (`english' starts with `to ', etc.) and
+                    ;; skip past it; the verb extractor already records
+                    ;; the head verb separately.
+                    ;; NOTE on MWU span convention: `tibetan-clause-seg
+                    ;; --mwu-span-at' returns `(start . end)' where END is
+                    ;; the parser's EXCLUSIVE end (`(+ start len)' in
+                    ;; `tibetan-find-multiword-units').  The branches
+                    ;; below normalise to an INCLUSIVE last-position (e-1)
+                    ;; for `number-sequence' / `nth' indexing.  Pre-fix,
+                    ;; the existing chunker treated END as inclusive and
+                    ;; over-iterated by one position (silent in production
+                    ;; because the spurious `nth' fell on a real syllable
+                    ;; that just happened to glue cleanly).
+                    ((and mwu-span
+                          (tibetan-clause-seg--mwu-verbal-p
+                           (cl-find-if
+                            (lambda (u) (= (car mwu-span) (nth 0 u)))
+                            mwu)))
+                     (setq i (cdr mwu-span)))
+                    ;; A non-verbal MWU span: absorb as a single NP head
+                    ;; — but never cross a verb position.  A user-supplied
+                    ;; vocab MWU like `ཡུལ་འཐོན' (homeland + go-out) would
+                    ;; otherwise pull the verb into the NP head.  Truncate
+                    ;; the MWU end to just before the first verb position
+                    ;; it overlaps; if that leaves an empty span, fall back
                     ;; to the standard content-word branch.
                     ((and mwu-span
                           (let* ((s (car mwu-span))
                                  (e (cdr mwu-span))
                                  (vp (cl-find-if
-                                      (lambda (v) (and (>= v s) (<= v e)))
+                                      (lambda (v) (and (>= v s) (< v e)))
                                       verb-pos)))
                             (cond ((null vp) t)
                                   ((= vp s) (setq mwu-span nil))
-                                  (t (setq mwu-span (cons s (1- vp))) t)))
+                                  ;; Truncate so the new exclusive end
+                                  ;; sits exactly at the verb position
+                                  ;; (excluding it).
+                                  (t (setq mwu-span (cons s vp)) t)))
                           mwu-span)
                      (let* ((s (car mwu-span))
-                            (e (cdr mwu-span))
+                            (e (cdr mwu-span))         ; exclusive end
+                            (last-pos (1- e))          ; inclusive end
                             (form (mapconcat (lambda (k) (nth k words))
-                                             (number-sequence s e) "་"))
+                                             (number-sequence s last-pos) "་"))
                             (np-start s)
-                            (np-end e)
+                            (np-end last-pos)
                             (np-case nil)
                             (modifiers '()))
                        ;; Trailing case: either as suffix on the MWU's last
-                       ;; syllable OR as a following standalone particle.
-                       (let* ((last-w (string-trim (nth e words)))
+                       ;; syllable (last-pos) OR as the standalone
+                       ;; particle word right after the MWU (at exclusive
+                       ;; end e).
+                       (let* ((last-w (string-trim (nth last-pos words)))
                               (sfx-case (tibetan-clause-seg--case-of last-w)))
                          (when (and sfx-case
                                     (> (length last-w)
@@ -400,8 +452,8 @@ MWU spans are treated as atomic heads.  Returns a list of NP alists
                                                                      (cons (car p) (cdr p)))
                                                                    tibetan-clause-seg--case-particles))))))
                            (setq np-case sfx-case)))
-                       (when (and (not np-case) (< (1+ e) (1+ ce)))
-                         (let* ((nxt-pos (1+ e))
+                       (when (and (not np-case) (<= e ce))
+                         (let* ((nxt-pos e)
                                 (nxt (and (<= nxt-pos ce)
                                           (string-trim (nth nxt-pos words)))))
                            (when (and nxt
@@ -433,6 +485,13 @@ MWU spans are treated as atomic heads.  Returns a list of NP alists
                             (pieces (list w)))
                        (while (and (< (1+ np-end) (1+ ce))
                                    (not (member (1+ np-end) verb-pos))
+                                   ;; Stop if the next position starts a new
+                                   ;; MWU — the MWU branch must take over so
+                                   ;; light-verb compounds (`ཆུང་མ་བྱེད') and
+                                   ;; other parser-glued units aren't half-
+                                   ;; absorbed by the surrounding NP.
+                                   (not (tibetan-clause-seg--mwu-span-at
+                                         (1+ np-end) mwu))
                                    (let* ((nxt (string-trim
                                                 (nth (1+ np-end) words)))
                                           (ncls (tibetan-clause-seg--classify-word
