@@ -1,0 +1,256 @@
+;;; tibetan-analysis-claude-prompt-test.el --- Tests for Claude prompt enrichment -*- lexical-binding: t -*-
+
+;;; Commentary:
+;; Tests for the source-aware Claude translation prompt built by
+;; `tibetan-analysis--build-claude-prompts'.  Exercise the three input
+;; sources that shape the prompt:
+;;   1. #+TITLE / :WORK / :AUTHOR / :SOURCES from the source file
+;;   2. #+TIBETAN_CLAUDE_CONTEXT: headers (multi-line, repeatable)
+;;   3. Resources vocabulary matches (so proper names / technical terms
+;;      are not paraphrased away)
+;;
+;; gptel is stubbed: no network activity; we inspect the prompt that
+;; `tibetan-analysis--request-claude-translation' *would* have sent.
+
+;;; Code:
+
+(require 'ert)
+(require 'cl-lib)
+
+(let ((root (expand-file-name ".." (file-name-directory
+                                    (or load-file-name buffer-file-name)))))
+  (add-to-list 'load-path root)
+  (add-to-list 'load-path (expand-file-name "core" root))
+  (add-to-list 'load-path (expand-file-name "persist" root))
+  (add-to-list 'load-path (expand-file-name "analysis" root))
+  (add-to-list 'load-path (expand-file-name "data" root))
+  (add-to-list 'load-path (expand-file-name "philology" root))
+  (add-to-list 'load-path (expand-file-name "config" root)))
+
+(require 'tibetan-analysis-persist)
+
+;; ============================================================================
+;; HELPERS
+;; ============================================================================
+
+(defun tibetan-test--write (path text)
+  "Write TEXT to PATH, creating parent directories."
+  (make-directory (file-name-directory path) t)
+  (with-temp-file path (insert text)))
+
+(defmacro tibetan-test--with-source (source-contents &rest body)
+  "Write SOURCE-CONTENTS to a temp source.org, bind SOURCE-FILE, eval BODY."
+  (declare (indent 1))
+  `(let* ((dir (make-temp-file "tibetan-claude-prompt-" t))
+          (source-file (expand-file-name "source.org" dir)))
+     (unwind-protect
+         (progn
+           (tibetan-test--write source-file ,source-contents)
+           ,@body)
+       (delete-directory dir t))))
+
+;; ============================================================================
+;; METADATA EXTRACTION
+;; ============================================================================
+
+(ert-deftest tibetan-claude-prompt-reads-title-and-properties ()
+  "WORK/AUTHOR/SOURCES from the first :PROPERTIES: drawer are captured."
+  (tibetan-test--with-source
+      "#+TITLE: Milarepa\n#+AUTHOR: Carsten Paul\n\n* bKa' bum\n:PROPERTIES:\n:WORK: Mila rnam thar\n:AUTHOR: gTsang smyon He ru ka\n:SOURCES: fol. 1a1\n:END:\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :title) "Milarepa"))
+      (should (equal (plist-get meta :work)  "Mila rnam thar"))
+      (should (equal (plist-get meta :author) "gTsang smyon He ru ka"))
+      (should (equal (plist-get meta :sources) "fol. 1a1")))))
+
+(ert-deftest tibetan-claude-prompt-collects-multiple-context-headers ()
+  "Every `#+TIBETAN_CLAUDE_CONTEXT:' line is collected in source order."
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_CLAUDE_CONTEXT: Kadampa blo sbyong verse.\n#+TIBETAN_CLAUDE_CONTEXT: Target language: English.\n#+TIBETAN_CLAUDE_CONTEXT: For PNs see Sörensen & Hazod 2007.\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :claude-context)
+                     '("Kadampa blo sbyong verse."
+                       "Target language: English."
+                       "For PNs see Sörensen & Hazod 2007."))))))
+
+(ert-deftest tibetan-claude-prompt-missing-file-safe ()
+  "Non-existent / nil source file returns an empty metadata plist."
+  (let ((meta (tibetan-analysis--read-source-metadata nil)))
+    (should (null (plist-get meta :claude-context)))
+    (should (null (plist-get meta :title))))
+  (let ((meta (tibetan-analysis--read-source-metadata
+               "/nonexistent/path/source.org")))
+    (should (null (plist-get meta :claude-context)))))
+
+;; ============================================================================
+;; ANALYSIS-FILE ↦ SOURCE-FILE RESOLUTION
+;; ============================================================================
+
+(ert-deftest tibetan-claude-prompt-extracts-source-from-analysis ()
+  "`#+SOURCE:' org-link in an analysis file resolves to an absolute path."
+  (let* ((dir (make-temp-file "tib-src-" t))
+         (source (expand-file-name "Milarepa-prepared.org" dir))
+         (subdir (expand-file-name "analysis" dir))
+         (analysis (expand-file-name "seg-007.org" subdir)))
+    (unwind-protect
+        (progn
+          (tibetan-test--write source "#+TITLE: Milarepa\n")
+          (tibetan-test--write
+           analysis
+           "#+TITLE: Segment 7 Analysis\n#+SOURCE: [[file:../Milarepa-prepared.org::*Segment 7][Milarepa-prepared.org / Segment 7]]\n\n* Tibetan Text\nfoo\n")
+          (let ((resolved (tibetan-analysis--source-file-from-analysis
+                           analysis)))
+            (should (stringp resolved))
+            (should (file-equal-p resolved source))))
+      (delete-directory dir t))))
+
+;; ============================================================================
+;; PROMPT ASSEMBLY
+;; ============================================================================
+
+(ert-deftest tibetan-claude-prompt-assembles-system-and-user ()
+  "System prompt carries context headers; user prompt carries text + Wylie."
+  (tibetan-test--with-source
+      "#+TITLE: bKa' 'bum rgyas pa\n#+TIBETAN_CLAUDE_CONTEXT: Kadampa blo sbyong verse; author Sangs rgyas dbon ston.\n#+TIBETAN_CLAUDE_CONTEXT: Target language: English.\n\n* W\n:PROPERTIES:\n:WORK: bKa' 'bum rgyas pa\n:AUTHOR: Sangs rgyas dbon ston (1138–1210)\n:END:\n"
+    (let* ((prompts (tibetan-analysis--build-claude-prompts
+                     "མཉམ་མེད།" source-file))
+           (sys (car prompts))
+           (usr (cdr prompts)))
+      (should (stringp sys))
+      (should (stringp usr))
+      ;; Work / author propagate into the system prompt
+      (should (string-match-p "bKa' 'bum rgyas pa" sys))
+      (should (string-match-p "Sangs rgyas dbon ston" sys))
+      ;; Context headers propagate verbatim
+      (should (string-match-p "Kadampa blo sbyong" sys))
+      (should (string-match-p "Target language: English" sys))
+      ;; User prompt carries the Tibetan
+      (should (string-match-p "མཉམ་མེད" usr)))))
+
+(ert-deftest tibetan-claude-prompt-works-without-source-file ()
+  "Nil source-file yields a valid fallback prompt (no crash, sane default)."
+  (let* ((prompts (tibetan-analysis--build-claude-prompts "མཉམ་མེད།" nil))
+         (sys (car prompts))
+         (usr (cdr prompts)))
+    (should (stringp sys))
+    (should (stringp usr))
+    (should (string-match-p "Classical Tibetan" sys))
+    (should (string-match-p "མཉམ་མེད" usr))))
+
+(ert-deftest tibetan-claude-prompt-drops-hardcoded-rnam-thar-default ()
+  "The system prompt no longer force-assumes rnam thar / chos 'byung.
+Genre hints come from `#+TIBETAN_CLAUDE_CONTEXT:' instead."
+  (let* ((prompts (tibetan-analysis--build-claude-prompts "ཀ།" nil))
+         (sys (car prompts)))
+    (should-not (string-match-p "biographical narratives (rnam thar)" sys))
+    (should-not (string-match-p "historical chronicles (chos 'byung)" sys))))
+
+;; ============================================================================
+;; RESOURCES VOCABULARY MATCHING
+;; ============================================================================
+
+(ert-deftest tibetan-claude-prompt-glossary-matches-are-surfaced ()
+  "Resources vocabulary entries whose term occurs in the segment are
+attached to the user prompt as a 'Glossary for this passage' block."
+  (let* ((dir (make-temp-file "tib-vocab-" t))
+         (source (expand-file-name "source.org" dir))
+         (res-dir (expand-file-name "Resources" dir))
+         (vocab (expand-file-name "vocabulary.org" res-dir)))
+    (unwind-protect
+        (progn
+          (tibetan-test--write
+           vocab
+           "#+TITLE: V\n\n* Vocabulary\n\n| Term | Gloss |\n|------+-------|\n| མཉམ་མེད | peerless // ohnegleichen |\n| སངས་རྒྱས་དབོན་སྟོན | Sangs rgyas dbon ston (1138–1210) |\n| རྒྱུ | cause — unrelated filler |\n")
+          (tibetan-test--write
+           source
+           "#+TITLE: T\n#+TIBETAN_VOCAB_FILE: Resources/vocabulary.org\n")
+          (let* ((prompts
+                  (tibetan-analysis--build-claude-prompts
+                   "མཉམ་མེད་འགྲོ་བའི་མགོན་པོ་སངས་རྒྱས་དབོན་སྟོན།"
+                   source))
+                 (usr (cdr prompts)))
+            ;; Terms present in the segment surface
+            (should (string-match-p "མཉམ་མེད" usr))
+            (should (string-match-p "peerless" usr))
+            (should (string-match-p "Sangs rgyas dbon ston" usr))
+            ;; Terms NOT in the segment are filtered out
+            (should-not (string-match-p "unrelated filler" usr))))
+      (delete-directory dir t))))
+
+;; ============================================================================
+;; INTEGRATION WITH --request-claude-translation (gptel stubbed)
+;; ============================================================================
+
+(defvar tibetan-test--captured-prompt nil)
+(defvar tibetan-test--captured-system nil)
+
+(ert-deftest tibetan-claude-prompt-request-honours-source-file ()
+  "`--request-claude-translation' passes the enriched prompt to gptel."
+  (tibetan-test--with-source
+      "#+TITLE: Milarepa-prepared\n#+TIBETAN_CLAUDE_CONTEXT: Classical rnam thar narrative; gTsang smyon He ru ka version of the Mila rnam thar. Target language: English.\n"
+    (let* ((analysis-dir (make-temp-file "tib-analysis-" t))
+           (analysis-file (expand-file-name "seg-001.org" analysis-dir)))
+      (unwind-protect
+          (progn
+            (tibetan-test--write
+             analysis-file
+             "#+TITLE: Segment 1 Analysis\n\n* Tibetan Text\n\n** Provided Translations\n*** Claude\n[Requesting translation...]\n")
+            (setq tibetan-test--captured-prompt nil
+                  tibetan-test--captured-system nil)
+            (cl-letf*
+                (((symbol-function 'gptel-request)
+                  (lambda (prompt &rest args)
+                    (setq tibetan-test--captured-prompt prompt
+                          tibetan-test--captured-system (plist-get args :system))
+                    nil))
+                 ((symbol-function 'tibetan-analysis--ensure-gptel-ready)
+                  (lambda () t))
+                 ((symbol-function 'featurep)
+                  (lambda (feat &rest _) (eq feat 'gptel)))
+                 ((symbol-function 'fboundp)
+                  (lambda (sym) (memq sym '(gptel-request
+                                            tibetan-analysis--ensure-gptel-ready
+                                            tibetan-to-wylie-fixed))))
+                 ((symbol-function 'tibetan-to-wylie-fixed)
+                  (lambda (_s) "mnyam med")))
+              (tibetan-analysis--request-claude-translation
+               "མཉམ་མེད།" analysis-file source-file))
+            (should (stringp tibetan-test--captured-prompt))
+            (should (stringp tibetan-test--captured-system))
+            (should (string-match-p "Classical rnam thar narrative"
+                                    tibetan-test--captured-system))
+            (should (string-match-p "མཉམ་མེད"
+                                    tibetan-test--captured-prompt)))
+        (delete-directory analysis-dir t)))))
+
+(ert-deftest tibetan-claude-prompt-request-backwards-compatible ()
+  "`--request-claude-translation' still accepts 2 args (no source-file)."
+  (let* ((analysis-dir (make-temp-file "tib-analysis-" t))
+         (analysis-file (expand-file-name "seg-001.org" analysis-dir)))
+    (unwind-protect
+        (progn
+          (tibetan-test--write analysis-file
+                               "* Tibetan Text\n** Provided Translations\n*** Claude\n[Requesting translation...]\n")
+          (setq tibetan-test--captured-prompt nil)
+          (cl-letf*
+              (((symbol-function 'gptel-request)
+                (lambda (prompt &rest _)
+                  (setq tibetan-test--captured-prompt prompt)
+                  nil))
+               ((symbol-function 'tibetan-analysis--ensure-gptel-ready)
+                (lambda () t))
+               ((symbol-function 'featurep)
+                (lambda (feat &rest _) (eq feat 'gptel)))
+               ((symbol-function 'fboundp)
+                (lambda (sym) (memq sym '(gptel-request
+                                          tibetan-analysis--ensure-gptel-ready
+                                          tibetan-to-wylie-fixed))))
+               ((symbol-function 'tibetan-to-wylie-fixed)
+                (lambda (_s) "mnyam med")))
+            (tibetan-analysis--request-claude-translation
+             "མཉམ་མེད།" analysis-file))
+          (should (stringp tibetan-test--captured-prompt)))
+      (delete-directory analysis-dir t))))
+
+(provide 'tibetan-analysis-claude-prompt-test)
+;;; tibetan-analysis-claude-prompt-test.el ends here

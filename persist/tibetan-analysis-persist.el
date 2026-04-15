@@ -566,21 +566,182 @@ Returns list of (source-name . translation-text) pairs."
 (defvar tibetan-analysis--claude-system-prompt
   "You are a specialist in Classical Tibetan (chos skad) translation. \
 You translate passages from classical Tibetan Buddhist texts into clear, \
-accurate English that respects the register and conventions of the tradition. \
+accurate English that respects the register and conventions of the tradition.
 
 Guidelines:
 - Preserve technical Buddhist terminology (use Sanskrit where standard, \
 e.g. dharma, bodhisattva, samādhi), with English gloss in parentheses \
 on first occurrence only
-- Respect the literary style of the source — these are often biographical \
-narratives (rnam thar) or historical chronicles (chos 'byung)
 - Render particles and syntactic structures idiomatically in English \
 rather than literally
 - Honorific forms (zhu, gsol, mdzad, etc.) should be reflected in the \
 register of the translation
 - Keep the translation fluent and readable, not word-for-word
-- Output ONLY the translation, no commentary or notes"
-  "System prompt for Claude translation of classical Tibetan.")
+- Output ONLY the translation, no commentary or notes
+
+Genre, period and context hints (if any) are supplied below by the \
+source file via `#+TIBETAN_CLAUDE_CONTEXT:' headers. Do NOT assume a \
+specific genre unless such context is given."
+  "System prompt for Claude translation of classical Tibetan.
+Genre-specific assumptions are no longer hardcoded — they come from
+the source file's `#+TIBETAN_CLAUDE_CONTEXT:' headers instead.")
+
+;; ----------------------------------------------------------------------------
+;; Source-aware prompt enrichment (workshop-ready)
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-analysis--read-source-metadata (source-file)
+  "Return a plist of prompt-relevant metadata extracted from SOURCE-FILE.
+Keys:
+  :title           value of the first `#+TITLE:' line
+  :work            :WORK from the first :PROPERTIES: drawer
+  :author          :AUTHOR from the first :PROPERTIES: drawer
+  :sources         :SOURCES from the first :PROPERTIES: drawer
+  :claude-context  list of all `#+TIBETAN_CLAUDE_CONTEXT:' values in order
+  :vocab-file      value of `#+TIBETAN_VOCAB_FILE:' (relative to SOURCE-FILE)
+
+Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
+  (let (title work author sources ctx vocab)
+    (when (and source-file (file-exists-p source-file))
+      (condition-case nil
+          (with-temp-buffer
+            (insert-file-contents source-file)
+            (goto-char (point-min))
+            (when (re-search-forward "^#\\+TITLE:[ \t]*\\(.*\\)$" nil t)
+              (setq title (string-trim (match-string 1))))
+            (goto-char (point-min))
+            (when (re-search-forward "^#\\+TIBETAN_VOCAB_FILE:[ \t]*\\(.*\\)$" nil t)
+              (setq vocab (string-trim (match-string 1))))
+            (goto-char (point-min))
+            (while (re-search-forward
+                    "^#\\+TIBETAN_CLAUDE_CONTEXT:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (unless (string-empty-p val)
+                  (push val ctx))))
+            (setq ctx (nreverse ctx))
+            ;; First :PROPERTIES: drawer
+            (goto-char (point-min))
+            (when (re-search-forward "^:PROPERTIES:$" nil t)
+              (let ((drawer-end (save-excursion
+                                  (re-search-forward "^:END:$" nil t))))
+                (when drawer-end
+                  (save-restriction
+                    (narrow-to-region (point) drawer-end)
+                    (goto-char (point-min))
+                    (when (re-search-forward
+                           "^:WORK:[ \t]*\\(.*\\)$" nil t)
+                      (setq work (string-trim (match-string 1))))
+                    (goto-char (point-min))
+                    (when (re-search-forward
+                           "^:AUTHOR:[ \t]*\\(.*\\)$" nil t)
+                      (setq author (string-trim (match-string 1))))
+                    (goto-char (point-min))
+                    (when (re-search-forward
+                           "^:SOURCES:[ \t]*\\(.*\\)$" nil t)
+                      (setq sources (string-trim (match-string 1)))))))))
+        (error nil))) ;; close condition-case and outer `when source-file'
+    (list :title title
+          :work work
+          :author author
+          :sources sources
+          :claude-context ctx
+          :vocab-file vocab)))
+
+
+(defun tibetan-analysis--source-file-from-analysis (analysis-file)
+  "Return the absolute source file referenced by ANALYSIS-FILE.
+Reads the `#+SOURCE:' header (an org link of the form
+`[[file:../foo.org::*Segment N][…]]') and resolves it relative to
+the directory of ANALYSIS-FILE.  Returns nil if nothing is found."
+  (when (and analysis-file (file-exists-p analysis-file))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents analysis-file)
+          (goto-char (point-min))
+          (when (re-search-forward
+                 "^#\\+SOURCE:[ \t]*\\[\\[file:\\([^]:]+\\)" nil t)
+            (let ((rel (match-string 1)))
+              (expand-file-name rel (file-name-directory analysis-file)))))
+      (error nil))))
+
+(defun tibetan-analysis--match-resources-vocab (tibetan-text vocab-file)
+  "Return a list of (TERM . GLOSS) from VOCAB-FILE that occur in TIBETAN-TEXT.
+VOCAB-FILE is an org file containing a table whose first column is the
+Tibetan term and second column is the gloss."
+  (let (matches)
+    (when (and tibetan-text vocab-file (file-exists-p vocab-file))
+      (condition-case nil
+          (with-temp-buffer
+            (insert-file-contents vocab-file)
+            (goto-char (point-min))
+            (while (re-search-forward
+                    "^[ \t]*|[ \t]*\\([^|\n]+?\\)[ \t]*|[ \t]*\\([^|\n]+?\\)[ \t]*|"
+                    nil t)
+              (let ((term (string-trim (match-string 1)))
+                    (gloss (string-trim (match-string 2))))
+                (when (and (not (string-empty-p term))
+                           ;; Skip header separator / "Term" header row
+                           (not (string-match-p "\\`-+\\'" term))
+                           (not (string= term "Term"))
+                           ;; Must contain at least one Tibetan char
+                           (string-match-p "[\u0F00-\u0FFF]" term)
+                           (string-match-p (regexp-quote term) tibetan-text))
+                  (push (cons term gloss) matches)))))
+        (error nil)))
+    (nreverse matches)))
+
+(defun tibetan-analysis--build-claude-prompts (tibetan-text source-file)
+  "Build (SYSTEM . USER) Claude prompts for TIBETAN-TEXT.
+SOURCE-FILE, if non-nil, supplies genre/author/context metadata and a
+Resources vocabulary file.  The returned SYSTEM prompt embeds work,
+author, and all `#+TIBETAN_CLAUDE_CONTEXT:' lines; the USER prompt
+carries the Tibetan text, its Wylie transliteration (when available),
+and a filtered glossary for proper names / technical terms that occur
+in this very passage."
+  (let* ((meta   (tibetan-analysis--read-source-metadata source-file))
+         (title  (plist-get meta :title))
+         (work   (plist-get meta :work))
+         (author (plist-get meta :author))
+         (ctx    (plist-get meta :claude-context))
+         (vocab-rel (plist-get meta :vocab-file))
+         (vocab-file (and vocab-rel source-file
+                          (expand-file-name
+                           vocab-rel (file-name-directory source-file))))
+         (glossary (and vocab-file
+                        (tibetan-analysis--match-resources-vocab
+                         tibetan-text vocab-file)))
+         (wylie (condition-case nil
+                    (when (fboundp 'tibetan-to-wylie-fixed)
+                      (tibetan-to-wylie-fixed tibetan-text))
+                  (error nil)))
+         (src-block
+          (let (parts)
+            (when work   (push (format "Work: %s" work) parts))
+            (when (and author (not (and work (string= work author))))
+              (push (format "Author: %s" author) parts))
+            (when (and title (not work)) (push (format "Title: %s" title) parts))
+            (when ctx
+              (push "Context from source file:" parts)
+              (dolist (line ctx)
+                (push (format "  - %s" line) parts)))
+            (when parts
+              (concat "\n\nSource metadata for this passage:\n"
+                      (mapconcat #'identity (nreverse parts) "\n")))))
+         (system (concat tibetan-analysis--claude-system-prompt
+                         (or src-block "")))
+         (glossary-block
+          (when glossary
+            (concat
+             "\n\nGlossary for this passage "
+             "(prefer these renderings; do not paraphrase proper names):\n"
+             (mapconcat (lambda (kv)
+                          (format "  - %s = %s" (car kv) (cdr kv)))
+                        glossary "\n"))))
+         (user (concat "Translate this Classical Tibetan passage into English:\n\n"
+                       tibetan-text
+                       (if wylie (format "\n\nWylie: %s" wylie) "")
+                       (or glossary-block ""))))
+    (cons system user)))
 
 (defun tibetan-analysis--read-authinfo-key (host)
   "Read password for HOST from ~/.authinfo or ~/.authinfo.gpg.
@@ -641,27 +802,34 @@ Returns non-nil if gptel is ready to use."
             (setq gptel-model "claude-sonnet-4-20250514"))))
       t)))
 
-(defun tibetan-analysis--request-claude-translation (tibetan-text analysis-file)
+(defun tibetan-analysis--request-claude-translation
+    (tibetan-text analysis-file &optional source-file)
   "Request a Claude translation of TIBETAN-TEXT asynchronously.
 When the response arrives, insert it into ANALYSIS-FILE under the
 *** Claude heading in the Provided Translations section.
-Requires gptel package and a configured Anthropic API key.
-This function is designed to NEVER signal an error — all failures
-are reported via `message' so analysis display is never blocked."
+
+If SOURCE-FILE is given (or can be derived from ANALYSIS-FILE's
+`#+SOURCE:' link), its `#+TIBETAN_CLAUDE_CONTEXT:' headers,
+:WORK/:AUTHOR properties and a Resources vocabulary file are folded
+into the prompts so Claude gets genre / author / glossary context.
+
+Requires gptel and a configured Anthropic API key.  Never signals —
+failures are reported via `message'."
   (condition-case err
       (progn
         (unless (and (featurep 'gptel) (fboundp 'gptel-request))
           (error "gptel not loaded"))
         (tibetan-analysis--ensure-gptel-ready)
-        (let ((wylie (condition-case nil
-                         (when (fboundp 'tibetan-to-wylie-fixed)
-                           (tibetan-to-wylie-fixed tibetan-text))
-                       (error nil))))
+        (let* ((src (or source-file
+                        (tibetan-analysis--source-file-from-analysis
+                         analysis-file)))
+               (prompts (tibetan-analysis--build-claude-prompts
+                         tibetan-text src))
+               (system-prompt (car prompts))
+               (user-prompt   (cdr prompts)))
           (gptel-request
-           (format "Translate this Classical Tibetan passage into English:\n\n%s%s"
-                   tibetan-text
-                   (if wylie (format "\n\nWylie: %s" wylie) ""))
-           :system tibetan-analysis--claude-system-prompt
+           user-prompt
+           :system system-prompt
            :callback
            (lambda (response info)
              (if (not response)

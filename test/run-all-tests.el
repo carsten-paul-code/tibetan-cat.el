@@ -57,5 +57,42 @@
 (condition-case nil (require 'tibetan-verse-philology-test) (error nil))
 (condition-case nil (require 'tibetan-madhyamaka-terms-test) (error nil))
 
+;; Doc-prep module tests
+(condition-case nil (require 'tibetan-doc-format-test) (error nil))
+(condition-case nil (require 'tibetan-ocr-runner-test) (error nil))
+(condition-case nil (require 'tibetan-ocr-correct-test) (error nil))
+
+;; New test files for untested public functions
+(condition-case nil (require 'tibetan-particles-bialek-test) (error nil))
+(condition-case nil (require 'tibetan-enhanced-display-test) (error nil))
+(condition-case nil (require 'tibetan-vocabulary-detailed-test) (error nil))
+(condition-case nil (require 'tibetan-sentence-structure-test) (error nil))
+(condition-case nil (require 'tibetan-particles-test) (error nil))
+(condition-case nil (require 'tibetan-translation-suggest-test) (error nil))
+
+;; Analysis module tests for untested public functions
+(condition-case nil (require 'tibetan-classroom-test) (error nil))
+(condition-case nil (require 'tibetan-enhanced-parser-test) (error nil))
+(condition-case nil (require 'tibetan-mitra-translation-test) (error nil))
+
+;; Round-1 regression suite for verb extraction (seg-007/011/012/013)
+(condition-case nil (require 'tibetan-round1-verb-extraction-test) (error nil))
+
+;; Round-2 regression suite for clause segmentation / NP chunking /
+;; argument structure
+(condition-case nil (require 'tibetan-round2-clause-segmenter-test) (error nil))
+
+;; Batch reanalysis (preserves user notes + Claude translation)
+(condition-case nil (require 'tibetan-batch-reanalyze-test) (error nil))
+
+;; Steinert SQLite dictionary integration (tests auto-skip if DB missing)
+(condition-case nil (require 'tibetan-steinert-test) (error nil))
+
+;; Multi-source Detailed Dictionary rendering
+(condition-case nil (require 'tibetan-vocab-multisource-test) (error nil))
+
+;; Source-aware Claude prompt (reads #+TIBETAN_CLAUDE_CONTEXT: and friends)
+(condition-case nil (require 'tibetan-analysis-claude-prompt-test) (error nil))
+
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here
