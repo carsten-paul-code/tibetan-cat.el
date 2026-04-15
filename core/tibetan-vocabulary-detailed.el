@@ -17,6 +17,12 @@
 ;;; Code:
 
 (require 'cl-lib)
+;; Soft dependency: verb classifier provides authoritative verb meanings,
+;; used by stem-reference enrichment. Load if available.
+(require 'tibetan-verb-classifier nil t)
+;; Soft dependency: Steinert SQLite dictionary supplies Sanskrit
+;; equivalents and a broad fallback gloss source. Load if available.
+(require 'tibetan-steinert nil t)
 
 ;; ============================================================================
 ;; DETAILED VOCABULARY CACHE
@@ -27,9 +33,44 @@
 Key: Tibetan or Wylie term
 Value: plist with :primary :detailed :sanskrit :wylie :source")
 
+;;;###autoload
+(defun tibetan-vocab-clear-cache ()
+  "Clear the detailed vocabulary cache.
+Use this after reloading vocabulary code so that updated lookup logic
+(e.g. verb-stem enrichment) takes effect for already-queried words."
+  (interactive)
+  (let ((n (hash-table-count tibetan-detailed-vocab-cache)))
+    (clrhash tibetan-detailed-vocab-cache)
+    (message "Cleared %d cached vocabulary entries" n)))
+
 ;; ============================================================================
 ;; ENTRY PARSING - Extract structured info from raw glossary entries
 ;; ============================================================================
+
+(defun tibetan-vocab--first-sense-bracket-aware (text)
+  "Return the prefix of TEXT up to the first `;', `,', or `.' that
+appears at bracket-depth zero.  `[]' and `()' nest, so a comma
+inside `[accusative, adverbial …]' does NOT terminate the sense.
+
+Returns the full TEXT if no terminator is found at depth zero."
+  (if (or (null text) (not (stringp text)) (string-empty-p text))
+      text
+    (let ((depth 0)
+          (end (length text))
+          (i 0)
+          (len (length text)))
+      (catch 'done
+        (while (< i len)
+          (let ((c (aref text i)))
+            (cond
+             ((or (= c ?\[) (= c ?\()) (cl-incf depth))
+             ((or (= c ?\]) (= c ?\))) (when (> depth 0) (cl-decf depth)))
+             ((and (= depth 0)
+                   (or (= c ?\;) (= c ?,) (= c ?.)))
+              (setq end i)
+              (throw 'done nil))))
+          (cl-incf i)))
+      (substring text 0 end))))
 
 (defun tibetan-vocab--parse-entry (raw-entry)
   "Parse RAW-ENTRY string into structured format.
@@ -52,16 +93,17 @@ Returns plist with :primary :detailed :sanskrit."
         (when (string-match "[Ss]anskrit:?\\s-*\\([A-Za-z][a-z]*\\)" raw-entry)
           (setq sanskrit (match-string 1 raw-entry))))
 
-      ;; Extract primary meaning (first part before semicolon, comma, or period)
+      ;; Extract primary meaning: text up to the first `;' / `,' / `.'
+      ;; at BRACKET-DEPTH ZERO.  A naive split would chop `(1) [accusative,
+      ;; adverbial accusative, …' at the first comma inside `[accusative,
+      ;; …]', producing a useless `(1) [accusative' fragment for words
+      ;; like `ལ' whose gloss starts with a bracketed list.
       (let ((first-meaning raw-entry))
-        ;; Remove leading numbers like "1) " or "1. "
+        ;; Remove leading numbers like "1) " or "1. ".
         (setq first-meaning (replace-regexp-in-string "^[0-9]+[.):]\\s-*" "" first-meaning))
-        ;; Take first meaning segment
-        (when (string-match "^\\([^;.,]+\\)" first-meaning)
-          (setq primary (string-trim (match-string 1 first-meaning))))
-        ;; Clean up primary
+        (setq primary (tibetan-vocab--first-sense-bracket-aware first-meaning))
         (when primary
-          (setq primary (replace-regexp-in-string "\\s-+$" "" primary))
+          (setq primary (string-trim primary))
           ;; Remove "to " prefix for verbs if it makes it cleaner
           ;; (setq primary (replace-regexp-in-string "^to " "" primary))
           ))
@@ -87,8 +129,105 @@ Returns plist with :primary :detailed :sanskrit."
       (error nil))))
 
 ;; ============================================================================
+;; VERB-STEM REFERENCE FOLLOWING
+;; ============================================================================
+
+(defconst tibetan-vocab--stem-ref-pattern
+  "\\b\\(?:pf\\.\\|Pf\\.\\|pres\\.\\|pres\\|fut\\.\\|Fut\\.\\|ft\\.\\|imp\\.\\|Imp\\.\\)[ \t]+\\(?:of\\|von\\|zu\\)[ \t]+\\([a-zA-Z' ]+?\\)\\(?:[;,.]\\|//\\|$\\)"
+  "Regex that matches verb-stem references like 'pf. of byed', 'Pf. von rgyal du \\=dzugs',
+'fut. of sleb pa', 'Imp. von gtong'. The base Wylie form is captured in group 1.")
+
+(defun tibetan-vocab--extract-stem-reference (text)
+  "Return the base Wylie form referenced in TEXT (e.g. 'byed' for 'pf. of byed'),
+or nil if no stem reference is found."
+  (when (and text (stringp text))
+    (save-match-data
+      (when (string-match tibetan-vocab--stem-ref-pattern text)
+        (let ((base (string-trim (match-string 1 text))))
+          (unless (or (string-empty-p base)
+                      ;; Filter junk captures: must look like Wylie (letters/spaces/apostrophe)
+                      (not (string-match-p "^[a-zA-Z][a-zA-Z' ]*$" base)))
+            base))))))
+
+(defun tibetan-vocab--already-has-gloss-p (text)
+  "Return non-nil if TEXT already contains a gloss after the stem reference,
+i.e. a semicolon or the German//English separator following the reference."
+  (and text
+       (stringp text)
+       (string-match-p
+        "\\b\\(?:pf\\.\\|Pf\\.\\|pres\\.\\|pres\\|fut\\.\\|Fut\\.\\|ft\\.\\|imp\\.\\|Imp\\.\\)[ \t]+\\(?:of\\|von\\|zu\\)[ \t]+[^;]*;"
+        text)))
+
+;; ============================================================================
 ;; COMPREHENSIVE LOOKUP - Try all sources
 ;; ============================================================================
+
+(defvar tibetan-vocab--enriching nil
+  "Non-nil while a stem-reference base lookup is in progress; disables
+further enrichment to prevent recursion cycles.")
+
+(defun tibetan-vocab--lookup-base-meaning (wylie-base)
+  "Return a short English meaning for WYLIE-BASE.
+Prefers the Hill 2010 verb table (authoritative for common verbs like
+byed/gtong/dzugs), then falls back to `tibetan-vocab-lookup-detailed'.
+The verb table is consulted first because general dictionaries (RY,
+DharmaMitra) often return idiomatic senses for bare verbs."
+  (let* ((tibetan (tibetan-vocab--tibetan-from-wylie wylie-base))
+         (verb-entry (and tibetan
+                          (fboundp 'tibetan-verb-lookup)
+                          (tibetan-verb-lookup tibetan)))
+         (verb-meaning (and verb-entry
+                            (cdr (assoc 'meaning verb-entry)))))
+    (cond
+     (verb-meaning (string-trim verb-meaning))
+     (t
+      (let ((dict-entry (tibetan-vocab-lookup-detailed wylie-base)))
+        (when dict-entry
+          (plist-get dict-entry :primary)))))))
+
+(defun tibetan-vocab--enrich-with-base (entry)
+  "If ENTRY's :primary is a bare stem reference (e.g. \"pf. of byed\"),
+look up the base form and append its primary meaning.
+Returns a possibly-modified copy of ENTRY. Recursion-safe via a
+dynamic flag `tibetan-vocab--enriching'."
+  (if tibetan-vocab--enriching
+      entry
+    (let* ((primary (plist-get entry :primary))
+           (detailed (plist-get entry :detailed))
+           ;; `parse-entry' truncates at the first period, so for input
+           ;; "pf. of byed" :primary becomes just "pf". Fall back to
+           ;; :detailed to recover the full stem reference.
+           (base (or (tibetan-vocab--extract-stem-reference primary)
+                     (tibetan-vocab--extract-stem-reference detailed))))
+      (if (and base
+               (not (tibetan-vocab--already-has-gloss-p primary))
+               (not (tibetan-vocab--already-has-gloss-p detailed)))
+          (let* ((tibetan-vocab--enriching t)
+                 (base-primary (tibetan-vocab--lookup-base-meaning base)))
+            (if (and base-primary (not (string-empty-p base-primary)))
+                (if (tibetan-vocab--extract-stem-reference base-primary)
+                    entry
+                  ;; Use " — " (em dash) instead of ";" so the appended
+                  ;; base meaning survives downstream "first sense"
+                  ;; splitters that cut on semicolons.
+                  ;; For :primary, use :detailed as the base text (since
+                  ;; parse-entry may have truncated :primary at a period),
+                  ;; so the user sees the full "pf. of byed — to do, to make".
+                  (let* ((primary-base (if (tibetan-vocab--extract-stem-reference primary)
+                                           primary
+                                         detailed))
+                         (new-primary (format "%s — %s" primary-base base-primary))
+                         (new-detailed (if (and detailed
+                                                (not (string= detailed primary))
+                                                (not (tibetan-vocab--already-has-gloss-p detailed)))
+                                           (format "%s — %s" detailed base-primary)
+                                         detailed))
+                         (enriched (copy-sequence entry)))
+                    (setq enriched (plist-put enriched :primary new-primary))
+                    (setq enriched (plist-put enriched :detailed new-detailed))
+                    enriched))
+              entry))
+        entry))))
 
 (defun tibetan-vocab-lookup-detailed (word)
   "Look up WORD and return detailed dictionary entry.
@@ -174,6 +313,46 @@ Returns plist with :primary :detailed :sanskrit :wylie :source, or nil."
                                        :sanskrit nil
                                        :wylie wylie
                                        :source "DharmaMitra")))))))
+
+          ;; Steinert fallback: if nothing else matched, pull the best
+          ;; available gloss from Christian Steinert's aggregated DB.
+          (unless result
+            (when (fboundp 'tibetan-steinert-lookup)
+              (let ((hits (tibetan-steinert-lookup (or tibetan word) 5)))
+                (when hits
+                  (let* ((preferred (or (cl-find-if
+                                         (lambda (h)
+                                           (let ((src (plist-get h :source)))
+                                             (member src
+                                                     '("02-RangjungYeshe"
+                                                       "01-Hopkins2015"
+                                                       "43-84000Dict"
+                                                       "07-JimValby"
+                                                       "08-IvesWaldo"))))
+                                         hits)
+                                        (car hits)))
+                         (gloss (plist-get preferred :gloss))
+                         (parsed (tibetan-vocab--parse-entry gloss)))
+                    (setq result (list :primary (plist-get parsed :primary)
+                                       :detailed (plist-get parsed :detailed)
+                                       :sanskrit (plist-get parsed :sanskrit)
+                                       :wylie wylie
+                                       :source (format "Steinert/%s"
+                                                       (plist-get preferred :source)))))))))
+
+          ;; Sanskrit enrichment: if we have a result with no Sanskrit,
+          ;; probe Steinert's Sanskrit-indexed sources so the Detailed
+          ;; Dictionary can surface the Sanskrit equivalent.
+          (when (and result
+                     (not (plist-get result :sanskrit))
+                     (fboundp 'tibetan-steinert-sanskrit-for))
+            (let ((skt (tibetan-steinert-sanskrit-for (or tibetan word))))
+              (when (and skt (not (string-empty-p skt)))
+                (setq result (plist-put result :sanskrit skt)))))
+
+          ;; Follow stem references like "pf. of byed" -> append base meaning
+          (when result
+            (setq result (tibetan-vocab--enrich-with-base result)))
 
           ;; Cache and return
           (when result
@@ -319,6 +498,164 @@ Format:
 (defun tibetan-vocab-format-list-full (vocab-list)
   "Format VOCAB-LIST as full dictionary section."
   (mapconcat #'tibetan-vocab-format-entry-full vocab-list "\n"))
+
+;; ============================================================================
+;; MULTI-SOURCE LOOKUP — for the Detailed Dictionary section
+;; ============================================================================
+;;
+;; `tibetan-vocab-lookup-detailed' returns a single "best" entry (first
+;; source that matches), which is right for the short Word / Particle
+;; List.  The Detailed Dictionary section wants the opposite: show every
+;; source that carries non-redundant information, in a consistent order.
+;;
+;; Order (rule A, as agreed with the user):
+;;
+;;   1. Provided vocabulary list (Resources folder, per-document)
+;;   2. Custom vocabulary (user's own list)
+;;   3. Steinert aggregated DB (top hits)
+;;   4. Rangjung Yeshe standalone
+;;   5. Bundled glossaries (Hopkins/Bialek)
+;;   6. DharmaMitra
+;;
+;; Within this order, near-duplicate entries are suppressed — we only
+;; keep a later source if its gloss differs substantially from what
+;; earlier sources already said ("serious deviation").  Sanskrit is
+;; surfaced ONLY when the source entry carries it natively; we do not
+;; synthesise Sanskrit from separate Sanskrit-indexed tables.
+
+(defconst tibetan-vocab--steinert-cap 5
+  "Maximum number of Steinert rows surfaced per word in the multi-source
+Detailed Dictionary block.  Lower values produce tighter blocks at the
+cost of variety for deeply polysemous terms; higher values restore the
+wider coverage.  Tuned down from the original 8 after real-segment
+review showed words like ཡུལ / ཤོ / ལ producing overly long blocks.")
+
+(defun tibetan-vocab--dedup-fingerprint (text)
+  "Return a normalised fingerprint of TEXT for gloss deduplication.
+Lower-cases, collapses whitespace, strips punctuation, and truncates
+to 80 chars.  Two entries with the same fingerprint are treated as
+near-duplicates and only the first is shown."
+  (let* ((s (or text ""))
+         (s (downcase s))
+         (s (replace-regexp-in-string "[].;:,!?(){}/—–[-]" " " s))
+         (s (replace-regexp-in-string "[[:space:]]+" " " s))
+         (s (string-trim s)))
+    (if (> (length s) 80) (substring s 0 80) s)))
+
+(defun tibetan-vocab--make-source-entry (seen source-name raw-gloss
+                                              native-sanskrit wylie)
+  "Build a source-entry plist for RAW-GLOSS, or return nil to skip.
+
+SEEN is a hash-table tracking gloss fingerprints already emitted; if
+the fingerprint of this entry is present (or empty), nil is returned
+and SEEN is left untouched.  On success, the fingerprint is recorded
+in SEEN and a plist (:source :primary :detailed :sanskrit :wylie)
+is returned.
+
+Sanskrit is preferred from NATIVE-SANSKRIT (the source row's own
+field), falling back to whatever the parser extracts from the gloss
+text — never synthesised from elsewhere."
+  (when (and raw-gloss
+             (stringp raw-gloss)
+             (not (string-empty-p (string-trim raw-gloss))))
+    (let* ((parsed (tibetan-vocab--parse-entry raw-gloss))
+           (primary (plist-get parsed :primary))
+           (detailed (plist-get parsed :detailed))
+           (skt (let ((s (or native-sanskrit (plist-get parsed :sanskrit))))
+                  (and s (stringp s)
+                       (not (string-empty-p (string-trim s)))
+                       (string-trim s))))
+           (fp (tibetan-vocab--dedup-fingerprint
+                (or detailed primary ""))))
+      (unless (or (string-empty-p fp)
+                  (gethash fp seen))
+        (puthash fp t seen)
+        (list :source source-name
+              :primary primary
+              :detailed detailed
+              :sanskrit skt
+              :wylie wylie)))))
+
+(defun tibetan-vocab-multisource-entries (word)
+  "Return an ordered, deduplicated list of dictionary entries for WORD.
+Each element is a plist (:source :primary :detailed :sanskrit :wylie).
+
+Priority order:
+  1. Resources (provided per-document vocabulary list)
+  2. Custom (user list)
+  3. Steinert aggregated DB — several top hits
+  4. Rangjung Yeshe standalone
+  5. Bundled glossaries (Hopkins / Bialek)
+  6. DharmaMitra
+
+Near-duplicates are skipped, so polysemous entries like ཡུལ do not
+produce ten variants of the same gloss.  Sanskrit is emitted only
+when the source entry carries it natively."
+  (when (and word (stringp word) (not (string-empty-p word)))
+    (let* ((wylie (if (string-match-p "^[ༀ-࿿]" word)
+                      (tibetan-vocab--get-wylie word)
+                    word))
+           (tibetan (if (string-match-p "^[a-z]" word)
+                        (tibetan-vocab--tibetan-from-wylie word)
+                      word))
+           (results '())
+           (seen (make-hash-table :test 'equal)))
+      (cl-flet ((add (source-name raw-gloss &optional native-skt)
+                  (let ((e (tibetan-vocab--make-source-entry
+                            seen source-name raw-gloss native-skt wylie)))
+                    (when e (push e results)))))
+        ;; 1. Resources (provided per-document list)
+        (when (and (boundp 'tibetan-current-resources-vocab)
+                   tibetan-current-resources-vocab)
+          (let ((entry (or (and tibetan (gethash tibetan
+                                                 tibetan-current-resources-vocab))
+                           (and wylie (gethash wylie
+                                               tibetan-current-resources-vocab)))))
+            (when entry (add "Resources (provided)" entry))))
+        ;; 2. Custom vocabulary
+        (when (and (boundp 'tibetan-current-custom-vocab)
+                   tibetan-current-custom-vocab)
+          (let ((entry (or (and tibetan (gethash tibetan
+                                                 tibetan-current-custom-vocab))
+                           (and wylie (gethash wylie
+                                               tibetan-current-custom-vocab)))))
+            (when entry (add "Custom" entry))))
+        ;; 3. Steinert aggregated DB — top hits, deduped by fingerprint.
+        ;; We pass the cap to the lookup AND trim defensively on our side,
+        ;; so the bound holds even if a backend ignores the limit arg.
+        (when (fboundp 'tibetan-steinert-lookup)
+          (let* ((cap tibetan-vocab--steinert-cap)
+                 (hits (condition-case nil
+                           (tibetan-steinert-lookup (or tibetan word) cap)
+                         (error nil)))
+                 (hits (if (and hits (> (length hits) cap))
+                           (cl-subseq hits 0 cap)
+                         hits)))
+            (dolist (h hits)
+              (add (format "Steinert/%s" (or (plist-get h :source) "?"))
+                   (plist-get h :gloss)
+                   (plist-get h :sanskrit)))))
+        ;; 4. Rangjung Yeshe standalone — surfaces only if it adds new content.
+        (when (fboundp 'tibetan-lookup-word-in-rangjung-yeshe)
+          (let ((ry (condition-case nil
+                        (tibetan-lookup-word-in-rangjung-yeshe (or tibetan word))
+                      (error nil))))
+            (when ry (add "Rangjung Yeshe" ry))))
+        ;; 5. Bundled glossaries (Hopkins, Bialek, …)
+        (when (and (boundp 'tibetan-comprehensive-vocabulary)
+                   tibetan-comprehensive-vocabulary)
+          (let ((entry (or (and tibetan (gethash tibetan
+                                                 tibetan-comprehensive-vocabulary))
+                           (and wylie (gethash wylie
+                                               tibetan-comprehensive-vocabulary)))))
+            (when entry (add "Bundled" entry))))
+        ;; 6. DharmaMitra fallback
+        (when (fboundp 'tibetan-lookup-word-in-dharmamitra)
+          (let ((dm (condition-case nil
+                        (tibetan-lookup-word-in-dharmamitra (or tibetan word))
+                      (error nil))))
+            (when dm (add "DharmaMitra" dm)))))
+      (nreverse results))))
 
 ;; ============================================================================
 ;; INTEGRATION FUNCTION - For analysis generation
