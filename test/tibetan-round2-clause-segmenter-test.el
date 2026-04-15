@@ -388,5 +388,57 @@ verb extractor records the head verb separately."
     ;; case-suffix GEN `འི' is stripped so the head reads `ཨ་ཁུ'.
     (should (member "ཨ་ཁུ" heads))))
 
+(ert-deftest tibetan-round2-segment-filters-modal-and-reporter ()
+  "Modal (`is-modal') and reporter (`is-reporter') auxiliaries do not
+form their own clauses — they chain onto a content verb.  Without
+this filter, `...བྱེད་དགོས་ཟེར' would produce three [main] clauses
+instead of one (`བྱེད', with `+MODAL:དགོས +SAYS:ཟེར' annotations
+surfaced by the Sentence Structure renderer)."
+  (let* ((words '("ཁོང" "བྱེད" "དགོས" "ཟེར"))
+         (verbs (list `((lemma . "བྱེད") (source-pos . 1)
+                        (source-form . "བྱེད")
+                        (is-modal . nil) (is-reporter . nil))
+                      `((lemma . "དགོས") (source-pos . 2)
+                        (source-form . "དགོས")
+                        (is-modal . t)   (is-reporter . nil))
+                      `((lemma . "ཟེར")  (source-pos . 3)
+                        (source-form . "ཟེར")
+                        (is-modal . nil) (is-reporter . t))))
+         (clauses (tibetan-clause-segment words verbs nil))
+         (lemmas (mapcar (lambda (c)
+                           (alist-get 'lemma (alist-get 'verb c)))
+                         clauses)))
+    (should (= (length clauses) 1))
+    (should (member "བྱེད" lemmas))
+    (should-not (member "དགོས" lemmas))
+    (should-not (member "ཟེར" lemmas))
+    ;; aux-positions records the filtered modal/reporter source-pos so
+    ;; the NP chunker can skip them.
+    (let ((aux (alist-get 'aux-positions (car clauses))))
+      (should (member 2 aux))
+      (should (member 3 aux)))))
+
+(ert-deftest tibetan-round2-np-skips-aux-positions ()
+  "When a clause has `aux-positions' (modal/reporter auxiliaries
+filtered from clause-segmentation), the NP chunker must NOT absorb
+those positions into surrounding NPs."
+  (let* ((words '("ཁོང" "བྱེད" "དགོས" "ཟེར"))
+         (verbs (list `((lemma . "བྱེད") (source-pos . 1)
+                        (source-form . "བྱེད")
+                        (is-modal . nil) (is-reporter . nil))
+                      `((lemma . "དགོས") (source-pos . 2)
+                        (source-form . "དགོས")
+                        (is-modal . t)   (is-reporter . nil))
+                      `((lemma . "ཟེར")  (source-pos . 3)
+                        (source-form . "ཟེར")
+                        (is-modal . nil) (is-reporter . t))))
+         (clauses (tibetan-clause-segment words verbs nil))
+         (nps (tibetan-np-chunk words clauses nil))
+         (heads (mapcar (lambda (np) (alist-get 'head np)) nps)))
+    ;; Only `ཁོང' is a real NP; `དགོས' / `ཟེར' must NOT show up as NP heads.
+    (should (member "ཁོང" heads))
+    (should-not (cl-some (lambda (h) (string-match-p "དགོས" h)) heads))
+    (should-not (cl-some (lambda (h) (string-match-p "ཟེར" h)) heads))))
+
 (provide 'tibetan-round2-clause-segmenter-test)
 ;;; tibetan-round2-clause-segmenter-test.el ends here

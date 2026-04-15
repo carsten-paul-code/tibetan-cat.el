@@ -263,5 +263,13 @@ swallow real verbs that happen to end in `པ' (none of the bare set).
              (lambda (_w) nil)))
     (should (tibetan-verb-detect--lookup "བྱེད"))))
 
+(ert-deftest tibetan-round1-gsol-is-recognized ()
+  "`གསོལ' (honorific eat/drink/request) is in the closed minor-verb
+set so seg-14's `ཆང་གསོལ་ནས' resolves the converb head correctly."
+  (skip-unless (fboundp 'tibetan-verb-detect--lookup))
+  (let ((entry (tibetan-verb-detect--lookup "གསོལ")))
+    (should entry)
+    (should (string= (alist-get 'lemma entry) "གསོལ"))))
+
 (provide 'tibetan-round1-verb-extraction-test)
 ;;; tibetan-round1-verb-extraction-test.el ends here

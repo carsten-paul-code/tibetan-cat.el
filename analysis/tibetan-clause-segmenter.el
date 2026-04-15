@@ -134,9 +134,17 @@ Each verb becomes exactly one clause.  The clause's span runs from the
 position after the previous clause's end up to and including the verb
 position (plus any trailing converb particle or final particle)."
   (let* ((n (length words))
-         ;; Only verbs we can locate in the word list: require numeric pos
+         ;; Only verbs we can locate in the word list: require numeric pos.
+         ;; Also drop modal / reporter auxiliaries — those don't form
+         ;; their own clauses, they chain onto a content verb (the
+         ;; Sentence Structure renderer surfaces them as `+MODAL:X' /
+         ;; `+SAYS:X' annotations).  Without this filter, seg-11
+         ;; (`...བྱེད་དགོས་ཟེར།') produced three spurious main clauses.
          (placed (cl-remove-if-not
-                  (lambda (v) (numberp (alist-get 'source-pos v)))
+                  (lambda (v)
+                    (and (numberp (alist-get 'source-pos v))
+                         (not (alist-get 'is-modal v))
+                         (not (alist-get 'is-reporter v))))
                   verbs))
          ;; Order by position, de-dup same pos (keep first).
          (by-pos (cl-sort (cl-copy-list placed) #'<
@@ -216,7 +224,37 @@ position (plus any trailing converb particle or final particle)."
         (let* ((last (car (last rev)))
                (cur-end (alist-get 'end last)))
           (when (and (numberp cur-end) (< cur-end (1- n)))
-            (setf (alist-get 'end last) (1- n)))))
+            (setf (alist-get 'end last) (1- n))))
+        ;; Annotate each clause with `aux-positions': source-pos of any
+        ;; modal/reporter auxiliary verb (filtered out above) that falls
+        ;; inside the clause's [start, end] range.  The NP chunker uses
+        ;; this to skip those positions instead of glueing them into
+        ;; surrounding NPs (so e.g. seg-11's `དགོས' and `ཟེར' don't
+        ;; leak as `དགོས་ཟེར (—)' arguments of `བྱེད').
+        (let ((aux-verbs (cl-remove-if-not
+                          (lambda (v)
+                            (and (numberp (alist-get 'source-pos v))
+                                 (or (alist-get 'is-modal v)
+                                     (alist-get 'is-reporter v))))
+                          verbs)))
+          ;; Rebuild via mapcar so the new alist key actually lives in
+          ;; the list element, not just a let-bound copy.  `setf' on
+          ;; `alist-get' rebinds the local variable when the key is
+          ;; missing — it does not mutate the list cell.
+          (setq rev
+                (mapcar
+                 (lambda (c)
+                   (let* ((cs (alist-get 'start c))
+                          (ce (alist-get 'end c))
+                          (aux (cl-loop for v in aux-verbs
+                                        for p = (alist-get 'source-pos v)
+                                        when (and (numberp p)
+                                                  (>= p cs) (<= p ce))
+                                        collect p)))
+                     (if aux
+                         (append c `((aux-positions . ,aux)))
+                       c)))
+                 rev))))
       rev)))
 
 ;; ============================================================================
@@ -368,11 +406,15 @@ MWU spans are treated as atomic heads.  Returns a list of NP alists
              for ci from 0
              do
              (let ((i cs)
-                   ;; Verb positions within this clause — NPs may not
-                   ;; cover them.
+                   ;; Positions within this clause that NPs must skip:
+                   ;; the clause's own verb, plus any modal/reporter
+                   ;; auxiliaries recorded in `aux-positions'.  Without
+                   ;; the latter, filtered-out auxiliaries get glued
+                   ;; into surrounding NPs (seg-11 regression).
                    (verb-pos (when clause
-                               (list (alist-get 'source-pos
-                                                (alist-get 'verb clause))))))
+                               (cons (alist-get 'source-pos
+                                                (alist-get 'verb clause))
+                                     (alist-get 'aux-positions clause)))))
                (while (<= i ce)
                  (let* ((w (string-trim (nth i words)))
                         (cls (tibetan-clause-seg--classify-word w))

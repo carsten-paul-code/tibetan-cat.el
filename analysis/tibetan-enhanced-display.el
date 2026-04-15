@@ -59,7 +59,10 @@ srid=be-possible, 'os=be-appropriate.")
     "བལྟམས" "སྟོན" "བཙས" "གྲུབ" "འགྲུབ"
     "ཐོབ" "འཐོབ" "རྙེད" "བཞུགས" "བཞེངས"
     "འབྱོན" "བྱོན" "གཤེགས" "གཤེགས་སོ"
-    "གནང" "མཛད")
+    "གནང" "མཛད"
+    ;; Honorific eat / drink / request — common in Milarepa narrative
+    ;; (e.g. seg-14 `ཆང་གསོལ་ནས' "having drunk beer").
+    "གསོལ")
   "Classical verbs not present in the Hill 2010 DB but worth detecting.
 Entries produced from this set lack full case-frame data; they are
 rendered as minimal verb entries so Sentence Structure still shows them.")
