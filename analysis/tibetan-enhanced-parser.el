@@ -21,6 +21,13 @@
 (require 'tibetan-vocabulary nil t)
 
 ;; ============================================================================
+;; EXTERNAL VARIABLES
+;; ============================================================================
+
+(defvar tibetan-cat-data-dir nil
+  "Base directory for Tibetan CAT data files.")
+
+;; ============================================================================
 ;; DICTIONARY LOADING
 ;; ============================================================================
 
@@ -93,6 +100,16 @@ Returns list of (start-index . end-index . entry-data) tuples."
                  (not tibetan-comprehensive-vocabulary)
                  (= (hash-table-count tibetan-comprehensive-vocabulary) 0)))
     (tibetan-bundled-load-all-glossaries))
+  ;; Per-document Resources / Custom vocabulary — load now so the MWU
+  ;; loop below (which checks `tibetan-current-resources-vocab' and
+  ;; `tibetan-current-custom-vocab') sees the user's hand-written
+  ;; entries.  Without this the user's `ཆུང་མ་བྱེད' / `ཀློག་སློབ' MWUs
+  ;; never reach the parser's `multiword-units' output, and downstream
+  ;; MWU-aware verb / NP / negation logic has nothing to consult.
+  (when (fboundp 'tibetan-load-resources-vocab)
+    (ignore-errors (tibetan-load-resources-vocab)))
+  (when (fboundp 'tibetan-load-custom-vocab)
+    (ignore-errors (tibetan-load-custom-vocab)))
   (let ((matches '())
         (i 0))
     (while (< i (length words))
@@ -104,6 +121,24 @@ Returns list of (start-index . end-index . entry-data) tuples."
                  do
                  (let* ((slice (cl-subseq words i (+ i len)))
                         (joined (string-join slice "་"))
+                        ;; Per-document Resources / Custom vocab — these
+                        ;; carry the user's hand-written multiword
+                        ;; entries (e.g. `ཆུང་མ་བྱེད', `ཀློག་སློབ').
+                        ;; Without checking them here, the MWU never
+                        ;; reaches `multiword-units' and downstream
+                        ;; MWU-aware logic in the verb extractor /
+                        ;; clause segmenter cannot see it.  Highest
+                        ;; priority: user's wordlist trumps everything.
+                        (resources-vocab
+                         (when (and (boundp 'tibetan-current-resources-vocab)
+                                    tibetan-current-resources-vocab
+                                    (> len 1))
+                           (gethash joined tibetan-current-resources-vocab)))
+                        (custom-vocab
+                         (when (and (boundp 'tibetan-current-custom-vocab)
+                                    tibetan-current-custom-vocab
+                                    (> len 1))
+                           (gethash joined tibetan-current-custom-vocab)))
                         ;; Check comprehensive vocabulary first (new!)
                         (comp-vocab (when (boundp 'tibetan-comprehensive-vocabulary)
                                      (gethash joined tibetan-comprehensive-vocabulary)))
@@ -112,9 +147,17 @@ Returns list of (start-index . end-index . entry-data) tuples."
                                    (gethash joined tibetan-compounds-dict)))
                         (proper-noun (when tibetan-proper-nouns-dict
                                       (gethash joined tibetan-proper-nouns-dict))))
-                   (when (or comp-vocab compound proper-noun)
-                     ;; Build data structure for display
+                   (when (or resources-vocab custom-vocab
+                             comp-vocab compound proper-noun)
+                     ;; Build data structure for display.  Resources /
+                     ;; Custom take precedence over the bundled sources.
                      (let ((data (cond
+                                 (resources-vocab
+                                  `((english . ,resources-vocab)
+                                    (category . "resources")))
+                                 (custom-vocab
+                                  `((english . ,custom-vocab)
+                                    (category . "custom")))
                                  (compound compound)
                                  (proper-noun proper-noun)
                                  (comp-vocab
@@ -132,7 +175,7 @@ Returns list of (start-index . end-index . entry-data) tuples."
 ;; ENHANCED WORD ANALYSIS
 ;; ============================================================================
 
-(defun tibetan-analyze-word-unit (word prev-word next-word)
+(defun tibetan-analyze-word-unit (word _prev-word _next-word)
   "Analyze single tsheg-delimited WORD with context.
 PREV-WORD and NEXT-WORD provide context.
 Returns alist with analysis data."
@@ -241,7 +284,8 @@ Returns structured analysis with:
 - Word-level analysis
 - Particle identification (only at boundaries)
 - Context-aware verb identification."
-  (let* ((words (tibetan-segment-text text))
+  (when (and text (stringp text) (not (string-empty-p text)))
+    (let* ((words (tibetan-segment-text text))
          (multiword-units (tibetan-find-multiword-units words))
          ;; Also find verb+nominalizer constructions
          (verb-nom-units (tibetan-find-verb-nominalizer-units words))
@@ -298,7 +342,7 @@ Returns structured analysis with:
 
     `((words . ,words)
       (analysis . ,(nreverse analysis))
-      (multiword-units . ,multiword-units))))
+      (multiword-units . ,multiword-units)))))
 
 ;; ============================================================================
 ;; HELPER FUNCTIONS
