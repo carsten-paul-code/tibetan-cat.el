@@ -302,5 +302,37 @@ a spuriously-negated `བྱེད' entry."
     (should byed)
     (should-not (alist-get 'negated byed))))
 
+(ert-deftest tibetan-extract-verbs-mwu-head-verb-found ()
+  "A verbal MWU containing a real verb resolves to that verb (either
+as a compound, like `གླུ་ལེན', or as its head syllable after strip
+— like `གསོལ' from `གསོལ་ནས').  The trailing converb / final
+particle must NEVER be emitted as the verb lemma."
+  (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
+  (let* ((words '("གླུ" "ལེན" "ཞིང"))
+         (mwu '((0 3 "གླུ་ལེན་ཞིང" ((english . "to sing a song")))))
+         (verbs (tibetan-extract-verbs-compound-aware
+                 "གླུ་ལེན་ཞིང" words mwu))
+         (lemmas (mapcar (lambda (v) (alist-get 'lemma v)) verbs)))
+    ;; Must surface a verb lemma (either the compound or its head);
+    ;; must NOT surface the trailing converb `ཞིང'.
+    (should (or (member "གླུ་ལེན" lemmas) (member "ལེན" lemmas)))
+    (should-not (member "ཞིང" lemmas))))
+
+(ert-deftest tibetan-extract-verbs-mwu-fallback-skips-ablative-converb ()
+  "Right-to-left fallback: for a verbal MWU whose last syllable is a
+converb / final particle, the fallback steps past it and records the
+syllable before.  Forces a fallback case by using a verb stem
+(`གསོལ') that Hill DB alone doesn't recognise — it's in the closed
+minor-verb-set rather than the main DB."
+  (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
+  (let* ((words '("གསོལ" "ནས"))
+         (mwu '((0 2 "གསོལ་ནས"
+                    ((english . "to eat / drink (honorific)")))))
+         (verbs (tibetan-extract-verbs-compound-aware
+                 "གསོལ་ནས" words mwu))
+         (lemmas (mapcar (lambda (v) (alist-get 'lemma v)) verbs)))
+    (should (member "གསོལ" lemmas))
+    (should-not (member "ནས" lemmas))))
+
 (provide 'tibetan-enhanced-display-test)
 ;;; tibetan-enhanced-display-test.el ends here

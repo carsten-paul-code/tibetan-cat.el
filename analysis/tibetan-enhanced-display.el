@@ -1133,20 +1133,34 @@ Strategy:
                               start
                               (plist-get hit :negated)
                               (plist-get hit :suffix-type))
-                    ;; Fallback: try only the LAST constituent (Tibetan
-                    ;; compounds are head-final — `ཆུང་མ་བྱེད' → `བྱེད').
+                    ;; Fallback: scan RIGHT-TO-LEFT through the MWU's
+                    ;; syllables, skipping trailing converb and final
+                    ;; particles (they sit AFTER the verb in head-final
+                    ;; Tibetan).  Record the first syllable that
+                    ;; resolves to a verb.  This handles:
+                    ;;   `ཆུང་མ་བྱེད'   → `བྱེད' (last = verb)
+                    ;;   `གླུ་ལེན་ཞིང'  → `ལེན' (tail ཞིང is converb)
+                    ;;   `གསོལ་ནས'     → `གསོལ' (tail ནས is converb)
                     (let* ((syls (split-string form "་" t))
-                           (last-i (1- (length syls)))
-                           (last-syl (and (>= last-i 0) (nth last-i syls)))
-                           (h (and last-syl
-                                   (tibetan-verb-detect--progressive
-                                    last-syl))))
-                      (when h
-                        (record (plist-get h :entry)
-                                (plist-get h :source-form)
-                                (+ start last-i)
-                                (plist-get h :negated)
-                                (plist-get h :suffix-type))))))))
+                           (i (1- (length syls))))
+                      ;; Skip converb / sentence-final particles from
+                      ;; the right — they are suffixes, never heads.
+                      (while (and (>= i 0)
+                                  (let ((s (nth i syls)))
+                                    (or (and (fboundp 'tibetan-clause-seg--classify-word)
+                                             (memq (tibetan-clause-seg--classify-word s)
+                                                   '(converb final)))
+                                        (member s '("ནས" "ལས")))))
+                        (cl-decf i))
+                      (when (>= i 0)
+                        (let* ((head-syl (nth i syls))
+                               (h (tibetan-verb-detect--progressive head-syl)))
+                          (when h
+                            (record (plist-get h :entry)
+                                    (plist-get h :source-form)
+                                    (+ start i)
+                                    (plist-get h :negated)
+                                    (plist-get h :suffix-type))))))))))
               ;; If neither path applied, the MWU is non-verbal and we
               ;; emit no verb entry for it.
               )))
