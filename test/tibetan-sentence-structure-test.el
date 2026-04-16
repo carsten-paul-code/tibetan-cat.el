@@ -79,6 +79,39 @@ Single-character last syllables (fused ergative, e.g. ས) stay nil."
   (should (eq 'strong (tibetan-is-sentence-boundary-p "ཞེས་གསུངས།")))
   (should (eq 'strong (tibetan-is-sentence-boundary-p "མཛད།"))))
 
+(ert-deftest tibetan-is-sentence-boundary-p-honorific-verbs-strong ()
+  "Honorific finite verbs profiled from Milarepa are now strong."
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "སར་བྱོན།")))       ; "came"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "ལོ་གཅིག་བཞུགས།"))) ; "stayed one year"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "གཅིག་ཀྱང་མ་གནང།"))) ; "did not give even one"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "ཅི་ཡིན་གསུང།")))   ; "said what it is"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "ཡབ་གཤེགས།")))     ; "father passed away"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "ཆོས་ཞུས།")))       ; "requested teachings"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "བགྱིས།"))))
+
+(ert-deftest tibetan-is-sentence-boundary-p-past-verbs-strong ()
+  "Past-tense finite verbs profiled from Milarepa are now strong."
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "བུ་སྐྱེས།")))       ; "a son was born"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "འོངས།")))            ; "came"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "སོང་།")))            ; "went"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "ཤི།")))              ; "died"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "བལྟམས།")))          ; "was born"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "བཏགས།")))           ; "named"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "ཕུག་ཏུ་མཚམས་གཅོད་དུ་བཅུག།"))) ; "caused to do retreat"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "ཆོས་བསྟན།")))      ; "taught dharma"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "ཡི་གེ་བརྫངས།")))  ; "sent a letter"
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "ངས་ཤེས།"))))        ; "I knew"
+
+(ert-deftest tibetan-is-sentence-boundary-p-existential-duk-strong ()
+  "Sentence-final existential འདུག། yields strong boundary."
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "སློབ་པར་འདུག།")))
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "འདེབས་མ་ནུས་པར་འདུག།"))))
+
+(ert-deftest tibetan-is-sentence-boundary-p-future-gyur-strong ()
+  "Future / transformative འགྱུར། yields strong boundary."
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "སྣང་བ་འགྱུར།")))
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "བདུན་བཅུ་རྩ་གསུམ་པར་འགྱུར།"))))
+
 (ert-deftest tibetan-is-sentence-boundary-p-topic-marker-not-boundary ()
   "Topic marker ནི། does NOT end a sentence (Milarepa seg:1)."
   (should-not (tibetan-is-sentence-boundary-p "རྣལ་འབྱོར་གྱི་དབང་ཕྱུག་མི་ལ་རས་པ་ནི།")))
@@ -107,19 +140,35 @@ Milarepa seg:4 pattern."
   "པས (causal converb) does NOT end a sentence (Milarepa seg:10)."
   (should-not (tibetan-is-sentence-boundary-p "ཡིན་པས།")))
 
+(ert-deftest tibetan-is-sentence-boundary-p-bas-causal-allomorph ()
+  "བས (causal allomorph of པས on non-aspirated stems) does NOT end a sentence.
+Profiled from Milarepa: ཟེར་བས། \"because he said\", མཐོང་བས། \"because he saw\"."
+  (should-not (tibetan-is-sentence-boundary-p "ཟེར་བས།"))
+  (should-not (tibetan-is-sentence-boundary-p "མཐོང་བས།")))
+
+(ert-deftest tibetan-is-sentence-boundary-p-pai-tshe-not-boundary ()
+  "Nominalizer + genitive + ཚེ = temporal subordinate clause, not a boundary.
+Milarepa: ཡོད་པའི་ཚེ། \"while being\", ཚོགས་བཞེས་པའི་ཚེ། \"when assembled\"."
+  (should-not (tibetan-is-sentence-boundary-p "ཡོད་པའི་ཚེ།"))
+  (should-not (tibetan-is-sentence-boundary-p "བཞེས་པའི་ཚེ།"))
+  (should-not (tibetan-is-sentence-boundary-p "བྱས་པའི་ཚེ།")))
+
 (ert-deftest tibetan-is-sentence-boundary-p-expanded-converbs ()
   "Expanded converb list: ན (conditional), ཀྱང/ཡང (concessive)."
   (should-not (tibetan-is-sentence-boundary-p "སོང་ན།"))
   (should-not (tibetan-is-sentence-boundary-p "ལྟ་ཀྱང།"))
   (should-not (tibetan-is-sentence-boundary-p "དེ་ཡང།")))
 
-(ert-deftest tibetan-is-sentence-boundary-p-past-verb-weak ()
-  "Multi-syllable past-tense verb + bare single shad → weak boundary.
-These are the cases the auto-segmenter leaves for user review."
-  (should (eq 'weak (tibetan-is-sentence-boundary-p "བལྟམས།")))
-  (should (eq 'weak (tibetan-is-sentence-boundary-p "སོང་།")))
-  (should (eq 'weak (tibetan-is-sentence-boundary-p "བཅུག།")))
-  (should (eq 'weak (tibetan-is-sentence-boundary-p "ཚར།"))))
+(ert-deftest tibetan-is-sentence-boundary-p-unknown-residual-is-weak ()
+  "Multi-syllable last word + bare single shad, not matching any closed
+list, falls through to weak.  This is the residual class the auto
+segmenter leaves for human review.
+The specific verbs asserted here (ཚར \"finished\", and a made-up form)
+are not in the finite-verb list and should stay weak until profiled."
+  (should (eq 'weak (tibetan-is-sentence-boundary-p "ཚར།")))
+  ;; Proper name in sentence-final position: staying weak is right —
+  ;; syntactically indistinguishable from a mid-sentence title.
+  (should (eq 'weak (tibetan-is-sentence-boundary-p "ཐོས་པ་དགའ།"))))
 
 (ert-deftest tibetan-is-sentence-boundary-p-coordinator-dang ()
   "Coordinator དང། does NOT end a sentence."

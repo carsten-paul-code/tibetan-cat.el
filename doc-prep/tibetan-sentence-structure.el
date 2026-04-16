@@ -52,13 +52,47 @@
     "ཡིན" "མིན"                          ; Copulas (often end sentences)
     "ཡོད" "མེད"                          ; Existentials
     ;; Finite verb forms common in rnam thar prose
-    "ཟེར" "གསུངས" "སྨྲས" "བྱས" "བྱུང" "གྱུར" "ཤོག" "མཛད")
-  "Particles/words that strongly indicate a sentence end when followed by shad.")
+    "ཟེར" "གསུངས" "སྨྲས" "བྱས" "བྱུང" "གྱུར" "ཤོག" "མཛད"
+    ;; Honorific finite verbs (rnam thar style)
+    "བྱོན"       ; "went / came" (hon., past of འགྲོ / འོང)
+    "བཞུགས"     ; "resided / stayed" (hon.)
+    "གནང"        ; "gave / did" (hon.)
+    "གསུང"       ; "said" (hon., present; past གསུངས already listed)
+    "གཤེགས"     ; "passed away / went" (hon.)
+    "བགྱིས"     ; "did" (hon., past)
+    "ཞུས"        ; "requested" (hon., past)
+    ;; Past-tense finite verbs (profiled from Milarepa rnam thar)
+    "སྐྱེས"     ; "was born"
+    "འོངས"      ; "came" (past)
+    "སོང"        ; "went" (past of འགྲོ)
+    "ཤི"         ; "died"
+    "བརྫངས"    ; "sent" (past)
+    "བལྟམས"    ; "was born" (hon., archaic)
+    "བཏགས"     ; "named / gave (a name)"
+    "བཅུག"      ; "caused / put" (past)
+    "བསྟན"      ; "showed / taught" (past)
+    "ཤེས"        ; "knew / knows"
+    ;; Future / transformative
+    "འགྱུར"     ; "will become" (future; past གྱུར already listed)
+    ;; Sentence-final existential
+    "འདུག")     ; "exists / is present" (typically sentence-final in cl.)
+  "Particles and finite-verb stems that strongly indicate a sentence end
+when followed by shad.
+Populated in two passes: (a) the traditional sentence-final particle set
+(sa, to, no, do, ro, 'o, ngo, go, bo) and the copulas/existentials, plus
+(b) finite verbs harvested from corpus profiling of the Milarepa rnam
+thar.  The verb set is deliberately a closed list rather than a
+morphology-based heuristic: rnam-thar verb morphology is irregular enough
+(stem suppletion, honorific substitution, archaic past forms) that any
+rule over stems is lossier than an enumerated list maintained from real
+texts.  Extend as new corpora are profiled.")
 
 (defvar tibetan-sentence-converb-particles
   '("ནས" "སྟེ" "ཏེ" "དེ" "ཅིང" "ཞིང" "ཤིང"
     ;; Expanded: nominalizer + case as converbs
     "པས"         ; causal  (X-pas → because X)
+    "བས"         ; causal allomorph of པས on non-aspirated nominalizer stems
+                 ; (e.g. ཟེར་བས། "because [he] said", མཐོང་བས། "because [he] saw")
     "པར"         ; terminative on nominalizer (so that / into)
     ;; Conditional / concessive
     "ན" "ཀྱང" "ཡང"
@@ -86,10 +120,14 @@ and purpose.")
   "Topic markers that typically do NOT end a sentence on their own.")
 
 (defvar tibetan-non-boundary-two-syllable-patterns
-  '("པ་ལ" "པ་ན" "པ་ལས")
+  '("པ་ལ" "པ་ན" "པ་ལས"
+    ;; Temporal subordinate clause: "at the time of X-ing / when X"
+    "པའི་ཚེ" "བའི་ཚེ")
   "Two-syllable (tsheg-separated) patterns that mark a non-final clause.
 Covers the case where nominalizer པ and a following case particle are
-written as two syllables rather than fused (e.g. པ་ལ vs. པར).")
+written as two syllables rather than fused (e.g. པ་ལ vs. པར), and the
+fixed nominalizer + genitive + ཚེ pattern that introduces a temporal
+subordinate clause (e.g. ཡོད་པའི་ཚེ། \"while being\").")
 
 (defun tibetan-extract-particle-text (particle)
   "Extract text from a particle, handling both string and list formats.
