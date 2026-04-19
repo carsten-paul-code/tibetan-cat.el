@@ -31,6 +31,14 @@
   (skip-unless (fboundp 'tibetan-auto-analyze-document))
   (should (eq (key-binding (kbd "C-c u B")) 'tibetan-auto-analyze-document)))
 
+(ert-deftest tibetan-keybinding-batch-reanalyze ()
+  "Test that C-c u r is bound to tibetan-analysis-batch-reanalyze."
+  (require 'tibetan-analysis-persist nil t)
+  (require 'tibetan-keybindings nil t)
+  (skip-unless (fboundp 'tibetan-analysis-batch-reanalyze))
+  (should (eq (key-binding (kbd "C-c u r"))
+              'tibetan-analysis-batch-reanalyze)))
+
 (ert-deftest tibetan-keybinding-reorganize ()
   "Test that C-c u O is bound to tibetan-reorganize-analysis-files."
   (skip-unless (fboundp 'tibetan-reorganize-analysis-files))
@@ -86,13 +94,58 @@
   (should (commandp 'tibetan-preview-reorganization)))
 
 ;; ============================================================================
+;; TEXT SCALE ADJUSTMENT TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-increase-text-scale-increments-correctly ()
+  "Test that tibetan-increase-text-scale increments the scale factor by 0.1."
+  (skip-unless (fboundp 'tibetan-increase-text-scale))
+  (skip-unless (fboundp 'tibetan-set-text-scale))
+  ;; Set initial scale factor
+  (let ((initial-scale 1.4))
+    ;; Save original scale
+    (let ((original (or tibetan-text-scale-factor 1.4)))
+      (tibetan-set-text-scale initial-scale)
+      (tibetan-increase-text-scale)
+      ;; After increase, scale should be initial + 0.1
+      (should (and tibetan-text-scale-factor
+                   (>= tibetan-text-scale-factor (+ initial-scale 0.08))))
+      (should (and tibetan-text-scale-factor
+                   (<= tibetan-text-scale-factor (+ initial-scale 0.12))))
+      ;; Restore
+      (tibetan-set-text-scale original))))
+
+(ert-deftest tibetan-decrease-text-scale-decrements-correctly ()
+  "Test that tibetan-decrease-text-scale decrements scale factor by 0.1 with min 1.0."
+  (skip-unless (fboundp 'tibetan-decrease-text-scale))
+  (skip-unless (fboundp 'tibetan-set-text-scale))
+  ;; Test normal decrement
+  (let ((initial-scale 1.5))
+    (let ((original (or tibetan-text-scale-factor 1.4)))
+      (tibetan-set-text-scale initial-scale)
+      (tibetan-decrease-text-scale)
+      ;; After decrease, scale should be initial - 0.1
+      (should (and tibetan-text-scale-factor
+                   (>= tibetan-text-scale-factor (- initial-scale 0.12))))
+      (should (and tibetan-text-scale-factor
+                   (<= tibetan-text-scale-factor (- initial-scale 0.08))))
+      ;; Test minimum boundary (at 1.0)
+      (tibetan-set-text-scale 1.05)
+      (tibetan-decrease-text-scale)
+      ;; Should not go below 1.0
+      (should (and tibetan-text-scale-factor
+                   (>= tibetan-text-scale-factor 1.0)))
+      ;; Restore
+      (tibetan-set-text-scale original))))
+
+;; ============================================================================
 ;; HELPER
 ;; ============================================================================
 
 (defun tibetan-keybindings-run-tests ()
   "Run all keybinding tests interactively."
   (interactive)
-  (ert-run-tests-interactively "^tibetan-keybinding-\\|^tibetan-function-"))
+  (ert-run-tests-interactively "^tibetan-keybinding-\\|^tibetan-function-\\|^tibetan-increase-\\|^tibetan-decrease-"))
 
 (provide 'tibetan-keybindings-test)
 ;;; tibetan-keybindings-test.el ends here

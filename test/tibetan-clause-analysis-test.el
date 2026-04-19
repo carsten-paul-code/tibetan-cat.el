@@ -259,6 +259,58 @@
       (should (string-match-p "འགྲོ" (plist-get main :verb))))))
 
 ;; ============================================================================
+;; FORMAT CLAUSE TREE TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-format-clause-tree-with-nil ()
+  "Test formatting nil clause tree."
+  (let ((result (tibetan-format-clause-tree nil)))
+    (should (stringp result))
+    (should (string-match-p "No clause structure" result))))
+
+(ert-deftest tibetan-format-clause-tree-simple-clause ()
+  "Test formatting simple clause tree."
+  (let* ((text "ཆོས་གསུངས།")
+         (tree (tibetan-build-clause-tree text)))
+    (if tree
+      (let ((result (tibetan-format-clause-tree tree)))
+        (should (stringp result))
+        (should (string-match-p "Main Clause" result)))
+      (skip "Could not build clause tree for test input"))))
+
+(ert-deftest tibetan-format-clause-tree-with-indent ()
+  "Test formatting clause tree with indentation."
+  (let* ((text "བཞུགས་ནས་གསུངས།")
+         (tree (tibetan-build-clause-tree text)))
+    (when tree
+      (let ((result (tibetan-format-clause-tree tree 1)))
+        (should (stringp result))))))
+
+;; ============================================================================
+;; ANALYZE CLAUSE STRUCTURE TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-analyze-clause-structure-basic ()
+  "Test basic clause structure analysis."
+  (let ((result (tibetan-analyze-clause-structure "ཆོས་གསུངས།")))
+    (should (or (null result) (stringp result)))
+    (when result
+      (should (> (length result) 0)))))
+
+(ert-deftest tibetan-analyze-clause-structure-with-converb ()
+  "Test clause structure analysis with converb."
+  (let ((result (tibetan-analyze-clause-structure "བཞུགས་ནས་གསུངས།")))
+    (should (or (null result) (stringp result)))
+    (when result
+      (should (or (string-match-p "CLAUSE STRUCTURE" result)
+                  (string-match-p "No clause structure" result))))))
+
+(ert-deftest tibetan-analyze-clause-structure-nil-input ()
+  "Test that nil input is handled gracefully."
+  (should-not (tibetan-analyze-clause-structure nil))
+  (should-not (tibetan-analyze-clause-structure "")))
+
+;; ============================================================================
 ;; HELPER FUNCTION
 ;; ============================================================================
 

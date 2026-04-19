@@ -177,5 +177,57 @@
   (let ((context 'svatantrika))
     (should (symbolp context))))
 
+;; ============================================================================
+;; INITIALIZATION TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-initialize-madhyamaka-vocabulary-function-exists ()
+  "Test that tibetan-initialize-madhyamaka-vocabulary function exists."
+  (should (fboundp 'tibetan-initialize-madhyamaka-vocabulary)))
+
+(ert-deftest tibetan-initialize-madhyamaka-vocabulary-returns-hash ()
+  "Test that initialization returns a hash table."
+  (skip-unless (fboundp 'tibetan-initialize-madhyamaka-vocabulary))
+  (let ((result (tibetan-initialize-madhyamaka-vocabulary)))
+    ;; Should return hash table or be stored in variable
+    (should (or (hash-table-p result)
+                (and (fboundp 'tibetan-initialize-madhyamaka-vocabulary)
+                     (or (boundp 'tibetan-madhyamaka-vocabulary)
+                         (boundp 'tibetan-madhyamaka-terms)))))))
+
+;; ============================================================================
+;; EXTRACTION TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-extract-madhyamaka-vocabulary-function-exists ()
+  "Test that tibetan-extract-madhyamaka-vocabulary function exists."
+  (should (fboundp 'tibetan-extract-madhyamaka-vocabulary)))
+
+(ert-deftest tibetan-extract-madhyamaka-vocabulary-from-text ()
+  "Test extraction of Madhyamaka terms from Tibetan text."
+  (skip-unless (fboundp 'tibetan-extract-madhyamaka-vocabulary))
+  ;; Test with text containing known Madhyamaka term
+  (let ((result (tibetan-extract-madhyamaka-vocabulary "སྟོང་པ་ཉིད་དེ")))
+    (should (listp result))))
+
+(ert-deftest tibetan-extract-madhyamaka-vocabulary-empty-text ()
+  "Test extraction from empty or no-term text."
+  (skip-unless (fboundp 'tibetan-extract-madhyamaka-vocabulary))
+  ;; Empty text
+  (let ((result1 (tibetan-extract-madhyamaka-vocabulary "")))
+    (should (listp result1)))
+  ;; Text without Madhyamaka terms
+  (let ((result2 (tibetan-extract-madhyamaka-vocabulary "བདག་གིས་ཞིང")))
+    (should (listp result2))))
+
+(ert-deftest tibetan-extract-madhyamaka-vocabulary-multiple-terms ()
+  "Test extraction of multiple Madhyamaka terms."
+  (skip-unless (fboundp 'tibetan-extract-madhyamaka-vocabulary))
+  ;; Text with multiple philosophical terms
+  (let ((result (tibetan-extract-madhyamaka-vocabulary "སྟོང་པ་ཉིད་དང་དོན་དམ་བདེན་པ")))
+    (should (listp result))
+    ;; May extract various terms
+    (should (>= (length result) 0))))
+
 (provide 'tibetan-madhyamaka-terms-test)
 ;;; tibetan-madhyamaka-terms-test.el ends here

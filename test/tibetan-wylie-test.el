@@ -180,5 +180,84 @@
   ;; ཀ is NOT a valid prefix
   (should-not (tibetan-is-prefix "ཀ" "ག")))
 
+;; ============================================================================
+;; FIXED VERSION TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-to-wylie-fixed-syllable-conversion ()
+  "Test tibetan-to-wylie-fixed for proper syllable conversions with implicit 'a'."
+  ;; Basic syllables with implicit 'a'
+  (should (equal (tibetan-to-wylie-fixed "བདག") "bdag"))
+  (should (equal (tibetan-to-wylie-fixed "དང") "dang"))
+  (should (equal (tibetan-to-wylie-fixed "པས") "pas"))
+  ;; Syllables with explicit vowels (no implicit 'a')
+  (should (equal (tibetan-to-wylie-fixed "བི") "bi"))
+  (should (equal (tibetan-to-wylie-fixed "སེམས") "sems"))
+  ;; Syllables with punctuation
+  (should (string-match-p "dang" (tibetan-to-wylie-fixed "དང་")))
+  ;; Multi-syllable words
+  (should (string-match-p "byang.*chub" (tibetan-to-wylie-fixed "བྱང་ཆུབ")))
+  ;; Edge cases
+  (should (equal (tibetan-to-wylie-fixed "") ""))
+  (should (stringp (tibetan-to-wylie-fixed "བདག test"))))
+
+(ert-deftest tibetan-syllable-to-wylie-root-handling ()
+  "Test tibetan-syllable-to-wylie for correct root consonant handling and implicit 'a'."
+  ;; Single root with implicit 'a'
+  (should (equal (tibetan-syllable-to-wylie "བ") "ba"))
+  (should (equal (tibetan-syllable-to-wylie "དང") "dang"))
+  ;; Root with explicit vowel mark (no implicit 'a')
+  (should (equal (tibetan-syllable-to-wylie "བི") "bi"))
+  (should (equal (tibetan-syllable-to-wylie "དེ") "de"))
+  ;; Prefix + root combinations (prefix gets no 'a', root gets 'a')
+  (should (equal (tibetan-syllable-to-wylie "གསད") "gsad"))
+  (should (equal (tibetan-syllable-to-wylie "བསམ") "bsam"))
+  ;; Root + suffix combinations (root gets 'a' only if no vowel mark)
+  (should (equal (tibetan-syllable-to-wylie "བར") "bar"))
+  (should (equal (tibetan-syllable-to-wylie "དང") "dang"))
+  ;; Subscript consonants
+  (should (equal (tibetan-syllable-to-wylie "གྲ") "gra"))
+  (should (equal (tibetan-syllable-to-wylie "བྲ") "bra"))
+  (should (equal (tibetan-syllable-to-wylie "གླ") "gla"))
+  ;; Empty and edge cases
+  (should (equal (tibetan-syllable-to-wylie "") ""))
+  (should (equal (tibetan-syllable-to-wylie "ི") "i")))
+
+(ert-deftest tibetan-wylie-l-ca-subscript ()
+  "ལྕ (la + subscript ca) — Milarepa seg-007 regression, ལྕགས→lcags."
+  (should (equal (tibetan-syllable-to-wylie "ལྕ") "lca"))
+  (should (equal (tibetan-syllable-to-wylie "ལྕགས") "lcags"))
+  (should (equal (tibetan-syllable-to-wylie "ལྕེ") "lce")))
+
+(ert-deftest tibetan-wylie-b-prefix-l-stack ()
+  "བ prefix + ལ-headed stack — Milarepa seg-007 regression, བལྟམས→bltams."
+  (should (equal (tibetan-syllable-to-wylie "བལྟ") "blta"))
+  (should (equal (tibetan-syllable-to-wylie "བལྟམས") "bltams"))
+  (should (equal (tibetan-syllable-to-wylie "བལྟས") "bltas")))
+
+(ert-deftest tibetan-wylie-a-chen-no-double-a ()
+  "Bare ཨ must transliterate as \"a\", not \"aa\" (Milarepa seg-011 regression)."
+  (should (equal (tibetan-syllable-to-wylie "ཨ") "a"))
+  ;; Compound where ཨ opens a syllable — was producing 'aa khu'i' before fix.
+  (should (equal (tibetan-to-wylie-fixed "ཨ་ཁུ") "a khu"))
+  (should (equal (tibetan-to-wylie-fixed "ཨ་ཁུའི") "a khu'i")))
+
+(ert-deftest tibetan-wylie-a-chen-vowel-carrier ()
+  "ཨ + vowel sign should emit only the vowel, not \"a\" + vowel.
+ཨ is the vowel carrier (a-chen); when followed by a vowel sign the
+\"a\" is silent and the vowel sign alone determines the value.
+Regression: ཨོམ was producing \"aom\" instead of \"om\"."
+  ;; Single-syllable vowel carrier cases
+  (should (equal (tibetan-syllable-to-wylie "ཨོ") "o"))
+  (should (equal (tibetan-syllable-to-wylie "ཨི") "i"))
+  (should (equal (tibetan-syllable-to-wylie "ཨུ") "u"))
+  (should (equal (tibetan-syllable-to-wylie "ཨེ") "e"))
+  ;; ཨོམ = om (vowel carrier + o-sign + suffix ma)
+  (should (equal (tibetan-syllable-to-wylie "ཨོམ") "om"))
+  ;; Bare ཨ still = "a" (no vowel sign → carrier IS the vowel)
+  (should (equal (tibetan-syllable-to-wylie "ཨ") "a"))
+  ;; Multi-syllable: OM SWA STI mantra
+  (should (equal (tibetan-to-wylie-fixed "ཨོམ་སྭ་སྟི") "om swa sti")))
+
 (provide 'tibetan-wylie-test)
 ;;; tibetan-wylie-test.el ends here

@@ -47,8 +47,11 @@
   "Test basic segment collection from document."
   (skip-unless (fboundp 'tibetan-reorg--collect-document-segments))
   (with-temp-buffer
+    (insert "* Title\n\n** Sentence 1\n\n*** Segment 1\nབཀྲ་ཤིས།\n\n*** Segment 2\nབདེ་ལེགས།\n")
     (org-mode)
-    (insert "* Title\n** Sentence 1\n*** Segment 1\nབཀྲ་ཤིས།\n*** Segment 2\nབདེ་ལེགས།\n")
+    (when (fboundp 'org-set-regexps-and-options) (org-set-regexps-and-options))
+    (font-lock-ensure)
+    (goto-char (point-min))
     (let ((result (tibetan-reorg--collect-document-segments)))
       (should result)
       (should (= 2 (length result)))
@@ -59,8 +62,11 @@
   "Test segment collection on empty document."
   (skip-unless (fboundp 'tibetan-reorg--collect-document-segments))
   (with-temp-buffer
+    (insert "* Title\n\n** Notes\nNo segments here\n")
     (org-mode)
-    (insert "* Title\n** Notes\nNo segments here\n")
+    (when (fboundp 'org-set-regexps-and-options) (org-set-regexps-and-options))
+    (font-lock-ensure)
+    (goto-char (point-min))
     (let ((result (tibetan-reorg--collect-document-segments)))
       (should (null result)))))
 
@@ -68,8 +74,11 @@
   "Test that segment collection captures Tibetan text."
   (skip-unless (fboundp 'tibetan-reorg--collect-document-segments))
   (with-temp-buffer
+    (insert "* Title\n\n** Sentence 1\n\n*** Segment 1\nསངས་རྒྱས།\n")
     (org-mode)
-    (insert "* Title\n** Sentence 1\n*** Segment 1\nསངས་རྒྱས།\n")
+    (when (fboundp 'org-set-regexps-and-options) (org-set-regexps-and-options))
+    (font-lock-ensure)
+    (goto-char (point-min))
     (let ((result (tibetan-reorg--collect-document-segments)))
       (should result)
       (should (string-match-p "སངས་རྒྱས" (plist-get (car result) :tibetan-text))))))

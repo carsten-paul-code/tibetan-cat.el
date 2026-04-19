@@ -93,5 +93,52 @@
   (should (symbolp 'tibetan-cat-insert-translation))
   (should (symbolp 'reload-all-glossaries)))
 
+;; ============================================================================
+;; PERSISTENT SENTENCE ANALYSIS SUBMENU
+;; The menu must expose the C-c s A / R / r commands plus the queue
+;; status / cancel commands so non-Emacs-savvy users can find them.
+;; We assert via the source file rather than the keymap because
+;; easy-menu-define lowers entries into a structure that's awkward to
+;; introspect; the source check is cheap and catches regressions.
+;; ============================================================================
+
+(defvar tibetan-menu-test--source
+  (let ((base-dir (file-name-directory (or load-file-name buffer-file-name))))
+    (with-temp-buffer
+      (insert-file-contents
+       (expand-file-name "../config/tibetan-menu.el" base-dir))
+      (buffer-string)))
+  "Cached source of tibetan-menu.el, for menu-content assertions.")
+
+(ert-deftest tibetan-menu-has-persistent-sentence-submenu ()
+  "The Tibetan menu must include a `Persistent Sentence Analysis' submenu."
+  (should (string-match-p "\"Persistent Sentence Analysis\""
+                          tibetan-menu-test--source)))
+
+(ert-deftest tibetan-menu-sentence-submenu-has-open-command ()
+  "Sentence submenu must expose `tibetan-sentence-open-analysis'."
+  (should (string-match-p "tibetan-sentence-open-analysis"
+                          tibetan-menu-test--source)))
+
+(ert-deftest tibetan-menu-sentence-submenu-has-reanalyze-command ()
+  "Sentence submenu must expose `tibetan-sentence-reanalyze'."
+  (should (string-match-p "tibetan-sentence-reanalyze\\b"
+                          tibetan-menu-test--source)))
+
+(ert-deftest tibetan-menu-sentence-submenu-has-batch-command ()
+  "Sentence submenu must expose `tibetan-sentence-batch-reanalyze'."
+  (should (string-match-p "tibetan-sentence-batch-reanalyze"
+                          tibetan-menu-test--source)))
+
+(ert-deftest tibetan-menu-sentence-submenu-has-queue-status ()
+  "Sentence submenu must expose the Claude queue status command."
+  (should (string-match-p "tibetan-claude-queue-show-status"
+                          tibetan-menu-test--source)))
+
+(ert-deftest tibetan-menu-sentence-submenu-has-queue-cancel ()
+  "Sentence submenu must expose the Claude queue cancel command."
+  (should (string-match-p "tibetan-claude-queue-cancel-pending"
+                          tibetan-menu-test--source)))
+
 (provide 'tibetan-menu-test)
 ;;; tibetan-menu-test.el ends here

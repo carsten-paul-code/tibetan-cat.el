@@ -160,5 +160,45 @@
   "Test that database has at least 20 verbs."
   (should (>= (hash-table-count tibetan-verb-database) 20)))
 
+;; ============================================================================
+;; IS-VERB-P CLASSIFICATION TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-is-verb-p-known-verb ()
+  "Test that known verbs are correctly classified as verbs."
+  (skip-unless (fboundp 'tibetan-is-verb-p))
+  (should (tibetan-is-verb-p "བྱེད"))  ; "to do" is a verb
+  (should (tibetan-is-verb-p "འགྲོ"))  ; "to go" is a verb
+  (should (tibetan-is-verb-p "ཡིན")))  ; "to be" is a verb
+
+(ert-deftest tibetan-is-verb-p-non-verb ()
+  "Test that non-verbs are correctly classified as non-verbs."
+  (skip-unless (fboundp 'tibetan-is-verb-p))
+  (should-not (tibetan-is-verb-p "ཨ་མ"))  ; "mother" is not a verb
+  (should-not (tibetan-is-verb-p "གྲུབ"))  ; depends on context/form
+  (should-not (tibetan-is-verb-p "མི")))   ; "person" is not a verb
+
+(ert-deftest tibetan-is-verb-p-verb-stems ()
+  "Test verb classification for different verb stems."
+  (skip-unless (fboundp 'tibetan-is-verb-p))
+  ;; Past stem
+  (should (tibetan-is-verb-p "བྱས"))  ; past of བྱེད
+  ;; Future stem
+  (should (tibetan-is-verb-p "བྱ"))   ; future of བྱེད
+  ;; Imperative stem
+  (should (tibetan-is-verb-p "སོང")))  ; imperative of འགྲོ
+
+(ert-deftest tibetan-is-verb-p-empty-input ()
+  "Test verb classification with empty input."
+  (skip-unless (fboundp 'tibetan-is-verb-p))
+  (should-not (tibetan-is-verb-p ""))
+  (should-not (tibetan-is-verb-p nil)))
+
+(ert-deftest tibetan-is-verb-p-with-punctuation ()
+  "Test verb classification with Tibetan punctuation."
+  (skip-unless (fboundp 'tibetan-is-verb-p))
+  ;; Verb with trailing shad
+  (should (tibetan-is-verb-p "བྱེད།")))
+
 (provide 'tibetan-verb-classifier-test)
 ;;; tibetan-verb-classifier-test.el ends here

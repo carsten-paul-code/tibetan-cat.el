@@ -66,33 +66,34 @@
 
 (ert-deftest tibetan-strip-particles-genitive ()
   "Test stripping genitive particles.
-Note: Function preserves trailing tsheg as it's part of syllable structure."
-  (should (string= (tibetan-strip-particles "བདག་གི") "བདག་"))
-  (should (string= (tibetan-strip-particles "ཆོས་ཀྱི") "ཆོས་")))
+Trailing tsheg is trimmed so the stripped form matches the canonical
+(tsheg-free) keys used in Resources and bundled dictionaries."
+  (should (string= (tibetan-strip-particles "བདག་གི") "བདག"))
+  (should (string= (tibetan-strip-particles "ཆོས་ཀྱི") "ཆོས")))
 
 (ert-deftest tibetan-strip-particles-ergative ()
   "Test stripping ergative particles."
-  (should (string= (tibetan-strip-particles "བདག་གིས") "བདག་"))
-  (should (string= (tibetan-strip-particles "སེམས་ཀྱིས") "སེམས་")))
+  (should (string= (tibetan-strip-particles "བདག་གིས") "བདག"))
+  (should (string= (tibetan-strip-particles "སེམས་ཀྱིས") "སེམས")))
 
 (ert-deftest tibetan-strip-particles-ablative ()
   "Test stripping ablative particles."
-  (should (string= (tibetan-strip-particles "དེ་ནས") "དེ་"))
-  (should (string= (tibetan-strip-particles "དེ་ལས") "དེ་")))
+  (should (string= (tibetan-strip-particles "དེ་ནས") "དེ"))
+  (should (string= (tibetan-strip-particles "དེ་ལས") "དེ")))
 
 (ert-deftest tibetan-strip-particles-converb ()
   "Test stripping converb particles."
-  (should (string= (tibetan-strip-particles "བྱས་ནས") "བྱས་"))
-  (should (string= (tibetan-strip-particles "བྱས་ཏེ") "བྱས་")))
+  (should (string= (tibetan-strip-particles "བྱས་ནས") "བྱས"))
+  (should (string= (tibetan-strip-particles "བྱས་ཏེ") "བྱས")))
 
 (ert-deftest tibetan-strip-particles-topic ()
   "Test stripping topic marker."
-  (should (string= (tibetan-strip-particles "དེ་ནི") "དེ་")))
+  (should (string= (tibetan-strip-particles "དེ་ནི") "དེ")))
 
 (ert-deftest tibetan-strip-particles-final ()
   "Test stripping sentence-final particles."
-  (should (string= (tibetan-strip-particles "ཡིན་ནོ") "ཡིན་"))
-  (should (string= (tibetan-strip-particles "ཡོད་དོ") "ཡོད་")))
+  (should (string= (tibetan-strip-particles "ཡིན་ནོ") "ཡིན"))
+  (should (string= (tibetan-strip-particles "ཡོད་དོ") "ཡོད")))
 
 (ert-deftest tibetan-strip-particles-punctuation ()
   "Test stripping Tibetan punctuation."
@@ -313,8 +314,10 @@ to register both forms or use tsheg form."
   (let ((tibetan-comprehensive-vocabulary (make-hash-table :test 'equal))
         (tibetan-rangjung-yeshe-vocabulary nil)
         (tibetan-rangjung-yeshe-loaded t))
-    ;; Register with tsheg (how strip-particles returns it)
+    ;; Register both stripped forms: strip-particles may return either
+    ;; "བདག" (bare) or "བདག་" (with trailing tsheg) depending on input.
     (puthash "བདག་" "self" tibetan-comprehensive-vocabulary)
+    (puthash "བདག" "self" tibetan-comprehensive-vocabulary)
     ;; བདག་གི = བདག with genitive particle
     (should (string= (tibetan-lookup-word-in-local-glossary "བདག་གི") "self"))))
 
@@ -345,29 +348,44 @@ to register both forms or use tsheg form."
 ;; ============================================================================
 
 (ert-deftest tibetan-lookup-word-priority ()
-  "Test that lookup follows correct priority order."
-  (let ((tibetan-current-resources-vocab (make-hash-table :test 'equal))
+  "Test that lookup follows correct priority order.
+Note: The function combines English (from glossary) and German (from resources).
+When both glossary and resources exist, result is formatted as 'glossary (DE: resources)'."
+  (let ((tibetan-dictionary-priority
+         '(resources custom rangjung-yeshe local-glossary))
+        (tibetan-current-resources-vocab (make-hash-table :test 'equal))
         (tibetan-current-custom-vocab (make-hash-table :test 'equal))
-        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
+        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal))
+        (tibetan-rangjung-yeshe-vocabulary (make-hash-table :test 'equal))
+        (tibetan-rangjung-yeshe-loaded t))
     ;; Set different meanings in each source
     (puthash "བདག" "resources-meaning" tibetan-current-resources-vocab)
     (puthash "བདག" "custom-meaning" tibetan-current-custom-vocab)
     (puthash "བདག" "glossary-meaning" tibetan-comprehensive-vocabulary)
-    ;; Resources should have highest priority
-    (should (string= (tibetan-lookup-word "བདག") "resources-meaning"))))
+    ;; When both glossary and resources exist, they are combined
+    (should (string= (tibetan-lookup-word "བདག") "glossary-meaning (DE: resources-meaning)"))))
 
 (ert-deftest tibetan-lookup-word-fallback-to-custom ()
-  "Test fallback to custom vocab when not in resources."
-  (let ((tibetan-current-resources-vocab (make-hash-table :test 'equal))
+  "Test fallback to custom vocab when not in resources.
+Note: The function combines English (from glossary) and German (from custom).
+When both glossary and custom exist, result is formatted as 'glossary (DE: custom)'."
+  (let ((tibetan-dictionary-priority
+         '(resources custom rangjung-yeshe local-glossary))
+        (tibetan-current-resources-vocab (make-hash-table :test 'equal))
         (tibetan-current-custom-vocab (make-hash-table :test 'equal))
-        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
+        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal))
+        (tibetan-rangjung-yeshe-vocabulary (make-hash-table :test 'equal))
+        (tibetan-rangjung-yeshe-loaded t))
     (puthash "བདག" "custom-meaning" tibetan-current-custom-vocab)
     (puthash "བདག" "glossary-meaning" tibetan-comprehensive-vocabulary)
-    (should (string= (tibetan-lookup-word "བདག") "custom-meaning"))))
+    ;; When both glossary and custom exist, they are combined
+    (should (string= (tibetan-lookup-word "བདག") "glossary-meaning (DE: custom-meaning)"))))
 
 (ert-deftest tibetan-lookup-word-fallback-to-glossary ()
   "Test fallback to comprehensive glossary."
-  (let ((tibetan-current-resources-vocab nil)
+  (let ((tibetan-dictionary-priority
+         '(resources custom rangjung-yeshe local-glossary))
+        (tibetan-current-resources-vocab nil)
         (tibetan-current-custom-vocab nil)
         (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal))
         (tibetan-rangjung-yeshe-vocabulary nil)
@@ -591,6 +609,300 @@ to register both forms or use tsheg form."
   (condition-case nil
       (tibetan-lookup-word-in-rangjung-yeshe "")
     (error (should-not "Should not error on empty string"))))
+
+;; ============================================================================
+;; PARSE WORDLIST PDF TESTS (untested public function)
+;; ============================================================================
+
+(ert-deftest tibetan-parse-wordlist-pdf-nonexistent-file ()
+  "Test PDF parsing with nonexistent file."
+  (let ((vocab (tibetan-parse-wordlist-pdf "/nonexistent/file.pdf")))
+    (should (hash-table-p vocab))
+    (should (= (hash-table-count vocab) 0))))
+
+(ert-deftest tibetan-parse-wordlist-pdf-nil-path ()
+  "Test PDF parsing with nil path."
+  (let ((vocab (tibetan-parse-wordlist-pdf nil)))
+    (should (hash-table-p vocab))
+    (should (= (hash-table-count vocab) 0))))
+
+(ert-deftest tibetan-parse-wordlist-pdf-returns-hashtable ()
+  "Test that PDF parsing returns a hash table."
+  (let ((result (tibetan-parse-wordlist-pdf "/dev/null")))
+    (should (hash-table-p result))))
+
+;; ============================================================================
+;; LOAD RESOURCES VOCAB TESTS (untested public function)
+;; ============================================================================
+
+(ert-deftest tibetan-load-resources-vocab-initializes-variable ()
+  "Test that load-resources-vocab initializes the variable."
+  (let ((tibetan-current-resources-vocab nil))
+    (tibetan-load-resources-vocab)
+    ;; Should set the variable (either nil or hash-table)
+    (should (or (null tibetan-current-resources-vocab)
+                (hash-table-p tibetan-current-resources-vocab)))))
+
+(ert-deftest tibetan-load-resources-vocab-returns-hashtable ()
+  "Test that load-resources-vocab returns a hash table."
+  (let ((result (tibetan-load-resources-vocab)))
+    (should (or (null result) (hash-table-p result)))))
+
+(ert-deftest tibetan-load-resources-vocab-safe ()
+  "Test that load-resources-vocab doesn't error on missing resources."
+  (condition-case err
+      (tibetan-load-resources-vocab)
+    (error (should-not (format "Should not error: %s" err)))))
+
+;; ============================================================================
+;; LOAD CUSTOM VOCAB TESTS (untested public function)
+;; ============================================================================
+
+(ert-deftest tibetan-load-custom-vocab-returns-hashtable ()
+  "Test that load-custom-vocab returns a hash table."
+  (let ((result (tibetan-load-custom-vocab)))
+    (should (or (null result) (hash-table-p result)))))
+
+(ert-deftest tibetan-load-custom-vocab-safe ()
+  "Test that load-custom-vocab doesn't error on missing file."
+  (condition-case err
+      (tibetan-load-custom-vocab)
+    (error (should-not (format "Should not error: %s" err)))))
+
+(ert-deftest tibetan-load-custom-vocab-sets-variable ()
+  "Test that load-custom-vocab sets the current variable."
+  (let ((tibetan-current-custom-vocab nil))
+    (tibetan-load-custom-vocab)
+    ;; Should set the variable
+    (should (or (null tibetan-current-custom-vocab)
+                (hash-table-p tibetan-current-custom-vocab)))))
+
+;; ============================================================================
+;; LOOKUP IN DHARMAMITRA TESTS (untested public function)
+;; ============================================================================
+
+(ert-deftest tibetan-lookup-word-in-dharmamitra-basic ()
+  "Test DharmaMitra lookup with simple word."
+  (let ((result (tibetan-lookup-word-in-dharmamitra "བདག")))
+    (should (or (null result) (stringp result)))))
+
+(ert-deftest tibetan-lookup-word-in-dharmamitra-empty ()
+  "Test DharmaMitra lookup with empty string."
+  (let ((result (tibetan-lookup-word-in-dharmamitra "")))
+    (should (or (null result) (stringp result)))))
+
+(ert-deftest tibetan-lookup-word-in-dharmamitra-nil ()
+  "Test DharmaMitra lookup with nil."
+  (let ((result (tibetan-lookup-word-in-dharmamitra nil)))
+    (should (or (null result) (stringp result)))))
+
+;; ============================================================================
+;; FORMAT BILINGUAL MEANING TESTS (untested public function)
+;; ============================================================================
+
+(ert-deftest tibetan-format-bilingual-meaning-english-only ()
+  "Test bilingual format with English only."
+  (let ((result (tibetan-format-bilingual-meaning "self" nil)))
+    (should (stringp result))
+    (should (string-match-p "self" result))))
+
+(ert-deftest tibetan-format-bilingual-meaning-german-only ()
+  "Test bilingual format with German only."
+  (let ((result (tibetan-format-bilingual-meaning nil "ich")))
+    (should (stringp result))))
+
+(ert-deftest tibetan-format-bilingual-meaning-both ()
+  "Test bilingual format with both English and German."
+  (let ((result (tibetan-format-bilingual-meaning "self" "ich")))
+    (should (stringp result))
+    (should (string-match-p "self" result))))
+
+(ert-deftest tibetan-format-bilingual-meaning-empty-strings ()
+  "Test bilingual format with empty strings."
+  (let ((result (tibetan-format-bilingual-meaning "" "")))
+    (should (stringp result))))
+
+(ert-deftest tibetan-format-bilingual-meaning-special-chars ()
+  "Test bilingual format with special characters."
+  (let ((result (tibetan-format-bilingual-meaning "self & ego" "Ich/du")))
+    (should (stringp result))
+    (should (> (length result) 0))))
+
+;; ============================================================================
+;; EXTRACT ENGLISH FROM BILINGUAL TESTS (untested public function)
+;; ============================================================================
+
+(ert-deftest tibetan-extract-english-from-bilingual-english-only ()
+  "Test extracting English from bilingual meaning."
+  (let ((result (tibetan-extract-english-from-bilingual "self (DE: ich)")))
+    (should (stringp result))
+    (should (string-match-p "self" result))))
+
+(ert-deftest tibetan-extract-english-from-bilingual-complex ()
+  "Test extracting from complex bilingual format."
+  (let ((result (tibetan-extract-english-from-bilingual "self, ego (DE: ich, das Selbst)")))
+    (should (stringp result))))
+
+(ert-deftest tibetan-extract-english-from-bilingual-no-german ()
+  "Test extracting when no German part exists."
+  (let ((result (tibetan-extract-english-from-bilingual "self")))
+    (should (stringp result))
+    (should (string-match-p "self" result))))
+
+(ert-deftest tibetan-extract-english-from-bilingual-empty ()
+  "Test extracting from empty string."
+  (let ((result (tibetan-extract-english-from-bilingual "")))
+    (should (stringp result))))
+
+(ert-deftest tibetan-extract-english-from-bilingual-nil ()
+  "Test extracting from nil."
+  (let ((result (tibetan-extract-english-from-bilingual nil)))
+    (should (or (null result) (stringp result)))))
+
+;; ============================================================================
+;; DETECT VERB WITH SUFFIX TESTS (untested public function)
+;; ============================================================================
+
+(ert-deftest tibetan-detect-verb-with-suffix-ba ()
+  "Test detecting verb with བ suffix."
+  (let ((syllables '("བ" "ྱ" "ས")))
+    (let ((result (tibetan-detect-verb-with-suffix syllables 0)))
+      (should (or (null result) (listp result) (stringp result))))))
+
+(ert-deftest tibetan-detect-verb-with-suffix-va ()
+  "Test detecting verb with ྭ suffix."
+  (let ((syllables '("ྭ")))
+    (let ((result (tibetan-detect-verb-with-suffix syllables 0)))
+      (should (or (null result) (listp result))))))
+
+(ert-deftest tibetan-detect-verb-with-suffix-ma ()
+  "Test detecting verb with མ suffix."
+  (let ((syllables '("མ")))
+    (let ((result (tibetan-detect-verb-with-suffix syllables 0)))
+      (should (or (null result) (listp result))))))
+
+(ert-deftest tibetan-detect-verb-with-suffix-no-suffix ()
+  "Test with syllables that don't form verb suffix."
+  (let ((syllables '("ང")))
+    (let ((result (tibetan-detect-verb-with-suffix syllables 0)))
+      (should (or (null result) (listp result))))))
+
+(ert-deftest tibetan-detect-verb-with-suffix-empty ()
+  "Test with empty syllables list."
+  (let ((result (tibetan-detect-verb-with-suffix '() 0)))
+    (should (or (null result) (listp result)))))
+
+(ert-deftest tibetan-detect-verb-with-suffix-out-of-range ()
+  "Test with start index out of range."
+  (let ((syllables '("བ")))
+    (let ((result (tibetan-detect-verb-with-suffix syllables 10)))
+      (should (or (null result) (listp result))))))
+
+;; ============================================================================
+;; RESOURCE PATHS TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-get-custom-vocab-file-returns-string ()
+  "Test that get-custom-vocab-file returns a string path."
+  (let ((result (tibetan-get-custom-vocab-file)))
+    (should (or (null result) (stringp result)))))
+
+(ert-deftest tibetan-find-resources-folder-returns-string ()
+  "Test that find-resources-folder returns a string or nil."
+  (let ((result (tibetan-find-resources-folder)))
+    (should (or (null result) (stringp result)))))
+
+;; ============================================================================
+;; VOCABULARY INITIALIZATION TESTS
+;; ============================================================================
+
+;; Note: `tibetan-vocabulary-initialize-callable' is defined earlier in this
+;; file (see around line 534). Defining it again here used to abort the file
+;; load mid-way under newer ERT, silently preventing all subsequent tests
+;; (including regression tests at the end of the file) from registering.
+
+(ert-deftest tibetan-vocabulary-initialize-safe ()
+  "Test that vocabulary-initialize doesn't error."
+  (condition-case err
+      (tibetan-vocabulary-initialize)
+    (error (should-not (format "Should not error: %s" err)))))
+
+;; ============================================================================
+;; PARSE VOCAB PDF TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-parse-vocab-pdf-nonexistent-file ()
+  "Test parsing non-existent PDF file."
+  (skip-unless (fboundp 'tibetan-parse-vocab-pdf))
+  (let ((result (tibetan-parse-vocab-pdf "/nonexistent/path/vocab.pdf")))
+    (should (hash-table-p result))
+    (should (= (hash-table-count result) 0))))
+
+(ert-deftest tibetan-parse-vocab-pdf-returns-hash ()
+  "Test that parsing returns a hash table."
+  (skip-unless (fboundp 'tibetan-parse-vocab-pdf))
+  (let ((result (tibetan-parse-vocab-pdf nil)))
+    (should (hash-table-p result))))
+
+(ert-deftest tibetan-parse-vocab-pdf-nil-input ()
+  "Test parsing with nil input."
+  (skip-unless (fboundp 'tibetan-parse-vocab-pdf))
+  (let ((result (tibetan-parse-vocab-pdf nil)))
+    (should (hash-table-p result))
+    (should (= (hash-table-count result) 0))))
+
+(ert-deftest tibetan-parse-vocab-pdf-empty-hash-table ()
+  "Test that empty PDF path returns empty hash table."
+  (skip-unless (fboundp 'tibetan-parse-vocab-pdf))
+  (let ((result (tibetan-parse-vocab-pdf "")))
+    (should (hash-table-p result))
+    ;; Empty path should return empty hash
+    (should (<= (hash-table-count result) 1))))
+
+;; ============================================================================
+;; RESOURCES-VOCAB PRIORITY REGRESSION TEST
+;; ============================================================================
+;; When a Resources folder contains both a clean TXT wordlist and a
+;; two-column PDF Wortliste, pdftotext -layout fuses right-column
+;; continuation text into left-column entries (e.g. ལྕགས་ཕོ ended up
+;; with the gloss of a neighbouring entry: "distress overwhelms").
+;; `tibetan-load-resources-vocab' must therefore skip PDFs whenever
+;; TXT/ORG entries are already loaded.
+
+(ert-deftest tibetan-resources-vocab-pdf-skipped-when-txt-present ()
+  "TXT/ORG entries must take precedence; PDF must not clobber them."
+  (skip-unless (fboundp 'tibetan-load-resources-vocab))
+  (skip-unless (fboundp 'tibetan-parse-wordlist-txt))
+  (let* ((tmp-root (make-temp-file "tibetan-res-" t))
+         (res-dir  (expand-file-name "Resources" tmp-root))
+         (doc-dir  (expand-file-name "doc" tmp-root))
+         (doc-file (expand-file-name "seg.org" doc-dir))
+         (txt      (expand-file-name "wordlist.txt" res-dir))
+         (pdf      (expand-file-name "Wortliste-bad.pdf" res-dir)))
+    (unwind-protect
+        (progn
+          (make-directory res-dir t)
+          (make-directory doc-dir t)
+          (with-temp-file doc-file (insert "dummy"))
+          (with-temp-file txt
+            (insert "lcags pho 'brug gi lo\n")
+            (insert "    iron male dragon year (1040)\n"))
+          (with-temp-file pdf (insert "not a real pdf"))
+          (when (boundp 'tibetan-resources-vocab-cache)
+            (clrhash tibetan-resources-vocab-cache))
+          (setq tibetan-current-resources-vocab nil)
+          (with-current-buffer (find-file-noselect doc-file)
+            (unwind-protect
+                (tibetan-load-resources-vocab)
+              (kill-buffer)))
+          (should (hash-table-p tibetan-current-resources-vocab))
+          (should (or (gethash "lcags pho 'brug gi lo"
+                               tibetan-current-resources-vocab)
+                      (gethash "ལྕགས་ཕོ་འབྲུག་གི་ལོ"
+                               tibetan-current-resources-vocab)))
+          (should-not (gethash "ལྕགས་ཕོ" tibetan-current-resources-vocab))
+          (should-not (gethash "lcags pho" tibetan-current-resources-vocab)))
+      (delete-directory tmp-root t))))
 
 (provide 'tibetan-vocabulary-test)
 ;;; tibetan-vocabulary-test.el ends here

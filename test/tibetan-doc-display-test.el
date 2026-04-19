@@ -98,6 +98,40 @@
     (should tibetan-doc-display-mode)))
 
 ;; ============================================================================
+;; TEXT SCALE FUNCTION TESTS
+;; ============================================================================
+
+(ert-deftest tibetan-set-text-scale-is-command ()
+  "Test that tibetan-set-text-scale is an interactive command."
+  (should (fboundp 'tibetan-set-text-scale))
+  (should (commandp 'tibetan-set-text-scale)))
+
+(ert-deftest tibetan-set-text-scale-sets-variable ()
+  "Test that tibetan-set-text-scale updates the scale factor variable."
+  (let ((original-value tibetan-text-scale-factor))
+    (unwind-protect
+        (progn
+          (tibetan-set-text-scale 1.5)
+          (should (= tibetan-text-scale-factor 1.5))
+          (tibetan-set-text-scale 1.8)
+          (should (= tibetan-text-scale-factor 1.8)))
+      (setq tibetan-text-scale-factor original-value))))
+
+(ert-deftest tibetan-set-text-scale-accepts-numeric-input ()
+  "Test that tibetan-set-text-scale accepts valid numeric values."
+  (let ((original-value tibetan-text-scale-factor))
+    (unwind-protect
+        (progn
+          ;; Test various valid values
+          (tibetan-set-text-scale 1.0)
+          (should (= tibetan-text-scale-factor 1.0))
+          (tibetan-set-text-scale 1.6)
+          (should (= tibetan-text-scale-factor 1.6))
+          (tibetan-set-text-scale 2.0)
+          (should (= tibetan-text-scale-factor 2.0)))
+      (setq tibetan-text-scale-factor original-value))))
+
+;; ============================================================================
 ;; UTILITY FUNCTION TESTS
 ;; ============================================================================
 

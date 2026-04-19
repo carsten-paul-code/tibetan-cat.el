@@ -16,6 +16,9 @@
 ;; Load modules to test
 (require 'tibetan-doc-format)
 (require 'tibetan-ocr-validate)
+(require 'tibetan-doc-prep)
+(require 'tibetan-doc-prep-init)
+(require 'tibetan-ocr-runner)
 
 ;; ============================================================================
 ;; TEST DATA
@@ -227,6 +230,49 @@
   (should (equal (tibetan-ocr--model-name 'modern) "Modern"))
   (should (equal (tibetan-ocr--model-name 'pecha) "Woodblock"))  ; alias
   (should (equal (tibetan-ocr--model-name 'unknown) "Woodblock")))  ; default
+
+;; ============================================================================
+;; DOC-PREP WIZARD AND INTERACTIVE COMMANDS
+;; ============================================================================
+
+(ert-deftest tibetan-doc-prep-wizard-is-command ()
+  "Test that tibetan-doc-prep-wizard is an interactive command."
+  (should (fboundp 'tibetan-doc-prep-wizard))
+  (should (commandp 'tibetan-doc-prep-wizard)))
+
+(ert-deftest tibetan-doc-prep-ocr-is-command ()
+  "Test that tibetan-doc-prep-ocr is callable."
+  (should (fboundp 'tibetan-doc-prep-ocr))
+  (should (commandp 'tibetan-doc-prep-ocr)))
+
+(ert-deftest tibetan-doc-prep-correct-is-command ()
+  "Test that tibetan-doc-prep-correct is callable."
+  (should (fboundp 'tibetan-doc-prep-correct))
+  (should (commandp 'tibetan-doc-prep-correct)))
+
+(ert-deftest tibetan-doc-prep-format-is-command ()
+  "Test that tibetan-doc-prep-format is callable."
+  (should (fboundp 'tibetan-doc-prep-format))
+  (should (commandp 'tibetan-doc-prep-format)))
+
+(ert-deftest tibetan-doc-prep-quick-pecha-is-command ()
+  "Test that tibetan-doc-prep-quick-pecha is callable."
+  (should (fboundp 'tibetan-doc-prep-quick-pecha))
+  (should (commandp 'tibetan-doc-prep-quick-pecha)))
+
+(ert-deftest tibetan-doc-prep-quick-verse-is-command ()
+  "Test that tibetan-doc-prep-quick-verse is callable."
+  (should (fboundp 'tibetan-doc-prep-quick-verse))
+  (should (commandp 'tibetan-doc-prep-quick-verse)))
+
+;; ============================================================================
+;; DOC-PREP INIT STATUS
+;; ============================================================================
+
+(ert-deftest tibetan-doc-prep-init-status-is-command ()
+  "Test that tibetan-doc-prep-init-status is callable."
+  (should (fboundp 'tibetan-doc-prep-init-status))
+  (should (commandp 'tibetan-doc-prep-init-status)))
 
 ;; ============================================================================
 ;; HELPER FUNCTION FOR RUNNING TESTS

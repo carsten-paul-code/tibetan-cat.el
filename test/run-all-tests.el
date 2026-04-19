@@ -94,8 +94,20 @@
 ;; Source-aware Claude prompt (reads #+TIBETAN_CLAUDE_CONTEXT: and friends)
 (condition-case nil (require 'tibetan-analysis-claude-prompt-test) (error nil))
 
+;; Three-section Claude integration (Translation / Grammar / Context)
+(condition-case nil (require 'tibetan-analysis-claude-sections-test) (error nil))
+
 ;; Inline segment → Org heading migration
 (condition-case nil (require 'tibetan-segment-migrate-test) (error nil))
+
+;; Interlinear gloss + particle overview
+(condition-case nil (require 'tibetan-interlinear-test) (error nil))
+
+;; Throttled Claude request queue (concurrency cap + 429 retry)
+(condition-case nil (require 'tibetan-claude-queue-test) (error nil))
+
+;; Persistent sentence-level analysis (C-c s A / C-c s R / C-c s r)
+(condition-case nil (require 'tibetan-sentence-persist-test) (error nil))
 
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here
