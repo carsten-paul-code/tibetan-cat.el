@@ -106,6 +106,9 @@
 (require 'tibetan-enhanced-display)     ; Enhanced analysis display
 (require 'tibetan-clause-segmenter)     ; Round-2: clauses + NPs + argument structure
 
+;; Interlinear gloss + Particle Overview (Bialek Portfolio integration)
+(require 'tibetan-interlinear nil t)    ; Interlinear Wylie with glosses + particle overview
+
 ;; AI Translation (optional - soft load)
 (require 'tibetan-mitra-translation nil t)  ; Gemma-2-Mitra-E integration (Ollama/HuggingFace)
 
@@ -123,7 +126,9 @@
 ;; LOAD PERSISTENCE MODULES
 ;; ============================================================================
 
+(require 'tibetan-claude-queue)        ; Throttled Claude request queue (concurrency cap + 429 retry)
 (require 'tibetan-analysis-persist)    ; Persistent segment analysis (C-c u A / C-c u R)
+(require 'tibetan-sentence-persist)    ; Persistent sentence analysis (C-c s A / C-c s R / C-c s r)
 (require 'tibetan-compound-analysis)   ; Persistent compound analysis (C-c v A / C-c v R)
 (require 'tibetan-clause-analysis)     ; Clause analysis (converbs, main verbs)
 (require 'tibetan-auto-analysis)       ; Auto-analyze document (C-c u B)
@@ -139,6 +144,18 @@
     (require 'tibetan-doc-prep)        ; Document preparation wizard (OCR, validate, format)
   (error (message "⚠ tibetan-doc-prep failed: %s" (error-message-string err))))
 (require 'tibetan-sentence-structure)      ; Sentence structure tools
+
+;; ============================================================================
+;; CONFIGURATION — BIALEK PORTFOLIO
+;; ============================================================================
+
+;; Path to the Bialek Portfolio org file for Particle Overview generation.
+;; The interlinear gloss works without it (using inline Bialek data), but
+;; the Particle Overview section gains Portfolio excerpts when this is set.
+(when (boundp 'tibetan-interlinear-portfolio-file)
+  (setq tibetan-interlinear-portfolio-file
+        (expand-file-name
+         "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/WS25-26/Hausarbeiten/Tibetisch III/Hausarbeit_Tibetisch_III.org")))
 
 ;; ============================================================================
 ;; LOAD KEYBINDINGS
@@ -176,6 +193,12 @@ Loads glossaries and prepares the system for use."
       (insert "  C-c u R   Re-analyze segment (preserves your notes)\n")
       (insert "\n")
 
+      (insert "SENTENCE ANALYSIS (groups multiple segments):\n")
+      (insert "  C-c s A   Persistent sentence analysis (Roehrich + Claude discourse)\n")
+      (insert "  C-c s R   Re-analyze sentence (preserves your notes; C-u re-runs Claude)\n")
+      (insert "  C-c s r   Batch re-analyze all sentences\n")
+      (insert "\n")
+
       (insert "COMPOUND (verse/sentence) ANALYSIS:\n")
       (insert "  C-c v v   Quick verse analysis (meter + vocab)\n")
       (insert "  C-c v A   Persistent compound analysis (verse/sentence)\n")
@@ -204,6 +227,12 @@ Loads glossaries and prepares the system for use."
       (insert "  C-c s w   Sentence workspace (editable translation workspace)\n")
       (insert "  C-c u E   Toggle auto-analysis mode (or C-c u e)\n")
       (insert "  C-c u v   Reload all glossaries\n")
+      (insert "\n")
+
+      (insert "CLAUDE REQUEST QUEUE (throttling + 429 retry):\n")
+      (insert "  M-x tibetan-claude-queue-show-status     Show pending/in-flight\n")
+      (insert "  M-x tibetan-claude-queue-cancel-pending  Drop queued requests\n")
+      (insert "  M-x tibetan-claude-queue-reset-stats     Zero lifetime counters\n")
       (insert "\n")
 
       (insert "───────────────────────────────────────────────────────────────────\n")

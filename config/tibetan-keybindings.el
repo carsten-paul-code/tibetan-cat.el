@@ -100,6 +100,15 @@
   ;; - PRESERVES your notes, translation, and footnotes
   ;; - Updates hash and last-analyzed date
 
+(global-set-key (kbd "C-c u r") 'tibetan-analysis-batch-reanalyze)
+  ;; Batch re-analyze ALL analysis files in the analysis folder:
+  ;; - Iterates over every seg-NNN*.org in analysis/ (in order)
+  ;; - Regenerates each Auto-Analysis section
+  ;; - PRESERVES My Notes, Working Translation, Footnotes
+  ;; - PRESERVES existing *** Claude translation (unless you opt in
+  ;;   to re-request, which will fan out N async Claude calls)
+  ;; - Reports progress and summary when done
+
 ;; ============================================================================
 ;; BATCH SEGMENT ANALYSIS - C-c u B
 ;; ============================================================================
@@ -199,24 +208,26 @@
 (global-set-key (kbd "C-c u =") 'tibetan-set-text-scale)
   ;; Set exact Tibetan text scale factor
 
+;;;###autoload
 (defun tibetan-increase-text-scale ()
   "Increase Tibetan text scale by 0.1."
   (interactive)
   (tibetan-set-text-scale (+ (or tibetan-text-scale-factor 1.4) 0.1)))
 
+;;;###autoload
 (defun tibetan-decrease-text-scale ()
   "Decrease Tibetan text scale by 0.1 (minimum 1.0)."
   (interactive)
   (tibetan-set-text-scale (max 1.0 (- (or tibetan-text-scale-factor 1.4) 0.1))))
 
 ;; ============================================================================
-;; SENTENCE STRUCTURE - C-c s S / C-c s s
+;; SENTENCE STRUCTURE - C-c s S / C-c s s / C-c s m
 ;; ============================================================================
 
 (global-set-key (kbd "C-c s S") 'tibetan-add-sentence-structure)
   ;; Add sentence structure to document:
   ;; - Analyzes segment endings to detect sentence boundaries
-  ;; - Inserts ** Sentence N headings above segments
+  ;; - Inserts *** Sentence N headings above segments
   ;; - Modifies segment headings from *** to ****
   ;; - Works best with segments that end with sentence-final particles
 
@@ -230,6 +241,39 @@
   ;; Manually mark current segment as sentence start:
   ;; - Use when automatic detection misses a boundary
   ;; - Inserts sentence heading and demotes segment
+
+;; ============================================================================
+;; PERSISTENT SENTENCE ANALYSIS - C-c s A / C-c s R / C-c s r
+;; ============================================================================
+;;
+;; Sentence-level analogues of the segment-level C-c u A / C-c u R / C-c u r.
+;; A "sentence" here groups one or more contiguous segments under a *** Sentence N
+;; heading (created by C-c s S).  Each sentence gets its own analysis/sent-NNN.org
+;; file holding the Roehrich (or other published) translation, a class translation,
+;; the three Claude sections (Translation / Grammar / Context), and free-form
+;; working translation, notes, footnotes.
+
+(global-set-key (kbd "C-c s A") 'tibetan-sentence-open-analysis)
+  ;; Open or create persistent analysis for the sentence at point:
+  ;; - Walks up to the enclosing *** Sentence N heading
+  ;; - Creates analysis/sent-NNN.org if missing (with #+SEGMENTS, #+TIBETAN_HASH)
+  ;; - Opens in side window (right)
+  ;; - Triggers initial Claude discourse-level analysis on first creation
+  ;; - Warns if any child segment text changed since last analysis
+
+(global-set-key (kbd "C-c s R") 'tibetan-sentence-reanalyze)
+  ;; Re-analyze the current sentence:
+  ;; - Regenerates Tibetan Text / Wylie / #+SEGMENTS / #+TIBETAN_HASH
+  ;; - PRESERVES Roehrich, Class Translation, Working Translation, My Notes,
+  ;;   Footnotes, and any existing Claude Translation/Grammar/Context
+  ;; - With C-u prefix: also re-issues the Claude discourse-level request
+
+(global-set-key (kbd "C-c s r") 'tibetan-sentence-batch-reanalyze)
+  ;; Batch re-analyze ALL sent-NNN.org files in the analysis folder:
+  ;; - Regenerates structural sections from the source file
+  ;; - PRESERVES user content as in C-c s R
+  ;; - With C-u: also re-issues Claude on every sentence (N async calls)
+  ;; - Reports progress and a summary when done
 
 ;; ============================================================================
 ;; DOCUMENT PREPARATION - C-c u P / C-c u Y

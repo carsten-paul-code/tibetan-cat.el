@@ -15,6 +15,28 @@
 (easy-menu-define tibetan-cat-menu global-map
   "Menu for Tibetan CAT (Computer-Assisted Translation) tools."
   '("Tibetan"
+    ("Document Preparation"
+     ["Preparation Wizard..." tibetan-doc-prep-wizard
+      :help "Full pipeline: Source → OCR → Validation → Formatting"
+      :active (fboundp 'tibetan-doc-prep-wizard)]
+     "---"
+     ["Format Buffer (Segment)" tibetan-doc-format-buffer
+      :help "Split buffer text at shad boundaries into numbered segments"
+      :active (fboundp 'tibetan-doc-format-buffer)]
+     ["Format Region (Segment)" tibetan-doc-format-region
+      :help "Split selected text at shad boundaries into numbered segments"
+      :active (fboundp 'tibetan-doc-format-region)]
+     "---"
+     ["OCR from PDF/Image..." tibetan-doc-prep-ocr
+      :help "Run OCR on a PDF or image file"
+      :active (fboundp 'tibetan-doc-prep-ocr)]
+     ["Validate Buffer" tibetan-doc-prep-validate
+      :help "Validate current buffer against dictionaries"
+      :active (fboundp 'tibetan-doc-prep-validate)]
+     ["AI Correct Buffer" tibetan-doc-prep-correct
+      :help "AI-assisted correction of OCR errors"
+      :active (fboundp 'tibetan-doc-prep-correct)])
+    "---"
     ["Segment Info (C-c u i)" tibetan-segment-info
      :help "Show comprehensive segment analysis in side window"]
     ["Enhanced Segment Info (C-c u I)" tibetan-segment-info-enhanced
@@ -25,6 +47,8 @@
       :help "Open or create persistent analysis file for current segment"]
      ["Re-analyze Segment (C-c u R)" tibetan-reanalyze-segment
       :help "Regenerate analysis while preserving your notes"]
+     ["Batch Re-analyze Folder (C-c u r)" tibetan-analysis-batch-reanalyze
+      :help "Re-run auto-analysis on every seg-NNN*.org, preserving notes, working translation, and Claude translation"]
      ["Batch Analyze All Segments (C-c u B)" tibetan-auto-analyze-document
       :help "Analyze all segments in buffer, with option to skip or regenerate existing"]
      "---"
@@ -32,6 +56,23 @@
       :help "Re-request DharmaMitra translation (run in analysis file)"]
      ["Copy DharmaMitra to Working (C-c u W)" tibetan-copy-dharmamitra-to-working
       :help "Copy DharmaMitra translation to Working Translation section"])
+    ("Persistent Sentence Analysis"
+     ["Open/Create Sentence Analysis (C-c s A)" tibetan-sentence-open-analysis
+      :help "Open or create persistent analysis file for the sentence at point"
+      :active (fboundp 'tibetan-sentence-open-analysis)]
+     ["Re-analyze Sentence (C-c s R)" tibetan-sentence-reanalyze
+      :help "Regenerate sentence analysis while preserving your notes"
+      :active (fboundp 'tibetan-sentence-reanalyze)]
+     ["Batch Re-analyze Sentence Folder (C-c s r)" tibetan-sentence-batch-reanalyze
+      :help "Re-run auto-analysis on every sent-NNN*.org, preserving notes and Claude sections"
+      :active (fboundp 'tibetan-sentence-batch-reanalyze)]
+     "---"
+     ["Show Claude Queue Status" tibetan-claude-queue-show-status
+      :help "Show how many Claude requests are pending / in-flight / done"
+      :active (fboundp 'tibetan-claude-queue-show-status)]
+     ["Cancel Pending Claude Requests" tibetan-claude-queue-cancel-pending
+      :help "Drop queued Claude requests; in-flight requests still finish"
+      :active (fboundp 'tibetan-claude-queue-cancel-pending)])
     ("Compound/Verse Analysis"
      ["Open Compound Analysis (C-c v A)" tibetan-open-compound-analysis
       :help "Analyze verse or multi-line compound at point"]
@@ -55,11 +96,14 @@
       :help "Create sentence workspace with line-by-line analysis"]
      "---"
      ["Detect Sentence Boundaries (C-c s s)" tibetan-detect-sentence-boundaries
-      :help "Preview where sentence boundaries would be detected"]
+      :help "Preview where sentence boundaries would be detected"
+      :active (fboundp 'tibetan-detect-sentence-boundaries)]
      ["Add Sentence Structure (C-c s S)" tibetan-add-sentence-structure
-      :help "Add ** Sentence headings based on detected boundaries"]
+      :help "Add ** Sentence headings based on detected boundaries"
+      :active (fboundp 'tibetan-add-sentence-structure)]
      ["Mark Sentence Start (C-c s m)" tibetan-mark-sentence-start
-      :help "Manually mark current segment as starting a new sentence"])
+      :help "Manually mark current segment as starting a new sentence"
+      :active (fboundp 'tibetan-mark-sentence-start)])
     "---"
     ["Toggle Auto-Analysis (C-c u E)" tibetan-toggle-auto
      :help "Toggle automatic analysis as cursor moves between segments"
