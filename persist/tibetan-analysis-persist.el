@@ -1379,6 +1379,114 @@ unrelated reasons."
         (format "%s;\n%s // %s" de-ref de-rest en-rest))
        (t gloss)))))
 
+(defun tibetan-analysis--render-detailed-dictionary (tibetan-text vocab-pairs)
+  "Render the `** Detailed Dictionary' section for TIBETAN-TEXT.
+Inserts into the current buffer.  TIBETAN-TEXT is the raw input
+string; VOCAB-PAIRS is the segmentation's (word . gloss) alist used
+as a legacy fallback when the multi-source helper is unavailable.
+
+The section body is produced by `tibetan-vocab-extract-detailed'
+when present, enriched via `tibetan-vocab-multisource-entries' for
+the per-source breakdown (Resources / Steinert / Rangjung Yeshe /
+DharmaMitra).  Entries backed by a curated Resources list get a
+`★' marker on the head line.  Sanskrit is only emitted when the
+source entry itself carries it.  The bilingual gloss formatter
+keeps German // English pairs side by side."
+  (insert "** Detailed Dictionary\n")
+  (let ((vocab-list (condition-case nil
+                        (when (fboundp 'tibetan-vocab-extract-detailed)
+                          (tibetan-vocab-extract-detailed tibetan-text))
+                      (error nil))))
+    (if vocab-list
+        (progn
+          (dolist (entry vocab-list)
+            (let* ((tibetan (plist-get entry :tibetan))
+                   (wylie (plist-get entry :wylie))
+                   ;; Multi-source lookup: provided list first, then
+                   ;; Steinert block, then Rangjung Yeshe, others only
+                   ;; when they add a genuinely different gloss.
+                   ;; Sanskrit is emitted only when carried natively
+                   ;; by the source entry.
+                   (sources
+                    (condition-case nil
+                        (when (fboundp 'tibetan-vocab-multisource-entries)
+                          (tibetan-vocab-multisource-entries tibetan))
+                      (error nil)))
+                   ;; Provided-list entry gets a ★ marker on the head
+                   ;; line so students see at a glance that a curated
+                   ;; gloss exists for this word.
+                   (has-resources
+                    (cl-some (lambda (s)
+                               (let ((src (plist-get s :source)))
+                                 (and src
+                                      (string-prefix-p "Resources" src))))
+                             sources)))
+              ;; Dictionary-style head line: ◆ word [wylie] ★
+              (insert (format "◆ %s"
+                              (if (and wylie (stringp wylie)
+                                       (not (string-empty-p wylie))
+                                       (not (string= wylie tibetan)))
+                                  (format "%s [%s]" tibetan wylie)
+                                (tibetan-analysis--format-word-with-wylie
+                                 tibetan))))
+              (when has-resources (insert " ★"))
+              (insert "\n")
+              (if sources
+                  (dolist (src sources)
+                    (let* ((source-name (plist-get src :source))
+                           (gloss (or (plist-get src :detailed)
+                                      (plist-get src :primary)
+                                      "[no gloss]"))
+                           (skt (plist-get src :sanskrit))
+                           (formatted
+                            (tibetan-analysis--format-bilingual-gloss
+                             gloss))
+                           (lines (split-string formatted "\n")))
+                      (insert (format "  [%s]\n" source-name))
+                      (dolist (ln lines)
+                        (insert (format "    %s\n" ln)))
+                      ;; Sanskrit only when the entry itself supplied it.
+                      (when (and skt
+                                 (not (string-empty-p (string-trim skt))))
+                        (insert (format "    Skt: %s\n" skt)))))
+                ;; Fallback: legacy single-entry path if the
+                ;; multi-source helper is unavailable.
+                (let* ((detailed (plist-get entry :detailed))
+                       (primary (plist-get entry :primary))
+                       (sanskrit (plist-get entry :sanskrit))
+                       (source (plist-get entry :source))
+                       (meaning (or detailed primary "[not found]"))
+                       (formatted
+                        (tibetan-analysis--format-bilingual-gloss
+                         meaning))
+                       (lines (split-string formatted "\n")))
+                  (dolist (ln lines)
+                    (insert (format "  %s\n" ln)))
+                  (when sanskrit
+                    (insert (format "  Skt: %s\n" sanskrit)))
+                  (when source
+                    (insert (format "  [%s]\n" source)))))
+              (insert "\n")))
+          (insert "\n"))
+      ;; Fallback: use vocab-pairs if detailed system not available.
+      (if vocab-pairs
+          (progn
+            (dolist (pair vocab-pairs)
+              (let* ((word (car pair))
+                     (meaning (cdr pair))
+                     (root-form (tibetan-strip-particles word))
+                     (head (if (and root-form
+                                    (not (string-empty-p root-form))
+                                    (not (string= root-form word)))
+                               root-form
+                             word)))
+                (insert (format "◆ %s\n"
+                                (tibetan-analysis--format-word-with-wylie
+                                 head)))
+                (insert (format "  %s\n\n" (or meaning "[not found]")))))
+            (insert "\n"))
+        (insert "[No dictionary entries available]\n\n")))))
+
 (defun tibetan-analysis-generate-content (tibetan-text &optional seg-id source-text)
   "Generate auto-analysis content for TIBETAN-TEXT.
 Returns the analysis as a string (org-mode formatted).
@@ -1933,105 +2041,11 @@ affected, not the rest of the analysis."
 
             ;; ============================================================
             ;; SECTION 7: Detailed Dictionary (rich entries with Sanskrit)
+            ;; Rendered by the dedicated helper; kept as its own
+            ;; function so the output stays testable in isolation and
+            ;; the orchestrator can narrate sections one-per-call.
             ;; ============================================================
-            (insert "** Detailed Dictionary\n")
-            (let ((vocab-list (condition-case nil
-                                  (when (fboundp 'tibetan-vocab-extract-detailed)
-                                    (tibetan-vocab-extract-detailed tibetan-text))
-                                (error nil))))
-              (if vocab-list
-                  (progn
-                    (dolist (entry vocab-list)
-                      (let* ((tibetan (plist-get entry :tibetan))
-                             (wylie (plist-get entry :wylie))
-                             ;; Multi-source lookup: provided list first, then
-                             ;; Steinert block, then Rangjung Yeshe, others
-                             ;; only when they add a genuinely different gloss.
-                             ;; Sanskrit is emitted only when carried natively
-                             ;; by the source entry.
-                             (sources
-                              (condition-case nil
-                                  (when (fboundp 'tibetan-vocab-multisource-entries)
-                                    (tibetan-vocab-multisource-entries tibetan))
-                                (error nil)))
-                             ;; Provided-list entry gets a ★ marker on the head
-                             ;; line so students see at a glance that a curated
-                             ;; gloss exists for this word.
-                             (has-resources
-                              (cl-some (lambda (s)
-                                         (let ((src (plist-get s :source)))
-                                           (and src
-                                                (string-prefix-p "Resources" src))))
-                                       sources)))
-                        ;; Dictionary-style head line: ◆ word [wylie] ★
-                        ;; Route through the formatter so this stays in lock-step
-                        ;; with every other section.  If the multi-source entry
-                        ;; already carries a wylie string, let it win — otherwise
-                        ;; the formatter computes one from the Tibetan head.
-                        (insert (format "◆ %s"
-                                        (if (and wylie (stringp wylie)
-                                                 (not (string-empty-p wylie))
-                                                 (not (string= wylie tibetan)))
-                                            (format "%s [%s]" tibetan wylie)
-                                          (tibetan-analysis--format-word-with-wylie
-                                           tibetan))))
-                        (when has-resources (insert " ★"))
-                        (insert "\n")
-                        (if sources
-                            (dolist (src sources)
-                              (let* ((source-name (plist-get src :source))
-                                     (gloss (or (plist-get src :detailed)
-                                                (plist-get src :primary)
-                                                "[no gloss]"))
-                                     (skt (plist-get src :sanskrit))
-                                     (formatted
-                                      (tibetan-analysis--format-bilingual-gloss
-                                       gloss))
-                                     (lines (split-string formatted "\n")))
-                                (insert (format "  [%s]\n" source-name))
-                                (dolist (ln lines)
-                                  (insert (format "    %s\n" ln)))
-                                ;; Sanskrit only when the entry itself supplied it.
-                                (when (and skt
-                                           (not (string-empty-p (string-trim skt))))
-                                  (insert (format "    Skt: %s\n" skt)))))
-                          ;; Fallback: legacy single-entry path if the
-                          ;; multi-source helper is unavailable.
-                          (let* ((detailed (plist-get entry :detailed))
-                                 (primary (plist-get entry :primary))
-                                 (sanskrit (plist-get entry :sanskrit))
-                                 (source (plist-get entry :source))
-                                 (meaning (or detailed primary "[not found]"))
-                                 (formatted
-                                  (tibetan-analysis--format-bilingual-gloss
-                                   meaning))
-                                 (lines (split-string formatted "\n")))
-                            (dolist (ln lines)
-                              (insert (format "  %s\n" ln)))
-                            (when sanskrit
-                              (insert (format "  Skt: %s\n" sanskrit)))
-                            (when source
-                              (insert (format "  [%s]\n" source)))))
-                        (insert "\n")))
-                    (insert "\n"))
-                ;; Fallback: use vocab-pairs if detailed system not available
-                (if vocab-pairs
-                    (progn
-                      (dolist (pair vocab-pairs)
-                        (let* ((word (car pair))
-                               (meaning (cdr pair))
-                               (root-form (tibetan-strip-particles word))
-                               (head (if (and root-form
-                                              (not (string-empty-p root-form))
-                                              (not (string= root-form word)))
-                                         root-form
-                                       word)))
-                          (insert (format "◆ %s\n"
-                                          (tibetan-analysis--format-word-with-wylie
-                                           head)))
-                          (insert (format "  %s\n\n" (or meaning "[not found]")))))
-                      (insert "\n"))
-                  (insert "[No dictionary entries available]\n\n"))))
+            (tibetan-analysis--render-detailed-dictionary tibetan-text vocab-pairs)
 
             ;; ============================================================
             ;; SECTION 8: Provided Translations (at end — combine step)

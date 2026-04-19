@@ -61,8 +61,9 @@
 (global-set-key (kbd "C-c u v") 'reload-all-glossaries)
   ;; Reload all glossaries including Hopkins, Bialek, and others
 
-;; (global-set-key (kbd "C-c u +") 'add-tibetan-vocabulary)
-  ;; Add new vocabulary entry (if function exists)
+;; (global-set-key (kbd "C-c u +") 'add-to-tibetan-vocabulary)
+  ;; Add new vocabulary entry.  Defined in data/tibetan-glossary-loader.el.
+  ;; Enable by uncommenting the line above.
 
 ;; ============================================================================
 ;; VERSE ANALYSIS - C-c v v
