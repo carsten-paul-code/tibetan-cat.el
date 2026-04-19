@@ -310,30 +310,32 @@ STEINERT-LINK is an org link string or nil.
 SHORT-MEANING is the English gloss or nil.
 PARTICLE-WYLIE is the Wylie of the particle part or nil.
 PARTICLE-LABEL is the short Bialek label (\"GEN\", \"CONC\", etc.) or nil.
-Returns a string like:
-  [[steinert-url][stem[gloss]]] [[particle-overview][particle[LABEL]]]"
-  (let ((parts '()))
-    ;; Lexical stem part
-    (let ((stem-text
-           (if (and short-meaning (not (string-empty-p short-meaning)))
-               (format "%s[%s]" wylie-stem
-                       ;; Keep gloss short for the interlinear
-                       (tibetan-interlinear--truncate-gloss short-meaning 30))
-             wylie-stem)))
-      (if steinert-link
-          ;; Wrap in Steinert link: [[url][displayed-text]]
-          ;; steinert-link is already formatted as [[url][Steinert]]
-          ;; We need to extract the URL and re-wrap with our text
-          (if (string-match "\\[\\[\\([^]]+\\)\\]\\[" steinert-link)
-              (push (format "[[%s][%s]]" (match-string 1 steinert-link)
-                            stem-text)
-                    parts)
-            (push stem-text parts))
-        (push stem-text parts)))
 
-    ;; Particle part (if any)
+The English gloss (or Bialek label) is rendered OUTSIDE the org link
+so the clickable area covers only the Wylie, keeping the readable
+English visible as plain text.  Returns something like:
+
+  [[steinert-url][stem]] [gloss] [[particle-overview][particle]] [LABEL]"
+  (let ((parts '()))
+    ;; Lexical stem part — link wraps ONLY the Wylie; English gloss
+    ;; follows outside the link.
+    (let ((linked-stem
+           (if steinert-link
+               (if (string-match "\\[\\[\\([^]]+\\)\\]\\[" steinert-link)
+                   (format "[[%s][%s]]"
+                           (match-string 1 steinert-link) wylie-stem)
+                 wylie-stem)
+             wylie-stem)))
+      (push (if (and short-meaning (not (string-empty-p short-meaning)))
+                (format "%s [%s]" linked-stem
+                        (tibetan-interlinear--truncate-gloss
+                         short-meaning 30))
+              linked-stem)
+            parts))
+
+    ;; Particle part — same treatment: link over the Wylie, label plain.
     (when (and particle-wylie particle-label)
-      (push (format "[[particle:%s][%s[%s]]]"
+      (push (format "[[particle:%s][%s]] [%s]"
                     particle-wylie particle-wylie particle-label)
             parts))
 

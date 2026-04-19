@@ -209,27 +209,37 @@
 ;; ============================================================================
 
 (ert-deftest tibetan-interlinear-format-entry-lexical ()
-  "Lexical word with Steinert link and gloss."
+  "Lexical word with Steinert link and gloss.
+The link must wrap ONLY the Wylie; the English gloss sits outside
+the link as readable plain text."
   (let ((result (tibetan-interlinear--format-gloss-entry
                  "'khor ba"
                  "[[https://steinert.example.com][Steinert]]"
                  "cyclic existence"
                  nil nil)))
-    ;; Should contain the wylie with gloss
-    (should (string-match-p "'khor ba\\[cyclic existence\\]" result))
-    ;; Should contain the URL
-    (should (string-match-p "steinert.example.com" result))))
+    ;; Link wraps the wylie alone.
+    (should (string-match-p
+             "\\[\\[https://steinert\\.example\\.com\\]\\['khor ba\\]\\]"
+             result))
+    ;; Gloss sits outside the link (space then bracketed gloss).
+    (should (string-match-p "\\]\\] \\[cyclic existence\\]" result))
+    ;; And specifically NOT the old nested form `wylie[gloss]` inside
+    ;; the link body.
+    (should-not (string-match-p "'khor ba\\[cyclic existence\\]\\]\\]"
+                                result))))
 
 (ert-deftest tibetan-interlinear-format-entry-with-particle ()
-  "Entry with both lexical stem and particle."
+  "Entry with both lexical stem and particle.
+Links wrap only the Wylie for both stem and particle; the English
+gloss and the Bialek label sit outside their respective links."
   (let ((result (tibetan-interlinear--format-gloss-entry
                  "blo rgod" nil "agitated mind"
                  "kyi" "GEN")))
-    ;; Should have two parts
-    (should (string-match-p "blo rgod\\[agitated mind\\]" result))
-    (should (string-match-p "kyi\\[GEN\\]" result))
-    ;; Particle should be a link
-    (should (string-match-p "\\[\\[particle:kyi\\]" result))))
+    ;; Stem: wylie then plain bracketed gloss.
+    (should (string-match-p "blo rgod \\[agitated mind\\]" result))
+    ;; Particle: link wraps the particle Wylie, label follows outside.
+    (should (string-match-p "\\[\\[particle:kyi\\]\\[kyi\\]\\] \\[GEN\\]"
+                            result))))
 
 (ert-deftest tibetan-interlinear-format-entry-no-gloss ()
   "Entry without gloss shows just the wylie."
