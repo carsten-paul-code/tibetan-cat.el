@@ -301,6 +301,23 @@ or (WORD . nil) if no particle detected."
 ;; INTERLINEAR GLOSS GENERATOR
 ;; ============================================================================
 
+(defun tibetan-interlinear--sanitize-gloss (gloss)
+  "Make GLOSS safe to embed inside `[...]' without forming an org link.
+
+Rangjung Yeshe and other glossaries contain entries whose gloss is
+itself wrapped in square brackets — e.g. `[value-big]', `[R]', or
+`[accusative, adverbial]'.  When the interlinear renderer wraps
+such a gloss in `[...]' the resulting `[[value-big]]' is read by
+org-mode as a link target, and `org-export-dispatch' aborts with
+`Unable to resolve link: \"value-big\"'.  Replacing `[...]' with
+`(...)' inside the gloss keeps the content readable while
+guaranteeing no accidental double-bracket ever reaches the export
+layer.  Called for its value; does not mutate input."
+  (when gloss
+    (let ((out (replace-regexp-in-string "\\[" "(" gloss)))
+      (setq out (replace-regexp-in-string "\\]" ")" out))
+      out)))
+
 (defun tibetan-interlinear--format-gloss-entry (wylie-stem steinert-link
                                                  short-meaning
                                                  particle-wylie particle-label)
@@ -313,7 +330,10 @@ PARTICLE-LABEL is the short Bialek label (\"GEN\", \"CONC\", etc.) or nil.
 
 The English gloss (or Bialek label) is rendered OUTSIDE the org link
 so the clickable area covers only the Wylie, keeping the readable
-English visible as plain text.  Returns something like:
+English visible as plain text.  Any brackets inside the gloss are
+rewritten to parens so the enclosing `[...]' wrapper never produces
+a second `[' / `]' pair that org-mode would parse as a link.
+Returns something like:
 
   [[steinert-url][stem]] [gloss] [[particle-overview][particle]] [LABEL]"
   (let ((parts '()))
@@ -328,15 +348,17 @@ English visible as plain text.  Returns something like:
              wylie-stem)))
       (push (if (and short-meaning (not (string-empty-p short-meaning)))
                 (format "%s [%s]" linked-stem
-                        (tibetan-interlinear--truncate-gloss
-                         short-meaning 30))
+                        (tibetan-interlinear--sanitize-gloss
+                         (tibetan-interlinear--truncate-gloss
+                          short-meaning 30)))
               linked-stem)
             parts))
 
     ;; Particle part — same treatment: link over the Wylie, label plain.
     (when (and particle-wylie particle-label)
       (push (format "[[particle:%s][%s]] [%s]"
-                    particle-wylie particle-wylie particle-label)
+                    particle-wylie particle-wylie
+                    (tibetan-interlinear--sanitize-gloss particle-label))
             parts))
 
     (mapconcat #'identity (nreverse parts) " ")))

@@ -247,5 +247,32 @@ gloss and the Bialek label sit outside their respective links."
                  "ma" nil nil nil nil)))
     (should (equal result "ma"))))
 
+(ert-deftest tibetan-interlinear-format-gloss-with-brackets-sanitised ()
+  "A gloss that is itself `[X]' must not produce `[[X]]' in the output.
+Rangjung Yeshe has entries whose gloss is literally bracketed
+(e.g. `[value-big]', `[R]', `[accusative, adverbial]').  Wrapping
+such a gloss naïvely in `[...]' would create `[[value-big]]',
+which org-mode reads as a link target and causes
+`Org export aborted.  Unable to resolve link: \"value-big\"'.
+The formatter must rewrite brackets to parens."
+  (let ((result (tibetan-interlinear--format-gloss-entry
+                 "rin chen" nil "[value-big]" nil nil)))
+    ;; The bracketed gloss is present but wrapped as (value-big) inside
+    ;; the outer [...].
+    (should (string-match-p "\\[(value-big)\\]" result))
+    ;; And the pathological [[value-big]] sequence must NOT appear.
+    (should-not (string-match-p "\\[\\[value-big\\]\\]" result))))
+
+(ert-deftest tibetan-interlinear-format-gloss-mixed-brackets-sanitised ()
+  "Brackets that appear INSIDE a longer gloss are also rewritten, so
+`[la] [(1) [accusative, adverbial]]' does not contain a stray `[[…]]'
+sequence either."
+  (let ((result (tibetan-interlinear--format-gloss-entry
+                 "la" nil "(1) [accusative, adverbial]" nil nil)))
+    (should-not (string-match-p "\\[\\[" result))
+    (should-not (string-match-p "\\]\\]" result))
+    ;; Core content still readable.
+    (should (string-match-p "accusative" result))))
+
 (provide 'tibetan-interlinear-test)
 ;;; tibetan-interlinear-test.el ends here
