@@ -19,7 +19,7 @@
 ;; TRANSLATION SUGGESTION ENGINE
 ;; ============================================================================
 
-(defun tibetan-suggest-translation (tibetan-text vocab-list grammar-list)
+(defun tibetan-suggest-translation (_tibetan-text vocab-list grammar-list)
   "Suggest a translation based on VOCAB-LIST and GRAMMAR-LIST.
 
 VOCAB-LIST: list of (tibetan-word . english-meaning)
@@ -36,7 +36,7 @@ Returns a suggested translation with grammatical notes."
 
     ;; Process vocabulary items in order they appear
     (dolist (vocab-pair vocab-list)
-      (let* ((tib-word (car vocab-pair))
+      (let* ((_tib-word (car vocab-pair))
              (meaning (cdr vocab-pair)))
         ;; Just use the vocabulary meanings directly
         (push meaning translation-parts)))
@@ -44,7 +44,7 @@ Returns a suggested translation with grammatical notes."
     ;; Add grammatical notes for REAL case particles only
     ;; Filter out false positives (particles inside compound words)
     (dolist (g grammar-list)
-      (let* ((particle (nth 0 g))
+      (let* ((_particle (nth 0 g))
              (word (nth 1 g))
              (gram-type (nth 2 g))
              (function (nth 3 g)))
@@ -93,7 +93,7 @@ This helps students understand HOW to translate converbs correctly."
        "These are DEPENDENT CLAUSES that connect to the main verb.\n\n"
        (mapconcat
         (lambda (item)
-          (let ((particle (nth 0 item))
+          (let ((_particle (nth 0 item))
                 (word (nth 1 item))
                 (gram-type (nth 2 item))
                 (translation-guide (nth 4 item)))

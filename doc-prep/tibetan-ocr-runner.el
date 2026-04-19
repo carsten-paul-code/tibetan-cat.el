@@ -248,7 +248,7 @@ Returns OCR result plist."
 ;; ============================================================================
 
 ;;;###autoload
-(defun tibetan-ocr-run (source &optional model)
+(defun tibetan-ocr-run (source &optional _model)
   "Process SOURCE through BDRC OCR.
 MODEL is currently ignored (user selects in GUI app).
 For GUI app, this launches the workflow and prompts for import.

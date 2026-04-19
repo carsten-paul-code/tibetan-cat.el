@@ -77,6 +77,7 @@ FILENAME is relative to the glossaries directory."
       (message "Loaded unified glossary: %d entries" count))
     count))
 
+;;;###autoload
 (defun tibetan-bundled-load-all-glossaries ()
   "Load all bundled glossaries into the comprehensive vocabulary.
 This is the main entry point for loading vocabulary data."
@@ -97,6 +98,7 @@ This is the main entry point for loading vocabulary data."
     (message "Tibetan glossaries loaded: %d total entries"
              (hash-table-count tibetan-comprehensive-vocabulary))))
 
+;;;###autoload
 (defun tibetan-bundled-reload-glossaries ()
   "Force reload all bundled glossaries."
   (interactive)

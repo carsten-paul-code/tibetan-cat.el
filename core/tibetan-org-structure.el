@@ -9,20 +9,43 @@
 ;;; Commentary:
 
 ;; This module provides support for working with Tibetan texts structured
-;; in org-mode format for classroom translation work:
+;; in org-mode format for classroom translation work.
 ;;
-;; * Title
-;; ** Sentence 1
-;; *** Segment 1
-;; Tibetan text here
-;; *** Segment 2
-;; More text
-;; ** Sentence 2
-;; ...
+;; Two structural conventions are supported:
+;;
+;; A) Fresh-prep format (produced by `tibetan-prepare-document'):
+;;
+;;    * Title
+;;    ** Sentence 1
+;;    *** Segment 1
+;;    Tibetan text here
+;;    *** Segment 2
+;;    More text
+;;    ** Sentence 2
+;;    ...
+;;
+;; B) Section + after-the-fact sentence-wrap format (produced when
+;;    `tibetan-add-sentence-structure' demotes existing segments under
+;;    `** Section' parents):
+;;
+;;    * Title
+;;    ** Section
+;;    *** Sentence 1
+;;    **** Segment 1
+;;    Tibetan text here
+;;    **** Segment 2
+;;    *** Sentence 2
+;;    **** Segment 3
+;;    ...
+;;
+;; Detection is content-based ("Segment N" / "Sentence N" in the
+;; heading text), not level-based, so both layouts work transparently.
 ;;
 ;; Workflow:
-;; 1. On *** Segment: C-c u A runs word-by-word segment analysis
-;; 2. On ** Sentence: C-c u A runs clause/sentence structure analysis
+;; 1. On a Segment heading: C-c u A runs word-by-word segment analysis
+;; 2. On a Sentence heading: C-c u A / C-c u S runs sentence-level
+;;    analysis covering Translation, Grammar (discourse-level), and
+;;    Context.
 ;;
 ;; Sentences are determined by main verbs, with double-shad (།།) as
 ;; definite sentence boundaries.
@@ -42,29 +65,39 @@
 ;;; Detection Functions
 
 (defun tibetan-org-at-segment-p ()
-  "Return t if point is in or under a segment heading (*** Segment).
-Works both when cursor is on the heading line or in the content below it."
+  "Return t if point is in or under a Segment heading.
+Detects segments at any heading level (typically *** in the
+fresh-prep layout, **** in the section + sentence-wrap layout
+produced by `tibetan-add-sentence-structure').
+Works both when cursor is on the heading line or in the content
+below it."
   (save-excursion
     (condition-case nil
         (progn
           ;; Try to go back to the current or parent heading
           (unless (org-at-heading-p)
             (org-back-to-heading t))
-          (and (= (org-current-level) 3)
-               (string-match-p "Segment" (org-get-heading t t t t))))
+          (let ((heading (org-get-heading t t t t)))
+            (and heading
+                 (string-match-p "\\bSegment\\b" heading))))
       (error nil))))
 
 (defun tibetan-org-at-sentence-p ()
-  "Return t if point is in or under a sentence heading (** Sentence).
-Works both when cursor is on the heading line or in the content below it."
+  "Return t if point is in or under a Sentence heading.
+Detects sentences at any heading level (typically ** in the
+fresh-prep layout, *** in the section + sentence-wrap layout
+produced by `tibetan-add-sentence-structure').
+Works both when cursor is on the heading line or in the content
+below it."
   (save-excursion
     (condition-case nil
         (progn
           ;; Try to go back to the current or parent heading
           (unless (org-at-heading-p)
             (org-back-to-heading t))
-          (and (= (org-current-level) 2)
-               (string-match-p "Sentence" (org-get-heading t t t t))))
+          (let ((heading (org-get-heading t t t t)))
+            (and heading
+                 (string-match-p "\\bSentence\\b" heading))))
       (error nil))))
 
 ;;; Segment Functions
@@ -152,8 +185,8 @@ Works when positioned anywhere in or under a sentence."
 
 (defun tibetan-org-get-sentence-data ()
   "Get sentence data for analysis.
-Returns cons cell (ID . TEXT) where ID is 'Sentence N' and TEXT is combined segments.
-Works when positioned on a ** Sentence heading."
+Returns cons cell (ID . TEXT) where ID is \='Sentence N\=' and TEXT is
+combined segments. Works when positioned on a ** Sentence heading."
   (when (tibetan-org-at-sentence-p)
     (let ((sent-id (tibetan-org-get-sentence-id))
           (text (tibetan-org-get-sentence-text)))
@@ -176,18 +209,27 @@ Works when positioned anywhere in or under a sentence."
           (string-to-number (match-string 1 heading)))))))
 
 (defun tibetan-org-get-parent-section-name ()
-  "Get the name of the parent section (level 2 heading) for current segment.
-Returns just the heading text without stars, useful for files that don't use
-'Sentence N' format (e.g., '[30] Introduction' style headings)."
+  "Get the name of the parent Section (level 2 heading).
+Walks up from the current heading until reaching level 2 — the
+canonical Section level in both supported layouts.  Useful for
+files that don't use \='Sentence N\=' format (e.g.,
+\='[30] Introduction\=' style headings).
+
+In the fresh-prep layout this returns the level-2 heading
+directly (which is often \='Sentence N\=' — that is the documented
+fallback behaviour preserved for backward compatibility).  In the
+section + sentence-wrap layout it walks up past the level-3
+Sentence to return the actual Section name."
   (save-excursion
     ;; First, ensure we're on a heading
     (unless (org-at-heading-p)
       (org-back-to-heading t))
-    ;; If we're at a segment (level 3), move up to parent (level 2)
-    (when (= (org-current-level) 3)
-      (org-up-heading-safe))
-    ;; Get the heading text if we're at level 2
-    (when (= (org-current-level) 2)
+    ;; Walk up until we hit level 2 (or run out of parents).
+    (while (and (> (or (org-current-level) 0) 2)
+                (org-up-heading-safe)))
+    ;; Get the heading text if we're at level 2.
+    (when (and (org-current-level)
+               (= (org-current-level) 2))
       (let ((heading (org-get-heading t t t t)))
         ;; Clean up heading - remove leading/trailing spaces and brackets
         (when heading
@@ -195,18 +237,21 @@ Returns just the heading text without stars, useful for files that don't use
 
 ;;; Navigation Functions
 
+;;;###autoload
 (defun tibetan-org-next-segment ()
   "Move to next segment heading."
   (interactive)
   (when (tibetan-org-at-segment-p)
     (org-forward-heading-same-level 1)))
 
+;;;###autoload
 (defun tibetan-org-previous-segment ()
   "Move to previous segment heading."
   (interactive)
   (when (tibetan-org-at-segment-p)
     (org-backward-heading-same-level 1)))
 
+;;;###autoload
 (defun tibetan-org-next-sentence ()
   "Move to next sentence heading."
   (interactive)
@@ -216,6 +261,7 @@ Returns just the heading text without stars, useful for files that don't use
     (org-up-heading-safe)
     (org-forward-heading-same-level 1)))
 
+;;;###autoload
 (defun tibetan-org-previous-sentence ()
   "Move to previous sentence heading."
   (interactive)
@@ -227,6 +273,7 @@ Returns just the heading text without stars, useful for files that don't use
 
 ;;; Display Functions
 
+;;;###autoload
 (defun tibetan-org-show-segment-info ()
   "Show information about current segment."
   (interactive)
@@ -241,6 +288,7 @@ Returns just the heading text without stars, useful for files that don't use
                    text)))
     (message "Not in a segment heading")))
 
+;;;###autoload
 (defun tibetan-org-show-sentence-info ()
   "Show information about current sentence."
   (interactive)
@@ -272,6 +320,7 @@ This integrates with tibetan-sentence-workspace.el."
 
 ;;; Document Preparation Functions
 
+;;;###autoload
 (defun tibetan-prepare-document (&optional title)
   "Prepare current buffer for Tibetan translation work.
 Segments the Tibetan text and adds org-mode headers.
@@ -554,6 +603,7 @@ Returns list of segment strings."
     ;; Return in original order
     (nreverse segments)))
 
+;;;###autoload
 (defun tibetan-prepare-document-from-region (start end &optional title)
   "Prepare Tibetan text in region for translation work.
 Creates segments from the selected Tibetan text.
@@ -568,6 +618,7 @@ Result replaces the region content."
     (tibetan-prepare-document title)
     (widen)))
 
+;;;###autoload
 (defun tibetan-prepare-new-document ()
   "Create a new buffer and prepare it for Tibetan translation.
 Prompts for title and then for the Tibetan text to paste."

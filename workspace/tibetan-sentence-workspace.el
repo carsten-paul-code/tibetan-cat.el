@@ -19,6 +19,37 @@
 (require 'tibetan-org-structure)
 
 ;; ============================================================================
+;; EXTERNAL VARIABLES
+;; ============================================================================
+
+(defvar tibetan-workspace-file nil
+  "Path to the current workspace file being edited.")
+
+(defvar org-latex-classes nil
+  "LaTeX document classes for export.")
+
+(defvar org-export-with-toc nil
+  "Org export option: whether to include table of contents.")
+
+(defvar org-export-with-title nil
+  "Org export option: whether to include document title.")
+
+(defvar org-export-with-author nil
+  "Org export option: whether to include author.")
+
+(defvar org-export-with-date nil
+  "Org export option: whether to include date.")
+
+(defvar org-latex-compiler nil
+  "LaTeX compiler to use for export.")
+
+(defvar org-latex-pdf-process nil
+  "LaTeX PDF processing command.")
+
+(defvar org-latex-default-class nil
+  "Default LaTeX document class for export.")
+
+;; ============================================================================
 ;; SENTENCE DETECTION - UNIFIED
 ;; ============================================================================
 
@@ -47,7 +78,8 @@ Returns plist with :number, :segments, :start, :end."
    (tibetan-get-sentence-at-point)))
 
 (defun tibetan-get-sentence-at-point ()
-  "Get the current sentence (segments between ‖SEN‖ markers or sentence boundaries)."
+  "Get the current sentence (segments between markers or
+sentence boundaries)."
   (save-excursion
     (let ((start-pos nil)
           (end-pos nil)
@@ -184,12 +216,16 @@ Returns plist with :number, :segments, :start, :end."
                         (type (nth 2 a))
                         (function (nth 3 a))
                         (trans-guide (nth 4 a))
-                        (reference (nth 5 a)))
+                        (reference (nth 5 a))
+                        (portfolio (nth 6 a)))
                     (insert (format "***** %s in '%s'\n" particle word))
                     (insert (format "- TYPE: %s\n" type))
                     (insert (format "- FUNCTION: %s\n" function))
                     (insert (format "- TRANSLATION: %s\n" trans-guide))
-                    (insert (format "- REFERENCE: %s\n\n" reference)))))
+                    (insert (format "- REFERENCE: %s\n" reference))
+                    (when portfolio
+                      (insert (format "- PORTFOLIO: %s\n" portfolio)))
+                    (insert "\n"))))
             (insert "No grammatical markers detected in this segment.\n\n"))
 
           ;; Translation suggestion for this segment
@@ -232,6 +268,7 @@ Returns plist with :number, :segments, :start, :end."
 ;; MAIN COMMAND
 ;; ============================================================================
 
+;;;###autoload
 (defun tibetan-prepare-sentence ()
   "Open sentence preparation workspace.
 Creates editable workspace with translation, notes, and vocabulary reference.
@@ -242,7 +279,7 @@ Works with both org structure (** Sentence) and old markers."
         (error "Not in a sentence. Position cursor in ** Sentence heading or old markers.")
 
       (let* ((workspace-buffer (tibetan-create-sentence-workspace sentence-data))
-             (source-buffer (current-buffer)))
+             (_source-buffer (current-buffer)))
 
         ;; Auto-analysis now works WITH workspace (no need to disable)
         ;; The analysis window updates independently without destroying workspace
@@ -259,6 +296,7 @@ Works with both org structure (** Sentence) and old markers."
         (message "✓ Sentence %s workspace open BELOW. Edit there, press C-c C-c to save."
                 (plist-get sentence-data :number))))))
 
+;;;###autoload
 (defun tibetan-save-workspace ()
   "Save current workspace to file."
   (interactive)
@@ -266,6 +304,7 @@ Works with both org structure (** Sentence) and old markers."
     (write-file tibetan-workspace-file)
     (message "Workspace saved to %s" tibetan-workspace-file)))
 
+;;;###autoload
 (defun tibetan-export-workspace-pdf ()
   "Export current workspace to PDF for classroom reference.
 Uses minimal LaTeX setup - no title page, no TOC."
@@ -297,6 +336,7 @@ Uses minimal LaTeX setup - no title page, no TOC."
        (message "PDF export failed: %s. Make sure LaTeX (XeLaTeX) is installed."
                 (error-message-string err))))))
 
+;;;###autoload
 (defun tibetan-export-any-org-to-pdf ()
   "Export ANY org file to PDF with minimal LaTeX setup.
 Works for any .org file, not just workspace files.

@@ -13,6 +13,8 @@
 
 (require 'cl-lib)
 
+(declare-function gptel-request "gptel" (prompt &rest args))
+
 ;; ============================================================================
 ;; CONFIGURATION
 ;; ============================================================================
@@ -178,7 +180,7 @@ Returns plist: (:text \"...\" :changes (list of plists))"
 
   (require 'gptel)
 
-  (let ((gptel-model tibetan-ocr-correct-model))
+  (let ((_gptel-model tibetan-ocr-correct-model))
     (gptel-request prompt
       :system tibetan-ocr-correct--system-prompt
       :callback callback)))
@@ -234,7 +236,7 @@ Returns plist: (:text \"corrected\" :changes (list))"
 ;; DIFF DISPLAY
 ;; ============================================================================
 
-(defun tibetan-ocr-correct--show-diff (original corrected changes)
+(defun tibetan-ocr-correct--show-diff (_original corrected changes)
   "Show diff between ORIGINAL and CORRECTED text with CHANGES list."
   (let ((buf (get-buffer-create "*Tibetan OCR Corrections*")))
     (with-current-buffer buf

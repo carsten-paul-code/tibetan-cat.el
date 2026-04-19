@@ -56,7 +56,7 @@ Value: (wylie translation vocabulary grammar suggestion)")
   "Get DharmaMitra translation for TIBETAN-TEXT.
 Returns translation string or error message."
   (when (and tibetan-text (not (string-empty-p tibetan-text)))
-    (condition-case err
+    (condition-case _err
         (if (fboundp 'dharmamitra-text-get-translation)
             (let ((trans (dharmamitra-text-get-translation tibetan-text)))
               (if (and trans
@@ -94,6 +94,7 @@ Returns list of verb entries found, or nil if verb classifier not available."
 ;; MAIN ANALYSIS FUNCTION
 ;; ============================================================================
 
+;;;###autoload
 (defun tibetan-segment-info (&optional silent fast)
   "Show segment analysis in RIGHT window.
 Displays:
@@ -189,34 +190,55 @@ If FAST is non-nil, skip slow DharmaMitra translation (for auto-mode)."
                 (insert (or translation "[Not available]"))
                 (insert "\n\n"))
 
-              ;; Vocabulary - use new detailed system for consistency with C-c u A
+              ;; Vocabulary - DharmaMitra-style format for classroom use
+              ;; Format: word, lemma, wylie, POS, 'meaning'
+              ;; Identical to C-c u A persistent analysis format
               (insert "VOCABULARY:\n")
               (tibetan-insert-separator)
-              (let ((detailed-vocab (condition-case nil
-                                        (when (fboundp 'tibetan-vocab-extract-detailed)
-                                          (tibetan-vocab-extract-detailed tibetan-text))
-                                      (error nil))))
-                (if detailed-vocab
-                    (progn
-                      (dolist (entry detailed-vocab)
-                        (let* ((tib (plist-get entry :tibetan))
-                               (wy (plist-get entry :wylie))
-                               (primary (plist-get entry :primary))
-                               (source (plist-get entry :source)))
-                          (insert (format "  %s [%s] — %s"
-                                          tib
-                                          (or wy "?")
-                                          (or primary "[not found]")))
-                          (when (and source (string= source "Resources"))
-                            (insert " ★"))
-                          (insert "\n")))
-                      (insert "\n"))
-                  ;; Fallback to old vocab system
-                  (if vocab
-                      (progn
-                        (insert (tibetan-vocab-format-list vocab nil))
-                        (insert "\n\n"))
-                    (insert "  [No vocabulary extracted]\n\n"))))
+              ;; Build verb lookup table once for POS detection
+              (let ((verb-table (make-hash-table :test 'equal)))
+                (dolist (v verbs)
+                  (when (and v (listp v) (consp (car v)))
+                    (let ((lemma (alist-get 'lemma v)))
+                      (when lemma (puthash lemma v verb-table)))))
+              (if vocab
+                  (progn
+                    (dolist (pair vocab)
+                      (let* ((word (car pair))
+                             (meaning (cdr pair))
+                             (root-form (tibetan-strip-particles word))
+                             (wylie-word (condition-case nil
+                                             (when (fboundp 'tibetan-to-wylie-fixed)
+                                               (tibetan-to-wylie-fixed word))
+                                           (error nil)))
+                             ;; Determine grammatical role (POS)
+                             (gram-role (condition-case nil
+                                            (if (fboundp 'tibetan-analysis--get-grammatical-role)
+                                                (tibetan-analysis--get-grammatical-role
+                                                 word root-form verb-table)
+                                              "?")
+                                          (error "?")))
+                             ;; Lemma (root form)
+                             (lemma (if (and root-form
+                                             (not (string= root-form word))
+                                             (not (string-empty-p root-form)))
+                                        root-form
+                                      word))
+                             ;; Short meaning
+                             (short-meaning (when (and meaning
+                                                       (not (string= meaning "[look up]"))
+                                                       (not (string= meaning "[not found]")))
+                                              (let ((m (car (split-string meaning "[;,]" t))))
+                                                (when m (string-trim m))))))
+                        (insert (format "  %s, %s, %s, %s"
+                                        word lemma
+                                        (or wylie-word "?")
+                                        (or gram-role "?")))
+                        (when short-meaning
+                          (insert (format ", '%s'" short-meaning)))
+                        (insert "\n")))
+                    (insert "\n"))
+                (insert "  [No vocabulary extracted]\n\n")))
 
               ;; Grammar Analysis (Bialek)
               (insert "GRAMMATICAL ANALYSIS (Bialek):\n")
@@ -228,12 +250,16 @@ If FAST is non-nil, skip slow DharmaMitra translation (for auto-mode)."
                           (type (nth 2 a))
                           (function (nth 3 a))
                           (trans-guide (nth 4 a))
-                          (reference (nth 5 a)))
+                          (reference (nth 5 a))
+                          (portfolio (nth 6 a)))
                       (insert (format "  • %s in '%s'\n" particle word))
                       (insert (format "    TYPE: %s\n" type))
                       (insert (format "    FUNCTION: %s\n" function))
                       (insert (format "    TRANSLATION: %s\n" trans-guide))
-                      (insert (format "    REFERENCE: %s\n\n" reference))))
+                      (insert (format "    REFERENCE: %s\n" reference))
+                      (when portfolio
+                        (insert (format "    PORTFOLIO: %s\n" portfolio)))
+                      (insert "\n")))
                 (insert "  [No grammatical markers detected]\n"))
             (insert "\n")
 
@@ -338,9 +364,10 @@ Called by post-command-hook. Uses persistent analysis (C-c u A)."
                 (tibetan-open-segment-analysis))))
         (error nil)))))
 
+;;;###autoload
 (defun tibetan-toggle-auto ()
   "Toggle auto-analysis mode.
-When enabled, persistent analysis (C-c u A) updates automatically as you navigate.
+When enabled, persistent analysis updates automatically as you navigate.
 Bound to C-c u E."
   (interactive)
   (if tibetan-auto-mode

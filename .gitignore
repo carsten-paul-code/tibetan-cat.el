@@ -57,3 +57,6 @@ temp/
 
 # Workshop presentation materials (kept local)
 /docs/*.pptx
+
+# Claude Code project settings (user-local permission allowlist)
+/.claude/

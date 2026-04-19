@@ -27,10 +27,13 @@
 
 (defun tibetan-count-syllables (tibetan-text)
   "Count syllables in TIBETAN-TEXT.
-Returns number of syllables (segments separated by tsheg ་)."
-  (let* ((clean (replace-regexp-in-string "[།༎༏༐༑༔\n\r ]" "" tibetan-text))
-         (syllables (split-string clean "་" t)))
-    (length syllables)))
+Returns number of syllables (segments separated by tsheg ་).
+Returns 0 if text is nil or empty."
+  (if (and tibetan-text (not (string-empty-p tibetan-text)))
+      (let* ((clean (replace-regexp-in-string "[།༎༏༐༑༔\n\r ]" "" tibetan-text))
+             (syllables (split-string clean "་" t)))
+        (length syllables))
+    0))
 
 (defun tibetan-syllable-breakdown (tibetan-text)
   "Break down TIBETAN-TEXT into individual syllables.
@@ -75,12 +78,12 @@ Returns list of (syllable position is-filler-p)."
 (defun tibetan-extract-core-meaning (tibetan-text)
   "Extract core meaning by removing likely metrical fillers.
 Returns string with fillers marked."
-  (let* ((syllables (tibetan-syllable-breakdown tibetan-text))
+  (let* ((_syllables (tibetan-syllable-breakdown tibetan-text))
          (analysis (tibetan-identify-metrical-fillers tibetan-text))
          (core-parts '()))
     (dolist (item analysis)
       (let ((syl (nth 0 item))
-            (pos (nth 1 item))
+            (_pos (nth 1 item))
             (is-filler (nth 2 item)))
         (if is-filler
             (push (format "[%s]" syl) core-parts)
@@ -193,6 +196,7 @@ Returns (verse-number . verse-lines) or nil if not in a verse block."
         (when verse-lines
           (cons verse-number (nreverse verse-lines)))))))
 
+;;;###autoload
 (defun tibetan-analyze-current-verse-interactive ()
   "Analyze the verse block at point and display in side window.
 Shows:
@@ -251,8 +255,8 @@ Bound to C-c v v."
             (when (fboundp 'tibetan-extract-madhyamaka-vocabulary)
               (insert "\nMADHYAMAKA TERMINOLOGY:\n")
               (insert "──────────────────────────────────────\n")
-              (let ((all-text (mapconcat 'identity verse-lines " "))
-                    (found-terms (tibetan-extract-madhyamaka-vocabulary all-text)))
+              (let* ((all-text (mapconcat 'identity verse-lines " "))
+                     (found-terms (tibetan-extract-madhyamaka-vocabulary all-text)))
                 (if found-terms
                     (dolist (term-pair found-terms)
                       (insert (format "  • %s\n    → %s\n\n" (car term-pair) (cdr term-pair))))

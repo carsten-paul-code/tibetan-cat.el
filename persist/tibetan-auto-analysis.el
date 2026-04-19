@@ -25,6 +25,7 @@
 (require 'tibetan-org-structure nil t)
 (require 'tibetan-analysis-persist nil t)
 (require 'tibetan-clause-analysis nil t)
+(require 'tibetan-utils nil t)
 
 ;; ============================================================================
 ;; CUSTOMIZATION
@@ -61,7 +62,7 @@ Called with (CURRENT TOTAL MESSAGE).")
   (when tibetan-auto--progress-callback
     (funcall tibetan-auto--progress-callback current total message)))
 
-(defmacro tibetan-auto--with-progress (callback total &rest body)
+(defmacro tibetan-auto--with-progress (callback _total &rest body)
   "Execute BODY with progress CALLBACK for TOTAL items."
   (declare (indent 2))
   `(let ((tibetan-auto--progress-callback ,callback))
@@ -93,18 +94,48 @@ Called with (CURRENT TOTAL MESSAGE).")
 ;; COLLECTION FUNCTIONS
 ;; ============================================================================
 
+(defun tibetan-auto--seg-id->number (seg-id)
+  "Convert a segment id (string like \"4\" or \"seg-4\") to an integer.
+Returns nil if no digits are found."
+  (cond
+   ((numberp seg-id) seg-id)
+   ((stringp seg-id)
+    (when (string-match "\\([0-9]+\\)" seg-id)
+      (string-to-number (match-string 1 seg-id))))
+   (t nil)))
+
+(defun tibetan-auto--collect-inline-segments ()
+  "Collect segments marked with inline 〔seg:N〕...〔/seg〕 markers.
+Returns alist of (SEGMENT-NUMBER . TIBETAN-TEXT) sorted by number."
+  (when (fboundp 'tibetan-get-all-segments)
+    (let (result)
+      (dolist (seg (tibetan-get-all-segments))
+        (let ((n (tibetan-auto--seg-id->number (car seg)))
+              (text (cdr seg)))
+          (when (and n text (not (string-empty-p (string-trim text))))
+            (push (cons n text) result))))
+      (sort (nreverse result) (lambda (a b) (< (car a) (car b)))))))
+
 (defun tibetan-auto--collect-segments ()
   "Collect all segments from current buffer.
+Supports both hierarchical org segments (*** Segment N) and inline
+〔seg:N〕...〔/seg〕 markers produced by `tibetan-doc-format'. The
+hierarchical form wins if present; otherwise the inline form is used.
 Returns alist of (SEGMENT-NUMBER . TIBETAN-TEXT)."
-  (save-excursion
-    (goto-char (point-min))
-    (let ((segments '()))
-      (while (re-search-forward "^\\*\\*\\* Segment \\([0-9]+\\)" nil t)
-        (let* ((seg-num (string-to-number (match-string 1)))
-               (text (tibetan-org-get-segment-text)))
-          (when text
-            (push (cons seg-num text) segments))))
-      (nreverse segments))))
+  (let ((org-segs
+         (save-excursion
+           (goto-char (point-min))
+           (let ((segments '()))
+             (while (re-search-forward "^\\*\\*\\* Segment \\([0-9]+\\)" nil t)
+               (let* ((seg-num (string-to-number (match-string 1)))
+                      (text (when (fboundp 'tibetan-org-get-segment-text)
+                              (tibetan-org-get-segment-text))))
+                 (when text
+                   (push (cons seg-num text) segments))))
+             (nreverse segments)))))
+    (if org-segs
+        org-segs
+      (tibetan-auto--collect-inline-segments))))
 
 (defun tibetan-auto--collect-sentences ()
   "Collect all sentences from current buffer.
@@ -158,7 +189,7 @@ SOURCE-FILE is used to generate a unique suffix."
 ;; SENTENCE ANALYSIS GENERATION
 ;; ============================================================================
 
-(defun tibetan-auto--generate-sentence-analysis (sent-num tibetan-text)
+(defun tibetan-auto--generate-sentence-analysis (_sent-num tibetan-text)
   "Generate sentence analysis content for SENT-NUM with TIBETAN-TEXT.
 Returns the analysis as an org-mode formatted string."
   (let* ((clause-analysis (if (fboundp 'tibetan-analyze-clause-structure)
@@ -227,6 +258,7 @@ SOURCE-FILE is the path to the source document."
 ;; MAIN AUTO-ANALYZE FUNCTION
 ;; ============================================================================
 
+;;;###autoload
 (defun tibetan-auto-analyze-document (&optional force)
   "Automatically generate analysis files for all segments and sentences.
 
@@ -304,10 +336,136 @@ Progress is shown in the echo area."
 
 
 ;; ============================================================================
+;; BATCH CLAUDE TRANSLATION (retroactively fill *** Claude sections)
+;; ============================================================================
+
+(defcustom tibetan-auto-claude-request-delay 1.5
+  "Seconds to wait between successive Claude translation requests.
+Batched gptel requests are fire-and-forget asynchronous, but throwing
+hundreds at once causes rate-limit or timeout errors.  The staggered
+fire loop in `tibetan-auto-request-claude-translations' spaces them
+out by this many seconds."
+  :type 'number
+  :group 'tibetan-cat)
+
+(defun tibetan-auto--extract-tibetan-text-from-analysis (filepath)
+  "Read the Tibetan segment text out of the `* Tibetan Text' heading
+of analysis file FILEPATH.  Returns a trimmed string, or nil."
+  (when (and filepath (file-exists-p filepath))
+    (with-temp-buffer
+      (insert-file-contents filepath)
+      (goto-char (point-min))
+      (when (re-search-forward "^\\* Tibetan Text[ \t]*\n" nil t)
+        (let ((start (point))
+              (end (if (re-search-forward "^\\* " nil t)
+                       (match-beginning 0)
+                     (point-max))))
+          (let ((text (string-trim (buffer-substring-no-properties start end))))
+            (and text (not (string-empty-p text)) text)))))))
+
+(defun tibetan-auto--claude-needs-request-p (filepath)
+  "Non-nil if FILEPATH's *** Claude section is empty or still a placeholder.
+We consider a translation \"missing\" when the Claude block contains
+only the default `[Requesting translation...]' placeholder, a
+`[Claude unavailable: ...]' error marker, or is blank."
+  (when (and filepath (file-exists-p filepath))
+    (with-temp-buffer
+      (insert-file-contents filepath)
+      (goto-char (point-min))
+      (when (re-search-forward "^\\*\\*\\* Claude$" nil t)
+        (forward-line 1)
+        (let* ((start (point))
+               (end (if (re-search-forward "^\\*\\*\\*\\|^\\*\\*[^*]" nil t)
+                        (line-beginning-position)
+                      (point-max)))
+               (body (string-trim (buffer-substring-no-properties start end))))
+          (or (string-empty-p body)
+              (string-match-p "\\`\\[Requesting translation" body)
+              (string-match-p "\\`\\[Claude unavailable" body)
+              (string-match-p "\\`\\[Not available" body)))))))
+
+(defun tibetan-auto--analysis-files (folder)
+  "Return the list of per-segment analysis files under FOLDER.
+Matches `seg-NNN*.org' — sentence files are deliberately excluded so
+we focus the batch on the segments used in class."
+  (when (and folder (file-directory-p folder))
+    (sort (directory-files folder t "\\`seg-[0-9]+.*\\.org\\'")
+          #'string<)))
+
+;;;###autoload
+(defun tibetan-auto-request-claude-translations (&optional force)
+  "Request Claude translations for every segment analysis that is missing one.
+
+Walks the analysis folder for the current source file, finds every
+`seg-NNN*.org' whose *** Claude section is still a placeholder (or an
+`unavailable' error marker), and queues an asynchronous gptel request
+for each.  Requests are spaced by
+`tibetan-auto-claude-request-delay' seconds so we do not trip
+rate-limit guards.
+
+With a prefix argument (FORCE non-nil), re-request translations for
+every segment file regardless of whether one is already present.  Use
+this after you've changed the system prompt or switched model."
+  (interactive "P")
+  (unless (buffer-file-name)
+    (error "Buffer must be saved to a file first"))
+  (unless (fboundp 'tibetan-analysis--request-claude-translation)
+    (error "tibetan-analysis-persist not loaded"))
+  (let* ((folder (tibetan-analysis-get-folder))
+         (files (tibetan-auto--analysis-files folder))
+         (targets (if force files
+                    (seq-filter #'tibetan-auto--claude-needs-request-p
+                                files)))
+         (total (length targets))
+         (queued 0)
+         (skipped (- (length files) total))
+         (delay 0.0))
+    (cond
+     ((null files)
+      (message "No segment analysis files found under %s" folder))
+     ((zerop total)
+      (message "All %d segment analyses already have Claude translations \
+(use C-u prefix to force re-request)" (length files)))
+     (t
+      (message "Queueing Claude translations for %d segment%s (skipping %d already filled)..."
+               total (if (= total 1) "" "s") skipped)
+      (dolist (file targets)
+        (let ((tibetan-text
+               (tibetan-auto--extract-tibetan-text-from-analysis file))
+              (this-delay delay))
+          (when (and tibetan-text (not (string-empty-p tibetan-text)))
+            ;; Stagger so gptel does not fire all requests simultaneously.
+            ;; `run-at-time' returns a timer object we don't need to track;
+            ;; all failure modes are already swallowed inside
+            ;; `tibetan-analysis--request-claude-translation'.
+            (run-at-time
+             this-delay nil
+             (lambda ()
+               (condition-case err
+                   (tibetan-analysis--request-claude-translation
+                    tibetan-text file)
+                 (error
+                  (message "Claude request failed for %s: %s"
+                           (file-name-nondirectory file)
+                           (error-message-string err))))))
+            (setq queued (1+ queued))
+            (setq delay (+ delay
+                           (or tibetan-auto-claude-request-delay 1.5))))))
+      (message "Queued %d Claude translation request%s (one every %.1fs).  Results arrive asynchronously."
+               queued (if (= queued 1) "" "s")
+               (or tibetan-auto-claude-request-delay 1.5))))))
+
+
+;; ============================================================================
 ;; KEYBINDINGS
 ;; ============================================================================
 
 (global-set-key (kbd "C-c u B") 'tibetan-auto-analyze-document)
+;; Batch-fill Claude translations for segments that still show the
+;; `[Requesting translation...]' placeholder.  Mnemonic: "u C" for
+;; "Claude".  Prefix argument (C-u C-c u C) force-re-requests every
+;; segment.
+(global-set-key (kbd "C-c u C") 'tibetan-auto-request-claude-translations)
 
 (provide 'tibetan-auto-analysis)
 ;;; tibetan-auto-analysis.el ends here

@@ -161,8 +161,8 @@ This function handles both cases."
 Returns a plist with :verb, :type, :position, :stem.
 The main verb is typically the final verb not marked with a converb particle."
   (when (and text (stringp text) (not (string-empty-p text)))
-    (let* ((clean-text (tibetan-clause--clean-text text))
-           (syllables (tibetan-clause--split-syllables clean-text))
+    (let* ((_clean-text (tibetan-clause--clean-text text))
+           (syllables (tibetan-clause--split-syllables text))
            (converbs (tibetan-detect-converbs text))
            ;; For standalone converb particles, position is the particle's position
            ;; The verb stem at (position - 1) is still part of the converb construction
@@ -227,29 +227,13 @@ Each converb is paired with the verb it modifies."
            (scoped '()))
 
       (when (and converbs main-verb)
-        ;; For now, use simple scoping: each converb scopes to the next verb
-        ;; More sophisticated scoping would consider clause boundaries
-        (let ((syllables (tibetan-clause--split-syllables text))
-              (main-pos (plist-get main-verb :position)))
-
-          (dolist (converb converbs)
-            (let ((conv-pos (plist-get converb :position)))
-              ;; Find the verb this converb scopes to
-              ;; By default, scope to the final main verb
-              ;; But if there's a coordinative converb between, scope to that
-              (let ((target-verb main-verb))
-                ;; Check for intermediate coordinative converbs
-                (dolist (other-conv converbs)
-                  (when (and (> (plist-get other-conv :position) conv-pos)
-                            (eq 'coordinative (plist-get other-conv :type))
-                            (< (plist-get other-conv :position) main-pos))
-                    ;; This converb might scope to an intermediate verb
-                    ;; For simplicity, we still scope to the main verb
-                    nil))
-
-                (push (list :converb converb
-                           :main-verb target-verb)
-                      scoped))))))
+        ;; TODO: More sophisticated scoping could check for
+        ;; intermediate coordinative converbs. For now, all converbs
+        ;; scope to the main verb.
+        (dolist (converb converbs)
+          (push (list :converb converb
+                      :main-verb main-verb)
+                scoped)))
 
       ;; Return in order of appearance
       (nreverse scoped))))
@@ -261,7 +245,7 @@ Each converb is paired with the verb it modifies."
 (defun tibetan-build-clause-tree (text)
   "Build a hierarchical clause tree from TEXT.
 Returns a plist representing the clause structure:
-  :type - 'clause
+  :type - \='clause\='
   :text - original text
   :main-verb - the main verb plist
   :dependent-clauses - list of dependent clause plists"
@@ -293,8 +277,8 @@ Returns a plist representing the clause structure:
 
 (defun tibetan-format-clause-tree (tree &optional indent)
   "Format TREE for display with optional INDENT level."
-  (let ((indent (or indent 0))
-        (prefix (make-string (* indent 2) ?\s)))
+  (let* ((indent (or indent 0))
+         (prefix (make-string (* indent 2) ?\s)))
     (if (not tree)
         (concat prefix "[No clause structure detected]\n")
       (concat
@@ -336,7 +320,8 @@ Returns a plist representing the clause structure:
 
 (defun tibetan-analyze-clause-structure (text)
   "Analyze clause structure in TEXT and return formatted analysis.
-This is the main entry point for clause analysis."
+This is the main entry point for clause analysis, identifying main verbs
+and converbial constructions."
   (when (and text (stringp text) (not (string-empty-p text)))
     (let ((tree (tibetan-build-clause-tree text)))
       (if tree

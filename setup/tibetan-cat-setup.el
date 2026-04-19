@@ -190,6 +190,7 @@
 ;; MAIN INSTALL COMMAND
 ;; ============================================================================
 
+;;;###autoload
 (defun tibetan-cat-install (&optional non-interactive)
   "Install and configure Tibetan CAT system.
 If NON-INTERACTIVE is non-nil, skip prompts and use defaults."
@@ -274,6 +275,7 @@ If NON-INTERACTIVE is non-nil, skip prompts and use defaults."
 ;; STATUS / HEALTH CHECK
 ;; ============================================================================
 
+;;;###autoload
 (defun tibetan-cat-status ()
   "Show Tibetan CAT system status and health check."
   (interactive)

@@ -45,22 +45,22 @@ Each element in the returned list is:
   (PARTICLE WORD TYPE FUNCTION TRANSLATION-EFFECT SCHWIEGER-REF)
 
 Where:
-  PARTICLE - the particle itself (e.g., 'འི')
-  WORD - the full word containing the particle (e.g., 'པའི')
-  TYPE - grammatical type (e.g., 'GEN', 'ERG', 'ABL')
+  PARTICLE - the particle itself (e.g., \\='འི\\=)
+  WORD - the full word containing the particle (e.g., \\='པའི\\=)
+  TYPE - grammatical type (e.g., \\='GEN\\=, \\='ERG\\=, \\='ABL\\=)
   FUNCTION - description of function in this specific context
   TRANSLATION-EFFECT - guidance for translation
   SCHWIEGER-REF - reference to Schwieger's grammar"
 
   (let ((analysis '())
         ;; Clean text: remove punctuation first
-        (clean-text (replace-regexp-in-string "[།༎༏༐༑༔]" "" tibetan-text))
+        (_clean-text (replace-regexp-in-string "[།༎༏༐༑༔]" "" tibetan-text))
         (words (split-string (replace-regexp-in-string " " "་"
                               (replace-regexp-in-string "[།༎༏༐༑༔]" "" tibetan-text)) "་" t)))
 
     ;; Process each word
     (dolist (word words)
-      (let ((found nil))
+      (let ((_found nil))
         ;; Check for multi-character particles (less ambiguous)
         (cond
          ;; ========== GENITIVE ==========

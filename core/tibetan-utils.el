@@ -22,7 +22,8 @@
 
 (defun tibetan-get-current-line-as-segment ()
   "Get current line as a segment (for plain text without markers).
-Returns cons cell (line-number . line-text) if line contains Tibetan text, nil otherwise."
+Returns cons cell (line-number . line-text) if line contains Tibetan text,
+nil otherwise."
   (save-excursion
     (beginning-of-line)
     (let* ((line-start (point))
@@ -79,8 +80,9 @@ Returns cons cell (seg-id . seg-text) or nil."
 
 (defun tibetan-get-current-segment ()
   "Get current segment ID and text.
-Handles both old format 〔seg:ID〕 and new format 〔seg〕.
-Returns cons cell (seg-id . seg-text) if point is within a segment, nil otherwise."
+Handles both old format \=〔seg:ID〕\= and new format \=〔seg〕\=.
+Returns cons cell (seg-id . seg-text) if point is within a segment,
+nil otherwise."
   (save-excursion
     (let ((pos (point))
           (case-fold-search t))

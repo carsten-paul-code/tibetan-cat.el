@@ -189,6 +189,26 @@
     ))
 
 ;; ============================================================================
+;; VOCABULARY HASH TABLE
+;; ============================================================================
+
+(defvar tibetan-madhyamaka-vocabulary nil
+  "Hash table for Madhyamaka philosophical terminology.
+Populated from tibetan-madhyamaka-core-terms and tibetan-gelugpa-specific-usage.")
+
+(defun tibetan-initialize-madhyamaka-vocabulary ()
+  "Initialize the Madhyamaka vocabulary hash table from the term lists."
+  (unless tibetan-madhyamaka-vocabulary
+    (setq tibetan-madhyamaka-vocabulary (make-hash-table :test 'equal))
+    (dolist (term-pair tibetan-madhyamaka-core-terms)
+      (puthash (car term-pair) (cdr term-pair) tibetan-madhyamaka-vocabulary))
+    (dolist (term-pair tibetan-gelugpa-specific-usage)
+      (puthash (car term-pair) (cdr term-pair) tibetan-madhyamaka-vocabulary))))
+
+;; Initialize on load
+(tibetan-initialize-madhyamaka-vocabulary)
+
+;; ============================================================================
 ;; VOCABULARY LOOKUP
 ;; ============================================================================
 

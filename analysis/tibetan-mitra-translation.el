@@ -81,6 +81,7 @@ Get your token at: https://huggingface.co/settings/tokens"
 (defvar tibetan-mitra--cache (make-hash-table :test 'equal)
   "Cache for Mitra translations.")
 
+;;;###autoload
 (defun tibetan-mitra-clear-cache ()
   "Clear the translation cache."
   (interactive)
@@ -241,6 +242,7 @@ Uses the backend specified in `tibetan-mitra-backend'."
 ;; INTERACTIVE COMMANDS
 ;; ============================================================================
 
+;;;###autoload
 (defun tibetan-mitra-translate-region (start end)
   "Translate Tibetan text in region from START to END using Mitra."
   (interactive "r")
@@ -253,6 +255,7 @@ Uses the backend specified in `tibetan-mitra-backend'."
       (message "Mitra translation failed")
       nil)))
 
+;;;###autoload
 (defun tibetan-mitra-translate-segment ()
   "Translate current Tibetan segment using Mitra."
   (interactive)
@@ -268,6 +271,7 @@ Uses the backend specified in `tibetan-mitra-backend'."
           translation)
       (message "No Tibetan segment found at point"))))
 
+;;;###autoload
 (defun tibetan-mitra-translate-dwim ()
   "Translate Tibetan text: region if active, else current segment."
   (interactive)
@@ -279,6 +283,7 @@ Uses the backend specified in `tibetan-mitra-backend'."
 ;; SETUP HELPERS
 ;; ============================================================================
 
+;;;###autoload
 (defun tibetan-mitra-setup-ollama ()
   "Display instructions for setting up Mitra in Ollama."
   (interactive)
@@ -300,6 +305,7 @@ Uses the backend specified in `tibetan-mitra-backend'."
     (princ "Set tibetan-mitra-backend to 'huggingface and provide your API token.\n")))
 
 
+;;;###autoload
 (defun tibetan-mitra-check-status ()
   "Check status of Mitra translation backend."
   (interactive)

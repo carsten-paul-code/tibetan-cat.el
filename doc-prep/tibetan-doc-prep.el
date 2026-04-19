@@ -18,13 +18,16 @@
 
 (require 'cl-lib)
 
-;; ============================================================================
-;; LOAD PATH SETUP
-;; ============================================================================
+;; External variable from cat-mode
+(defvar cat-mode-map nil "Keymap for cat-mode (declared for byte-compiler).")
 
-(defvar tibetan-doc-prep-base-dir
-  (file-name-directory (or load-file-name buffer-file-name))
-  "Base directory of doc-prep module.")
+;; Declare external OCR functions
+(declare-function tibetan-ocr-open-app "tibetan-ocr-runner" (&optional file))
+(declare-function tibetan-ocr-workflow "tibetan-ocr-runner" (&optional source-file))
+(declare-function tibetan-ocr-status "tibetan-ocr-runner" ())
+(declare-function tibetan-ocr-import-from-clipboard "tibetan-ocr-runner" ())
+(declare-function tibetan-ocr-import-from-file "tibetan-ocr-runner" (file))
+(declare-function tibetan-ocr-import-from-buffer "tibetan-ocr-runner" ())
 
 ;; ============================================================================
 ;; CUSTOMIZATION
@@ -466,7 +469,7 @@ Guides through: Source → OCR → Validation → AI Correction → Formatting."
 ;; ============================================================================
 
 ;;;###autoload
-(defun tibetan-doc-prep-quick-pecha (file)
+(defun tibetan-doc-prep-quick-pecha (_file)
   "Quick preparation for pecha scans with defaults.
 FILE is the PDF or image to process."
   (interactive "fSelect pecha PDF/image: ")
@@ -477,7 +480,7 @@ FILE is the PDF or image to process."
     (tibetan-doc-prep-wizard)))
 
 ;;;###autoload
-(defun tibetan-doc-prep-quick-verse (file)
+(defun tibetan-doc-prep-quick-verse (_file)
   "Quick preparation for verse texts.
 FILE is the PDF or image to process."
   (interactive "fSelect verse PDF/image: ")

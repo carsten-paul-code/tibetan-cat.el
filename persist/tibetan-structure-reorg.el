@@ -76,7 +76,8 @@ Returns list of plists with :segment-num, :tibetan-text, :hash, :sentence-num."
 
 (defun tibetan-reorg--collect-analysis-files (directory)
   "Collect inventory of analysis files in DIRECTORY.
-Returns list of plists with :filename, :filepath, :segment-num, :hash, :has-notes."
+Returns list of plists with :filename, :filepath, :segment-num,
+:hash, :has-notes."
   (when (file-directory-p directory)
     (let ((files (directory-files directory nil "^seg-[0-9]+.*\\.org$"))
           (inventory '()))
@@ -259,10 +260,10 @@ Updates internal references to NEW-SEGMENT-NUM."
                                 archive-dir))))
         (rename-file filepath archive-path)))))
 
-(defun tibetan-reorg--generate-new-filename (segment-num source-file)
+(defun tibetan-reorg--generate-new-filename (segment-num _source-file)
   "Generate filename for SEGMENT-NUM analysis.
 SOURCE-FILE is used for the short suffix."
-  (tibetan-analysis-segment-filename segment-num source-file))
+  (tibetan-analysis-segment-filename segment-num))
 
 ;; ============================================================================
 ;; EXECUTION
@@ -353,6 +354,7 @@ Returns plist with :renamed, :created, :archived, :kept counts."
 ;; MAIN COMMANDS
 ;; ============================================================================
 
+;;;###autoload
 (defun tibetan-reorganize-analysis-files (&optional dry-run)
   "Reorganize analysis files to match current document structure.
 
@@ -430,6 +432,7 @@ Returns plist with reorganization statistics."
                          (plist-get result :kept))
                 result))))))))
 
+;;;###autoload
 (defun tibetan-preview-reorganization ()
   "Preview what reorganization would do without making changes."
   (interactive)

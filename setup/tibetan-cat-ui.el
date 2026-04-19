@@ -156,6 +156,7 @@
 ;; MASTER SETUP
 ;; ============================================================================
 
+;;;###autoload
 (defun tibetan-cat-ui-install ()
   "Install all UI packages and configure them."
   (interactive)
@@ -164,6 +165,7 @@
   (tibetan-cat-ui-setup)
   (message "UI setup complete! Restart Emacs for full effect."))
 
+;;;###autoload
 (defun tibetan-cat-ui-setup ()
   "Activate all UI enhancements (packages must already be installed)."
   (interactive)

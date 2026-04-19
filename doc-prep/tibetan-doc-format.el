@@ -67,32 +67,37 @@ Returns list of text segments."
 ;; SEGMENT MARKERS
 ;; ============================================================================
 
-(defun tibetan-doc-format--add-segment-markers (lines &optional start-num)
+(defun tibetan-doc-format--add-segment-markers (lines &optional start-num with-trans)
   "Add 〔seg:N〕 markers to LINES.
 START-NUM is the starting segment number (default 1).
+When WITH-TRANS is non-nil, also append an empty 〔trans:N〕 ... 〔/trans〕
+block after each segment so the class translation can be inserted inline.
 Returns list of marked lines."
   (let ((n (or start-num 1)))
     (mapcar (lambda (line)
               (prog1
-                  (format "〔seg:%d〕%s〔/seg〕" n (string-trim line))
+                  (if with-trans
+                      (format "〔seg:%d〕%s〔/seg〕\n〔trans:%d〕\n〔/trans〕"
+                              n (string-trim line) n)
+                    (format "〔seg:%d〕%s〔/seg〕" n (string-trim line)))
                 (setq n (1+ n))))
             lines)))
+
+(defun tibetan-doc-format-get-translation (text seg-num)
+  "Extract the translation text for SEG-NUM from TEXT.
+Looks for a 〔trans:N〕 ... 〔/trans〕 block and returns the trimmed content,
+or nil if no block is found or the block is empty."
+  (when (and text seg-num)
+    (let ((pattern (format "〔trans:%d〕\\([^〔]*\\)〔/trans〕" seg-num)))
+      (save-match-data
+        (when (string-match pattern text)
+          (let ((content (string-trim (match-string 1 text))))
+            (unless (string-empty-p content)
+              content)))))))
 
 ;; ============================================================================
 ;; FOLIO MARKERS
 ;; ============================================================================
-
-(defun tibetan-doc-format--folio-as-heading (folio-num)
-  "Format FOLIO-NUM as org heading."
-  (format "** Folio %s\n" folio-num))
-
-(defun tibetan-doc-format--folio-inline (folio-num)
-  "Format FOLIO-NUM as inline marker."
-  (format "[F:%s] " folio-num))
-
-(defun tibetan-doc-format--folio-as-property (folio-num)
-  "Format FOLIO-NUM as property drawer opener."
-  (format ":PROPERTIES:\n:FOLIO: %s\n:END:\n" folio-num))
 
 (defun tibetan-doc-format--extract-folio-markers (text)
   "Extract folio markers from TEXT.
@@ -143,12 +148,23 @@ Returns alist of ((position . folio-num) ...)."
 ;; ============================================================================
 
 (defun tibetan-doc-format--generate-body (text options)
-  "Generate org body from TEXT with OPTIONS."
+  "Generate org body from TEXT with OPTIONS.
+
+Recognised option keys:
+  :line-break     `shad' | `double-shad' | `preserve'
+  :segments       t | nil (wrap each line in 〔seg:N〕 ... 〔/seg〕)
+  :translations   t | nil (append an empty 〔trans:N〕 block after
+                  each segment; defaults to t when :segments is t)"
   (let* ((line-break (or (plist-get options :line-break) 'shad))
          (add-segments (plist-get options :segments))
-         (folio-style (or (plist-get options :folio-style) 'heading))
+         ;; Default: if segments are on, add translation blocks unless
+         ;; the caller explicitly turned them off.
+         (add-trans (if (plist-member options :translations)
+                        (plist-get options :translations)
+                      add-segments))
+         (_folio-style (or (plist-get options :folio-style) 'heading))
          (lines (tibetan-doc-format--split-text text line-break))
-         (folio-markers (tibetan-doc-format--extract-folio-markers text))
+         (_folio-markers (tibetan-doc-format--extract-folio-markers text))
          (result ""))
 
     ;; Start text section
@@ -156,7 +172,8 @@ Returns alist of ((position . folio-num) ...)."
 
     ;; Process lines
     (if add-segments
-        (let ((marked-lines (tibetan-doc-format--add-segment-markers lines)))
+        (let ((marked-lines (tibetan-doc-format--add-segment-markers
+                             lines nil add-trans)))
           (dolist (line marked-lines)
             (setq result (concat result line "\n"))))
       (dolist (line lines)
@@ -182,6 +199,9 @@ SOURCE-INFO is plist with:
 OPTIONS is plist with:
   :line-break    `shad' | `double-shad' | `preserve'
   :segments      t | nil (add segment markers)
+  :translations  t | nil (append empty 〔trans:N〕 blocks after each
+                 segment for inline class translations; defaults to the
+                 value of :segments)
   :folio-style   `heading' | `inline' | `property'
   :text-type     `classical' | `madhyamaka-verse' | `sutra' | `commentary'
 
@@ -250,6 +270,7 @@ Returns options plist."
                         '("shad" "double-shad" "preserve")
                         nil t nil nil "shad"))
    :segments (yes-or-no-p "Add segment markers? ")
+   :translations (yes-or-no-p "Append empty 〔trans:N〕 blocks for class translations? ")
    :folio-style (intern (completing-read
                          "Folio style: "
                          '("heading" "inline" "property")

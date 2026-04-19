@@ -24,8 +24,8 @@ Use C-c u + / C-c u - to adjust interactively."
 
 (defface tibetan-script-face
   '((t (:height 1.8)))
-  "Face for Tibetan script text.
-Makes Tibetan text larger for better visibility of superscript and subscript letters."
+  "Face for Tibetan script text for better visibility
+of superscript and subscript letters."
   :group 'tibetan-cat)
 
 (defun tibetan-set-text-scale (factor)
@@ -105,6 +105,7 @@ Smaller and muted to not distract from Tibetan text."
 ;; MINOR MODE
 ;; ============================================================================
 
+;;;###autoload
 (define-minor-mode tibetan-doc-display-mode
   "Minor mode for displaying Tibetan prepared documents.
 Makes segment markers smaller and less obtrusive.

@@ -33,7 +33,7 @@ Returns empty string if indices are out of range."
 
 (defun tibetan-to-wylie-fixed (tibetan-text)
   "Convert Tibetan Unicode text to Wylie transliteration.
-FIXED: Properly handles implicit 'a' vowels after each consonant."
+FIXED: Properly handles implicit \='a\=' vowels after each consonant."
   (condition-case err
       (let ((result "")
             (pos 0)
@@ -80,7 +80,7 @@ FIXED: Properly handles implicit 'a' vowels after each consonant."
 
 (defun tibetan-is-prefix (char next-char)
   "Check if CHAR is a valid prefix before NEXT-CHAR in Tibetan.
-Prefixes don't get implicit 'a' vowel."
+Prefixes don't get implicit \='a\=' vowel."
   (let ((prefixes '(
         ;; ག prefix
         ("ག" . ("ཅ" "ཉ" "ཏ" "ད" "ན" "ཙ" "ཞ" "ཟ" "ཡ" "ཤ" "ས"))
@@ -98,8 +98,9 @@ Prefixes don't get implicit 'a' vowel."
 
 (defun tibetan-syllable-to-wylie (syllable)
   "Convert a single Tibetan syllable to Wylie.
-Handles implicit 'a' vowels correctly after each consonant.
-Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix]"
+Handles implicit \='a\=' vowels correctly after each consonant.
+Recognizes Tibetan syllable structure: [prefix] ROOT [subscript]
+[vowel] [suffix]"
   (condition-case err
   ;; Character mappings with priority (longer matches first)
   (let ((consonant-stacks '(
@@ -110,6 +111,8 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
         ("བརྒ" . "brg") ("བསྒ" . "bsg") ("བརྟ" . "brt") ("བསྟ" . "bst")
         ("བརྡ" . "brd") ("བསྡ" . "bsd")
         ("བསྐ" . "bsk")
+        ;; Three-character stacks with ལ-headed roots (ba prefix + l-stack)
+        ("བལྟ" . "blt") ("བལྡ" . "bld") ("བལྗ" . "blj")
         ;; Two-character stacks with subscripts (3-char total)
         ("སྨྲ" . "smr") ("སྤྲ" . "spr") ("སྦྲ" . "sbr") ("སྒྲ" . "sgr")
         ("སྐྲ" . "skr") ("སྣྲ" . "snr")
@@ -122,9 +125,10 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
         ("རྒ" . "rg") ("རྐ" . "rk") ("རྟ" . "rt") ("རྡ" . "rd")
         ("རྣ" . "rn") ("རྦ" . "rb") ("རྨ" . "rm") ("རྩ" . "rts")
         ("རྫ" . "rdz") ("རྗ" . "rj") ("རྙ" . "rny") ("རླ" . "rl")
-        ("ལྟ" . "lt") ("ལྡ" . "ld") ("ལྗ" . "lj")
+        ("ལྟ" . "lt") ("ལྡ" . "ld") ("ལྗ" . "lj") ("ལྕ" . "lc")
         ("དྲ" . "dr") ("དྭ" . "dw") ("ཕྲ" . "phr") ("ཁྲ" . "khr")
-        ("གྲ" . "gr") ("ཏྲ" . "tr") ("ཐྲ" . "thr") ("བྲ" . "br")
+        ("གྲ" . "gr") ("ཀྲ" . "kr") ("ཏྲ" . "tr") ("ཐྲ" . "thr") ("བྲ" . "br")
+        ("རྒྱ" . "rgy") ("རྐྱ" . "rky") ("རྨྱ" . "rmy")
         ("སྒྱ" . "sgy") ("སྐྱ" . "sky") ("སྤྱ" . "spy") ("སྦྱ" . "sby")
         ("གྲྭ" . "grw") ("ཀྲུ" . "kru") ("དྲུ" . "dru")
         ;; Consonant + subscript ལ (la-btags) - missing stacks
@@ -167,7 +171,7 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
             (match-length 0)
             (match-wylie nil)
             (is-consonant nil)
-            (is-vowel nil))
+)
 
         ;; Try to match longest possible sequence first (4, 3, 2, then 1 character)
         (dolist (len '(4 3 2 1))
@@ -208,7 +212,7 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
                   (setq matched t)
                   (setq match-length len)
                   (setq match-wylie (cdr pair))
-                  (setq is-vowel t)))
+                  (ignore is-consonant)))  ;; vowel matched
 
               ;; Try final marks
               (dolist (pair final-marks)
@@ -228,7 +232,6 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
                        (has-vowel-after nil)
                        (is-prefix nil)
                        (is-root nil)
-                       (is-suffix nil)
                        (current-char (tibetan-safe-substring syllable pos (1+ pos))))
 
                   ;; ===== STEP 1: Check if this consonant is a prefix =====
@@ -286,7 +289,7 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
 
                    ;; Otherwise, we've already seen the root, so this is a suffix
                    (t
-                    (setq is-suffix t)))
+                    nil))  ; suffix position
 
                   ;; ===== STEP 3: Check for vowel marks after this consonant =====
                   (when (< next-pos (length syllable))
@@ -311,7 +314,20 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript] [vowel] [suffix
                   ;; ===== STEP 5: Add implicit 'a' =====
                   ;; Only ROOT consonants get 'a' (unless followed by vowel mark or final mark)
                   ;; NEVER add 'a' to: prefix, suffix, or consonants followed by vowels
-                  (when (and is-root (not has-vowel-after))
+                  ;;
+                  ;; SPECIAL CASE — ཨ (a-chen / vowel carrier):
+                  ;; The mapping emits "a" for ཨ (line 151).  When ཨ is
+                  ;; followed by a vowel sign the "a" must be *removed*
+                  ;; because ཨ is merely the carrier — the vowel sign
+                  ;; alone determines the syllable value (ཨོ → "o", not "ao").
+                  ;; When ཨ is bare (no vowel after), the "a" stays — it IS
+                  ;; the vowel.  No extra implicit 'a' is ever added for ཨ.
+                  (when (and is-root (string= current-char "ཨ") has-vowel-after)
+                    ;; Strip the trailing "a" that the consonant mapping added
+                    (setq result (substring result 0 (- (length result) 1))))
+                  (when (and is-root
+                             (not has-vowel-after)
+                             (not (string= current-char "ཨ")))
                     (setq result (concat result "a")))
 
                   (setq is-first-consonant nil)))

@@ -14,35 +14,6 @@
 (require 'cl-lib)
 
 ;; ============================================================================
-;; COMMON TIBETAN CONSTRUCTIONS
-;; ============================================================================
-
-(defvar tibetan-cat-constructions
-  '(;; Temporal constructions
-    ("པའི་ཚེ" . "at the time when ... %s")
-    ("བའི་ཚེ" . "at the time when ... %s")
-    ("པའི་དུས" . "at the time when ... %s")
-    ("བའི་དུས" . "at the time when ... %s")
-    ("ན" . "when %s")
-    ("ནས" . "after %s-ing / from %s")
-    ("ཏེ" . "having %s-ed, ...")
-    ;; Locative
-    ("དུ" . "in/to %s")
-    ("ལ" . "to/for %s")
-    ("ར" . "to/for %s")
-    ;; Genitive
-    ("གི" . "%s's")
-    ("གྱི" . "%s's")
-    ("ཀྱི" . "%s's")
-    ("འི" . "%s's")
-    ;; Ergative/Instrumental
-    ("གིས" . "by %s")
-    ("ཀྱིས" . "by %s")
-    ("ས" . "by %s"))
-  "Common Tibetan grammatical constructions and their English patterns.
-%s is replaced with the relevant noun or verb phrase.")
-
-;; ============================================================================
 ;; WORD ORDER MAPPING
 ;; ============================================================================
 
@@ -118,7 +89,7 @@ Returns nil for empty or nil input."
       (setq gloss (string-trim gloss)))
     gloss)))
 
-(defun tibetan-cat--build-verb-phrase (verb-form verb-meaning verb-info)
+(defun tibetan-cat--build-verb-phrase (verb-form verb-meaning _verb-info)
   "Build English verb phrase from VERB-FORM, VERB-MEANING, and VERB-INFO."
   (let ((base (or verb-meaning
                   (tibetan-cat--gloss-word verb-form)
@@ -129,7 +100,7 @@ Returns nil for empty or nil input."
     ;; (For now, just return the base form)
     base))
 
-(defun tibetan-cat--build-noun-phrase (form english role marker)
+(defun tibetan-cat--build-noun-phrase (form english role _marker)
   "Build English noun phrase from FORM, ENGLISH, ROLE, and MARKER."
   (let ((base (or english
                   (tibetan-cat--gloss-word form)
@@ -185,7 +156,7 @@ Returns a string with the suggested translation."
                     (when (fboundp 'tibetan-extract-verbs-compound-aware)
                       (tibetan-extract-verbs-compound-aware tibetan-text words multiword-units))))
          ;; Get argument analysis
-         (args-by-verb '())
+         (_args-by-verb '())
          (translation-parts '()))
 
     ;; Analyze arguments for each verb
@@ -193,10 +164,10 @@ Returns a string with the suggested translation."
       (when (and verb (listp verb) (consp (car verb)))
         (let* ((lemma (alist-get 'lemma verb))
                (meaning (alist-get 'meaning verb))
-               (frame (or (alist-get 'case_frame verb) "?"))
-               (trans (alist-get 'transitivity verb))
+               (_frame (or (alist-get 'case_frame verb) "?"))
+               (_trans (alist-get 'transitivity verb))
                (arg-analysis (when (fboundp 'tibetan-analyze-arguments)
-                               (tibetan-analyze-arguments verb multiword-units words)))
+                               (tibetan-analyze-arguments verb multiword-units words verbs)))
                (clause-parts '())
                (agent nil)
                (patient nil)
@@ -271,12 +242,11 @@ Analyzes grammatical structure to produce proper English word order."
                     (tibetan-build-compound-aware-segments words multiword-units)))
         (bialek (when (fboundp 'tibetan-analyze-grammar-bialek)
                   (tibetan-analyze-grammar-bialek tibetan-text)))
-        (sentence-parts '())
+        (_sentence-parts '())
         (subject nil)
         (location nil)
         (verb-phrase nil)
-        (temporal-clause nil)
-        (topic nil)
+        (_topic nil)
         (sentence-initial nil))
 
     ;; Check for sentence-initial particles
@@ -289,7 +259,7 @@ Analyzes grammatical structure to produce proper English word order."
       (let* ((particle (nth 0 gram))
              (word (nth 1 gram))
              (gram-type (nth 2 gram))
-             (word-gloss (tibetan-cat--gloss-word
+             (_word-gloss (tibetan-cat--gloss-word
                           (replace-regexp-in-string particle "$" "" word))))
         (cond
          ;; Terminative/Allative (དུ/ལ/ར) - location or goal
@@ -299,10 +269,10 @@ Analyzes grammatical structure to produce proper English word order."
             (setq location (format "in %s" (or np word)))))
 
          ;; Genitive with temporal marker (པའི་ཚེ, etc.)
+         ;; TODO: Use temporal clause detection for improved translation
          ((and (string-match-p "GENITIVE" gram-type)
                (string-match-p "ཚེ\\|དུས" tibetan-text))
-          ;; This is part of a temporal clause
-          (setq temporal-clause t))
+          nil)
 
          ;; Ergative - agent/subject
          ((string-match-p "ERGATIVE" gram-type)
@@ -373,6 +343,7 @@ Analyzes grammatical structure to produce proper English word order."
 ;; INTERACTIVE COMMAND
 ;; ============================================================================
 
+;;;###autoload
 (defun tibetan-cat-insert-translation ()
   "Generate and insert CAT translation for current segment.
 Works within an analysis buffer to fill in the CAT Suggested line."
@@ -401,6 +372,7 @@ Works within an analysis buffer to fill in the CAT Suggested line."
               (message "CAT translation: %s" translation))))
       (message "No Tibetan text found in buffer"))))
 
+;;;###autoload
 (defun tibetan-cat-translate-region (start end)
   "Generate CAT translation for Tibetan text in region from START to END."
   (interactive "r")

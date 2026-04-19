@@ -134,8 +134,8 @@ Returns (start-line . end-line) or nil."
   "Detect verse by finding 4 consecutive 7-syllable lines.
 Returns (start-line . end-line) or nil."
   (save-excursion
-    (let ((current-line (line-number-at-pos))
-          (seven-count 0)
+    (let ((_current-line (line-number-at-pos))
+          (_seven-count 0)
           start-line end-line)
       ;; Go back to find start of 7-syllable sequence
       (beginning-of-line)
@@ -179,7 +179,7 @@ Returns (start-line . end-line) or nil."
        (progn
          (goto-char current-pos)
          (when (re-search-backward "〔verse:\\([0-9]+\\)〕" nil t)
-           (let ((verse-num (match-string 1))
+           (let ((_verse-num (match-string 1))
                  (start-line (1+ (line-number-at-pos)))
                  end-line)
              (forward-line 1)
@@ -285,7 +285,7 @@ Creates the folder if it doesn't exist."
 
 (defun tibetan-compound-filename (compound-id)
   "Generate filename for compound COMPOUND-ID.
-Returns filename like 'compound-001.org'."
+Returns filename like \='compound-001.org\='."
   (format "compound-%03d.org" compound-id))
 
 (defun tibetan-compound-get-next-id ()
@@ -316,7 +316,7 @@ Returns list of connector analyses."
   (let ((connectors '())
         (prev-line nil))
     (dolist (line-data lines)
-      (let ((text (cdr line-data))
+      (let ((_text (cdr line-data))
             (line-num (car line-data)))
         (when prev-line
           ;; Check for converb endings that link to next line
@@ -561,7 +561,7 @@ Returns org-mode formatted string with actual draft translations."
       (dolist (ld line-data-list)
         (let* ((line-idx (alist-get 'line-idx ld))
                (gloss (alist-get 'gloss ld))
-               (verbs (alist-get 'verbs ld))
+               (_verbs (alist-get 'verbs ld))
                (parts '()))
           ;; Build with technical terms
           (dolist (pair gloss)
@@ -720,7 +720,7 @@ Returns org-mode formatted string."
       (let ((line-num 1))
         (dolist (line-data lines)
           (let* ((tibetan (cdr line-data))
-                 (src-line (car line-data))
+                 (_src-line (car line-data))
                  (syllable-count (when (fboundp 'tibetan-count-syllables)
                                    (tibetan-count-syllables tibetan))))
             (insert (format "*** LINE %d: %s\n" line-num tibetan))
@@ -1025,6 +1025,36 @@ Must be called from within a compound analysis buffer."
             (let ((context (with-current-buffer (find-file-noselect source-path)
                              (tibetan-compound-get-context))))
               (tibetan-compound-regenerate-auto filepath lines context))))))))
+
+;; ============================================================================
+;; ANALYSIS FUNCTIONS FOR INTERACTIVE COMMANDS
+;; ============================================================================
+
+;;;###autoload
+(defun tibetan-compound-analyze-document-structure ()
+  "Analyze the structure of the current document.
+Returns a list of analysis results or nil if no structure found."
+  (interactive)
+  (save-excursion
+    (goto-char (point-min))
+    (let ((headings '()))
+      (while (re-search-forward "^\\*+\\s-+\\(.+\\)$" nil t)
+        (push (list (match-string 1) (line-number-at-pos)) headings))
+      (when headings
+        (nreverse headings)))))
+
+(defun tibetan-compound-analyze-verse-structure (lines)
+  "Analyze verse structure from LINES.
+LINES should be a list of (line-num . text) cons cells.
+Returns a list of verse analysis or nil."
+  (when lines
+    (let ((analysis '()))
+      (dolist (line-data lines)
+        (let ((text (cdr line-data)))
+          (when (string-match "[ༀ-࿿]" text)
+            (push (list :line (car line-data) :text text) analysis))))
+      (when analysis
+        (nreverse analysis)))))
 
 (provide 'tibetan-compound-analysis)
 ;;; tibetan-compound-analysis.el ends here
