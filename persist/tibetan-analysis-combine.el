@@ -44,6 +44,8 @@
                   "tibetan-analysis-persist" (content))
 (declare-function tibetan-analysis--read-section-body
                   "tibetan-analysis-persist" (filepath section-name))
+(declare-function tibetan-analysis--filter-to-tibetan-lines
+                  "tibetan-analysis-persist" (text))
 
 ;; ============================================================================
 ;; CONFIGURATION
@@ -96,9 +98,28 @@ or has no auto-analysis subtree."
         (cdr (tibetan-analysis--split-level2-sections content))))))
 
 (defun tibetan-analysis-combine--tibetan-text (filepath)
-  "Return the body of `* Tibetan Text' in FILEPATH (trimmed)."
+  "Return the body of `* Tibetan Text' in FILEPATH (trimmed, filtered).
+
+The raw body often interleaves Tibetan with non-Tibetan cruft that
+should never surface in the combined document:
+
+  - Org `#+TITLE:' / `#+AUTHOR:' / `#+TIBETAN_CLAUDE_CONTEXT:'
+    headers captured inside a segment when the `〔seg:N〕' marker
+    was placed above the source-file preamble.
+  - `#'-prefixed editorial / OCR comments.
+  - Blank separators.
+
+We reuse `tibetan-analysis--filter-to-tibetan-lines' (the same
+pre-parser sanitiser the per-segment generator runs) to keep only
+lines that contain at least one Tibetan character.  Returns nil
+when the filtered result is empty — the caller uses that to decide
+whether the segment should be rendered at all."
   (let ((raw (tibetan-analysis--read-section-body filepath "Tibetan Text")))
-    (when raw (string-trim raw))))
+    (when raw
+      (let ((filtered (tibetan-analysis--filter-to-tibetan-lines
+                       (string-trim raw))))
+        (when (and filtered (not (string-empty-p (string-trim filtered))))
+          filtered)))))
 
 (defun tibetan-analysis-combine--snippet (text)
   "Return a one-line snippet of TEXT suitable for a heading suffix.
@@ -123,32 +144,44 @@ with a trailing ellipsis when longer."
         one-line))))
 
 (defun tibetan-analysis-combine--render-segment (filepath seg-id)
-  "Return a string containing the combined-doc block for one segment.
-FILEPATH points at the seg-NNN*.org file, SEG-ID is the numeric id."
+  "Return a string containing the combined-doc block for one segment,
+or nil when the segment has no Tibetan content to render.
+
+FILEPATH points at the seg-NNN*.org file, SEG-ID is the numeric id.
+
+A segment is skipped when `tibetan-analysis-combine--tibetan-text'
+returns nil (the `* Tibetan Text' body had no Tibetan characters
+once non-Tibetan lines were filtered out).  This typically happens
+for seg-001 in sources where the `〔seg:1〕' marker sits above the
+#+TITLE / #+AUTHOR / #+TIBETAN_CLAUDE_CONTEXT preamble — the
+segment captures the preamble but no actual passage, so including
+it in the combined document would only produce a run of
+`[Not available]' placeholders."
   (let* ((tibetan (tibetan-analysis-combine--tibetan-text filepath))
          (sections (tibetan-analysis-combine--read-auto-sections filepath))
          (snippet (tibetan-analysis-combine--snippet tibetan)))
-    (with-temp-buffer
-      (insert (format "* Segment %d%s\n"
-                      seg-id
-                      (if (and snippet (not (string-empty-p snippet)))
-                          (concat " — " snippet)
-                        "")))
-      (dolist (heading tibetan-analysis-combine--per-segment-order)
-        (cond
-         ;; Tibetan Text comes from the top-level * Tibetan Text.
-         ((string= heading "** Tibetan Text")
-          (insert "** Tibetan Text\n")
-          (insert (or tibetan "[Not available]"))
-          (insert "\n\n"))
-         ;; The others come from the auto-analysis sections map.
-         (t
-          (let ((body (cdr (assoc heading sections))))
-            (insert heading "\n")
-            (if (and body (not (string-empty-p (string-trim body))))
-                (insert (string-trim-right body) "\n\n")
-              (insert "[Not available]\n\n"))))))
-      (buffer-string))))
+    (when tibetan
+      (with-temp-buffer
+        (insert (format "* Segment %d%s\n"
+                        seg-id
+                        (if (and snippet (not (string-empty-p snippet)))
+                            (concat " — " snippet)
+                          "")))
+        (dolist (heading tibetan-analysis-combine--per-segment-order)
+          (cond
+           ;; Tibetan Text comes from the top-level * Tibetan Text.
+           ((string= heading "** Tibetan Text")
+            (insert "** Tibetan Text\n")
+            (insert tibetan)
+            (insert "\n\n"))
+           ;; The others come from the auto-analysis sections map.
+           (t
+            (let ((body (cdr (assoc heading sections))))
+              (insert heading "\n")
+              (if (and body (not (string-empty-p (string-trim body))))
+                  (insert (string-trim-right body) "\n\n")
+                (insert "[Not available]\n\n"))))))
+        (buffer-string)))))
 
 ;; ============================================================================
 ;; APPENDIX COLLECTION AND DEDUP
@@ -305,24 +338,35 @@ Writes `combined.org' in the folder and opens it in a side window."
          (output-path (expand-file-name "combined.org" folder)))
     (unless files
       (user-error "No seg-NNN*.org files found in %s" folder))
-    (with-temp-file output-path
-      (insert "#+TITLE: Combined Segment Analyses\n")
-      (insert (format "#+GENERATED: %s\n"
-                      (format-time-string "%Y-%m-%d %H:%M:%S")))
-      (insert (format "#+SEGMENT_COUNT: %d\n" (length files)))
-      (insert "#+STARTUP: showall\n\n")
-      (insert "* Overview\n\n")
-      (insert (format "Generated from %d segment files under =%s=.\n\n"
-                      (length files) folder))
-      (insert "This document is regenerated by =M-x ")
-      (insert "tibetan-analysis-combine-document= (bound to =C-c u C=).  ")
-      (insert "Edit the per-segment =seg-NNN.org= files, not this one — ")
-      (insert "changes here are overwritten on next rebuild.\n\n")
-      ;; Per-segment blocks
-      (dolist (f files)
-        (let ((sid (or (tibetan-analysis--seg-id-from-filename f) 0)))
-          (insert (tibetan-analysis-combine--render-segment f sid))
-          (insert "\n")))
+    (let ((included 0) (skipped 0))
+      (with-temp-file output-path
+        (insert "#+TITLE: Combined Segment Analyses\n")
+        (insert (format "#+GENERATED: %s\n"
+                        (format-time-string "%Y-%m-%d %H:%M:%S")))
+        (insert (format "#+SEGMENT_COUNT: %d\n" (length files)))
+        (insert "#+STARTUP: showall\n")
+        ;; Export directives: no table of contents, no section numbers.
+        ;; With 200+ per-segment top-level headings a TOC would fill
+        ;; the first several pages of any exported PDF / HTML with a
+        ;; list the reader already knows.
+        (insert "#+OPTIONS: toc:nil num:nil\n\n")
+        (insert "* Overview\n\n")
+        (insert (format "Generated from %d segment files under =%s=.\n\n"
+                        (length files) folder))
+        (insert "This document is regenerated by =M-x ")
+        (insert "tibetan-analysis-combine-document= (bound to =C-c u C=).  ")
+        (insert "Edit the per-segment =seg-NNN.org= files, not this one — ")
+        (insert "changes here are overwritten on next rebuild.\n\n")
+        ;; Per-segment blocks — segments whose `* Tibetan Text' has no
+        ;; Tibetan content (preamble-only, common on seg-001) are
+        ;; silently dropped so the combined doc stays signal-heavy.
+        (dolist (f files)
+          (let* ((sid (or (tibetan-analysis--seg-id-from-filename f) 0))
+                 (block (tibetan-analysis-combine--render-segment f sid)))
+            (if block
+                (progn (insert block) (insert "\n")
+                       (cl-incf included))
+              (cl-incf skipped))))
       ;; Appendix A — Grammatical Markers
       (let* ((gm-bodies (tibetan-analysis-combine--collect-appendix-bodies
                          files "** Grammatical Markers"))
@@ -341,11 +385,18 @@ Writes `combined.org' in the folder and opens it in a side window."
         (insert (tibetan-analysis-combine--render-appendix
                  "* Appendix B — Detailed Dictionary"
                  dd-entries))))
-    (message "Combined document: %s" output-path)
-    (let ((buf (find-file-noselect output-path)))
-      (display-buffer-in-side-window
-       buf '((side . right) (window-width . 0.5)))
-      buf)))
+      (message
+       (if (> skipped 0)
+           (format "Combined document: %s (%d segment%s, %d skipped — no Tibetan content)"
+                   output-path
+                   included (if (= included 1) "" "s")
+                   skipped)
+         (format "Combined document: %s (%d segments)"
+                 output-path included)))
+      (let ((buf (find-file-noselect output-path)))
+        (display-buffer-in-side-window
+         buf '((side . right) (window-width . 0.5)))
+        buf))))
 
 (provide 'tibetan-analysis-combine)
 ;;; tibetan-analysis-combine.el ends here

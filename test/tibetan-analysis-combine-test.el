@@ -185,5 +185,40 @@ a user-error rather than silently writing an empty file."
     (should-error (tibetan-analysis-combine-document folder)
                   :type 'user-error)))
 
+(ert-deftest tibetan-combine-skips-segments-with-no-tibetan ()
+  "A segment whose `* Tibetan Text' contains only non-Tibetan lines
+\(e.g. a `〔seg:1〕' that captured the source-file preamble) must be
+dropped from the combined output — no empty `* Segment N' heading,
+no run of `[Not available]' placeholders."
+  (tibetan-combine-test--with-temp-folder folder
+    ;; seg-001: preamble only — no Tibetan characters.
+    (tibetan-combine-test--write-seg
+     folder 1
+     "#+TITLE: A source file\n#+TIBETAN_CLAUDE_CONTEXT: some context\n"
+     '(("** Wylie Transliteration" "")
+       ("** Claude Translation"    "")
+       ("** Claude Grammar"        "")))
+    ;; seg-002: a real passage.
+    (tibetan-combine-test--write-seg
+     folder 2 "རྒྱལ་དང་དེ་སྲས་"
+     '(("** Wylie Transliteration" "rgyal dang de sras")
+       ("** Particle Map" "[map]")
+       ("** Interlinear Gloss" "rgyal [king]")
+       ("** Verb Classification (Hill 2010)" "[verbs]")
+       ("** Claude Translation" "The victor")
+       ("** Claude Grammar" "NP coord")))
+    (let ((buf (tibetan-analysis-combine-document folder)))
+      (unwind-protect
+          (with-current-buffer buf
+            (let ((text (buffer-string)))
+              ;; Segment 1 dropped entirely.
+              (should-not (string-match-p "^\\* Segment 1" text))
+              ;; Segment 2 retained.
+              (should (string-match-p "^\\* Segment 2" text))
+              (should (string-match-p "The victor" text))
+              ;; Export-level TOC suppressed.
+              (should (string-match-p "^#\\+OPTIONS:.*toc:nil" text))))
+        (kill-buffer buf)))))
+
 (provide 'tibetan-analysis-combine-test)
 ;;; tibetan-analysis-combine-test.el ends here
