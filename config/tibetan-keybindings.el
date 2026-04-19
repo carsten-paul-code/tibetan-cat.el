@@ -124,6 +124,21 @@
   ;; - Also available via Menu: Tibetan > Batch Analyze All Segments
 
 ;; ============================================================================
+;; COMBINED DOCUMENT - C-c u C
+;; ============================================================================
+
+(global-set-key (kbd "C-c u C") 'tibetan-analysis-combine-document)
+  ;; Stitch every seg-NNN*.org under analysis/ into one combined.org:
+  ;; - Per-segment body: Tibetan Text + Wylie + Particle Map + Interlinear
+  ;;   Gloss + Verb Classification + Claude Translation + Claude Grammar
+  ;; - Appendix A: consolidated Grammatical Markers (deduped, back-refs)
+  ;; - Appendix B: consolidated Detailed Dictionary (deduped, back-refs)
+  ;; - Writes analysis/combined.org and opens it in a side window.
+  ;; - Rebuild at any time; overwrites combined.org (edit the per-segment
+  ;;   files, not this one).
+  ;; - C-u prefix prompts for a different analysis folder.
+
+;; ============================================================================
 ;; PERSISTENT COMPOUND ANALYSIS - C-c v A / C-c v R
 ;; ============================================================================
 

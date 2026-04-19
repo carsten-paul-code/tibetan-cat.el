@@ -122,5 +122,8 @@
 ;; Auto-content reorder (priority section order + Claude Grammar promotion)
 (condition-case nil (require 'tibetan-analysis-reorder-test) (error nil))
 
+;; Combined document builder (C-c u C) — per-segment blocks + dedup appendix
+(condition-case nil (require 'tibetan-analysis-combine-test) (error nil))
+
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here
