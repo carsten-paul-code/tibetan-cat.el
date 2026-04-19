@@ -451,7 +451,7 @@ Returns list of (particle word type function translation-guide bialek-ref)."
                (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
           (when (> (length root) 0)
             (push (list particle word "CONVERBIAL: TEMPORAL/CIRCUMSTANTIAL"
-                       (format "Temporal/circumstantial: 'when %s' or 'upon %s'" root)
+                       (format "Temporal/circumstantial: 'when %s' or 'upon %s'" root root)
                        (format "Translation: 'when %s' or 'upon %s-ing'" root root)
                        "Bialek: V+པ་ལ converb - temporal or circumstantial"
                        "Portfolio §2.9 (V+pa la): temporal/circumstantial")

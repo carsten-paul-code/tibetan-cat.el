@@ -89,6 +89,8 @@
 ;; PACKAGE INSTALLATION
 ;; ============================================================================
 
+(defvar package-archive-contents)
+
 (defun tibetan-cat-setup--ensure-packages ()
   "Install required Emacs packages."
   (require 'package)
@@ -176,6 +178,8 @@
 ;; ============================================================================
 ;; FONT SETUP (for init.el)
 ;; ============================================================================
+
+(declare-function set-fontset-font "fontset" (fontset script font &optional frame add))
 
 (defun tibetan-cat-setup--configure-fonts ()
   "Configure Tibetan font display."

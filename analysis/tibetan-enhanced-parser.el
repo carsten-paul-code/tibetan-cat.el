@@ -27,6 +27,10 @@
 (defvar tibetan-cat-data-dir nil
   "Base directory for Tibetan CAT data files.")
 
+;; Populated by `tibetan-bundled-glossary' when the bundled glossaries
+;; are loaded.  Declared here so the byte-compiler recognises it.
+(defvar tibetan-comprehensive-vocabulary)
+
 ;; ============================================================================
 ;; DICTIONARY LOADING
 ;; ============================================================================

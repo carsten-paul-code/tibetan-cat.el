@@ -70,6 +70,9 @@
 (require 'tibetan-utils nil t)
 (require 'gptel nil t)
 
+;; Silence byte-compile warnings when gptel is not installed.
+(declare-function gptel-request "gptel" (&optional prompt &rest args))
+
 (defconst tibetan-sentence-persist-version "1.0"
   "Version of the sentence analysis file format.")
 

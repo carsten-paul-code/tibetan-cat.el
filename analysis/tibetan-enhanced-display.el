@@ -39,7 +39,7 @@
   '("དགོས" "ཆོག" "ཐུབ" "ཤེས" "ནུས" "སྲིད" "འོས")
   "Modal / auxiliary verbs that typically follow a main verb.
 dgos=must, chog=may, thub=be able, shes=know-how, nus=be-able,
-srid=be-possible, 'os=be-appropriate.")
+srid=be-possible, \\='os=be-appropriate.")
 
 (defvar tibetan-verb-detect--reporting-set
   '("ཟེར" "གསུང" "གསུངས" "བཤད" "སྨྲ" "སྨྲས" "ཞུ" "ཞུས" "བརྗོད")

@@ -274,10 +274,11 @@ same rule at `analysis/tibetan-particles-bialek.el' (§terminative)."
   (> (length (car pair)) 1))
 
 (defun tibetan-clause-seg--classify-word (w)
-  "Return a symbol for W: 'case-suffix, 'case-standalone, 'negator,
-'determiner, 'final, 'converb, or nil (= content/head candidate).
-Detects the longest matching suffix.  Single-character case
-particles match only as standalone — see
+  "Return a symbol for W indicating its grammatical role.
+Possible return values: \\='case-suffix, \\='case-standalone, \\='negator,
+\\='determiner, \\='final, \\='converb, or nil (= content/head
+candidate).  Detects the longest matching suffix.  Single-character
+case particles match only as standalone — see
 `tibetan-clause-seg--multichar-suffix-p'."
   (let ((w (string-trim w)))
     (cond

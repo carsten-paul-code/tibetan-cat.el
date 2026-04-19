@@ -27,6 +27,11 @@
 (require 'tibetan-doc-format)
 (require 'tibetan-ocr-validate)
 
+;; Populated by the bundled glossary loader — declared so byte-compile
+;; doesn't warn when we reach the status function below before the
+;; glossary module has had a chance to define it.
+(defvar tibetan-comprehensive-vocabulary)
+
 ;; AI correction (requires gptel)
 (require 'tibetan-ocr-correct)
 

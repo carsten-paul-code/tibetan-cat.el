@@ -79,9 +79,9 @@
   "Particles and finite-verb stems that strongly indicate a sentence end
 when followed by shad.
 Populated in two passes: (a) the traditional sentence-final particle set
-(sa, to, no, do, ro, 'o, ngo, go, bo) and the copulas/existentials, plus
-(b) finite verbs harvested from corpus profiling of the Milarepa rnam
-thar.  The verb set is deliberately a closed list rather than a
+(sa, to, no, do, ro, \\='o, ngo, go, bo) and the copulas/existentials,
+plus (b) finite verbs harvested from corpus profiling of the Milarepa
+rnam thar.  The verb set is deliberately a closed list rather than a
 morphology-based heuristic: rnam-thar verb morphology is irregular enough
 (stem suppletion, honorific substitution, archaic past forms) that any
 rule over stems is lossier than an enumerated list maintained from real
@@ -216,9 +216,9 @@ Detection layers, in order:
        (t nil)))))
 
 (defun tibetan--segment-boundary-at-point ()
-  "Return the confidence symbol (nil | 'strong | 'weak) of the segment
-whose heading starts at point.  Reads the segment body from the next
-line up to the following Org heading."
+  "Return the confidence symbol of the segment heading at point.
+One of nil, \\='strong, or \\='weak.  Reads the segment body from
+the next line up to the following Org heading."
   (tibetan-is-sentence-boundary-p
    (save-excursion
      (forward-line 1)
@@ -228,9 +228,10 @@ line up to the following Org heading."
          (buffer-substring-no-properties start (point-max)))))))
 
 (defun tibetan--collect-segment-boundaries ()
-  "Walk the current buffer and return a list of plists, one per
-*** Segment heading, in document order:
-  (:seg-num N :pos POS :confidence (nil|'strong|'weak))."
+  "Walk the current buffer and return a plist per `*** Segment' heading.
+Each plist has the shape (:seg-num N :pos POS :confidence CONF) where
+CONF is one of nil, \\='strong, or \\='weak.  Returns them in
+document order."
   (let (acc)
     (save-excursion
       (goto-char (point-min))

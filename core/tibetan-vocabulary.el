@@ -68,10 +68,12 @@ Can be overridden per-buffer with an org header:
 Example configurations:
   ;; Classroom: text wordlist first, then general
   (setq tibetan-dictionary-priority
-        \\='(resources custom verbs rangjung-yeshe steinert local-glossary dharmamitra))
+        \\='(resources custom verbs rangjung-yeshe
+          steinert local-glossary dharmamitra))
   ;; Research: Steinert collection first for breadth
   (setq tibetan-dictionary-priority
-        \\='(steinert rangjung-yeshe verbs resources local-glossary dharmamitra))"
+        \\='(steinert rangjung-yeshe verbs resources
+          local-glossary dharmamitra))"
   :type '(repeat (choice (const :tag "Resources folder wordlist" resources)
                          (const :tag "Custom vocab file" custom)
                          (const :tag "Verb classifier" verbs)
@@ -112,8 +114,7 @@ Returns meaning string or nil."
              ;; Format verb entry for display
              (let ((meaning (alist-get 'meaning verb-entry))
                    (trans (alist-get 'transitivity verb-entry))
-                   (case-frame (alist-get 'case_frame verb-entry))
-                   (lemma (alist-get 'lemma verb-entry)))
+                   (case-frame (alist-get 'case_frame verb-entry)))
                (when meaning
                  (concat meaning
                          (when (or trans case-frame)
@@ -642,76 +643,73 @@ Both Tibetan and Wylie keys are stored for lookup."
                         (format "pdftotext -layout %s -"
                                 (shell-quote-argument pdf-path))))
                  (lines (split-string text "\n"))
-                 (in-word-list nil))
-            ;; Parse the word list format
-            (let ((current-term nil)
-                  (current-def ""))
-              (dolist (line lines)
-                ;; Detect start of word list section
-                (when (string-match "^Word list" line)
-                  (setq in-word-list t))
+                 (in-word-list nil)
+                 (current-term nil)
+                 (current-def ""))
+            ;; Parse the word list format.  current-term / current-def
+            ;; are bound at let* scope so the post-loop save-last-entry
+            ;; block at the bottom of the function can see their final
+            ;; values without byte-compile warnings.
+            (dolist (line lines)
+              ;; Detect start of word list section
+              (when (string-match "^Word list" line)
+                (setq in-word-list t))
 
-                (when in-word-list
-                  (cond
-                   ;; Skip section headers like "(142.2–5)" or "The Brahmin's Dog"
-                   ((or (string-match "^([0-9.].*)" line)
-                        (string-match "^The " line)
-                        (string-match "^Secondary Literature" line)
-                        (string-match "^[0-9]+$" line)  ; page numbers
-                        (string-empty-p (string-trim line)))
-                    ;; Save previous entry before skipping
-                    (when (and current-term (not (string-empty-p current-def)))
-                      (let ((def (string-trim current-def)))
-                        ;; Store under Wylie key
-                        (puthash current-term def vocab-table)
-                        ;; Also try to convert to Tibetan and store that
-                        (when (fboundp 'tibetan-wylie-to-tibetan)
-                          (let ((tib (ignore-errors (tibetan-wylie-to-tibetan current-term))))
-                            (when (and tib (not (string-empty-p tib)))
-                              (puthash tib def vocab-table))))))
-                    (setq current-term nil)
-                    (setq current-def ""))
+              (when in-word-list
+                (cond
+                 ;; Skip section headers like "(142.2–5)" or "The Brahmin's Dog"
+                 ((or (string-match "^([0-9.].*)" line)
+                      (string-match "^The " line)
+                      (string-match "^Secondary Literature" line)
+                      (string-match "^[0-9]+$" line)
+                      (string-empty-p (string-trim line)))
+                  (tibetan--maybe-store-vocab-entry
+                   vocab-table current-term current-def)
+                  (setq current-term nil)
+                  (setq current-def ""))
 
-                   ;; Line starting with Tibetan character = new Tibetan term
-                   ((string-match "^\\([ཀ-ྼ][^[:space:]]*\\)" line)
-                    ;; Save previous entry
-                    (when (and current-term (not (string-empty-p current-def)))
-                      (puthash current-term (string-trim current-def) vocab-table))
-                    (setq current-term (match-string 1 line))
-                    (setq current-def ""))
+                 ;; Line starting with Tibetan character = new Tibetan term
+                 ((string-match "^\\([ཀ-ྼ][^[:space:]]*\\)" line)
+                  (when (and current-term (not (string-empty-p current-def)))
+                    (puthash current-term (string-trim current-def)
+                             vocab-table))
+                  (setq current-term (match-string 1 line))
+                  (setq current-def ""))
 
-                   ;; Non-indented line with lowercase letters = Wylie term
-                   ((and (not (string-match "^\\s-" line))
-                         (string-match "^\\([a-z' ]+\\)$" (string-trim line)))
-                    ;; Save previous entry
-                    (when (and current-term (not (string-empty-p current-def)))
-                      (let ((def (string-trim current-def)))
-                        (puthash current-term def vocab-table)
-                        (when (fboundp 'tibetan-wylie-to-tibetan)
-                          (let ((tib (ignore-errors (tibetan-wylie-to-tibetan current-term))))
-                            (when (and tib (not (string-empty-p tib)))
-                              (puthash tib def vocab-table))))))
-                    (setq current-term (string-trim line))
-                    (setq current-def ""))
+                 ;; Non-indented line with lowercase letters = Wylie term
+                 ((and (not (string-match "^\\s-" line))
+                       (string-match "^\\([a-z' ]+\\)$" (string-trim line)))
+                  (tibetan--maybe-store-vocab-entry
+                   vocab-table current-term current-def)
+                  (setq current-term (string-trim line))
+                  (setq current-def ""))
 
-                   ;; Indented line = definition continuation
-                   ((and current-term
-                         (string-match "^\\s-+\\(.+\\)" line))
-                    (setq current-def (concat current-def
-                                             (if (string-empty-p current-def) "" " ")
-                                             (string-trim (match-string 1 line))))))))))
+                 ;; Indented line = definition continuation
+                 ((and current-term
+                       (string-match "^\\s-+\\(.+\\)" line))
+                  (setq current-def
+                        (concat current-def
+                                (if (string-empty-p current-def) "" " ")
+                                (string-trim (match-string 1 line))))))))
 
-              ;; Save last entry
-              (when (and current-term (not (string-empty-p current-def)))
-                (let ((def (string-trim current-def)))
-                  (puthash current-term def vocab-table)
-                  (when (fboundp 'tibetan-wylie-to-tibetan)
-                    (let ((tib (ignore-errors (tibetan-wylie-to-tibetan current-term))))
-                      (when (and tib (not (string-empty-p tib)))
-                        (puthash tib def vocab-table))))))
+            ;; Save last entry (still inside the let*).
+            (tibetan--maybe-store-vocab-entry
+             vocab-table current-term current-def))
         (error
          (message "Warning: Could not parse vocab PDF %s: %s" pdf-path err))))
     vocab-table))
+
+(defun tibetan--maybe-store-vocab-entry (vocab-table term def)
+  "Store TERM with DEF in VOCAB-TABLE under Wylie and (if convertible)
+Tibetan keys, when TERM is non-nil and DEF non-empty.  No-op otherwise."
+  (when (and term (stringp def) (not (string-empty-p def)))
+    (let ((trimmed (string-trim def)))
+      (unless (string-empty-p trimmed)
+        (puthash term trimmed vocab-table)
+        (when (fboundp 'tibetan-wylie-to-tibetan)
+          (let ((tib (ignore-errors (tibetan-wylie-to-tibetan term))))
+            (when (and tib (not (string-empty-p tib)))
+              (puthash tib trimmed vocab-table))))))))
 
 (defun tibetan-load-custom-vocab ()
   "Load custom vocabulary for current buffer if #+TIBETAN_VOCAB_FILE is set.

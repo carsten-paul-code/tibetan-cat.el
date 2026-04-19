@@ -20,6 +20,48 @@
 (require 'cl-lib)
 
 ;; ============================================================================
+;; OPTIONAL-DEPENDENCY DECLARATIONS
+;; ============================================================================
+;;
+;; All of the variables and functions declared below live in third-party
+;; packages (treemacs, doom-modeline, dashboard, beacon, dimmer, vertico,
+;; marginalia, org-bullets).  They are intentionally soft-loaded by the
+;; setters in this file — at runtime we only set them when the user has
+;; installed the underlying package.  The declarations here exist purely
+;; to silence byte-compile warnings on a fresh checkout where none of
+;; those packages are present.
+
+(defvar package-archive-contents)
+
+(defvar treemacs-width)
+(defvar treemacs-show-hidden-files)
+(defvar treemacs-follow-mode)
+(declare-function treemacs-filewatch-mode "treemacs" (&optional arg))
+(declare-function treemacs-select-window "treemacs" ())
+
+(defvar doom-modeline-height)
+(defvar doom-modeline-icon)
+(defvar doom-modeline-major-mode-icon)
+(declare-function doom-modeline-mode "doom-modeline" (&optional arg))
+
+(defvar dashboard-banner-logo-title)
+(defvar dashboard-startup-banner)
+(defvar dashboard-center-content)
+(defvar dashboard-items)
+(defvar dashboard-set-heading-icons)
+(defvar dashboard-set-file-icons)
+(declare-function dashboard-setup-startup-hook "dashboard" ())
+
+(declare-function beacon-mode "beacon" (&optional arg))
+(declare-function dimmer-configure-which-key "dimmer" ())
+(declare-function dimmer-mode "dimmer" (&optional arg))
+(declare-function org-bullets-mode "org-bullets" (&optional arg))
+(declare-function vertico-mode "vertico" (&optional arg))
+(declare-function marginalia-mode "marginalia" (&optional arg))
+(declare-function set-fontset-font "fontset"
+                  (fontset script font &optional frame add))
+
+;; ============================================================================
 ;; PACKAGE INSTALLATION HELPER
 ;; ============================================================================
 

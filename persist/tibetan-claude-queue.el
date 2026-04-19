@@ -194,12 +194,12 @@ THUNK must be a function of one argument DONE-FN.  THUNK starts the
 asynchronous work (typically a `gptel-request' call) and, when the
 result is known, calls (funcall DONE-FN STATUS) with one of:
 
-  '(:status ok)                — success; ON-DONE is invoked
-  '(:status rate-limited)      — HTTP 429; queue retries with
-                                 exponential backoff up to
-                                 `tibetan-claude-queue-max-retries'
-  '(:status error :error STR)  — non-retryable failure; ON-FAIL
-                                 is invoked
+  \\='(:status ok)                — success; ON-DONE is invoked
+  \\='(:status rate-limited)      — HTTP 429; queue retries with
+                                    exponential backoff up to
+                                    `tibetan-claude-queue-max-retries'
+  \\='(:status error :error STR)  — non-retryable failure; ON-FAIL
+                                    is invoked
 
 Optional keyword args:
   :on-done FN  — called with the success status plist on success
@@ -209,7 +209,7 @@ Optional keyword args:
                  (typically the analysis filename)
 
 Synchronous errors raised inside THUNK are caught and reported as
-'(:status error :error STR).  Errors raised inside ON-DONE / ON-FAIL
+\\='(:status error :error STR).  Errors raised inside ON-DONE / ON-FAIL
 are caught and logged so they do not break queue progress."
   (unless (functionp thunk)
     (error "tibetan-claude-queue-submit: THUNK must be a function"))

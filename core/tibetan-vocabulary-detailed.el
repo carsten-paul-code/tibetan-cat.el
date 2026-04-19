@@ -134,12 +134,15 @@ Returns plist with :primary :detailed :sanskrit."
 
 (defconst tibetan-vocab--stem-ref-pattern
   "\\b\\(?:pf\\.\\|Pf\\.\\|pres\\.\\|pres\\|fut\\.\\|Fut\\.\\|ft\\.\\|imp\\.\\|Imp\\.\\)[ \t]+\\(?:of\\|von\\|zu\\)[ \t]+\\([a-zA-Z' ]+?\\)\\(?:[;,.]\\|//\\|$\\)"
-  "Regex that matches verb-stem references like 'pf. of byed', 'Pf. von rgyal du \\=dzugs',
-'fut. of sleb pa', 'Imp. von gtong'. The base Wylie form is captured in group 1.")
+  "Regex matching verb-stem references in vocabulary entries.
+Matches patterns such as \\=`pf. of byed\\=', \\=`Pf. von rgyal du dzugs\\=',
+\\=`fut. of sleb pa\\=', \\=`Imp. von gtong\\='.  The base Wylie form is
+captured in group 1.")
 
 (defun tibetan-vocab--extract-stem-reference (text)
-  "Return the base Wylie form referenced in TEXT (e.g. 'byed' for 'pf. of byed'),
-or nil if no stem reference is found."
+  "Return the base Wylie form referenced in TEXT.
+For example \\=`byed\\=' for input containing \\=`pf. of byed\\='.
+Returns nil if no stem reference is found."
   (when (and text (stringp text))
     (save-match-data
       (when (string-match tibetan-vocab--stem-ref-pattern text)
@@ -365,9 +368,12 @@ Returns plist with :primary :detailed :sanskrit :wylie :source, or nil."
 
 (defun tibetan-vocab-extract-detailed (tibetan-text)
   "Extract detailed vocabulary from TIBETAN-TEXT.
-Returns list of plists, each with :tibetan :wylie :primary :detailed :sanskrit :source.
-Uses greedy matching: tries longer compounds first (4, 3, 2 syllables) before single.
-Handles compound detection and provides consistent format for C-c u i and C-c u A."
+Returns list of plists, each with keys
+:tibetan :wylie :primary :detailed :sanskrit :source.
+Uses greedy matching: tries longer compounds first (4, 3, 2 syllables)
+before falling back to single syllables.  Provides a consistent
+format for both the classroom view (C-c u i) and the persistent
+analysis (C-c u A)."
   (when (and tibetan-text (not (string-empty-p tibetan-text)))
     ;; Load vocabularies
     (when (fboundp 'tibetan-load-resources-vocab)

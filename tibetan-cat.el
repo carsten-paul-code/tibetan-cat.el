@@ -173,6 +173,11 @@
 ;; INITIALIZATION
 ;; ============================================================================
 
+;; Forward declaration so the byte-compiler sees `tibetan-cat-version' at
+;; the point it's referenced below.  The authoritative defconst lives
+;; further down under ";; VERSION INFO".
+(defvar tibetan-cat-version)
+
 ;;;###autoload
 (defun tibetan-cat-setup ()
   "Setup Tibetan CAT system.

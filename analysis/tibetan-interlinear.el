@@ -350,18 +350,19 @@ Tries to cut at a word boundary."
           (substring cut 0 space-pos)
         (concat (substring meaning 0 (- max-len 1)) "…")))))
 
-(defun tibetan-interlinear-generate-gloss (vocab-pairs enriched-vocab-pairs
-                                            bialek-analysis tibetan-text)
+(defun tibetan-interlinear-generate-gloss (_vocab-pairs enriched-vocab-pairs
+                                            bialek-analysis _tibetan-text)
   "Generate the Interlinear Gloss section content.
-VOCAB-PAIRS is the raw (tibetan . meaning) alist from segmentation.
+_VOCAB-PAIRS is the raw (tibetan . meaning) alist from segmentation
+ (accepted for caller symmetry but currently unused — enriched pairs
+ carry the short meanings the renderer needs).
 ENRICHED-VOCAB-PAIRS is ((tibetan-clean . short-meaning) ...) from the
 Word/Particle List loop.
 BIALEK-ANALYSIS is the result of `tibetan-analyze-grammar-bialek'.
-TIBETAN-TEXT is the original Tibetan string (for verse structure).
+_TIBETAN-TEXT is the original Tibetan string (for verse structure —
+reserved for shad/verse-break reinsertion; currently unused).
 Returns a string ready to insert after the `** Interlinear Gloss' heading."
-  (let* ((wylie-full (when (fboundp 'tibetan-to-wylie-fixed)
-                       (tibetan-to-wylie-fixed tibetan-text)))
-         ;; Build a lookup: tibetan-clean → (tag . short-meaning)
+  (let* (;; Build a lookup: tibetan-clean → (tag . short-meaning)
          ;; from the enriched vocab pairs and bialek analysis
          (bialek-by-word (make-hash-table :test 'equal))
          (gloss-by-word (make-hash-table :test 'equal))
@@ -436,10 +437,12 @@ Returns a string ready to insert after the `** Interlinear Gloss' heading."
 ;; ============================================================================
 
 (defun tibetan-interlinear-generate-particle-overview (bialek-analysis
-                                                        enriched-vocab-pairs)
+                                                        _enriched-vocab-pairs)
   "Generate the Particle Overview section content.
 BIALEK-ANALYSIS is the result of `tibetan-analyze-grammar-bialek'.
-ENRICHED-VOCAB-PAIRS provides context (what the word means in this segment).
+_ENRICHED-VOCAB-PAIRS is accepted for caller symmetry but is not
+currently consulted — the portfolio lookup keys off the Bialek
+particle tag alone.
 Returns a string ready to insert after the `** Particle Overview' heading."
   (let ((portfolio (tibetan-interlinear--get-portfolio))
         (seen-keys (make-hash-table :test 'equal))

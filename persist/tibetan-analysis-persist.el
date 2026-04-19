@@ -36,6 +36,15 @@
 ;; gptel for Claude translation (soft load - optional)
 (require 'gptel nil t)
 
+;; External gptel symbols — declared to silence byte-compile warnings
+;; when gptel is not installed.  At runtime the `(boundp ...)' / `(fboundp ...)'
+;; guards below the point of use keep behaviour safe.
+(defvar gptel-api-key)
+(defvar gptel-backend)
+(defvar gptel-model)
+(declare-function gptel-request "gptel" (&optional prompt &rest args))
+(declare-function gptel-make-anthropic "gptel" (name &rest args))
+
 (defconst tibetan-analysis-version "1.0"
   "Version of the analysis file format.")
 
@@ -453,7 +462,8 @@ end of text.  Returns nil if no matching segment heading is found."
           (string-trim block))))))
 
 (defun tibetan-analysis--filename-segment-number (basename)
-  "If BASENAME contains a segment marker like Segment-04 / seg-4, return the number."
+  "Return the segment number encoded in BASENAME, or nil.
+Recognises markers like Segment-04, segment_4, seg-4."
   (when (string-match
          "\\b\\(segment\\|seg\\)[-_ ]\\([0-9]+\\)"
          (downcase basename))
@@ -639,17 +649,14 @@ Use only these three headings. No preamble, no closing remarks.
 Genre, period and context hints (if any) are supplied below by the \
 source file via `#+TIBETAN_CLAUDE_CONTEXT:' headers. Do NOT assume a \
 specific genre unless such context is given."
-  "System prompt for Claude translation + grammar + vocabulary of classical Tibetan.
-Requests a three-section markdown response that is parsed by
-`tibetan-analysis--parse-claude-sections' and placed into
-`** Claude Translation' (at level 2, right after Wylie),
-`*** Claude Vocabulary' (at level 3, inside Provided Translations,
-before Grammar), and `*** Claude Grammar' (at level 3, inside
-Provided Translations).  The Vocabulary section produces
-DharmaMitra-style word-by-word analysis as the second tier
-(after provided vocabulary, before Steinert dictionary entries).
-Genre-specific assumptions come from the source file's
-`#+TIBETAN_CLAUDE_CONTEXT:' headers, not from hardcoded defaults.")
+  "System prompt sent to Claude for segment-level three-section analysis.
+Produces a markdown response (Translation / Vocabulary / Grammar)
+parsed by `tibetan-analysis--parse-claude-sections' and placed into
+`** Claude Translation', `*** Claude Vocabulary', and
+`*** Claude Grammar'.  Vocabulary uses DharmaMitra-style
+word-by-word format as the second tier (after provided vocabulary,
+before Steinert entries).  Genre-specific assumptions come from the
+source file's `#+TIBETAN_CLAUDE_CONTEXT:' headers.")
 
 ;; ----------------------------------------------------------------------------
 ;; Source-aware prompt enrichment (workshop-ready)
@@ -2138,28 +2145,22 @@ only if at least one plain content token remains."
         gloss))))
 
 (defun tibetan-analysis--cat-english-gloss (meaning)
-  "Extract a short English gloss from MEANING suitable for the CAT Gloss line.
+  "Extract a short English gloss from MEANING for the CAT Gloss line.
 
-Input MEANING is the enriched `short-meaning' produced by the
-Word/Particle List renderer.  It may be one of:
+MEANING is the enriched short-meaning produced by the Word/Particle
+List renderer.  Handled shapes:
 
-  1. A Hill-morphology gloss like
-        \"pf. of byed;\\nto do, to make\"
-     Returns:  \"to do, to make\"
-  2. A curated German//English entry like
-        \"Pf. von 'dzugs;\\nim Spiel einsetzen // to stake, to wager\"
-     or
-        \"blauer Lotus // blue lotus\"
-     Returns the English side (text after the last `//').
-  3. A stem-reference only entry (German abbrev. no English),
-     e.g. \"Pf. von 'dzugs\".  Returns the stripped stem-ref phrase
-     so the CAT Gloss still shows something meaningful.
-  4. A plain English gloss with sense separators.  Returns the first
-     sense (up to `;').
-  5. An RY-style \"verb: do\" / \"noun: X\" format — strip the
-     \"verb: \"/\"noun: \" prefix so CAT output reads cleanly.
+  1. Hill-morphology two-line form:  stem-ref + newline + gloss.
+     Returns just the gloss.
+  2. Curated bilingual entry with a DE // EN split on `//\\='.
+     Returns the English side.
+  3. Stem-reference only (German abbreviation, no English).
+     Returns the stripped stem-ref phrase.
+  4. Plain English gloss with sense separators.  Returns the first
+     sense (up to `;\\=').
+  5. RY-style `verb: do\\=' / `noun: X\\=' — strips the POS prefix.
 
-Returns nil if MEANING is nil/empty/a placeholder."
+Returns nil if MEANING is nil, empty, or a placeholder."
   (when (and meaning
              (stringp meaning)
              (not (string-empty-p meaning))
@@ -2257,10 +2258,10 @@ VOCAB-PAIRS is a list of (word . meaning) pairs.  MEANING is expected
 to already be a short CAT-ready English gloss (see
 `tibetan-analysis--cat-english-gloss').
 Returns a rough English gloss with particle-aware phrasing.
-Understands genitive (→ 'of'), dative (→ 'to/for'), topic (→ 'as for...'),
-causal converb -pas/-bas (→ 'because ... / by ...-ing'), sequential
-converb -te/-ste/-nas (→ '... and then'), and other common Tibetan
-grammatical constructions."
+Understands genitive (→ \\='of\\='), dative (→ \\='to/for\\='), topic
+(→ \\='as for...\\='), causal converb -pas/-bas (→ \\='because ... /
+by ...-ing\\='), sequential converb -te/-ste/-nas (→ \\='... and
+then\\='), and other common Tibetan grammatical constructions."
   (let ((parts '())
         (prev-was-genitive nil))
     (dolist (pair vocab-pairs)

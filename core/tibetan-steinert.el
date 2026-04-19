@@ -210,7 +210,7 @@ or nil if none. MAX-ROWS caps the displayed rows (default 8)."
 The URL encodes a JSON hash fragment that the single-page app at
 `https://dictionary.christian-steinert.de/' routes to a search result.
 WYLIE-TERM should be a lowercased Wylie string (e.g. \"mnyam med\").
-Strips trailing particles like 's, 'i suffixes for cleaner lookups."
+Strips trailing particles like \\='s, \\='i suffixes for cleaner lookups."
   (when (and wylie-term (stringp wylie-term)
              (not (string-empty-p (string-trim wylie-term))))
     (let* ((term (string-trim (downcase wylie-term)))
