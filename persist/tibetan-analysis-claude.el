@@ -750,15 +750,16 @@ legacy single-translation responses."
 (defconst tibetan-analysis--claude-section-order
   '((:translation "Claude Translation" 2)
     (:vocabulary  "Claude Vocabulary"  3)
-    (:grammar     "Claude Grammar"     3))
+    (:grammar     "Claude Grammar"     2))
   "Canonical order, heading names, and org levels for Claude sections.
-Each entry is (KEY HEADING LEVEL).  The Translation sits at level 2
-right after `** Wylie Transliteration' for high-visibility reading;
-Vocabulary and Grammar stay at level 3 inside `** Provided
-Translations'.  Vocabulary (DharmaMitra-style word-by-word from Claude)
-sits between DharmaMitra and Claude Grammar.  The writer, reader,
-scaffolding, and migration all consult this list so levels stay
-consistent everywhere.")
+Each entry is (KEY HEADING LEVEL).  Translation and Grammar both
+sit at level 2 so they can take their workshop-agreed slots in the
+priority order (positions 6 and 7 in the per-segment auto-analysis
+view).  Vocabulary stays at level 3 inside `** Provided
+Translations' (it's a DharmaMitra-style word-by-word tier the
+reader consults alongside the provided glosses).  The writer,
+reader, scaffolding, and migration all consult this list so levels
+stay consistent everywhere.")
 
 (defun tibetan-analysis--claude-heading-re (heading level)
   "Regexp that anchors `HEADING' at org LEVEL at beginning-of-line."
@@ -863,11 +864,10 @@ still created with two trailing newlines."
 Segment-layout target (detected via `** Wylie Transliteration'):
   - `** Claude Translation'   at org level 2, right after Wylie.
   - `*** Claude Vocabulary'   at org level 3, inside
-    `** Provided Translations' (after `*** DharmaMitra' if present,
-    before `*** Claude Grammar').
-  - `*** Claude Grammar'      at org level 3, inside
-    `** Provided Translations' (before `*** Reference Translations'
-    if present, otherwise appended).
+    `** Provided Translations' (after `*** DharmaMitra' if present).
+  - `** Claude Grammar'       at org level 2, placed after
+    `** Claude Translation' (the workshop-agreed priority order
+    puts it at position 7 as a peer of Claude Translation).
 
 Sentence-layout target (no `** Wylie Transliteration'):
   - `*** Claude Translation' at org level 3 (siblings under whatever
@@ -946,52 +946,64 @@ whichever target heading is still missing.  Idempotent."
                   (insert "*** Claude Vocabulary\n\n\n"))
               (goto-char (point-max))
               (insert "\n*** Claude Vocabulary\n\n")))))
-        ;; Ensure `*** Claude Grammar' exists.
-        (unless (save-excursion
-                  (goto-char (point-min))
-                  (re-search-forward "^\\*\\*\\* Claude Grammar$" nil t))
+        ;; Ensure `** Claude Grammar' exists at level 2.  If a legacy
+        ;; `*** Claude Grammar' is still present (file not yet
+        ;; regenerated under the new layout), migrate it: promote the
+        ;; heading to level 2 and move the body to sit right after
+        ;; `** Claude Translation'.  Idempotent: if both exist, the
+        ;; level-3 one is removed and its body folded into the level-2
+        ;; one (last-writer wins — the usual Claude-response path).
+        (save-excursion
           (goto-char (point-min))
-          (cond
-           ;; Prefer: inside `** Provided Translations', before
-           ;; `*** Reference Translations' if present, after Vocabulary.
-           ((re-search-forward "^\\*\\* Provided Translations$" nil t)
-            (let* ((section-end
+          (when (re-search-forward "^\\*\\*\\* Claude Grammar$" nil t)
+            (let* ((legacy-heading-start (line-beginning-position))
+                   (legacy-body-start (progn (forward-line 1) (point)))
+                   (legacy-end
                     (save-excursion
                       (if (re-search-forward
-                           (tibetan-analysis--claude-stop-re 2) nil t)
+                           (tibetan-analysis--claude-stop-re 3) nil t)
                           (line-beginning-position)
                         (point-max))))
-                   (vocab-end
-                    (save-excursion
-                      (when (re-search-forward
-                             "^\\*\\*\\* Claude Vocabulary$" section-end t)
-                        (forward-line 1)
-                        (if (re-search-forward
-                             (tibetan-analysis--claude-stop-re 3)
-                             section-end t)
-                            (line-beginning-position)
-                          section-end))))
-                   (ref-pos
-                    (save-excursion
-                      (when (re-search-forward
-                             "^\\*\\*\\* Reference Translations$"
-                             section-end t)
-                        (line-beginning-position)))))
-              (goto-char (or vocab-end ref-pos section-end))
-              (insert "*** Claude Grammar\n\n\n")))
-           ;; Fallback: after the Translation heading we just ensured.
-           (t
-            (goto-char (point-min))
-            (if (re-search-forward "^\\*\\* Claude Translation$" nil t)
-                (progn
-                  (forward-line 1)
-                  (if (re-search-forward
-                       (tibetan-analysis--claude-stop-re 2) nil t)
-                      (beginning-of-line)
-                    (goto-char (point-max)))
-                  (insert "*** Claude Grammar\n\n\n"))
-              (goto-char (point-max))
-              (insert "\n*** Claude Grammar\n\n"))))))
+                   (legacy-body
+                    (string-trim
+                     (buffer-substring-no-properties legacy-body-start
+                                                     legacy-end))))
+              (delete-region legacy-heading-start legacy-end)
+              ;; Stash body for the level-2 insertion below.
+              (unless (save-excursion
+                        (goto-char (point-min))
+                        (re-search-forward "^\\*\\* Claude Grammar$" nil t))
+                (goto-char (point-min))
+                (if (re-search-forward "^\\*\\* Claude Translation$" nil t)
+                    (progn
+                      (forward-line 1)
+                      (if (re-search-forward
+                           (tibetan-analysis--claude-stop-re 2) nil t)
+                          (beginning-of-line)
+                        (goto-char (point-max)))
+                      (insert "** Claude Grammar\n"
+                              (if (string-empty-p legacy-body) "\n\n"
+                                (concat legacy-body "\n\n"))))
+                  (goto-char (point-max))
+                  (insert "\n** Claude Grammar\n"
+                          (if (string-empty-p legacy-body) "\n\n"
+                            (concat legacy-body "\n\n"))))))))
+        (unless (save-excursion
+                  (goto-char (point-min))
+                  (re-search-forward "^\\*\\* Claude Grammar$" nil t))
+          (goto-char (point-min))
+          ;; Place after `** Claude Translation' (the priority-ordered
+          ;; position is right after it); fall back to end-of-buffer.
+          (if (re-search-forward "^\\*\\* Claude Translation$" nil t)
+              (progn
+                (forward-line 1)
+                (if (re-search-forward
+                     (tibetan-analysis--claude-stop-re 2) nil t)
+                    (beginning-of-line)
+                  (goto-char (point-max)))
+                (insert "** Claude Grammar\n\n\n"))
+            (goto-char (point-max))
+            (insert "\n** Claude Grammar\n\n"))))
        ;; -------------------------------------------------------------
        ;; SENTENCE / LEGACY LAYOUT: all four headings at level 3.
        ;; -------------------------------------------------------------
@@ -1047,8 +1059,10 @@ line."
   "Return the layout-appropriate Claude section-order for BUFFER.
 
 Segment layout (per-segment analysis files):
-  `** Claude Translation' (level 2), `*** Claude Grammar' (level 3).
-  Context is dropped — the segment workflow is two-section only.
+  `** Claude Translation' and `** Claude Grammar' both at level 2
+  (the workshop-agreed priority slots), plus `*** Claude
+  Vocabulary' at level 3 inside `** Provided Translations'.
+  Context is dropped — the segment workflow is three-section only.
 
 Sentence / legacy layout (sentence analysis files, or any buffer
 without the segment-layout marker):
@@ -1245,28 +1259,34 @@ and known error markers so we don't re-persist dead content."
 (defun tibetan-analysis--read-claude-sections (filepath)
   "Return preserved Claude content in FILEPATH as a plist.
 Keys: `:translation', `:vocabulary', `:grammar', each a non-empty
-string or nil.  Reads from the new mixed-level layout
-\(`** Claude Translation', `*** Claude Vocabulary',
-`*** Claude Grammar'); falls back to the legacy level-3 heading
-for `:translation' so old analysis files do not lose their work on
-reanalysis.  A legacy `*** Claude Context' body is still read when
-present and returned as `:context' for round-trip safety, but it is
-never written back."
+string or nil.  Reads from the current layout (Translation and
+Grammar at level 2; Vocabulary at level 3 inside Provided
+Translations) and falls back to the legacy level-3 placements so
+old analysis files do not lose their work on reanalysis.  A legacy
+`*** Claude Context' body is still read when present and returned
+as `:context' for round-trip safety, but it is never written back."
   (let ((translation
          (or
-          ;; New layout: `** Claude Translation' (level 2)
+          ;; Current layout: level 2.
           (tibetan-analysis--read-claude-section-body
            filepath "Claude Translation" 2)
-          ;; Legacy level-3 placement
+          ;; Legacy level-3 placement.
           (tibetan-analysis--read-claude-section-body
            filepath "Claude Translation" 3)
-          ;; Pre-three-section legacy heading
+          ;; Pre-three-section legacy heading.
           (tibetan-analysis--read-claude-section-body
            filepath "Claude" 3)))
         (vocabulary (tibetan-analysis--read-claude-section-body
                      filepath "Claude Vocabulary" 3))
-        (grammar (tibetan-analysis--read-claude-section-body
-                  filepath "Claude Grammar" 3))
+        (grammar
+         (or
+          ;; Current layout: level 2 (promoted out of Provided
+          ;; Translations so it can take the priority slot).
+          (tibetan-analysis--read-claude-section-body
+           filepath "Claude Grammar" 2)
+          ;; Legacy level-3 placement inside Provided Translations.
+          (tibetan-analysis--read-claude-section-body
+           filepath "Claude Grammar" 3)))
         ;; Preserve legacy Context body for round-trip safety; the
         ;; writer never emits a Context heading so this only surfaces
         ;; when an older analysis file still has one.
