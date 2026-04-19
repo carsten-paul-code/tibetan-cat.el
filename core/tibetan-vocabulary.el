@@ -1052,41 +1052,39 @@ overridden per-buffer with #+TIBETAN_DICT_PRIORITY."
 (defun tibetan-vocabulary-initialize ()
   "Initialize vocabulary by loading bundled glossaries.
 Called automatically when tibetan-vocabulary is loaded.
-Set `tibetan-skip-external-glossaries' to non-nil to skip loading."
-  ;; Skip if testing flag is set
+Set `tibetan-skip-external-glossaries' to non-nil to skip loading.
+
+As of the glossary-loader unification (2026-04) there is one canonical
+bundled module — `tibetan-glossary-loader' — which `tibetan-cat.el'
+already `require's at boot.  That module's `load-all-glossaries' is
+idempotent (guards on `tibetan-glossaries-loaded'), so calling it
+here is safe even though it has already been auto-called when the
+loader module was required.  The legacy external-path fallback is
+kept for users who install the package without the bundled data dir."
   (when (not (bound-and-true-p tibetan-skip-external-glossaries))
-    (let ((bundled-glossary (expand-file-name
-                             "data/tibetan-bundled-glossary.el"
-                             (file-name-directory
-                              (or load-file-name
-                                  (locate-library "tibetan-cat")
-                                  default-directory)))))
-      ;; Try bundled glossary first (for standalone package use)
-      (if (file-exists-p bundled-glossary)
-          (progn
-            (load bundled-glossary)
-            (when (fboundp 'tibetan-bundled-load-all-glossaries)
-              (tibetan-bundled-load-all-glossaries)))
-        ;; Fall back to external glossary path (legacy support)
-        (let ((external-glossary (expand-file-name
-                                  "~/buddhist-studies/translation-tools/load-comprehensive-glossaries.el")))
-          (when (file-exists-p external-glossary)
-            (load-file external-glossary)))))))
+    (cond
+     ;; Canonical path: the bundled loader.
+     ((fboundp 'load-all-glossaries)
+      (load-all-glossaries))
+     ;; Legacy external path (pre-open-source installs).
+     (t
+      (let ((external-glossary (expand-file-name
+                                "~/buddhist-studies/translation-tools/load-comprehensive-glossaries.el")))
+        (when (file-exists-p external-glossary)
+          (load-file external-glossary)))))))
 
 ;;;###autoload
 (defun reload-all-glossaries ()
-  "Reload all glossaries including bundled and external sources."
+  "Reload all glossaries, forcing a fresh read from disk.
+Uses the canonical `load-all-glossaries' with the FORCE flag, which
+resets the idempotence guard and re-emits every bundled source."
   (interactive)
   (cond
-   ;; Try bundled glossary reload first
-   ((fboundp 'tibetan-bundled-reload-glossaries)
-    (tibetan-bundled-reload-glossaries)
-    (message "Reloaded bundled glossaries"))
-   ;; Fall back to legacy function
+   ;; Canonical path: force a fresh reload of the bundled glossaries.
    ((fboundp 'load-all-glossaries)
-    (load-all-glossaries)
+    (load-all-glossaries t)
     (message "Reloaded all glossaries"))
-   ;; Try to load from external path
+   ;; Legacy external path (pre-open-source installs).
    (t
     (let ((glossary-file (expand-file-name
                           "~/buddhist-studies/translation-tools/load-comprehensive-glossaries.el")))

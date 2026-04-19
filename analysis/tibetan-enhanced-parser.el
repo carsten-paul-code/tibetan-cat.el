@@ -27,7 +27,7 @@
 (defvar tibetan-cat-data-dir nil
   "Base directory for Tibetan CAT data files.")
 
-;; Populated by `tibetan-bundled-glossary' when the bundled glossaries
+;; Populated by `tibetan-glossary-loader' when the bundled glossaries
 ;; are loaded.  Declared here so the byte-compiler recognises it.
 (defvar tibetan-comprehensive-vocabulary)
 
@@ -118,12 +118,15 @@ Uses longest-match-first strategy.
 Returns list of (start-index . end-index . entry-data) tuples."
   ;; Ensure dictionaries are loaded
   (tibetan-load-dictionaries)
-  ;; Also load bundled glossaries (Rangjung Yeshe etc.) if available
-  (when (and (fboundp 'tibetan-bundled-load-all-glossaries)
+  ;; Also ensure the canonical bundled glossaries are in place — the
+  ;; MWU loop below relies on `tibetan-comprehensive-vocabulary' being
+  ;; populated.  `load-all-glossaries' is idempotent so calling it when
+  ;; the hash is already primed is cheap.
+  (when (and (fboundp 'load-all-glossaries)
              (or (not (boundp 'tibetan-comprehensive-vocabulary))
                  (not tibetan-comprehensive-vocabulary)
                  (= (hash-table-count tibetan-comprehensive-vocabulary) 0)))
-    (tibetan-bundled-load-all-glossaries))
+    (load-all-glossaries))
   ;; Per-document Resources / Custom vocabulary — load now so the MWU
   ;; loop below (which checks `tibetan-current-resources-vocab' and
   ;; `tibetan-current-custom-vocab') sees the user's hand-written

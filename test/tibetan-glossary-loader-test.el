@@ -128,14 +128,7 @@
      (should (= calls 0)))))
 
 (ert-deftest tibetan-glossary-loader-load-all-force-bypasses-flag ()
-  "FORCE resets the flag and triggers a fresh load.
-Skipped when `load-all-glossaries' has been overridden by an
-alias (e.g. `tibetan-bundled-glossary' replaces the original
-arity-1 implementation with an arity-0 delegate)."
-  (skip-unless (and (fboundp 'load-all-glossaries)
-                    (let ((arity (ignore-errors
-                                   (func-arity #'load-all-glossaries))))
-                      (and arity (>= (cdr arity) 1)))))
+  "FORCE resets the flag and triggers a fresh load."
   (tibetan-glossary-loader-test--with-fresh-vocab
    (setq tibetan-glossaries-loaded t)
    (cl-letf* ((calls 0)
@@ -176,12 +169,7 @@ arity-1 implementation with an arity-0 delegate)."
 
 (ert-deftest tibetan-glossary-loader-lookup-returns-value-or-sentinel ()
   "`lookup-tibetan-comprehensive' returns the stored value for known keys
-and a `[Not found: …]' sentinel otherwise.
-Skipped when the symbol has been aliased by `tibetan-bundled-glossary'
-to `tibetan-bundled-lookup', which returns nil (not a sentinel) for
-misses and auto-loads the bundled glossaries on a cold lookup."
-  (skip-unless (let ((fn (symbol-function 'lookup-tibetan-comprehensive)))
-                 (and fn (not (symbolp fn)))))
+and a `[Not found: …]' sentinel otherwise."
   (tibetan-glossary-loader-test--with-fresh-vocab
    (setq tibetan-glossaries-loaded t)
    (puthash "ཤེས་རབ" "wisdom" tibetan-comprehensive-vocabulary)
