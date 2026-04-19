@@ -354,10 +354,19 @@ Returns something like:
               linked-stem)
             parts))
 
-    ;; Particle part — same treatment: link over the Wylie, label plain.
+    ;; Particle part — rendered as plain text `wylie [LABEL]'.
+    ;;
+    ;; Previously this produced `[[particle:%s][%s]]' links pointing at
+    ;; an org target `particle:X', but no such target existed: exporters
+    ;; failed with `Unable to resolve link: \"particle:du\"'.  The
+    ;; particles ARE detailed in the Particle Overview section, but
+    ;; that section is per-segment (and duplicated across all 217
+    ;; segments in the combined document) so there's no single
+    ;; canonical target to point at.  Plain text is safer and doesn't
+    ;; lose any information — the label is what the reader cares about.
     (when (and particle-wylie particle-label)
-      (push (format "[[particle:%s][%s]] [%s]"
-                    particle-wylie particle-wylie
+      (push (format "%s [%s]"
+                    particle-wylie
                     (tibetan-interlinear--sanitize-gloss particle-label))
             parts))
 

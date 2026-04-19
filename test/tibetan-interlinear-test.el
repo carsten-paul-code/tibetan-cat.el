@@ -237,9 +237,10 @@ gloss and the Bialek label sit outside their respective links."
                  "kyi" "GEN")))
     ;; Stem: wylie then plain bracketed gloss.
     (should (string-match-p "blo rgod \\[agitated mind\\]" result))
-    ;; Particle: link wraps the particle Wylie, label follows outside.
-    (should (string-match-p "\\[\\[particle:kyi\\]\\[kyi\\]\\] \\[GEN\\]"
-                            result))))
+    ;; Particle: plain Wylie + label (no link — `particle:X' targets
+    ;; don't exist, so we used to break org-export on resolve).
+    (should (string-match-p "kyi \\[GEN\\]" result))
+    (should-not (string-match-p "\\[\\[particle:" result))))
 
 (ert-deftest tibetan-interlinear-format-entry-no-gloss ()
   "Entry without gloss shows just the wylie."
