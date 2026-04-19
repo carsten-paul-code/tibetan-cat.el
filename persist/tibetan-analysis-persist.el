@@ -1270,7 +1270,14 @@ PARTICLES is the parsed particles list, VERBS is the verb list.
 Returns an org-formatted string with particles highlighted:
 - =PARTICLE= for case markers (genitive, dative, etc.)
 - ~CONVERB~ for converb particles
-- [Ø ROLE] for zero-marked arguments"
+- *PARTICLE* for sentence-final particles
+- [Ø ROLE] for zero-marked arguments
+
+The particle token itself is upper-cased inside the markup so it
+stays visible even when the surrounding buffer or export target
+hasn't applied org's verbatim / code / bold faces — e.g. plain-text
+viewers or PDF exports with a default theme that under-distinguishes
+inline markup."
   (let* ((wylie (condition-case nil
                     (when (fboundp 'tibetan-to-wylie-fixed)
                       (tibetan-to-wylie-fixed tibetan-text))
@@ -1288,25 +1295,25 @@ Returns an org-formatted string with particles highlighted:
          (final-particles '("ro" "so" "to" "no" "do" "'o" "ngo"))
          (result wylie))
 
-    ;; Mark case particles with =...=
+    ;; Mark case particles with =PARTICLE=
     (dolist (p case-particles)
       (setq result (replace-regexp-in-string
                     (format "\\b%s\\b" (regexp-quote p))
-                    (format "=%s=" p)
+                    (format "=%s=" (upcase p))
                     result)))
 
-    ;; Mark converb particles with ~...~
+    ;; Mark converb particles with ~PARTICLE~
     (dolist (p converb-particles)
       (setq result (replace-regexp-in-string
                     (format "\\b%s\\b" (regexp-quote p))
-                    (format "~%s~" p)
+                    (format "~%s~" (upcase p))
                     result)))
 
-    ;; Mark sentence-final particles with *...*
+    ;; Mark sentence-final particles with *PARTICLE*
     (dolist (p final-particles)
       (setq result (replace-regexp-in-string
                     (format "\\b%s\\(/\\|$\\)" (regexp-quote p))
-                    (format "*%s*\\1" p)
+                    (format "*%s*\\1" (upcase p))
                     result)))
 
     ;; Add zero-marker annotations for verbs that expect unmarked arguments
