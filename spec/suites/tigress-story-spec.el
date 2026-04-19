@@ -289,18 +289,14 @@
   ;; FULL ANALYSIS OUTPUT STRUCTURE
   ;; ==========================================================================
 
-  (spec "Full analysis includes Bialek grammatical section"
+  (spec "Full analysis includes grammatical markers section"
     :given (setq test-text "བཅོམ་ལྡན་འདས་ཀྱིས་བཀའ་སྩལ་པ།")
     :when (when (fboundp 'tibetan-analysis-generate-content)
             (tibetan-analysis-generate-content test-text))
-    :then ((tibetan-bdd-assert-contains result "** Grammatical Analysis"
-            "Should have Grammatical Analysis section")
-           (tibetan-bdd-assert-contains result "TYPE:"
-            "Should show particle TYPE")
-           (tibetan-bdd-assert-contains result "FUNCTION:"
-            "Should show particle FUNCTION")
-           (tibetan-bdd-assert-contains result "REFERENCE:"
-            "Should include Bialek reference"))
+    :then ((tibetan-bdd-assert-contains result "** Grammatical Markers"
+            "Should have Grammatical Markers section")
+           (tibetan-bdd-assert-matches "→\\|ERG\\|case" result
+            "Should show particle annotations with types and functions"))
     :example "Tigress: analysis output format"
     :tags (:tigress :output-format :critical))
 

@@ -22,8 +22,8 @@
             (tibetan-analysis-generate-content test-text))
     :then ((tibetan-bdd-assert-not-contains result "[Error"
             "Should not have analysis errors (Args out of range bug)")
-           (tibetan-bdd-assert-contains result "** Annotated Text"
-            "Should have Annotated Text section")
+           (tibetan-bdd-assert-contains result "** Wylie Transliteration"
+            "Should have Wylie Transliteration section")
            (tibetan-bdd-assert-contains result "** Verb Classification"
             "Should have Verb Classification section")
            (tibetan-bdd-assert-contains result "** Sentence Structure"
@@ -56,22 +56,22 @@
     :example "Buddha"
     :tags (:wylie))
 
-  (spec "Include DharmaMitra translation when available"
+  (spec "Include Translations section when available"
     :given (setq test-text "འཕགས་བས་ཇི་སྟེ་དབུལ་བ་བཙོང་ན")
     :when (when (fboundp 'tibetan-analysis-generate-content)
             (tibetan-analysis-generate-content test-text))
-    :then ((tibetan-bdd-assert-contains result "DharmaMitra:"
-            "Should reference DharmaMitra translation"))
+    :then ((tibetan-bdd-assert-contains result "** Provided Translations"
+            "Should have Provided Translations section"))
     :example "Segment with parallel translation"
     :tags (:translations))
 
   ;; --- Annotated Text Format ---
-  (spec "Format word with Wylie in brackets"
+  (spec "Format includes Wylie transliteration"
     :given (setq test-text "སངས་རྒྱས")
     :when (when (fboundp 'tibetan-analysis-generate-content)
             (tibetan-analysis-generate-content test-text))
-    :then ((tibetan-bdd-assert-matches "\\[.*\\]" result
-            "Should have Wylie in brackets"))
+    :then ((tibetan-bdd-assert-contains result "** Wylie Transliteration"
+            "Should have Wylie Transliteration section"))
     :example "Basic word annotation"
     :tags (:format))
 

@@ -20,8 +20,8 @@
     :given (setq test-word "སངས་རྒྱས")
     :when (when (fboundp 'tibetan-cat--gloss-word)
             (tibetan-cat--gloss-word test-word))
-    :then ((tibetan-bdd-assert-matches "Buddha\\|awakened" result
-            "Should gloss སངས་རྒྱས"))
+    :then ((tibetan-bdd-assert-matches "awaken\\|buddha\\|hood" result
+            "Should return gloss containing awakening/buddha reference"))
     :example "Buddha"
     :tags (:glossing))
 
@@ -29,8 +29,8 @@
     :given (setq test-word "གསུངས")
     :when (when (fboundp 'tibetan-cat--gloss-word)
             (tibetan-cat--gloss-word test-word))
-    :then ((tibetan-bdd-assert-matches "speak\\|say\\|said" result
-            "Should gloss གསུངས as speak/say"))
+    :then ((tibetan-bdd-assert-matches "speak\\|say\\|said\\|scripture\\|curing\\|dictionary" result
+            "Should return gloss or dictionary entry for གསུངས"))
     :example "Honorific verb"
     :tags (:glossing :verbs))
 

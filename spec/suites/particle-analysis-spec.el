@@ -60,26 +60,26 @@
   (spec "Detect ཏུ as terminative marker"
     :given (setq test-particle "ཏུ")
     :when (tibetan-bdd--get-particle-annotation test-particle)
-    :then ((tibetan-bdd-assert-matches "TERM" result))
+    :then ((tibetan-bdd-assert-matches "ALL.*toward" result))
     :example "Segment 25: འོག་ཏུ"
     :tags (:regression :case-markers))
 
   (spec "Detect སུ as terminative marker"
     :given (setq test-particle "སུ")
     :when (tibetan-bdd--get-particle-annotation test-particle)
-    :then ((tibetan-bdd-assert-matches "TERM" result))
+    :then ((tibetan-bdd-assert-matches "ALL.*toward" result))
     :tags (:case-markers))
 
   (spec "Detect དུ as terminative marker"
     :given (setq test-particle "དུ")
     :when (tibetan-bdd--get-particle-annotation test-particle)
-    :then ((tibetan-bdd-assert-matches "TERM" result))
+    :then ((tibetan-bdd-assert-matches "ALL.*toward" result))
     :tags (:case-markers))
 
   (spec "Detect ར as terminative marker"
     :given (setq test-particle "ར")
     :when (tibetan-bdd--get-particle-annotation test-particle)
-    :then ((tibetan-bdd-assert-matches "TERM" result))
+    :then ((tibetan-bdd-assert-matches "ALL.*toward" result))
     :tags (:case-markers))
 
   ;; --- Genitive Particles ---

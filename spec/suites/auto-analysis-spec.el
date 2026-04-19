@@ -22,8 +22,8 @@
     :when (tibetan-analysis-generate-content test-text)
     :then ((should result)
            (should (stringp result))
-           (tibetan-bdd-assert-contains result "Annotated Text"
-            "Should have annotated text section"))
+           (tibetan-bdd-assert-contains result "** Wylie Transliteration"
+            "Should have Wylie Transliteration section"))
     :example "Simple greeting analysis"
     :tags (:auto-analysis :segment))
 
