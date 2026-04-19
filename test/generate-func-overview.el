@@ -3,8 +3,22 @@
 ;;; Commentary:
 ;; Generates an HTML function overview that maps all public functions to their
 ;; tests.  Extracts function metadata (name, docstring, module, interactive
-;; status, parameters) from source files and maps tests using longest-prefix
-;; matching.
+;; status, parameters) from source files and maps tests in two passes:
+;;
+;;   1. Longest-prefix name match (fast, strict).  A test named
+;;      `tibetan-steinert-sanskrit-for-bodhisattva' maps to the
+;;      function `tibetan-steinert-sanskrit-for' (the longest function
+;;      name that is a word-prefix of the test name).
+;;
+;;   2. Body reference scan (fallback).  For every public function
+;;      that picked up zero tests in pass 1, search the source of each
+;;      test file for a `\\_<function-name\\_>' token.  Tests that
+;;      reference the function get attributed to it with a
+;;      `(referenced)' hint so the coverage count reflects real usage
+;;      even when the naming conventions diverge — e.g. the
+;;      `tibetan-text-classifier-test' suite uses names like
+;;      `tibetan-classifier-*' rather than the `tibetan-text-*' prefix
+;;      shared by the functions.
 ;;
 ;; Usage:
 ;;   emacs --batch -L . -L core -L analysis -L persist -L workspace \
@@ -93,26 +107,85 @@ Returns list of function alists."
     all-funcs))
 
 ;; ============================================================================
-;; TEST MAPPING — match tests to functions by longest prefix
+;; TEST MAPPING — two passes: longest-prefix match, then body reference scan
 ;; ============================================================================
 
-(defun tibetan-func-overview--build-test-map (all-funcs result-map)
-  "Map tests to functions using longest-prefix matching.
+(defun tibetan-func-overview--collect-test-sources (project-root)
+  "Read every `test/*-test.el' file and return a list of (file . source)."
+  (let ((test-dir (expand-file-name "test" project-root))
+        (sources '()))
+    (when (file-directory-p test-dir)
+      (dolist (file (directory-files test-dir t "-test\\.el$"))
+        (ignore-errors
+          (with-temp-buffer
+            (insert-file-contents file)
+            (push (cons (file-name-nondirectory file)
+                        (buffer-substring-no-properties (point-min) (point-max)))
+                  sources)))))
+    sources))
+
+(defun tibetan-func-overview--parse-test-defs (source)
+  "Return a list of (test-name . body-substring) from a test-file SOURCE.
+BODY-SUBSTRING is everything between `(ert-deftest NAME ())' and the
+matching closing paren; used for function-reference scanning."
+  (let ((defs '())
+        (start 0))
+    (while (string-match
+            "(ert-deftest[ \t\n]+\\([a-zA-Z0-9/_:?!*+=<>-]+\\)[ \t\n]+()"
+            source start)
+      (let* ((name (match-string 1 source))
+             (body-start (match-end 0))
+             (depth 1)
+             (i body-start))
+        ;; Walk forward tracking paren depth until we close the deftest.
+        (while (and (< i (length source)) (> depth 0))
+          (let ((c (aref source i)))
+            (cond
+             ((= c ?\() (setq depth (1+ depth)))
+             ((= c ?\)) (setq depth (1- depth)))
+             ;; Skip string literals
+             ((= c ?\")
+              (setq i (1+ i))
+              (while (and (< i (length source))
+                          (/= (aref source i) ?\")
+                          ;; skip escaped quotes
+                          (or (> (- i body-start) 0)
+                              (/= (aref source (1- i)) ?\\)))
+                (if (= (aref source i) ?\\) (setq i (+ i 2))
+                  (setq i (1+ i))))))
+            (setq i (1+ i))))
+        (push (cons name (substring source body-start (max body-start (1- i))))
+              defs)
+        (setq start i)))
+    (nreverse defs)))
+
+(defun tibetan-func-overview--body-references-p (body func-name)
+  "Return non-nil if BODY contains a symbol-boundary reference to FUNC-NAME."
+  (let ((case-fold-search nil)
+        (re (concat "\\_<" (regexp-quote func-name) "\\_>")))
+    (string-match-p re body)))
+
+(defun tibetan-func-overview--build-test-map (all-funcs result-map
+                                                         &optional project-root)
+  "Map tests to functions.
 ALL-FUNCS is the list of function alists.
-RESULT-MAP is the ERT result hash table (name -> status).
-Returns hash table: function-name -> list of (test-name . status)."
+RESULT-MAP is the ERT result hash table (test-name -> status).
+PROJECT-ROOT, if non-nil, enables the fallback body-reference pass.
+Returns hash table: function-name -> list of (test-name . status) cons,
+or (test-name . (referenced . status)) when the mapping was inferred
+from the body scan rather than the name prefix."
   (let ((func-test-map (make-hash-table :test 'equal))
-        ;; Sort function names by length descending for longest-prefix matching
         (sorted-names (sort (mapcar (lambda (f) (alist-get 'name f)) all-funcs)
                             (lambda (a b) (> (length a) (length b)))))
         (unmatched '()))
-    ;; For each test, find the best matching function
+    ;; ------------------------------------------------------------------
+    ;; Pass 1: longest-prefix name match.
+    ;; ------------------------------------------------------------------
     (maphash
      (lambda (test-name status)
        (let ((matched nil))
          (cl-dolist (func-name sorted-names)
            (when (and (string-prefix-p func-name test-name)
-                      ;; Ensure the match is at a word boundary (- or end)
                       (or (= (length func-name) (length test-name))
                           (= (aref test-name (length func-name)) ?-)))
              (let ((existing (gethash func-name func-test-map)))
@@ -124,7 +197,40 @@ Returns hash table: function-name -> list of (test-name . status)."
          (unless matched
            (push (cons test-name status) unmatched))))
      result-map)
-    ;; Store unmatched tests under a special key
+    ;; ------------------------------------------------------------------
+    ;; Pass 2: body-reference scan for functions with zero hits so far.
+    ;; Only runs when PROJECT-ROOT is provided and the unmatched test
+    ;; source can be read.
+    ;; ------------------------------------------------------------------
+    (when (and project-root unmatched)
+      (let* ((test-sources
+              (tibetan-func-overview--collect-test-sources project-root))
+             (all-defs
+              (mapcan (lambda (src)
+                        (tibetan-func-overview--parse-test-defs (cdr src)))
+                      test-sources))
+             ;; Map test-name -> body for O(1) lookup.
+             (body-index (make-hash-table :test 'equal)))
+        (dolist (def all-defs)
+          (puthash (car def) (cdr def) body-index))
+        (dolist (func all-funcs)
+          (let ((name (alist-get 'name func)))
+            (unless (gethash name func-test-map)
+              ;; This function has no prefix-matched tests.  Look for
+              ;; any unmatched test whose body mentions the function.
+              (let ((hits '()))
+                (dolist (pair unmatched)
+                  (let* ((test-name (car pair))
+                         (status (cdr pair))
+                         (body (gethash test-name body-index)))
+                    (when (and body
+                               (tibetan-func-overview--body-references-p
+                                body name))
+                      (push (cons test-name
+                                  (cons 'referenced status))
+                            hits))))
+                (when hits
+                  (puthash name (nreverse hits) func-test-map))))))))
     (when unmatched
       (puthash "__unmatched__" unmatched func-test-map))
     func-test-map))
@@ -143,14 +249,30 @@ Returns hash table: function-name -> list of (test-name . status)."
       (setq s (replace-regexp-in-string "\"" "&quot;" s))
       s)))
 
+(defun tibetan-func-overview--unwrap-status (status)
+  "Return the underlying ERT status from STATUS.
+Pass-2 references are wrapped as `(referenced . real-status)' — this
+helper unwraps them so the status icon rendering stays uniform."
+  (if (and (consp status) (eq (car status) 'referenced))
+      (cdr status)
+    status))
+
 (defun tibetan-func-overview--status-icon (status)
-  "Return HTML icon for test STATUS."
-  (cond
-   ((eq status 'passed) "<span class=\"st st-pass\">&#10003;</span>")
-   ((eq status 'skipped) "<span class=\"st st-skip\">&#9711;</span>")
-   ((and (consp status) (eq (car status) 'failed))
-    "<span class=\"st st-fail\">&#10007;</span>")
-   (t "<span class=\"st st-skip\">?</span>")))
+  "Return HTML icon for test STATUS.
+When STATUS is the wrapped `(referenced . real)' form emitted by the
+body-reference pass, a small ↗ badge is appended so the reader can
+tell the mapping was inferred rather than prefix-matched."
+  (let* ((referenced (and (consp status) (eq (car status) 'referenced)))
+         (real (tibetan-func-overview--unwrap-status status))
+         (icon (cond
+                ((eq real 'passed) "<span class=\"st st-pass\">&#10003;</span>")
+                ((eq real 'skipped) "<span class=\"st st-skip\">&#9711;</span>")
+                ((and (consp real) (eq (car real) 'failed))
+                 "<span class=\"st st-fail\">&#10007;</span>")
+                (t "<span class=\"st st-skip\">?</span>"))))
+    (if referenced
+        (concat icon " <span class=\"st st-ref\" title=\"matched by body reference, not name prefix\">&#8599;</span>")
+      icon)))
 
 (defun tibetan-func-overview--generate-html (all-funcs func-test-map)
   "Generate standalone HTML function overview.
@@ -524,6 +646,7 @@ header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 4px; }
 .st-pass { color: var(--passed); }
 .st-fail { color: var(--failed); }
 .st-skip { color: var(--skipped); }
+.st-ref  { color: var(--untested); font-size: 0.85em; }
 .no-tests-msg { font-style: italic; color: var(--untested); font-size: 0.9rem; }
 
 footer {
@@ -559,7 +682,8 @@ Produces a standalone HTML report at docs/function-overview.html."
       ;; Run tests
       (princ "Running all ERT tests...\n")
       (let* ((result-map (tibetan-func-overview--run-all-tests))
-             (func-test-map (tibetan-func-overview--build-test-map all-funcs result-map))
+             (func-test-map (tibetan-func-overview--build-test-map
+                             all-funcs result-map project-root))
              (html (tibetan-func-overview--generate-html all-funcs func-test-map))
              (output-file (expand-file-name "docs/function-overview.html" project-root)))
 
