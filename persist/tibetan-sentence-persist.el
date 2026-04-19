@@ -1,0 +1,989 @@
+;;; tibetan-sentence-persist.el --- Persistent sentence-level analysis -*- lexical-binding: t -*-
+
+;;; Commentary:
+;; Sentence-level analysis layer for the Tibetan CAT Tool.  A *sentence*
+;; is a super-segmental grouping that wraps one or more contiguous
+;; segments — declared in the source file as `*** Sentence N' headings
+;; with `**** Segment M' children (the layout produced by
+;; `tibetan-add-sentence-structure').
+;;
+;; Segments stay parsed individually for clause-level grammar work via
+;; `tibetan-analysis-persist'.  This module persists a separate
+;; `analysis/sent-NNN.org' file alongside the per-segment
+;; `analysis/seg-NNN.org' files so that sentence-level work — published
+;; reference translation (e.g. Roehrich), discourse-level Claude
+;; analysis, working translation, notes — does not collide with the
+;; segment-level scaffolding.
+;;
+;; Usage:
+;;   C-c s A - Open/create analysis for current sentence
+;;             (works from cursor on `*** Sentence N' heading or any
+;;             `**** Segment M' inside it)
+;;   C-c s R - Re-analyze current sentence (regenerates auto sections,
+;;             preserves user notes and Roehrich/Class translations).
+;;             With `C-u' prefix, also re-issues the Claude request.
+;;   C-c s r - Batch reanalyze every sentence file in the analysis
+;;             folder.  With `C-u' prefix, also re-issues Claude on
+;;             every sentence (N async calls).
+;;
+;; File layout:
+;;   your-text.org
+;;   analysis/
+;;     seg-001.org   ; segment-level (existing)
+;;     seg-002.org
+;;     ...
+;;     sent-001.org  ; sentence-level (this module)
+;;     sent-002.org
+;;     ...
+;;
+;; Body shape of a sentence file:
+;;   * Tibetan Text          — concatenated from child segments
+;;   * Wylie                 — concatenated, when available
+;;   * Provided Translations
+;;     *** Roehrich          — published reference, hand-pasted
+;;     *** Class Translation
+;;     *** Claude Translation
+;;     *** Claude Grammar
+;;     *** Claude Context
+;;   * Working Translation
+;;   * My Notes
+;;   * Footnotes
+;;
+;; Hash invariant: the `#+TIBETAN_HASH:' header is computed over the
+;; concatenated child-segment text.  This catches both edits to any
+;; child segment AND changes in segment membership of the sentence.
+
+;;; Code:
+
+(require 'cl-lib)
+;; Only require org when not in batch mode (can hang in batch).
+(unless noninteractive
+  (require 'org))
+(require 'md5)
+
+;; The Claude integration — three-section system, parsing, scaffolding,
+;; gptel readiness — is shared with the segment-level module.  Soft
+;; require the per-segment module so we can reuse its primitives without
+;; duplicating ~200 lines of buffer-rewriting helpers.
+(require 'tibetan-analysis-persist nil t)
+(require 'tibetan-org-structure nil t)
+(require 'tibetan-utils nil t)
+(require 'gptel nil t)
+
+(defconst tibetan-sentence-persist-version "1.0"
+  "Version of the sentence analysis file format.")
+
+;; ============================================================================
+;; PATH AND FILENAME FUNCTIONS
+;; ============================================================================
+
+(defun tibetan-sentence--get-folder ()
+  "Return the analysis folder for the current source buffer.
+Reuses `tibetan-analysis-get-folder' so segment and sentence files
+land in the same `analysis/' directory."
+  (if (fboundp 'tibetan-analysis-get-folder)
+      (tibetan-analysis-get-folder)
+    ;; Fallback: derive from buffer-file-name.
+    (let* ((src (buffer-file-name))
+           (dir (and src (file-name-directory src)))
+           (analysis-dir (and dir (expand-file-name "analysis" dir))))
+      (unless (and analysis-dir (file-exists-p analysis-dir))
+        (when analysis-dir (make-directory analysis-dir t)))
+      analysis-dir)))
+
+(defun tibetan-sentence--filename (sent-num)
+  "Return basename `sent-NNN.org' for SENT-NUM (an integer)."
+  (format "sent-%03d.org" sent-num))
+
+(defun tibetan-sentence--filepath (sent-num &optional folder)
+  "Return absolute path of `sent-NNN.org' for SENT-NUM.
+FOLDER defaults to `tibetan-sentence--get-folder'."
+  (let ((folder (or folder (tibetan-sentence--get-folder))))
+    (when folder
+      (expand-file-name (tibetan-sentence--filename sent-num) folder))))
+
+(defun tibetan-sentence--sent-id-from-filename (filepath)
+  "Extract numeric sentence id from FILEPATH's basename, or nil."
+  (let ((base (file-name-nondirectory filepath)))
+    (when (string-match "sent-\\([0-9]+\\)" base)
+      (string-to-number (match-string 1 base)))))
+
+(defun tibetan-sentence--seg-id-from-filename (filepath)
+  "Extract numeric segment id from FILEPATH's basename, or nil."
+  (let ((base (file-name-nondirectory filepath)))
+    (when (string-match "seg-\\([0-9]+\\)" base)
+      (string-to-number (match-string 1 base)))))
+
+;; ============================================================================
+;; SOURCE-FILE SENTENCE SCANNER
+;; ============================================================================
+
+(defun tibetan-sentence--current-sentence-bounds ()
+  "Return the buffer position bounds of the current sentence as (BEG . END).
+Works when point is on a `*** Sentence N' heading or anywhere inside
+it (including under one of its `**** Segment M' children).  Returns
+nil if no sentence is in scope."
+  (save-excursion
+    (catch 'no-sentence
+      (condition-case nil
+          (progn
+            (unless (org-at-heading-p)
+              (org-back-to-heading t))
+            ;; Walk up until we land on a `Sentence' heading or run
+            ;; out of parent headings.
+            (while (and (org-current-level)
+                        (not (string-match-p
+                              "\\bSentence\\b"
+                              (or (org-get-heading t t t t) ""))))
+              (unless (org-up-heading-safe)
+                (throw 'no-sentence nil)))
+            (when (and (org-current-level)
+                       (string-match-p
+                        "\\bSentence\\b"
+                        (or (org-get-heading t t t t) "")))
+              (let ((beg (point))
+                    (end (save-excursion
+                           (org-end-of-subtree t t)
+                           (point))))
+                (cons beg end))))
+        (error nil)))))
+
+(defun tibetan-sentence--current-sentence-num ()
+  "Return the sentence number of the sentence containing point, or nil."
+  (save-excursion
+    (let ((bounds (tibetan-sentence--current-sentence-bounds)))
+      (when bounds
+        (goto-char (car bounds))
+        (let ((heading (org-get-heading t t t t)))
+          (when (and heading
+                     (string-match "Sentence \\([0-9]+\\)" heading))
+            (string-to-number (match-string 1 heading))))))))
+
+(defun tibetan-sentence--collect-children-in-range (beg end)
+  "Collect Segment children of the sentence between BEG and END.
+Returns a list of plists `(:seg-num N :text STR :beg POS :end POS)'
+in source order, or nil when no segments are found.  Segments are
+matched by heading text (`Segment N'), not by level, so the function
+works for any heading depth produced by `tibetan-add-sentence-structure'
+or `tibetan-prepare-document'."
+  (save-excursion
+    (save-restriction
+      (narrow-to-region beg end)
+      (goto-char (point-min))
+      ;; Skip the sentence heading itself.
+      (when (org-at-heading-p)
+        (forward-line 1))
+      (let ((children '()))
+        (while (re-search-forward "^\\*+[ \t]+Segment[ \t]+\\([0-9]+\\)"
+                                  nil t)
+          (let* ((seg-num (string-to-number (match-string 1)))
+                 (heading-end (line-end-position))
+                 (subtree-beg (1+ heading-end))
+                 (subtree-end (save-excursion
+                                (org-end-of-subtree t t)
+                                (point)))
+                 (raw (and (<= subtree-beg subtree-end)
+                           (buffer-substring-no-properties
+                            subtree-beg subtree-end)))
+                 (text (and raw (string-trim raw))))
+            (when (and text (not (string-empty-p text)))
+              (push (list :seg-num seg-num
+                          :text text
+                          :beg (line-beginning-position)
+                          :end subtree-end)
+                    children))
+            ;; Move past this subtree to the next sibling.
+            (goto-char subtree-end)))
+        (nreverse children)))))
+
+(defun tibetan-sentence--collect-current-sentence ()
+  "Collect data for the sentence at point.
+Returns a plist
+  (:sent-num N
+   :children ((:seg-num M :text STR :beg POS :end POS) ...)
+   :tibetan-text STR  ; concatenated child texts, blank-line separated
+   :seg-nums (M1 M2 ...))
+or nil when no sentence is in scope."
+  (let* ((bounds (tibetan-sentence--current-sentence-bounds))
+         (sent-num (tibetan-sentence--current-sentence-num)))
+    (when (and bounds sent-num)
+      (let* ((children (tibetan-sentence--collect-children-in-range
+                        (car bounds) (cdr bounds)))
+             (texts (mapcar (lambda (c) (plist-get c :text)) children))
+             (joined (mapconcat #'identity texts "\n"))
+             (seg-nums (mapcar (lambda (c) (plist-get c :seg-num))
+                               children)))
+        (list :sent-num sent-num
+              :children children
+              :tibetan-text (string-trim joined)
+              :seg-nums seg-nums)))))
+
+(defun tibetan-sentence--collect-from-source-buffer (sent-num)
+  "Re-scan the current buffer for sentence SENT-NUM and return its data.
+Like `tibetan-sentence--collect-current-sentence' but driven by
+SENT-NUM rather than point position.  Returns nil when SENT-NUM is
+not present in the current buffer."
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward
+           (format "^\\*+[ \t]+Sentence[ \t]+%d\\b" sent-num) nil t)
+      (beginning-of-line)
+      (tibetan-sentence--collect-current-sentence))))
+
+;; ============================================================================
+;; HASH FUNCTIONS
+;; ============================================================================
+
+(defun tibetan-sentence--compute-hash (concatenated-text)
+  "Return MD5 of CONCATENATED-TEXT (utf-8) for change detection.
+Reuses `tibetan-analysis-compute-hash' when the segment-persist
+module is loaded so both hashing schemes stay identical."
+  (if (fboundp 'tibetan-analysis-compute-hash)
+      (tibetan-analysis-compute-hash concatenated-text)
+    (md5 (encode-coding-string (or concatenated-text "") 'utf-8))))
+
+(defun tibetan-sentence--get-stored-hash (filepath)
+  "Return the `#+TIBETAN_HASH:' header value stored in FILEPATH, or nil."
+  (when (and filepath (file-exists-p filepath))
+    (with-temp-buffer
+      (insert-file-contents filepath)
+      (goto-char (point-min))
+      (when (re-search-forward "^#\\+TIBETAN_HASH:[ \t]*\\(.+\\)$" nil t)
+        (string-trim (match-string 1))))))
+
+(defun tibetan-sentence--check-sync (filepath concatenated-text)
+  "Return non-nil if FILEPATH's stored hash matches CONCATENATED-TEXT."
+  (let ((stored  (tibetan-sentence--get-stored-hash filepath))
+        (current (tibetan-sentence--compute-hash concatenated-text)))
+    (and stored (string= stored current))))
+
+;; ============================================================================
+;; SECTION HELPERS — top-level (* …) sections
+;; ============================================================================
+
+(defun tibetan-sentence--find-section-bounds (buffer section-name)
+  "Find positions of `* SECTION-NAME' in BUFFER.
+Returns (START . END) or nil."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward
+             (format "^\\* %s$" (regexp-quote section-name)) nil t)
+        (let ((start (line-beginning-position))
+              (end (save-excursion
+                     (if (re-search-forward "^\\* " nil t)
+                         (line-beginning-position)
+                       (point-max)))))
+          (cons start end))))))
+
+(defun tibetan-sentence--read-section-body (filepath section-name)
+  "Return the trimmed body of `* SECTION-NAME' in FILEPATH, or nil."
+  (when (and filepath (file-exists-p filepath))
+    (with-temp-buffer
+      (insert-file-contents filepath)
+      (goto-char (point-min))
+      (when (re-search-forward
+             (format "^\\* %s$" (regexp-quote section-name)) nil t)
+        (forward-line 1)
+        (let ((start (point))
+              (end (save-excursion
+                     (if (re-search-forward "^\\* " nil t)
+                         (line-beginning-position)
+                       (point-max)))))
+          (let ((body (string-trim
+                       (buffer-substring-no-properties start end))))
+            (unless (string-empty-p body) body)))))))
+
+(defun tibetan-sentence--read-third-level-body (filepath heading)
+  "Return the trimmed body under `*** HEADING' in FILEPATH, or nil.
+Skips placeholder text so we don't carry empty scaffolding around."
+  (when (and filepath (file-exists-p filepath))
+    (with-temp-buffer
+      (insert-file-contents filepath)
+      (goto-char (point-min))
+      (when (re-search-forward
+             (format "^\\*\\*\\* %s$" (regexp-quote heading))
+             nil t)
+        (forward-line 1)
+        (let* ((start (point))
+               (end (save-excursion
+                      (if (re-search-forward
+                           "^\\*\\*\\*\\|^\\*\\*[^*]\\|^\\* " nil t)
+                          (line-beginning-position)
+                        (point-max))))
+               (body (string-trim
+                      (buffer-substring-no-properties start end))))
+          (unless (or (string-empty-p body)
+                      (string-match-p "\\`\\[Awaiting" body)
+                      (string-match-p "\\`\\[Hand-paste" body)
+                      (string-match-p "\\`\\[Working " body)
+                      (string-match-p "\\`\\[Requesting" body)
+                      (string-match-p "\\`\\[Claude unavailable" body)
+                      (string-match-p "\\`\\[Translation not available" body))
+            body))))))
+
+(defun tibetan-sentence--get-user-sections (filepath)
+  "Read user-owned sections from FILEPATH.
+Returns alist of (SECTION . CONTENT) for the trio that survives
+re-analysis: My Notes, Working Translation, Footnotes.  Each CONTENT
+covers the heading line through (just before) the next `* ' heading
+or end-of-file, so it can be re-inserted verbatim if the section
+gets clobbered by regeneration."
+  (when (and filepath (file-exists-p filepath))
+    (let (out)
+      (with-temp-buffer
+        (insert-file-contents filepath)
+        (dolist (name '("My Notes" "Working Translation" "Footnotes"))
+          (let ((bounds (tibetan-sentence--find-section-bounds
+                         (current-buffer) name)))
+            (when bounds
+              (push (cons name
+                          (buffer-substring-no-properties
+                           (car bounds) (cdr bounds)))
+                    out)))))
+      (nreverse out))))
+
+(defun tibetan-sentence--read-translation-bodies (filepath)
+  "Read user-owned third-level translation bodies from FILEPATH.
+Returns plist `(:roehrich STR :class STR)' (each non-nil only when
+the corresponding heading has real content, not placeholder text)."
+  (list :roehrich (tibetan-sentence--read-third-level-body filepath "Roehrich")
+        :class    (tibetan-sentence--read-third-level-body filepath "Class Translation")))
+
+;; ============================================================================
+;; FILE CREATION (scaffold)
+;; ============================================================================
+
+(defun tibetan-sentence--scaffold (sent-num seg-nums tibetan-text wylie source-file)
+  "Return the scaffold body for a new sent-NNN.org file (as string).
+SENT-NUM is the sentence number, SEG-NUMS the list of contained
+segment numbers, TIBETAN-TEXT the concatenated child text,
+WYLIE its transliteration (may be nil), SOURCE-FILE the absolute
+path of the source org buffer."
+  (let* ((source-name (and source-file
+                           (file-name-nondirectory source-file)))
+         (date (format-time-string "%Y-%m-%d"))
+         (hash (tibetan-sentence--compute-hash tibetan-text))
+         (segs-csv (mapconcat #'number-to-string seg-nums ", ")))
+    (with-temp-buffer
+      (insert (format "#+TITLE: Sentence %d Analysis\n" sent-num))
+      (insert "#+STARTUP: showall\n")
+      (when source-name
+        (insert (format "#+SOURCE: [[file:../%s::*Sentence %d][%s / Sentence %d]]\n"
+                        source-name sent-num source-name sent-num)))
+      (insert (format "#+SEGMENTS: %s\n" segs-csv))
+      (insert (format "#+TIBETAN_HASH: %s\n" hash))
+      (insert (format "#+ANALYSIS_VERSION: %s\n" tibetan-sentence-persist-version))
+      (insert (format "#+CREATED: %s\n" date))
+      (insert (format "#+LAST_ANALYZED: %s\n" date))
+      (insert "\n")
+      (insert "* Tibetan Text\n")
+      (insert tibetan-text)
+      (insert "\n\n")
+      (insert "* Wylie\n")
+      (if (and wylie (not (string-empty-p wylie)))
+          (insert wylie)
+        (insert "[Wylie transliteration not available]"))
+      (insert "\n\n")
+      (insert "* Provided Translations\n")
+      (insert "*** Roehrich\n")
+      (insert "[Hand-paste the published Roehrich English here]\n\n")
+      (insert "*** Class Translation\n")
+      (insert "[Working class translation here]\n\n")
+      (insert "*** Claude Translation\n")
+      (insert "[Awaiting Claude…]\n\n")
+      (insert "*** Claude Grammar\n")
+      (insert "[Awaiting Claude…]\n\n")
+      (insert "*** Claude Context\n")
+      (insert "[Awaiting Claude…]\n\n")
+      (insert "* Working Translation\n\n\n")
+      (insert "* My Notes\n\n\n")
+      (insert "* Footnotes\n\n")
+      (buffer-string))))
+
+(defun tibetan-sentence--create-file (sent-num seg-nums tibetan-text source-file)
+  "Create a new `sent-NNN.org' file for SENT-NUM, return its path."
+  (let* ((filepath (tibetan-sentence--filepath sent-num))
+         (wylie (condition-case nil
+                    (when (fboundp 'tibetan-to-wylie-fixed)
+                      (tibetan-to-wylie-fixed tibetan-text))
+                  (error nil)))
+         (body (tibetan-sentence--scaffold
+                sent-num seg-nums tibetan-text wylie source-file)))
+    (with-temp-file filepath
+      (insert body))
+    filepath))
+
+;; ============================================================================
+;; REGENERATE — preserves user content and translations
+;; ============================================================================
+
+(defun tibetan-sentence--regenerate (filepath sent-num seg-nums tibetan-text)
+  "Regenerate metadata + Tibetan/Wylie/scaffold of FILEPATH.
+Preserves: My Notes, Working Translation, Footnotes (top-level
+user sections); Roehrich, Class Translation, Claude Translation,
+Claude Grammar, Claude Context (third-level translation bodies).
+Updates `#+SEGMENTS:', `#+TIBETAN_HASH:', `#+LAST_ANALYZED:' and
+the `* Tibetan Text' / `* Wylie' bodies."
+  (let* ((user-sections (tibetan-sentence--get-user-sections filepath))
+         (trans (tibetan-sentence--read-translation-bodies filepath))
+         (claude
+          (when (fboundp 'tibetan-analysis--read-claude-sections)
+            (tibetan-analysis--read-claude-sections filepath)))
+         (hash  (tibetan-sentence--compute-hash tibetan-text))
+         (date  (format-time-string "%Y-%m-%d"))
+         (wylie (condition-case nil
+                    (when (fboundp 'tibetan-to-wylie-fixed)
+                      (tibetan-to-wylie-fixed tibetan-text))
+                  (error nil)))
+         (segs-csv (mapconcat #'number-to-string seg-nums ", ")))
+    (with-current-buffer (find-file-noselect filepath)
+      ;; Update or insert the headers.
+      (goto-char (point-min))
+      (if (re-search-forward "^#\\+SEGMENTS:.*$" nil t)
+          (replace-match (format "#+SEGMENTS: %s" segs-csv) t t)
+        ;; Insert after #+SOURCE if present, else after #+STARTUP.
+        (goto-char (point-min))
+        (when (or (re-search-forward "^#\\+SOURCE:.*$" nil t)
+                  (re-search-forward "^#\\+STARTUP:.*$" nil t))
+          (end-of-line)
+          (insert (format "\n#+SEGMENTS: %s" segs-csv))))
+
+      (goto-char (point-min))
+      (if (re-search-forward "^#\\+TIBETAN_HASH:.*$" nil t)
+          (replace-match (format "#+TIBETAN_HASH: %s" hash) t t)
+        (goto-char (point-min))
+        (when (re-search-forward "^#\\+SEGMENTS:.*$" nil t)
+          (end-of-line)
+          (insert (format "\n#+TIBETAN_HASH: %s" hash))))
+
+      (goto-char (point-min))
+      (if (re-search-forward "^#\\+LAST_ANALYZED:.*$" nil t)
+          (replace-match (format "#+LAST_ANALYZED: %s" date) t t)
+        (goto-char (point-min))
+        (when (re-search-forward "^#\\+CREATED:.*$" nil t)
+          (end-of-line)
+          (insert (format "\n#+LAST_ANALYZED: %s" date))))
+
+      ;; Update the Tibetan Text body.
+      (let ((bounds (tibetan-sentence--find-section-bounds
+                     (current-buffer) "Tibetan Text")))
+        (when bounds
+          (delete-region (car bounds) (cdr bounds))
+          (goto-char (car bounds))
+          (insert "* Tibetan Text\n" tibetan-text "\n\n")))
+
+      ;; Update the Wylie body.
+      (let ((bounds (tibetan-sentence--find-section-bounds
+                     (current-buffer) "Wylie")))
+        (cond
+         (bounds
+          (delete-region (car bounds) (cdr bounds))
+          (goto-char (car bounds))
+          (insert "* Wylie\n"
+                  (if (and wylie (not (string-empty-p wylie)))
+                      wylie
+                    "[Wylie transliteration not available]")
+                  "\n\n"))
+         (t
+          ;; Wylie section missing — insert it after Tibetan Text.
+          (let ((tib (tibetan-sentence--find-section-bounds
+                      (current-buffer) "Tibetan Text")))
+            (when tib
+              (goto-char (cdr tib))
+              (insert "* Wylie\n"
+                      (if (and wylie (not (string-empty-p wylie)))
+                          wylie
+                        "[Wylie transliteration not available]")
+                      "\n\n"))))))
+
+      ;; Restore Roehrich + Class Translation if we had real bodies.
+      (when (and (fboundp 'tibetan-analysis--ensure-claude-headings))
+        (tibetan-analysis--ensure-claude-headings (current-buffer)))
+      (when (and (plist-get trans :roehrich)
+                 (fboundp 'tibetan-analysis--replace-claude-section-body))
+        (tibetan-analysis--replace-claude-section-body
+         (current-buffer) "Roehrich" (plist-get trans :roehrich)))
+      (when (and (plist-get trans :class)
+                 (fboundp 'tibetan-analysis--replace-claude-section-body))
+        (tibetan-analysis--replace-claude-section-body
+         (current-buffer) "Class Translation" (plist-get trans :class)))
+
+      ;; Restore Claude sections.
+      (when (and claude
+                 (fboundp 'tibetan-analysis--restore-claude-sections))
+        (tibetan-analysis--restore-claude-sections filepath claude))
+
+      ;; Restore user sections (re-add any that got clobbered).
+      (dolist (section user-sections)
+        (let* ((name (car section))
+               (content (cdr section))
+               (bounds (tibetan-sentence--find-section-bounds
+                        (current-buffer) name)))
+          (unless bounds
+            (goto-char (point-max))
+            (insert content))))
+
+      (save-buffer)
+      (message "Re-analyzed sentence %d. User content preserved." sent-num))))
+
+;; ============================================================================
+;; DISCOURSE-LEVEL CLAUDE SYSTEM PROMPT
+;; ============================================================================
+
+(defvar tibetan-sentence--claude-system-prompt
+  "You are a specialist in Classical Tibetan (chos skad) translation \
+and philology, acting as a teaching assistant for a graduate classroom.
+
+The passage below is one **sentence** — a discourse unit composed of \
+one or more clauses (segments).  Your job is to analyse it at the \
+sentence/discourse level, NOT word-by-word: cross-clause connectives, \
+anaphora, narrative arc, and how the sentence sits in the surrounding \
+text.
+
+Produce THREE sections, separated by the exact markdown headings \
+shown below, in this order and nothing else:
+
+## Translation
+A single, fluent English rendering of the whole sentence.
+- Render the sentence as a coherent English sentence (or a small set \
+of tightly linked clauses), not as a sequence of literal segments.
+- Preserve technical Buddhist terminology (use Sanskrit where \
+standard, e.g. dharma, bodhisattva, samādhi), with English gloss in \
+parentheses on first occurrence only.
+- Honorific forms (zhu, gsol, mdzad, etc.) should be reflected in \
+the register.
+- No commentary in this section.
+
+## Grammar
+Explain the **discourse-level** grammar pedagogically for readers \
+learning Classical Tibetan.  Focus on:
+- The clause chain: which clauses are subordinate (and via which \
+converb — ablative ནས, simultaneous ཅིང/ཞིང/ཤིང, coordinative \
+ཏེ/སྟེ/དེ, conditional ན, concessive ཀྱང/ཡང/འང, …) vs. the main \
+clause that anchors the sentence.
+- Anaphora and reference tracking across clauses (zero-anaphora is \
+the Tibetan default; identify the implicit subjects/objects).
+- Topic / focus structure marked by ནི, ཡང, etc.
+- The sentence-final verb morphology and what tense / aspect / mood \
+it imposes on the whole sentence.
+Reference the actual Tibetan forms in parentheses.  Do NOT \
+re-analyse individual particles in detail — that work is done at the \
+segment level and you will be given the per-segment parser output as \
+ground truth in the user prompt.  Treat that grounding as \
+authoritative for case and verb tagging; narrate it pedagogically, \
+flag disagreements rather than silently overruling.
+
+## Context
+Locate the sentence in the wider arc of the passage.  For rnam-thar \
+(spiritual biography), this means: which biographical episode, \
+which lineage / institutional reference, which hagiographical \
+convention is being deployed (formulaic ordination / encounter / \
+realisation / death episodes, honorific verb choice for the \
+subject).  For blo sbyong or other didactic verse, this means: \
+which step in the rhetorical pattern, which tradition-internal \
+function the key terms serve.  Keep it to 2–4 sentences.  Do NOT \
+speculate beyond what the source metadata and per-segment glossary \
+support.
+
+Use only these three headings.  No preamble, no closing remarks.
+
+Genre, period and context hints (if any) are supplied below by the \
+source file via `#+TIBETAN_CLAUDE_CONTEXT:' headers.  Do NOT assume \
+a specific genre unless such context is given."
+  "System prompt for sentence-level (discourse) Claude analysis.
+Mirrors the three-section schema of the segment-level prompt so the
+existing parser (`tibetan-analysis--parse-claude-sections') can read
+the response, but reframes the task at the sentence/discourse level
+and tells Claude to defer to the per-segment parser output for
+particle-level tagging.")
+
+;; ============================================================================
+;; PROMPT BUILDER — pulls per-segment grounding from CHILD seg-NNN.org
+;; ============================================================================
+
+(defun tibetan-sentence--child-seg-filepath (seg-num &optional folder)
+  "Return absolute path to `seg-NNN.org' for SEG-NUM, or nil."
+  (let ((folder (or folder (tibetan-sentence--get-folder))))
+    (when folder
+      (let ((p (expand-file-name (format "seg-%03d.org" seg-num) folder)))
+        (when (file-exists-p p) p)))))
+
+(defun tibetan-sentence--collect-children-grounding (seg-nums &optional folder)
+  "Collect parser-grounding text from the seg-NNN.org files of SEG-NUMS.
+Returns a single concatenated string suitable for embedding in the
+Claude user prompt, or nil when no child files exist or none have
+parser content."
+  (when (and seg-nums (fboundp 'tibetan-analysis--read-analysis-parser-sections)
+             (fboundp 'tibetan-analysis--format-parser-grounding))
+    (let ((blocks '()))
+      (dolist (seg-num seg-nums)
+        (let* ((path (tibetan-sentence--child-seg-filepath seg-num folder))
+               (sections (and path
+                              (tibetan-analysis--read-analysis-parser-sections
+                               path)))
+               (formatted (and sections
+                               (tibetan-analysis--format-parser-grounding
+                                sections))))
+          (when (and formatted (not (string-empty-p formatted)))
+            (push (format "=== Segment %d ===%s" seg-num formatted)
+                  blocks))))
+      (when blocks
+        (concat
+         "\n\nPer-segment parser output (clause/case/verb tagging done by "
+         "the tool — treat as ground truth, narrate pedagogically rather "
+         "than re-tagging from scratch):\n\n"
+         (mapconcat #'identity (nreverse blocks) "\n\n"))))))
+
+(defun tibetan-sentence--build-claude-prompts
+    (tibetan-text seg-nums source-file &optional folder)
+  "Build (SYSTEM . USER) Claude prompts for sentence-level analysis.
+TIBETAN-TEXT is the concatenated sentence text; SEG-NUMS the list of
+child segment numbers used to look up their per-segment analysis
+files for parser grounding; SOURCE-FILE the source org buffer path
+(used for genre/author metadata via the same helper as
+`tibetan-analysis-persist'); FOLDER the analysis folder."
+  (let* ((meta   (and source-file
+                      (fboundp 'tibetan-analysis--read-source-metadata)
+                      (tibetan-analysis--read-source-metadata source-file)))
+         (title  (plist-get meta :title))
+         (work   (plist-get meta :work))
+         (author (plist-get meta :author))
+         (ctx    (plist-get meta :claude-context))
+         (wylie  (condition-case nil
+                     (when (fboundp 'tibetan-to-wylie-fixed)
+                       (tibetan-to-wylie-fixed tibetan-text))
+                   (error nil)))
+         (src-block
+          (let (parts)
+            (when work   (push (format "Work: %s" work) parts))
+            (when (and author (not (and work (string= work author))))
+              (push (format "Author: %s" author) parts))
+            (when (and title (not work)) (push (format "Title: %s" title) parts))
+            (when ctx
+              (push "Context from source file:" parts)
+              (dolist (line ctx)
+                (push (format "  - %s" line) parts)))
+            (when parts
+              (concat "\n\nSource metadata for this passage:\n"
+                      (mapconcat #'identity (nreverse parts) "\n")))))
+         (system (concat tibetan-sentence--claude-system-prompt
+                         (or src-block "")))
+         (grounding-block
+          (tibetan-sentence--collect-children-grounding seg-nums folder))
+         (segs-csv (mapconcat #'number-to-string seg-nums ", "))
+         (user (concat "Classical Tibetan sentence "
+                       (format "(spans segments: %s):\n\n" segs-csv)
+                       tibetan-text
+                       (if wylie (format "\n\nWylie: %s" wylie) "")
+                       (or grounding-block "")
+                       "\n\nProduce the three sections now.")))
+    (cons system user)))
+
+;; ============================================================================
+;; CLAUDE REQUEST (async via gptel)
+;; ============================================================================
+
+(defun tibetan-sentence--source-file-from-analysis (analysis-file)
+  "Return absolute source file referenced by sent-NNN.org ANALYSIS-FILE."
+  (when (and analysis-file (file-exists-p analysis-file))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents analysis-file)
+          (goto-char (point-min))
+          (when (re-search-forward
+                 "^#\\+SOURCE:[ \t]*\\[\\[file:\\([^]:]+\\)" nil t)
+            (let ((rel (match-string 1)))
+              (expand-file-name rel (file-name-directory analysis-file)))))
+      (error nil))))
+
+(defun tibetan-sentence--seg-nums-from-file (filepath)
+  "Read the `#+SEGMENTS:' header value from FILEPATH and return a list of ints."
+  (when (and filepath (file-exists-p filepath))
+    (with-temp-buffer
+      (insert-file-contents filepath)
+      (goto-char (point-min))
+      (when (re-search-forward "^#\\+SEGMENTS:[ \t]*\\(.*\\)$" nil t)
+        (let ((csv (string-trim (match-string 1))))
+          (when (and csv (not (string-empty-p csv)))
+            (mapcar #'string-to-number
+                    (split-string csv "[ ,\t]+" t))))))))
+
+(defun tibetan-sentence--request-claude
+    (tibetan-text seg-nums analysis-file &optional source-file folder)
+  "Async-request a Claude sentence-level analysis of TIBETAN-TEXT.
+On callback, parses the response and writes the three Claude
+sections into ANALYSIS-FILE.  Reuses
+`tibetan-analysis--insert-claude-sections' so the writer behaviour
+stays identical to the segment-level flow.
+
+Routed through `tibetan-claude-queue' so concurrent sentence-level
+requests share the same throttle / retry budget as segment-level
+requests, and a placeholder is written into the *** Claude
+Translation section if retries are exhausted."
+  (require 'tibetan-claude-queue)
+  (let ((label (and analysis-file
+                    (file-name-nondirectory analysis-file))))
+    (tibetan-claude-queue-submit
+     (lambda (done)
+       (condition-case err
+           (progn
+             (unless (and (featurep 'gptel) (fboundp 'gptel-request))
+               (error "gptel not loaded"))
+             (when (fboundp 'tibetan-analysis--ensure-gptel-ready)
+               (tibetan-analysis--ensure-gptel-ready))
+             (let* ((src (or source-file
+                             (tibetan-sentence--source-file-from-analysis
+                              analysis-file)))
+                    (prompts (tibetan-sentence--build-claude-prompts
+                              tibetan-text seg-nums src folder))
+                    (system-prompt (car prompts))
+                    (user-prompt   (cdr prompts)))
+               (gptel-request
+                user-prompt
+                :system system-prompt
+                :callback
+                (lambda (response info)
+                  (cond
+                   ((and response (stringp response)
+                         (not (string-empty-p response)))
+                    (when (fboundp 'tibetan-analysis--insert-claude-sections)
+                      (condition-case e
+                          (tibetan-analysis--insert-claude-sections
+                           response analysis-file)
+                        (error
+                         (message "Sentence Claude insert failed for %s: %s"
+                                  (or label "<file>")
+                                  (error-message-string e)))))
+                    (funcall done '(:status ok)))
+                   ((and (fboundp 'tibetan-analysis--claude-status-rate-limited-p)
+                         (tibetan-analysis--claude-status-rate-limited-p info))
+                    (funcall done '(:status rate-limited)))
+                   (t
+                    (funcall done
+                             (list :status 'error
+                                   :error (format "%s"
+                                                  (or (and (listp info)
+                                                           (plist-get info :status))
+                                                      "no response")))))))) ))
+         (error
+          (funcall done (list :status 'error
+                              :error (error-message-string err))))))
+     :label label
+     :on-fail
+     (lambda (status)
+       (let* ((kind (plist-get status :status))
+              (msg (cond
+                    ((eq kind 'rate-limited)
+                     "[Claude request failed: rate-limited (HTTP 429) after retries — re-run C-c s R later]")
+                    (t (format "[Claude request failed: %s — re-run C-c s R later]"
+                               (or (plist-get status :error) "unknown"))))))
+         (when (fboundp 'tibetan-analysis--write-claude-failure-stub)
+           (tibetan-analysis--write-claude-failure-stub
+            analysis-file msg)))))))
+
+;; ============================================================================
+;; PUBLIC COMMANDS
+;; ============================================================================
+
+;;;###autoload
+(defun tibetan-sentence-open-analysis ()
+  "Open or create analysis for the sentence at point in a side window.
+Works from a `*** Sentence N' heading or any `**** Segment M' (or
+`*** Segment M' in the fresh-prep layout) inside it.  When an
+analysis file already exists, warn if its stored hash no longer
+matches the current concatenated child text (i.e. the source has
+changed)."
+  (interactive)
+  (let* ((data (tibetan-sentence--collect-current-sentence)))
+    (unless data
+      (user-error "Not in a sentence (point is not under any *** Sentence heading)"))
+    (let* ((sent-num (plist-get data :sent-num))
+           (seg-nums (plist-get data :seg-nums))
+           (tib-text (plist-get data :tibetan-text))
+           (source-file (buffer-file-name))
+           (filepath (tibetan-sentence--filepath sent-num))
+           (exists (and filepath (file-exists-p filepath))))
+      (unless filepath
+        (error "Could not determine sentence analysis filepath; \
+source buffer must visit a file"))
+      (cond
+       (exists
+        (unless (tibetan-sentence--check-sync filepath tib-text)
+          (message "WARNING: Sentence %d source text has changed since last analysis"
+                   sent-num))
+        (let ((buf (find-file-noselect filepath)))
+          (when (fboundp 'tibetan-analysis-setup-faces)
+            (with-current-buffer buf
+              (tibetan-analysis-setup-faces)))
+          (display-buffer-in-side-window
+           buf '((side . right) (window-width . 0.5)))))
+       (t
+        (let ((newpath (tibetan-sentence--create-file
+                        sent-num seg-nums tib-text source-file)))
+          (message "Created sentence analysis: %s" newpath)
+          (let ((buf (find-file-noselect newpath)))
+            (when (fboundp 'tibetan-analysis-setup-faces)
+              (with-current-buffer buf
+                (tibetan-analysis-setup-faces)))
+            (display-buffer-in-side-window
+             buf '((side . right) (window-width . 0.5))))
+          (condition-case err
+              (tibetan-sentence--request-claude
+               tib-text seg-nums newpath source-file)
+            (error (message "Sentence Claude skipped: %s"
+                            (error-message-string err))))))))))
+
+;;;###autoload
+(defun tibetan-sentence-reanalyze ()
+  "Re-analyze the sentence at point.
+Regenerates Tibetan/Wylie/SEGMENTS/HASH; preserves My Notes,
+Working Translation, Footnotes, Roehrich, Class Translation, and
+the three Claude sections.  Re-issues the Claude request only when
+called with a prefix argument."
+  (interactive)
+  (let ((data (tibetan-sentence--collect-current-sentence)))
+    (unless data
+      (user-error "Not in a sentence"))
+    (let* ((sent-num (plist-get data :sent-num))
+           (seg-nums (plist-get data :seg-nums))
+           (tib-text (plist-get data :tibetan-text))
+           (source-file (buffer-file-name))
+           (filepath (tibetan-sentence--filepath sent-num)))
+      (unless (file-exists-p filepath)
+        (user-error
+         "No sentence analysis file exists yet — use C-c u S first"))
+      (when (yes-or-no-p
+             (format "Re-analyze sentence %d (user content preserved)? "
+                     sent-num))
+        (tibetan-sentence--regenerate filepath sent-num seg-nums tib-text)
+        ;; Refresh open buffer.
+        (let ((buf (get-file-buffer filepath)))
+          (when buf
+            (with-current-buffer buf
+              (revert-buffer t t))))
+        (when current-prefix-arg
+          (condition-case err
+              (tibetan-sentence--request-claude
+               tib-text seg-nums filepath source-file)
+            (error (message "Sentence Claude skipped: %s"
+                            (error-message-string err)))))))))
+
+(cl-defun tibetan-sentence-reanalyze-file
+    (filepath &key source-file re-request-claude dry-run)
+  "Headless single-file re-analysis of a sent-NNN.org FILEPATH.
+Tibetan text is freshly derived from SOURCE-FILE (or from the
+file's `#+SOURCE:' link if not given) by re-scanning the source
+buffer for the sentence number encoded in the filename.
+
+When RE-REQUEST-CLAUDE is non-nil, a fresh Claude request is
+dispatched after regeneration.  With DRY-RUN, no files are written.
+
+Returns plist:
+  (:file F :sent-id ID :ok BOOL :error STR :seg-nums (...))."
+  (let* ((sent-id (tibetan-sentence--sent-id-from-filename filepath))
+         (src (or source-file
+                  (tibetan-sentence--source-file-from-analysis filepath)))
+         (data (when (and sent-id src (file-readable-p src))
+                 (with-temp-buffer
+                   (insert-file-contents src)
+                   (org-mode)
+                   (tibetan-sentence--collect-from-source-buffer sent-id)))))
+    (cond
+     ((null sent-id)
+      `(:file ,filepath :ok nil
+              :error "Could not extract sent-id from filename"))
+     ((null src)
+      `(:file ,filepath :sent-id ,sent-id :ok nil
+              :error "Could not resolve source file"))
+     ((null data)
+      `(:file ,filepath :sent-id ,sent-id :ok nil
+              :error ,(format "Sentence %d not found in source" sent-id)))
+     (dry-run
+      `(:file ,filepath :sent-id ,sent-id :ok t :dry-run t
+              :seg-nums ,(plist-get data :seg-nums)))
+     (t
+      (condition-case err
+          (let ((seg-nums (plist-get data :seg-nums))
+                (tib-text (plist-get data :tibetan-text)))
+            (tibetan-sentence--regenerate filepath sent-id seg-nums tib-text)
+            (when re-request-claude
+              (condition-case e2
+                  (tibetan-sentence--request-claude
+                   tib-text seg-nums filepath src)
+                (error (message "Sentence Claude re-request failed for %s: %s"
+                                (file-name-nondirectory filepath)
+                                (error-message-string e2)))))
+            `(:file ,filepath :sent-id ,sent-id :ok t
+                    :seg-nums ,seg-nums))
+        (error
+         `(:file ,filepath :sent-id ,sent-id :ok nil
+                 :error ,(error-message-string err))))))))
+
+(defun tibetan-sentence--folder-sentence-files (folder)
+  "Return sent-NNN*.org files in FOLDER, sorted by sentence id."
+  (let* ((all (and (file-directory-p folder)
+                   (directory-files folder t "\\`sent-[0-9]+.*\\.org\\'")))
+         (ordered
+          (sort (copy-sequence (or all '()))
+                (lambda (a b)
+                  (< (or (tibetan-sentence--sent-id-from-filename a) 0)
+                     (or (tibetan-sentence--sent-id-from-filename b) 0))))))
+    ordered))
+
+;;;###autoload
+(cl-defun tibetan-sentence-batch-reanalyze
+    (&key folder source-file re-request-claude dry-run)
+  "Re-run analysis on every `sent-NNN*.org' file in FOLDER.
+
+FOLDER defaults to the analysis folder of the current buffer.
+SOURCE-FILE defaults to the current buffer's file.  With
+RE-REQUEST-CLAUDE non-nil, a fresh Claude request is dispatched
+per file.  With DRY-RUN non-nil, nothing is written.
+
+Returns plist:
+  (:folder F :total N :ok N-ok :failed N-bad :results RESULTS)."
+  (interactive
+   (list :folder (let ((d (or (and (buffer-file-name)
+                                   (tibetan-sentence--get-folder))
+                              default-directory)))
+                   (read-directory-name "Analysis folder: " d d t))
+         :source-file (buffer-file-name)
+         :re-request-claude
+         (y-or-n-p "Also request a fresh Claude analysis per sentence? ")
+         :dry-run nil))
+  (let* ((folder (or folder
+                     (and (buffer-file-name)
+                          (tibetan-sentence--get-folder))
+                     default-directory))
+         (files (tibetan-sentence--folder-sentence-files folder))
+         (results '())
+         (n (length files))
+         (i 0)
+         (ok 0))
+    (unless files
+      (user-error "No sentence analysis files (sent-NNN*.org) in %s" folder))
+    (dolist (f files)
+      (cl-incf i)
+      (message "[%d/%d] %s %s"
+               i n (if dry-run "dry-run" "reanalyzing")
+               (file-name-nondirectory f))
+      (let ((r (tibetan-sentence-reanalyze-file
+                f
+                :source-file source-file
+                :re-request-claude re-request-claude
+                :dry-run dry-run)))
+        (push r results)
+        (when (plist-get r :ok) (cl-incf ok))))
+    (let ((summary `(:folder ,folder
+                     :total ,n
+                     :ok ,ok
+                     :failed ,(- n ok)
+                     :dry-run ,(and dry-run t)
+                     :results ,(nreverse results))))
+      (message "Sentence batch reanalysis: %d/%d ok (%d failed)%s"
+               ok n (- n ok) (if dry-run " — dry run" ""))
+      summary)))
+
+(provide 'tibetan-sentence-persist)
+;;; tibetan-sentence-persist.el ends here
