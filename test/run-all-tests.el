@@ -119,5 +119,8 @@
 ;; lines before Wylie conversion and parser tokenisation).
 (condition-case nil (require 'tibetan-analysis-filter-test) (error nil))
 
+;; Auto-content reorder (priority section order + Claude Grammar promotion)
+(condition-case nil (require 'tibetan-analysis-reorder-test) (error nil))
+
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here

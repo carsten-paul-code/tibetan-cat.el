@@ -1527,6 +1527,113 @@ keeps German // English pairs side by side."
             (insert "\n"))
         (insert "[No dictionary entries available]\n\n")))))
 
+(defconst tibetan-analysis--priority-section-order
+  '("** Wylie Transliteration"
+    "** Particle Map"
+    "** Interlinear Gloss"
+    "** Verb Classification (Hill 2010)"
+    "** Claude Translation"
+    "** Claude Grammar")
+  "Section headings (at org level-2) that should appear first in the
+`* Auto-Analysis' output, in this exact order.  Any level-2 section
+NOT listed here is kept and emitted afterwards in the order it was
+generated.  `** Claude Grammar' is promoted from its legacy
+level-3 home inside `** Provided Translations' before the reorder.")
+
+(defun tibetan-analysis--split-level2-sections (content)
+  "Split CONTENT into an ordered list of level-2 section cons cells.
+Each element is (HEADING . BODY), where HEADING is the full heading
+line (e.g. `** Wylie Transliteration') and BODY is everything up to
+the next `^\\*\\* ' heading or end of string.  Text that appears
+before the first level-2 heading is returned under the special key
+`t' (typically empty) so the caller can preserve it."
+  (let ((result '())
+        (preamble nil)
+        (idx 0))
+    (while (< idx (length content))
+      (if (string-match "^\\*\\* .*$" content idx)
+          (let* ((h-start (match-beginning 0))
+                 (h-end (match-end 0))
+                 (heading (match-string 0 content))
+                 (next-start (or (and (string-match
+                                       "^\\*\\* .*$" content (1+ h-end))
+                                      (match-beginning 0))
+                                 (length content)))
+                 (body (substring content (1+ h-end) next-start)))
+            (unless preamble
+              (let ((pre (substring content 0 h-start)))
+                (setq preamble pre)))
+            (push (cons heading body) result)
+            (setq idx next-start))
+        ;; No more headings — everything that remains is trailing text.
+        ;; If we never saw a heading, the whole thing is preamble.
+        (unless preamble
+          (setq preamble (substring content idx)))
+        (setq idx (length content))))
+    (cons (or preamble "") (nreverse result))))
+
+(defun tibetan-analysis--extract-claude-grammar (sections)
+  "If SECTIONS contains a `** Provided Translations' whose body holds a
+`*** Claude Grammar' sub-heading, extract that subsection and return
+a new list with:
+  - a new `** Claude Grammar' level-2 entry carrying the promoted body
+  - the original `** Provided Translations' with that sub-heading
+    removed (the rest of its body preserved)
+When no `*** Claude Grammar' is present the sections are returned
+unchanged."
+  (let ((found-body nil)
+        (updated '()))
+    (dolist (pair sections)
+      (if (string= (car pair) "** Provided Translations")
+          (let ((body (cdr pair)))
+            (if (string-match
+                 "^\\*\\*\\* Claude Grammar[ \t]*\n\\([\000-\377]*?\\)\\(\\(?:\n\\*\\*\\* \\)\\|\\'\\)"
+                 body)
+                (let* ((grammar-body (string-trim (match-string 1 body)))
+                       (match-start (match-beginning 0))
+                       (tail-start (match-beginning 2))
+                       (new-body (concat (substring body 0 match-start)
+                                         (substring body tail-start))))
+                  (setq found-body grammar-body)
+                  (push (cons (car pair) new-body) updated))
+              (push pair updated)))
+        (push pair updated)))
+    (setq updated (nreverse updated))
+    (if found-body
+        (append updated
+                (list (cons "** Claude Grammar"
+                            (concat found-body "\n"))))
+      updated)))
+
+(defun tibetan-analysis--reorder-auto-content (content)
+  "Reorder the level-2 sections of CONTENT into the priority order
+defined by `tibetan-analysis--priority-section-order', keeping every
+other section in its original relative position.
+
+This also promotes `*** Claude Grammar' out of `** Provided
+Translations' so it can slot into the priority list as a first-
+class level-2 section."
+  (let* ((split (tibetan-analysis--split-level2-sections content))
+         (preamble (car split))
+         (sections (tibetan-analysis--extract-claude-grammar (cdr split)))
+         (priority-pairs '())
+         (remaining '()))
+    ;; Walk priority list and pull the matching sections out of SECTIONS.
+    (dolist (p tibetan-analysis--priority-section-order)
+      (let ((hit (cl-find p sections :key #'car :test #'string=)))
+        (when hit
+          (push hit priority-pairs)
+          (setq sections (cl-remove p sections
+                                    :key #'car :test #'string=)))))
+    (setq priority-pairs (nreverse priority-pairs))
+    (setq remaining sections)
+    (concat preamble
+            (mapconcat
+             (lambda (pair)
+               (concat (car pair) "\n" (cdr pair)))
+             (append priority-pairs remaining)
+             ""))))
+
 (defun tibetan-analysis-generate-content (tibetan-text &optional seg-id source-text)
   "Generate auto-analysis content for TIBETAN-TEXT.
 Returns the analysis as a string (org-mode formatted).
@@ -2154,7 +2261,14 @@ affected, not the rest of the analysis."
                 (insert "[Add reference translations here, e.g. from Blue Annals (Roerich), or other published translations]\n")))
             (insert "\n")
 
-            (buffer-string))))
+            ;; Reorder level-2 sections into the workshop-agreed
+            ;; priority: Wylie → Particle Map → Interlinear Gloss →
+            ;; Verb Classification → Claude Translation → Claude
+            ;; Grammar, with the remaining sections retained in
+            ;; their generated order afterwards.  Also promotes the
+            ;; level-3 `*** Claude Grammar' out of `** Provided
+            ;; Translations' so it can take its priority slot.
+            (tibetan-analysis--reorder-auto-content (buffer-string)))))
     (error
      ;; On error, return minimal analysis with error info
      (format "** Wylie Transliteration\n[Error during analysis]\n\n** Provided Translations\n- [Error: %s]\n\n** Vocabulary\n[Error]\n"
