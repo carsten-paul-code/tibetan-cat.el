@@ -1,23 +1,137 @@
 ;;; tibetan-vocabulary.el --- Vocabulary lookup with DharmaMitra fallback -*- lexical-binding: t -*-
 
 ;;; Commentary:
-;; Provides vocabulary lookup with multiple sources:
-;; 1. Custom vocabulary file (per-document, via #+TIBETAN_VOCAB_FILE header)
-;; 2. Local comprehensive glossaries (17,777 entries)
-;; 3. DharmaMitra API fallback with caching
+;; Provides vocabulary lookup with multiple configurable sources:
+;; 1. Resources folder wordlist (auto-detected from ../Resources/)
+;; 2. Custom vocabulary file (per-document, via #+TIBETAN_VOCAB_FILE header)
+;; 3. Rangjung Yeshe dictionary (English, bundled)
+;; 4. Christian Steinert's dictionary collection (Hopkins, Valby, 84000, etc.)
+;; 5. Local comprehensive glossaries (17,777 entries)
+;; 6. DharmaMitra API fallback with caching
 ;;
 ;; Handles:
 ;; - Compound word detection
 ;; - Particle stripping
+;; - Bilingual merge (English + German)
 ;; - Cached translations to avoid repeated API calls
+;;
+;; Dictionary priority is configurable:
+;; - Global: customize `tibetan-dictionary-priority'
+;; - Per-buffer: #+TIBETAN_DICT_PRIORITY: resources custom rangjung-yeshe
 ;;
 ;; Custom vocabulary:
 ;; Add #+TIBETAN_VOCAB_FILE: path/to/wordlist.pdf to your document header
 ;; The PDF will be parsed and cached for priority lookup
+;;
+;; Resources wordlist:
+;; Place a wordlist.txt (or .pdf/.org) in the Resources/ folder next to
+;; your working file.  Supports multiple formats including term-on-line
+;; with indented definition below.
 
 ;;; Code:
 
 (require 'cl-lib)
+;; Steinert is the SQLite-backed dictionary layer (see core/tibetan-steinert.el).
+;; Soft-required so this file still loads when the DB or sqlite.el is absent —
+;; `tibetan-lookup-word-in-steinert' handles the disabled case gracefully.
+(require 'tibetan-steinert nil t)
+
+;; ============================================================================
+;; DICTIONARY PRIORITY CONFIGURATION
+;; ============================================================================
+
+(defcustom tibetan-dictionary-priority
+  '(resources custom verbs rangjung-yeshe steinert local-glossary dharmamitra)
+  "Priority order for dictionary lookup.
+Each symbol names a dictionary source.  When looking up a word,
+sources are tried in order; the first match wins for each language
+category (English sources vs. German sources are merged separately).
+
+Available sources:
+  `resources'       — Wordlist from the Resources folder (auto-detected).
+                      Bilingual German // English.  Ideal for text-specific
+                      vocabulary prepared for class or study.
+  `custom'          — Per-document vocabulary (via #+TIBETAN_VOCAB_FILE).
+  `verbs'           — Verb classifier database with stem forms,
+                      transitivity, and case frames.
+  `rangjung-yeshe'  — Rangjung Yeshe dictionary (~162k entries, English).
+  `steinert'        — Christian Steinert's dictionary collection
+                      (Hopkins, Valby, Waldo, 84000, Bialek, etc.).
+                      Wylie-keyed pipe-delimited files.
+  `local-glossary'  — Bundled glossaries: common vocabulary, Hopkins,
+                      Madhyamaka terms, tibetan-english, unified.
+  `dharmamitra'     — DharmaMitra API (online AI translation fallback).
+
+Can be overridden per-buffer with an org header:
+  #+TIBETAN_DICT_PRIORITY: resources custom verbs rangjung-yeshe steinert
+
+Example configurations:
+  ;; Classroom: text wordlist first, then general
+  (setq tibetan-dictionary-priority
+        \\='(resources custom verbs rangjung-yeshe steinert local-glossary dharmamitra))
+  ;; Research: Steinert collection first for breadth
+  (setq tibetan-dictionary-priority
+        \\='(steinert rangjung-yeshe verbs resources local-glossary dharmamitra))"
+  :type '(repeat (choice (const :tag "Resources folder wordlist" resources)
+                         (const :tag "Custom vocab file" custom)
+                         (const :tag "Verb classifier" verbs)
+                         (const :tag "Rangjung Yeshe" rangjung-yeshe)
+                         (const :tag "Steinert collection" steinert)
+                         (const :tag "Local glossary" local-glossary)
+                         (const :tag "DharmaMitra API" dharmamitra)))
+  :group 'tibetan)
+
+(defun tibetan-get-buffer-dict-priority ()
+  "Get dictionary priority for current buffer.
+Checks for #+TIBETAN_DICT_PRIORITY header first, falls back to
+`tibetan-dictionary-priority' customization."
+  (or (save-excursion
+        (goto-char (point-min))
+        (when (re-search-forward
+               "^#\\+TIBETAN_DICT_PRIORITY:\\s-*\\(.+\\)$" nil t)
+          (let ((sources (split-string (match-string 1) "\\s-+" t)))
+            (mapcar #'intern sources))))
+      tibetan-dictionary-priority))
+
+(defun tibetan--lookup-in-source (source word &optional word-stripped)
+  "Look up WORD in dictionary SOURCE.  Try WORD-STRIPPED as fallback.
+Returns meaning string or nil."
+  (let ((stripped (or word-stripped (tibetan-strip-particles word))))
+    (pcase source
+      ('resources
+       (or (tibetan-lookup-word-in-resources-vocab word)
+           (tibetan-lookup-word-in-resources-vocab stripped)))
+      ('custom
+       (or (tibetan-lookup-word-in-custom-vocab word)
+           (tibetan-lookup-word-in-custom-vocab stripped)))
+      ('verbs
+       (when (fboundp 'tibetan-verb-lookup)
+         (let ((verb-entry (or (tibetan-verb-lookup word)
+                               (tibetan-verb-lookup stripped))))
+           (when verb-entry
+             ;; Format verb entry for display
+             (let ((meaning (alist-get 'meaning verb-entry))
+                   (trans (alist-get 'transitivity verb-entry))
+                   (case-frame (alist-get 'case_frame verb-entry))
+                   (lemma (alist-get 'lemma verb-entry)))
+               (when meaning
+                 (concat meaning
+                         (when (or trans case-frame)
+                           (format " [verb: %s%s]"
+                                   (or trans "")
+                                   (if case-frame
+                                       (format ", %s" case-frame) ""))))))))))
+      ('rangjung-yeshe
+       (or (tibetan-lookup-word-in-rangjung-yeshe word)
+           (tibetan-lookup-word-in-rangjung-yeshe stripped)))
+      ('steinert
+       (or (tibetan-lookup-word-in-steinert word)
+           (tibetan-lookup-word-in-steinert stripped)))
+      ('local-glossary
+       (or (tibetan-lookup-word-in-local-glossary word)
+           (tibetan-lookup-word-in-local-glossary stripped)))
+      ('dharmamitra
+       (tibetan-lookup-word-in-dharmamitra word)))))
 
 ;; Safe substring for multi-byte Tibetan text
 (defun tibetan-vocab-safe-substring (str start &optional end)
@@ -116,30 +230,90 @@ Stores entries under both Tibetan and Wylie keys for flexible lookup."
             (message "✓ Loaded Rangjung Yeshe dictionary: %d entries" count)))))))
 
 (defun tibetan-lookup-word-in-rangjung-yeshe (word)
-  "Look up WORD in Rangjung Yeshe dictionary (lazy-loads if needed).
-Tries Tibetan script first, then Wylie conversion.
+  "Look up WORD in the combined 64-source dictionary or Rangjung Yeshe.
+Tries the combined dictionary first (if loaded from init-tibetan-legacy.el),
+then falls back to the local Rangjung Yeshe copy.
 Returns meaning if found, nil otherwise."
-  ;; Lazy-load the dictionary on first use
-  (tibetan-rangjung-yeshe-load)
-  (when tibetan-rangjung-yeshe-vocabulary
-    (let* ((root-form (tibetan-strip-particles word))
-           (entry (or
-                   ;; Try full word as-is
-                   (gethash word tibetan-rangjung-yeshe-vocabulary)
-                   ;; Try with particles stripped
-                   (gethash root-form tibetan-rangjung-yeshe-vocabulary))))
-      ;; If not found, try Wylie conversion
-      (unless entry
-        (when (fboundp 'tibetan-to-wylie-fixed)
-          (let* ((wylie (ignore-errors (tibetan-to-wylie-fixed word)))
-                 (wylie-root (ignore-errors (tibetan-to-wylie-fixed root-form))))
-            (setq entry (or
-                         (and wylie (gethash wylie tibetan-rangjung-yeshe-vocabulary))
-                         (and wylie-root (gethash wylie-root tibetan-rangjung-yeshe-vocabulary)))))))
-      entry)))
+  (let* ((root-form (tibetan-strip-particles word))
+         (entry nil))
+    ;; 1. Try combined 64-source dictionary (loaded by init-tibetan-legacy.el)
+    (when (fboundp 'lookup-combined-dictionary-first)
+      (setq entry (or (lookup-combined-dictionary-first word)
+                      (lookup-combined-dictionary-first root-form)
+                      ;; Try with/without trailing tsheg
+                      (unless (string-suffix-p "་" word)
+                        (lookup-combined-dictionary-first (concat word "་")))
+                      (unless (string-suffix-p "་" root-form)
+                        (lookup-combined-dictionary-first (concat root-form "་"))))))
+    ;; 2. Fallback to local Rangjung Yeshe copy
+    (unless entry
+      (tibetan-rangjung-yeshe-load)
+      (when tibetan-rangjung-yeshe-vocabulary
+        (setq entry (or (gethash word tibetan-rangjung-yeshe-vocabulary)
+                        (gethash root-form tibetan-rangjung-yeshe-vocabulary)))
+        ;; Try Wylie conversion
+        (unless entry
+          (when (fboundp 'tibetan-to-wylie-fixed)
+            (let* ((wylie (ignore-errors (tibetan-to-wylie-fixed word)))
+                   (wylie-root (ignore-errors (tibetan-to-wylie-fixed root-form))))
+              (setq entry (or
+                           (and wylie (gethash wylie tibetan-rangjung-yeshe-vocabulary))
+                           (and wylie-root (gethash wylie-root tibetan-rangjung-yeshe-vocabulary)))))))))
+    entry))
 
 (defvar tibetan-current-custom-vocab nil
   "Current buffer's custom vocabulary hash-table, or nil if none.")
+
+;; ============================================================================
+;; STEINERT DICTIONARY COLLECTION (SQLite-backed, lazy query)
+;; ============================================================================
+;;
+;; The heavy lifting lives in `core/tibetan-steinert.el', which queries a
+;; SQLite database built from Christian Steinert's aggregated dictionary
+;; sources (800k+ entries across 60+ glossaries). This file just exposes a
+;; thin, priority-dispatch-compatible wrapper.
+;;
+;; If the DB isn't built yet, `tibetan-steinert-lookup' returns nil and
+;; priority dispatch falls through to the next source — no crash, no
+;; pre-loaded 215k-entry hash table sitting in RAM. Build with:
+;;   make build-steinert
+;; or run `scripts/build-steinert-db.py' directly. See NOTICE-steinert.md.
+
+(defvar tibetan--steinert-build-hint-shown nil
+  "Non-nil once the one-shot build-hint message has been emitted.")
+
+(defun tibetan--steinert-maybe-hint-build ()
+  "Print a one-time hint pointing at the DB build script.
+Only fires when the SQLite backend is present but no DB is on disk,
+so users who have intentionally disabled Steinert never see it."
+  (unless tibetan--steinert-build-hint-shown
+    (setq tibetan--steinert-build-hint-shown t)
+    (when (and (featurep 'tibetan-steinert)
+               (boundp 'tibetan-steinert-db-path)
+               tibetan-steinert-db-path
+               (not (file-readable-p tibetan-steinert-db-path)))
+      (message "Steinert dictionary DB missing — run `make build-steinert' (or scripts/build-steinert-db.py) to enable it"))))
+
+(defun tibetan-lookup-word-in-steinert (word)
+  "Look up WORD in the Steinert dictionary collection.
+Returns a single definition string tagged with its source
+(e.g. \"...explanation... [01-Hopkins2015]\"), or nil when the
+word is absent / the DB is unavailable.
+
+This is the legacy-shaped entry point used by the priority
+dispatcher in `tibetan--lookup-in-source'. The richer plist API
+lives in `tibetan-steinert-lookup' in core/tibetan-steinert.el."
+  (tibetan--steinert-maybe-hint-build)
+  (when (fboundp 'tibetan-steinert-lookup)
+    (let* ((hits (tibetan-steinert-lookup word 1))
+           (first (car hits)))
+      (when first
+        (let ((gloss  (plist-get first :gloss))
+              (source (plist-get first :source)))
+          (when (and gloss (not (string-empty-p gloss)))
+            (if (and source (not (string-empty-p source)))
+                (format "%s [%s]" (string-trim gloss) source)
+              (string-trim gloss))))))))
 
 ;; ============================================================================
 ;; CUSTOM VOCABULARY FILE SUPPORT
@@ -189,13 +363,11 @@ Returns hash-table with both Wylie and Tibetan keys."
                                 (shell-quote-argument pdf-path))))
                  (lines (split-string text "\n"))
                  (current-term nil)
-                 (current-def "")
-                 (page-section nil))
+                 (current-def ""))
             (dolist (line lines)
               (cond
                ;; Page reference like "(30.6)" or "(31.3–4)"
-               ((string-match "^(\\([0-9]+\\.[0-9]\\)" line)
-                (setq page-section (match-string 1 line))
+               ((string-match "^(\\([0-9]+\\.[0-9]+\\))" line)
                 ;; Save previous entry
                 (when (and current-term (not (string-empty-p current-def)))
                   (tibetan--store-vocab-entry vocab-table current-term current-def))
@@ -248,8 +420,13 @@ Returns hash-table with both Wylie and Tibetan keys."
     vocab-table))
 
 (defun tibetan--store-vocab-entry (vocab-table term def)
-  "Store TERM with DEF in VOCAB-TABLE under both Wylie and Tibetan keys."
-  (let ((clean-def (string-trim def)))
+  "Store TERM with DEF in VOCAB-TABLE under both Wylie and Tibetan keys.
+Strips folio markers like (12a5) and collapses extra whitespace."
+  (let* ((clean-def (string-trim def))
+         ;; Remove folio markers: (12a5), (16b), (3a2) etc.
+         (clean-def (replace-regexp-in-string "([0-9]+[ab][0-9]*)" "" clean-def))
+         ;; Collapse multiple spaces left by removal
+         (clean-def (replace-regexp-in-string "  +" " " (string-trim clean-def))))
     ;; Store under original key
     (puthash term clean-def vocab-table)
     ;; If term is Wylie, also store under Tibetan
@@ -272,35 +449,77 @@ Supports formats:
   - TAB-separated: term<TAB>definition
   - Colon-separated: term: definition
   - Dash-separated: term - definition
+  - Indented: term on non-indented line, definition on indented line(s) below
 Returns hash-table with both Wylie and Tibetan keys."
   (let ((vocab-table (make-hash-table :test 'equal)))
     (when (and txt-path (file-exists-p txt-path))
       (with-temp-buffer
         (insert-file-contents txt-path)
         (goto-char (point-min))
-        (while (not (eobp))
-          (let ((line (buffer-substring-no-properties
-                       (line-beginning-position) (line-end-position))))
-            ;; Skip empty lines and comments
-            (unless (or (string-empty-p (string-trim line))
-                        (string-match-p "^[#;/]" line))
-              (let ((term nil) (def nil))
-                (cond
-                 ;; TAB-separated
-                 ((string-match "^\\([^\t]+\\)\t+\\(.+\\)$" line)
-                  (setq term (string-trim (match-string 1 line)))
-                  (setq def (string-trim (match-string 2 line))))
-                 ;; Colon-separated (but not URL patterns)
-                 ((string-match "^\\([^:]+\\):\\s-+\\(.+\\)$" line)
-                  (setq term (string-trim (match-string 1 line)))
-                  (setq def (string-trim (match-string 2 line))))
-                 ;; Dash-separated
-                 ((string-match "^\\([^ -]+\\)\\s-+-\\s-+\\(.+\\)$" line)
-                  (setq term (string-trim (match-string 1 line)))
-                  (setq def (string-trim (match-string 2 line)))))
-                (when (and term def (not (string-empty-p term)) (not (string-empty-p def)))
-                  (tibetan--store-vocab-entry vocab-table term def)))))
-          (forward-line 1))))
+        ;; Detect format: if file has indented lines, use block mode
+        (let ((has-indented-lines
+               (save-excursion
+                 (re-search-forward "^    " nil t))))
+          (if has-indented-lines
+              ;; Block mode: term on non-indented line, definition on indented lines
+              (let ((current-term nil)
+                    (current-def-parts nil))
+                (while (not (eobp))
+                  (let ((line (buffer-substring-no-properties
+                               (line-beginning-position) (line-end-position))))
+                    (cond
+                     ;; Skip empty lines and comments
+                     ((or (string-empty-p (string-trim line))
+                          (string-match-p "^[#;/]" line))
+                      ;; Save previous entry on blank line
+                      (when (and current-term current-def-parts)
+                        (tibetan--store-vocab-entry
+                         vocab-table current-term
+                         (mapconcat #'identity (nreverse current-def-parts) " "))
+                        (setq current-term nil current-def-parts nil)))
+                     ;; Indented line = definition continuation
+                     ((string-match "^\\s-+\\(.+\\)" line)
+                      (when current-term
+                        (push (string-trim line) current-def-parts)))
+                     ;; Non-indented line = new term
+                     (t
+                      ;; Save previous entry
+                      (when (and current-term current-def-parts)
+                        (tibetan--store-vocab-entry
+                         vocab-table current-term
+                         (mapconcat #'identity (nreverse current-def-parts) " ")))
+                      (setq current-term (string-trim line))
+                      (setq current-def-parts nil))))
+                  (forward-line 1))
+                ;; Save last entry
+                (when (and current-term current-def-parts)
+                  (tibetan--store-vocab-entry
+                   vocab-table current-term
+                   (mapconcat #'identity (nreverse current-def-parts) " "))))
+            ;; Single-line mode (original behavior)
+            (while (not (eobp))
+              (let ((line (buffer-substring-no-properties
+                           (line-beginning-position) (line-end-position))))
+                ;; Skip empty lines and comments
+                (unless (or (string-empty-p (string-trim line))
+                            (string-match-p "^[#;/]" line))
+                  (let ((term nil) (def nil))
+                    (cond
+                     ;; TAB-separated
+                     ((string-match "^\\([^\t]+\\)\t+\\(.+\\)$" line)
+                      (setq term (string-trim (match-string 1 line)))
+                      (setq def (string-trim (match-string 2 line))))
+                     ;; Colon-separated (but not URL patterns)
+                     ((string-match "^\\([^:]+\\):\\s-+\\(.+\\)$" line)
+                      (setq term (string-trim (match-string 1 line)))
+                      (setq def (string-trim (match-string 2 line))))
+                     ;; Dash-separated
+                     ((string-match "^\\([^ -]+\\)\\s-+-\\s-+\\(.+\\)$" line)
+                      (setq term (string-trim (match-string 1 line)))
+                      (setq def (string-trim (match-string 2 line)))))
+                    (when (and term def (not (string-empty-p term)) (not (string-empty-p def)))
+                      (tibetan--store-vocab-entry vocab-table term def)))))
+              (forward-line 1))))))
     vocab-table))
 
 (defun tibetan-parse-wordlist-org (org-path)
@@ -355,25 +574,36 @@ Priority: TXT > ORG > PDF (PDF requires pdftotext)."
                 (txt-files (directory-files res-dir t "\\(Wortliste\\|wordlist\\|Word.?list\\|vocab\\).*\\.txt$" t))
                 (org-files (directory-files res-dir t "\\(Wortliste\\|wordlist\\|Word.?list\\|vocab\\).*\\.org$" t))
                 (pdf-files (directory-files res-dir t "\\(Wortliste\\|wordlist\\|Word.?list\\).*\\.pdf$" t)))
-            ;; Load TXT files first (highest priority)
+            ;; Load TXT files first (highest priority).
             (dolist (txt txt-files)
               (message "Loading Resources vocabulary from %s..." (file-name-nondirectory txt))
               (let ((entries (tibetan-parse-wordlist-txt txt)))
                 (maphash (lambda (k v) (puthash k v vocab-table)) entries)))
-            ;; Load ORG files
+            ;; Load ORG files.
             (dolist (org org-files)
               (message "Loading Resources vocabulary from %s..." (file-name-nondirectory org))
               (let ((entries (tibetan-parse-wordlist-org org)))
                 (maphash (lambda (k v) (puthash k v vocab-table)) entries)))
-            ;; Load PDF files (requires pdftotext)
-            (dolist (pdf pdf-files)
-              (if (executable-find "pdftotext")
-                  (progn
-                    (message "Loading Resources vocabulary from %s..." (file-name-nondirectory pdf))
-                    (let ((entries (tibetan-parse-wordlist-pdf pdf)))
-                      (maphash (lambda (k v) (puthash k v vocab-table)) entries)))
-                (message "⚠ Cannot load %s - pdftotext not installed. Export to .txt or install poppler."
-                         (file-name-nondirectory pdf))))
+            ;; Load PDF files only if no TXT/ORG entries were loaded.
+            ;; The `pdftotext -layout' output for two-column Wortliste PDFs
+            ;; interleaves right-column continuation text into left-column
+            ;; entries, fusing neighbouring entries' glosses (e.g. ལྕགས་ཕོ
+            ;; ended up with gloss text from `bya yis' + `khas nyen bab').
+            ;; PDF output is therefore only trustworthy as a last resort.
+            (if (> (hash-table-count vocab-table) 0)
+                (when pdf-files
+                  (message
+                   "ℹ Skipping %d PDF wordlist file(s); TXT/ORG entries take precedence"
+                   (length pdf-files)))
+              (dolist (pdf pdf-files)
+                (if (executable-find "pdftotext")
+                    (progn
+                      (message "Loading Resources vocabulary from %s..."
+                               (file-name-nondirectory pdf))
+                      (let ((entries (tibetan-parse-wordlist-pdf pdf)))
+                        (maphash (lambda (k v) (puthash k v vocab-table)) entries)))
+                  (message "⚠ Cannot load %s - pdftotext not installed. Export to .txt or install poppler."
+                           (file-name-nondirectory pdf)))))
             (if (> (hash-table-count vocab-table) 0)
                 (progn
                   (puthash res-dir vocab-table tibetan-resources-vocab-cache)
@@ -424,7 +654,7 @@ Both Tibetan and Wylie keys are stored for lookup."
                 (when in-word-list
                   (cond
                    ;; Skip section headers like "(142.2–5)" or "The Brahmin's Dog"
-                   ((or (string-match "^([0-9]" line)
+                   ((or (string-match "^([0-9.].*)" line)
                         (string-match "^The " line)
                         (string-match "^Secondary Literature" line)
                         (string-match "^[0-9]+$" line)  ; page numbers
@@ -469,7 +699,7 @@ Both Tibetan and Wylie keys are stored for lookup."
                          (string-match "^\\s-+\\(.+\\)" line))
                     (setq current-def (concat current-def
                                              (if (string-empty-p current-def) "" " ")
-                                             (string-trim (match-string 1 line))))))))
+                                             (string-trim (match-string 1 line))))))))))
 
               ;; Save last entry
               (when (and current-term (not (string-empty-p current-def)))
@@ -478,7 +708,7 @@ Both Tibetan and Wylie keys are stored for lookup."
                   (when (fboundp 'tibetan-wylie-to-tibetan)
                     (let ((tib (ignore-errors (tibetan-wylie-to-tibetan current-term))))
                       (when (and tib (not (string-empty-p tib)))
-                        (puthash tib def vocab-table))))))))
+                        (puthash tib def vocab-table))))))
         (error
          (message "Warning: Could not parse vocab PDF %s: %s" pdf-path err))))
     vocab-table))
@@ -525,7 +755,10 @@ Returns meaning if found, nil otherwise."
 
 (defun tibetan-strip-particles (word)
   "Strip common particles and punctuation from WORD to find root form.
-Only strips unambiguous multi-character particles to avoid false positives."
+Only strips unambiguous multi-character particles to avoid false positives.
+Also trims any trailing tsheg (་) or whitespace so that stripped forms
+match the canonical (tsheg-free) keys used in the Resources and other
+dictionaries."
   (let ((root word))
     ;; First strip any Tibetan punctuation
     (setq root (replace-regexp-in-string "[།༎༏]" "" root))
@@ -544,7 +777,10 @@ Only strips unambiguous multi-character particles to avoid false positives."
       (dolist (particle particle-patterns)
         (when (string-suffix-p particle root)
           (setq root (tibetan-vocab-safe-substring root 0 (- (length root) (length particle)))))))
-    root))
+    ;; Strip trailing tsheg/whitespace left behind after particle removal
+    ;; (e.g. "ཕམ་ནས" → strip "ནས" → "ཕམ་" → trim to "ཕམ" so it matches
+    ;; Resources keys).
+    (replace-regexp-in-string "[་ \t]+$" "" root)))
 
 ;; ============================================================================
 ;; VOCABULARY LOOKUP
@@ -600,7 +836,8 @@ Returns meaning if found, nil otherwise."
 
 (defun tibetan-format-bilingual-meaning (english german)
   "Format ENGLISH and GERMAN meanings, English first, German in brackets.
-If only one is available, return that. If both, format as 'english (DE: german)'."
+If only one is available, return that. If both, format as
+\='english (DE: german)\='."
   (cond
    ((and english german
          (not (string= english german))
@@ -615,7 +852,7 @@ If only one is available, return that. If both, format as 'english (DE: german)'
 
 (defun tibetan-extract-english-from-bilingual (meaning)
   "Extract English part from a bilingual meaning string.
-Handles formats like 'German // English' or 'German (English)'."
+Handles formats like \='German // English\=' or \='German (English)\='."
   (when (and meaning (stringp meaning))
     (cond
      ;; Format: "German // English"
@@ -631,78 +868,55 @@ Handles formats like 'German // English' or 'German (English)'."
       meaning)
      (t meaning))))
 
+(defun tibetan--collect-bilingual (word &optional word-stripped)
+  "Collect English and German meanings for WORD from all sources.
+Respects `tibetan-dictionary-priority' for ordering.
+Returns (ENGLISH-MEANING . GERMAN-MEANING) cons cell."
+  (let ((priority (tibetan-get-buffer-dict-priority))
+        (stripped (or word-stripped (tibetan-strip-particles word)))
+        (english-meaning nil)
+        (german-meaning nil))
+    ;; English-primary sources: rangjung-yeshe, local-glossary, dharmamitra
+    ;; German-primary sources: resources, custom (format: German // English)
+    (dolist (source priority)
+      (let ((result (tibetan--lookup-in-source source word stripped)))
+        (when result
+          (if (memq source '(resources custom))
+              ;; German-primary: may contain "German // English"
+              (unless german-meaning
+                (if (string-match-p "//" result)
+                    (let ((parts (split-string result "//" t)))
+                      (setq german-meaning (string-trim (car parts)))
+                      (when (and (>= (length parts) 2) (not english-meaning))
+                        (setq english-meaning (string-trim (cadr parts)))))
+                  (setq german-meaning result)))
+            ;; English-primary
+            (unless english-meaning
+              (setq english-meaning result))))))
+    (cons english-meaning german-meaning)))
+
 (defun tibetan-lookup-word (word &optional prev-word)
   "Look up WORD with optional PREV-WORD for compound detection.
-Returns meaning with English first, German in brackets if available.
-Priority: Rangjung Yeshe (English) > Resources (German) > others."
+Returns meaning with bilingual merge (English + German).
+Dictionary priority is controlled by `tibetan-dictionary-priority'
+and can be overridden per-buffer with #+TIBETAN_DICT_PRIORITY."
   (let ((meaning nil))
     ;; Try compound if prev-word provided
     (when prev-word
       (let* ((compound (concat prev-word "་" word))
              (compound-stripped (concat (tibetan-strip-particles prev-word) "་"
                                        (tibetan-strip-particles word)))
-             (english-meaning nil)
-             (german-meaning nil))
-        ;; Get English from Rangjung Yeshe/local glossary
-        (setq english-meaning (or (tibetan-lookup-word-in-rangjung-yeshe compound)
-                                  (tibetan-lookup-word-in-rangjung-yeshe compound-stripped)
-                                  (tibetan-lookup-word-in-local-glossary compound)
-                                  (tibetan-lookup-word-in-local-glossary compound-stripped)))
-        ;; Get German from Resources/custom
-        (setq german-meaning (or (tibetan-lookup-word-in-resources-vocab compound)
-                                 (tibetan-lookup-word-in-resources-vocab compound-stripped)
-                                 (tibetan-lookup-word-in-custom-vocab compound)
-                                 (tibetan-lookup-word-in-custom-vocab compound-stripped)))
-        ;; Handle "German // English" format
-        (when (and german-meaning (string-match-p "//" german-meaning))
-          (let ((parts (split-string german-meaning "//" t)))
-            (when (>= (length parts) 2)
-              (setq german-meaning (string-trim (car parts)))
-              (unless english-meaning
-                (setq english-meaning (string-trim (cadr parts)))))))
-        ;; Merge bilingual
+             (bilingual (tibetan--collect-bilingual compound compound-stripped)))
         (setq meaning (tibetan-format-bilingual-meaning
-                       (tibetan-extract-english-from-bilingual english-meaning)
-                       german-meaning))
-        ;; Fallback to DharmaMitra
-        (unless meaning
-          (setq meaning (tibetan-lookup-word-in-dharmamitra compound)))))
+                       (tibetan-extract-english-from-bilingual (car bilingual))
+                       (cdr bilingual)))))
 
     ;; Try single word if compound not found
     (unless meaning
-      ;; Strategy: Get English from Rangjung Yeshe, German from Resources, merge
-      (let ((english-meaning nil)
-            (german-meaning nil)
-            (word-stripped (tibetan-strip-particles word)))
-
-        ;; 1. Get English meaning (Rangjung Yeshe is primarily English)
-        (setq english-meaning (or (tibetan-lookup-word-in-rangjung-yeshe word)
-                                  (tibetan-lookup-word-in-rangjung-yeshe word-stripped)
-                                  (tibetan-lookup-word-in-local-glossary word)
-                                  (tibetan-lookup-word-in-local-glossary word-stripped)))
-
-        ;; 2. Get German meaning from Resources/Custom vocab
-        (setq german-meaning (or (tibetan-lookup-word-in-resources-vocab word)
-                                 (tibetan-lookup-word-in-resources-vocab word-stripped)
-                                 (tibetan-lookup-word-in-custom-vocab word)
-                                 (tibetan-lookup-word-in-custom-vocab word-stripped)))
-
-        ;; 3. If German has "// English" format, extract both parts
-        (when (and german-meaning (string-match-p "//" german-meaning))
-          (let ((parts (split-string german-meaning "//" t)))
-            (when (>= (length parts) 2)
-              (setq german-meaning (string-trim (car parts)))
-              (unless english-meaning
-                (setq english-meaning (string-trim (cadr parts)))))))
-
-        ;; 4. Merge: English first, German in brackets
+      (let* ((bilingual (tibetan--collect-bilingual word)))
         (setq meaning (tibetan-format-bilingual-meaning
-                       (tibetan-extract-english-from-bilingual english-meaning)
-                       german-meaning))
-
-        ;; 5. Fallback to DharmaMitra if nothing found
-        (unless meaning
-          (setq meaning (tibetan-lookup-word-in-dharmamitra word)))))
+                       (tibetan-extract-english-from-bilingual (car bilingual))
+                       (cdr bilingual)))))
 
     meaning))
 
@@ -737,18 +951,12 @@ Handles: verb་ཅིང་, verb་སྟེ་, verb་བར་, verb་བ�
         (cond
          ;; Check if syl2 is a converb particle
          ((member syl2 tibetan-converb-particles)
-          (let ((base-meaning (or (tibetan-lookup-word-in-rangjung-yeshe syl1)
-                                  (tibetan-lookup-word-in-local-glossary syl1)
-                                  (tibetan-lookup-word-in-resources-vocab syl1)
-                                  (tibetan-lookup-word-in-custom-vocab syl1))))
+          (let ((base-meaning (tibetan-lookup-word syl1)))
             (when base-meaning
               (list combined syl1 syl2 base-meaning))))
          ;; Check if syl2 is a nominalized suffix
          ((member syl2 tibetan-nominalized-suffixes)
-          (let ((base-meaning (or (tibetan-lookup-word-in-rangjung-yeshe syl1)
-                                  (tibetan-lookup-word-in-local-glossary syl1)
-                                  (tibetan-lookup-word-in-resources-vocab syl1)
-                                  (tibetan-lookup-word-in-custom-vocab syl1))))
+          (let ((base-meaning (tibetan-lookup-word syl1)))
             (when base-meaning
               (list combined syl1 syl2 base-meaning)))))))))
 
@@ -759,9 +967,12 @@ Handles: verb་ཅིང་, verb་སྟེ་, verb་བར་, verb་བ�
 (defun tibetan-extract-vocabulary (tibetan-text)
   "Extract vocabulary from TIBETAN-TEXT with meanings.
 Returns list of (word . meaning) pairs.
-Uses greedy matching: tries longer compounds first (4, 3, 2 syllables) before single.
-Handles compound detection and particle stripping automatically.
-Priority: Resources > Custom > Local glossary > Rangjung Yeshe > DharmaMitra."
+Uses greedy matching: tries longer compounds first (4, 3, 2 syllables)
+before single.  Handles compound detection and particle stripping
+automatically.  Dictionary priority is controlled by
+`tibetan-dictionary-priority' (default: Resources > Custom >
+Rangjung Yeshe > Local glossary > DharmaMitra) and can be
+overridden per-buffer with #+TIBETAN_DICT_PRIORITY."
   (when tibetan-text
     ;; Load vocabularies
     (tibetan-load-resources-vocab)
@@ -774,7 +985,7 @@ Priority: Resources > Custom > Local glossary > Rangjung Yeshe > DharmaMitra."
            (i 0))
       (while (< i num-words)
         (let* ((word (string-trim (nth i words)))
-               (word-stripped (tibetan-strip-particles word))
+               (_word-stripped (tibetan-strip-particles word))
                (found nil)
                (matched-len 1))
 
@@ -786,7 +997,7 @@ Priority: Resources > Custom > Local glossary > Rangjung Yeshe > DharmaMitra."
             (let ((verb-pattern (tibetan-detect-verb-with-suffix words i)))
               (when verb-pattern
                 (let* ((combined (nth 0 verb-pattern))
-                       (base-verb (nth 1 verb-pattern))
+                       (_base-verb (nth 1 verb-pattern))
                        (suffix (nth 2 verb-pattern))
                        (base-meaning (nth 3 verb-pattern))
                        ;; Build meaning description based on suffix type
@@ -864,6 +1075,7 @@ Set `tibetan-skip-external-glossaries' to non-nil to skip loading."
           (when (file-exists-p external-glossary)
             (load-file external-glossary)))))))
 
+;;;###autoload
 (defun reload-all-glossaries ()
   "Reload all glossaries including bundled and external sources."
   (interactive)
@@ -927,10 +1139,10 @@ Returns just the core translation without lengthy explanations."
 TIBETAN-WORD is the Tibetan text.
 FULL-MEANING is the full dictionary meaning.
 FORMAT-TYPE controls output style:
-  nil or 'compact  - Short one-line format: Tibetan *wylie* — short-meaning
-  'org-compact     - Org format with short meaning (for vocab section)
-  'org-detailed    - Org format with full meaning (for detailed section)
-  'full            - Plain text with full meaning (for classroom detailed)
+  nil or \='compact\=  - Short one-line format: Tibetan *wylie* — short-meaning
+  \='org-compact\=     - Org format with short meaning (for vocab section)
+  \='org-detailed\=    - Org format with full meaning (for detailed section)
+  \='full\=            - Plain text with full meaning (for classroom detailed)
 Returns formatted string."
   (let* ((wylie (condition-case nil
                     (when (fboundp 'tibetan-to-wylie-fixed)
