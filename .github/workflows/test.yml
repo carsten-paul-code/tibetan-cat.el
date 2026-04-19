@@ -1,0 +1,55 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        emacs-version: ['27.1', '28.2', '29.4']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Emacs
+        uses: purcell/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs-version }}
+
+      - name: Show Emacs version
+        run: emacs --version
+
+      - name: Byte-compile
+        run: make compile
+
+      - name: Run BDD specs
+        run: make test
+
+      - name: Run ERT tests
+        run: make test-quick
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Emacs
+        uses: purcell/setup-emacs@master
+        with:
+          version: '29.4'
+
+      - name: Check for byte-compile warnings
+        run: |
+          emacs --batch \
+            -L . -L core -L analysis -L workspace \
+            -L philology -L persist -L config -L data \
+            --eval "(setq byte-compile-error-on-warn t)" \
+            -f batch-byte-compile \
+            tibetan-cat.el \
+            core/*.el analysis/*.el workspace/*.el \
+            philology/*.el persist/*.el config/*.el data/*.el

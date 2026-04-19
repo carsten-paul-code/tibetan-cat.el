@@ -24,6 +24,12 @@
 # Test artifacts
 /test-output/
 /coverage/
+quality-report.txt
+
+# Generated documentation
+docs/living-documentation.html
+docs/test-documentation.html
+docs/function-overview.html
 
 # IDE
 .idea/
@@ -35,3 +41,19 @@ tmp/
 temp/
 *.tmp
 *.log
+
+# Steinert SQLite dictionary — built locally via `make build-steinert`
+# from steinert-src/. Too large (~220 MB) for the repo; distributed
+# separately.
+/steinert-src/
+/data/dictionaries/steinert.db
+/data/dictionaries/steinert.db-journal
+/data/dictionaries/steinert.db-wal
+/data/dictionaries/steinert.db-shm
+
+# User-curated reference materials — local-only for now.
+# A shareable merged dictionary directory will be added later.
+/Resources/
+
+# Workshop presentation materials (kept local)
+/docs/*.pptx
