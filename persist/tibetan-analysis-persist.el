@@ -1417,17 +1417,17 @@ affected, not the rest of the analysis."
                             (tibetan-extract-verbs-compound-aware tibetan-text words multiword-units))
                         (error nil)))
                (_zero-analysis (condition-case nil
-                                  (when (and verbs multiword-units (fboundp 'tibetan-analyze-zero-markers))
-                                    (tibetan-analyze-zero-markers verbs multiword-units words))
-                                (error nil)))
+                                   (when (and verbs multiword-units (fboundp 'tibetan-analyze-zero-markers))
+                                     (tibetan-analyze-zero-markers verbs multiword-units words))
+                                 (error nil)))
                (translation (condition-case nil
                                 (when (fboundp 'tibetan-get-dharmamitra-translation)
                                   (tibetan-get-dharmamitra-translation tibetan-text))
                               (error nil)))
                (_claimed-indices (condition-case nil
-                                    (when (fboundp 'tibetan-get-claimed-indices)
-                                      (tibetan-get-claimed-indices multiword-units))
-                                  (error nil)))
+                                     (when (fboundp 'tibetan-get-claimed-indices)
+                                       (tibetan-get-claimed-indices multiword-units))
+                                   (error nil)))
                (particles (when analysis (alist-get 'particles analysis)))
                ;; Build verb lookup table
                (verb-table (make-hash-table :test 'equal))
@@ -1447,654 +1447,654 @@ affected, not the rest of the analysis."
 
           ;; Build verb lookup for quick access
           (dolist (verb verbs)
-      (when (and verb (listp verb) (consp (car verb)))
-        (let ((lemma (alist-get 'lemma verb)))
-          (when lemma
-            (puthash lemma verb verb-table)))))
+            (when (and verb (listp verb) (consp (car verb)))
+              (let ((lemma (alist-get 'lemma verb)))
+                (when lemma
+                  (puthash lemma verb verb-table)))))
 
-    (with-temp-buffer
-      ;; ============================================================
-      ;; SECTION 1: Wylie Transliteration
-      ;; Reading the sequence first.
-      ;; ============================================================
-      (insert "** Wylie Transliteration\n")
-      (insert (or wylie-full "[Not available]"))
-      (insert "\n\n")
+          (with-temp-buffer
+            ;; ============================================================
+            ;; SECTION 1: Wylie Transliteration
+            ;; Reading the sequence first.
+            ;; ============================================================
+            (insert "** Wylie Transliteration\n")
+            (insert (or wylie-full "[Not available]"))
+            (insert "\n\n")
 
-      ;; ============================================================
-      ;; SECTION 1a: Interlinear Gloss + Particle Overview
-      ;; Mark position — content inserted after the Word/Particle List
-      ;; loop has built enriched-vocab-pairs and bialek-analysis.
-      ;; ============================================================
-      (setq interlinear-marker (copy-marker (point)))
+            ;; ============================================================
+            ;; SECTION 1a: Interlinear Gloss + Particle Overview
+            ;; Mark position — content inserted after the Word/Particle List
+            ;; loop has built enriched-vocab-pairs and bialek-analysis.
+            ;; ============================================================
+            (setq interlinear-marker (copy-marker (point)))
 
-      ;; ============================================================
-      ;; SECTION 1b: Claude Translation (promoted to level 2)
-      ;; Kept at the top so students see the fluent English rendering
-      ;; right after the Wylie reading — before the word-by-word lists.
-      ;; Populated asynchronously by `tibetan-analysis--insert-claude-sections'.
-      ;; ============================================================
-      (insert "** Claude Translation\n")
-      (insert "[Requesting translation...]\n\n")
+            ;; ============================================================
+            ;; SECTION 1b: Claude Translation (promoted to level 2)
+            ;; Kept at the top so students see the fluent English rendering
+            ;; right after the Wylie reading — before the word-by-word lists.
+            ;; Populated asynchronously by `tibetan-analysis--insert-claude-sections'.
+            ;; ============================================================
+            (insert "** Claude Translation\n")
+            (insert "[Requesting translation...]\n\n")
 
-      ;; ============================================================
-      ;; SECTION 2: Word / Particle List
-      ;; Compact, numbered list for word-by-word reading in class.
-      ;; Format:  N. Tibetan  wylie  [tag]  — short gloss [★ if Resources]
-      ;; Glosses are pulled from the same layered lookup the Detailed
-      ;; Dictionary uses (Resources → Custom → Bundled → Rangjung Yeshe
-      ;; → DharmaMitra), so short glosses match the dictionary entries
-      ;; below.  Falls back to vocab-pairs meaning if lookup misses.
-      ;; Tag is shown only when informative (particle category, verb).
-      ;; ============================================================
-      (insert "** Word / Particle List\n")
-      (if vocab-pairs
-          (let ((idx 1))
-            (dolist (pair vocab-pairs)
-              (let* ((word (car pair))
-                     (fallback-meaning (cdr pair))
-                     ;; Strip shad/punctuation before lookup so ལ། → ལ,
-                     ;; otherwise dictionary lookup misses and we fall
-                     ;; through to noisy partial matches.
-                     (word-clean (replace-regexp-in-string
-                                  "[།༎༏༐༑ ]+$" ""
-                                  (string-trim word)))
-                     (root-form (tibetan-strip-particles word-clean))
-                     (gram-role (tibetan-analysis--get-grammatical-role
-                                 word-clean root-form verb-table))
-                     (tag (cond
-                           ((null gram-role) nil)
-                           ((member gram-role
-                                    '("Noun" "?" "Unknown" "N")) nil)
-                           (t gram-role)))
-                     ;; Primary lookup: route through the SAME multi-source
-                     ;; pipeline that the Detailed Dictionary section uses,
-                     ;; taking the first entry.  This is the Resources-first
-                     ;; priority chain — without it, the Word/Particle List
-                     ;; would silently pick a Steinert/IvesWaldo gloss while
-                     ;; the Detailed Dictionary correctly shows the curated
-                     ;; Resources entry, leaving the two sections out of
-                     ;; lock-step.  Falls back to the stripped root form
-                     ;; (e.g. སླེབ་པའི → སླེབ་པ).
-                     (detailed-entry
-                      (condition-case nil
-                          (when (fboundp 'tibetan-vocab-multisource-entries)
-                            (or (car (tibetan-vocab-multisource-entries
-                                      word-clean))
-                                (and root-form
-                                     (not (string-empty-p root-form))
-                                     (not (string= root-form word-clean))
-                                     (car (tibetan-vocab-multisource-entries
-                                           root-form)))))
-                        (error nil)))
-                     ;; Multi-source labels Resources as "Resources (provided)";
-                     ;; downstream checks need to recognise both that and the
-                     ;; bare "Resources" / "Custom" labels older paths produced.
-                     (source (and detailed-entry
-                                  (plist-get detailed-entry :source)))
-                     (curated-source-p
-                      (and source
-                           (or (string-prefix-p "Resources" source)
-                               (string-prefix-p "Custom" source))))
-                     ;; Resources/Custom entries are hand-curated and
-                     ;; compact (German // English format), so use the
-                     ;; full :detailed field — :primary is cut off at the
-                     ;; first comma/period, which mangles German syn-lists
-                     ;; and abbreviations like "Pf.".  For larger
-                     ;; dictionaries (RY, DharmaMitra, Bundled), :primary
-                     ;; is the appropriate short sense.
-                     (clean-meaning
-                      (when detailed-entry
-                        (if curated-source-p
-                            (or (plist-get detailed-entry :detailed)
-                                (plist-get detailed-entry :primary))
-                          (or (plist-get detailed-entry :primary)
-                              (plist-get detailed-entry :detailed)))))
-                     ;; Fall back to the raw vocab-pairs meaning.
-                     (raw-meaning (or clean-meaning
-                                      (when (and fallback-meaning
-                                                 (not (string= fallback-meaning
-                                                               "[look up]"))
-                                                 (not (string= fallback-meaning
-                                                               "[not found]")))
-                                        fallback-meaning)))
-                     ;; Tidy the gloss without over-truncating.
-                     (short-meaning
-                      (when raw-meaning
-                        (let ((m (string-trim raw-meaning)))
-                          ;; Strip leading numbering like "1) " or "1. "
-                          (setq m (replace-regexp-in-string
-                                   "^[0-9]+[.):]\\s-*" "" m))
-                          ;; For non-curated dictionaries, keep only the
-                          ;; first sense (before ';' — proper sense
-                          ;; separator).  Curated Resources entries are
-                          ;; already compact, so leave intact.
-                          (unless curated-source-p
-                            (setq m (string-trim
-                                     (car (split-string m ";" t)))))
-                          ;; Truncate only non-curated sources.  Resources
-                          ;; and Custom entries are hand-written compact
-                          ;; glosses — cutting them loses the critical
-                          ;; "im Spiel einsetzen" / "to stake" sense.
-                          (setq m (if (and (not curated-source-p)
-                                           (> (length m) 90))
-                                      (concat (substring m 0 87) "…")
-                                    m))
-                          ;; Strip trailing Wylie cross-reference compounds
-                          ;; that some user wordlists bake into the gloss
-                          ;; (e.g. "dice kha phung la thong" → "dice").
-                          (tibetan-analysis--strip-wylie-tail m))))
-                     ;; Safety-net enrichment: if the gloss at this point
-                     ;; is still a bare stem reference (e.g. "pf. of byed"),
-                     ;; chase the base verb and append its meaning.  This
-                     ;; catches cases where the text came through the
-                     ;; vocab-pairs fallback path or any other route that
-                     ;; bypassed `tibetan-vocab-lookup-detailed'-level
-                     ;; enrichment. Skip if already enriched (em dash
-                     ;; present after the reference).
-                     (short-meaning
-                      (if (and short-meaning
-                               (fboundp 'tibetan-vocab--extract-stem-reference)
-                               (fboundp 'tibetan-vocab--lookup-base-meaning)
-                               (not (string-match-p " — " short-meaning)))
-                          (let ((stem-base
-                                 (tibetan-vocab--extract-stem-reference
-                                  short-meaning)))
-                            (if stem-base
-                                (let ((base-m
-                                       (tibetan-vocab--lookup-base-meaning
-                                        stem-base)))
-                                  (if (and base-m
-                                           (not (string-empty-p base-m))
-                                           (not (tibetan-vocab--extract-stem-reference
-                                                 base-m)))
-                                      (format "%s — %s"
-                                              short-meaning
-                                              ;; Trim base gloss at first
-                                              ;; semicolon to keep it short.
-                                              (string-trim
-                                               (car (split-string base-m ";" t))))
+            ;; ============================================================
+            ;; SECTION 2: Word / Particle List
+            ;; Compact, numbered list for word-by-word reading in class.
+            ;; Format:  N. Tibetan  wylie  [tag]  — short gloss [★ if Resources]
+            ;; Glosses are pulled from the same layered lookup the Detailed
+            ;; Dictionary uses (Resources → Custom → Bundled → Rangjung Yeshe
+            ;; → DharmaMitra), so short glosses match the dictionary entries
+            ;; below.  Falls back to vocab-pairs meaning if lookup misses.
+            ;; Tag is shown only when informative (particle category, verb).
+            ;; ============================================================
+            (insert "** Word / Particle List\n")
+            (if vocab-pairs
+                (let ((idx 1))
+                  (dolist (pair vocab-pairs)
+                    (let* ((word (car pair))
+                           (fallback-meaning (cdr pair))
+                           ;; Strip shad/punctuation before lookup so ལ། → ལ,
+                           ;; otherwise dictionary lookup misses and we fall
+                           ;; through to noisy partial matches.
+                           (word-clean (replace-regexp-in-string
+                                        "[།༎༏༐༑ ]+$" ""
+                                        (string-trim word)))
+                           (root-form (tibetan-strip-particles word-clean))
+                           (gram-role (tibetan-analysis--get-grammatical-role
+                                       word-clean root-form verb-table))
+                           (tag (cond
+                                 ((null gram-role) nil)
+                                 ((member gram-role
+                                          '("Noun" "?" "Unknown" "N")) nil)
+                                 (t gram-role)))
+                           ;; Primary lookup: route through the SAME multi-source
+                           ;; pipeline that the Detailed Dictionary section uses,
+                           ;; taking the first entry.  This is the Resources-first
+                           ;; priority chain — without it, the Word/Particle List
+                           ;; would silently pick a Steinert/IvesWaldo gloss while
+                           ;; the Detailed Dictionary correctly shows the curated
+                           ;; Resources entry, leaving the two sections out of
+                           ;; lock-step.  Falls back to the stripped root form
+                           ;; (e.g. སླེབ་པའི → སླེབ་པ).
+                           (detailed-entry
+                            (condition-case nil
+                                (when (fboundp 'tibetan-vocab-multisource-entries)
+                                  (or (car (tibetan-vocab-multisource-entries
+                                            word-clean))
+                                      (and root-form
+                                           (not (string-empty-p root-form))
+                                           (not (string= root-form word-clean))
+                                           (car (tibetan-vocab-multisource-entries
+                                                 root-form)))))
+                              (error nil)))
+                           ;; Multi-source labels Resources as "Resources (provided)";
+                           ;; downstream checks need to recognise both that and the
+                           ;; bare "Resources" / "Custom" labels older paths produced.
+                           (source (and detailed-entry
+                                        (plist-get detailed-entry :source)))
+                           (curated-source-p
+                            (and source
+                                 (or (string-prefix-p "Resources" source)
+                                     (string-prefix-p "Custom" source))))
+                           ;; Resources/Custom entries are hand-curated and
+                           ;; compact (German // English format), so use the
+                           ;; full :detailed field — :primary is cut off at the
+                           ;; first comma/period, which mangles German syn-lists
+                           ;; and abbreviations like "Pf.".  For larger
+                           ;; dictionaries (RY, DharmaMitra, Bundled), :primary
+                           ;; is the appropriate short sense.
+                           (clean-meaning
+                            (when detailed-entry
+                              (if curated-source-p
+                                  (or (plist-get detailed-entry :detailed)
+                                      (plist-get detailed-entry :primary))
+                                (or (plist-get detailed-entry :primary)
+                                    (plist-get detailed-entry :detailed)))))
+                           ;; Fall back to the raw vocab-pairs meaning.
+                           (raw-meaning (or clean-meaning
+                                            (when (and fallback-meaning
+                                                       (not (string= fallback-meaning
+                                                                     "[look up]"))
+                                                       (not (string= fallback-meaning
+                                                                     "[not found]")))
+                                              fallback-meaning)))
+                           ;; Tidy the gloss without over-truncating.
+                           (short-meaning
+                            (when raw-meaning
+                              (let ((m (string-trim raw-meaning)))
+                                ;; Strip leading numbering like "1) " or "1. "
+                                (setq m (replace-regexp-in-string
+                                         "^[0-9]+[.):]\\s-*" "" m))
+                                ;; For non-curated dictionaries, keep only the
+                                ;; first sense (before ';' — proper sense
+                                ;; separator).  Curated Resources entries are
+                                ;; already compact, so leave intact.
+                                (unless curated-source-p
+                                  (setq m (string-trim
+                                           (car (split-string m ";" t)))))
+                                ;; Truncate only non-curated sources.  Resources
+                                ;; and Custom entries are hand-written compact
+                                ;; glosses — cutting them loses the critical
+                                ;; "im Spiel einsetzen" / "to stake" sense.
+                                (setq m (if (and (not curated-source-p)
+                                                 (> (length m) 90))
+                                            (concat (substring m 0 87) "…")
+                                          m))
+                                ;; Strip trailing Wylie cross-reference compounds
+                                ;; that some user wordlists bake into the gloss
+                                ;; (e.g. "dice kha phung la thong" → "dice").
+                                (tibetan-analysis--strip-wylie-tail m))))
+                           ;; Safety-net enrichment: if the gloss at this point
+                           ;; is still a bare stem reference (e.g. "pf. of byed"),
+                           ;; chase the base verb and append its meaning.  This
+                           ;; catches cases where the text came through the
+                           ;; vocab-pairs fallback path or any other route that
+                           ;; bypassed `tibetan-vocab-lookup-detailed'-level
+                           ;; enrichment. Skip if already enriched (em dash
+                           ;; present after the reference).
+                           (short-meaning
+                            (if (and short-meaning
+                                     (fboundp 'tibetan-vocab--extract-stem-reference)
+                                     (fboundp 'tibetan-vocab--lookup-base-meaning)
+                                     (not (string-match-p " — " short-meaning)))
+                                (let ((stem-base
+                                       (tibetan-vocab--extract-stem-reference
+                                        short-meaning)))
+                                  (if stem-base
+                                      (let ((base-m
+                                             (tibetan-vocab--lookup-base-meaning
+                                              stem-base)))
+                                        (if (and base-m
+                                                 (not (string-empty-p base-m))
+                                                 (not (tibetan-vocab--extract-stem-reference
+                                                       base-m)))
+                                            (format "%s — %s"
+                                                    short-meaning
+                                                    ;; Trim base gloss at first
+                                                    ;; semicolon to keep it short.
+                                                    (string-trim
+                                                     (car (split-string base-m ";" t))))
+                                          short-meaning))
                                     short-meaning))
                               short-meaning))
-                        short-meaning))
-                     ;; Verb-morphology enrichment: when the stripped
-                     ;; root is a verb in the Hill 2010 DB and the
-                     ;; current gloss is either missing, unhelpful
-                     ;; (e.g. RY "verb: do"), or short/non-curated,
-                     ;; swap in a morphology-aware gloss built from
-                     ;; the lemma and its stem class.  Resources and
-                     ;; Custom entries are hand-curated and always win;
-                     ;; we only augment if they don't already reference
-                     ;; the verb lemma explicitly.
-                     (verb-gloss
-                      (tibetan-analysis--verb-morphology-gloss root-form))
-                     (short-meaning
-                      (cond
-                       ;; No verb info → keep whatever we had.
-                       ((null verb-gloss) short-meaning)
-                       ;; No gloss at all yet → use verb gloss.
-                       ((or (null short-meaning)
-                            (string-empty-p short-meaning))
-                        verb-gloss)
-                       ;; Curated Resources/Custom entry: don't replace
-                       ;; the human-written bilingual gloss.
-                       (curated-source-p
-                        short-meaning)
-                       ;; Current gloss already contains a stem
-                       ;; reference ("pf. of X — ...") from the
-                       ;; previous enrichment pass.  Leave it.
-                       ((and (fboundp 'tibetan-vocab--extract-stem-reference)
-                             (tibetan-vocab--extract-stem-reference
-                              short-meaning))
-                        short-meaning)
-                       ;; Current gloss already echoes the Hill meaning.
-                       ;; Look at the first *content* word (≥4 chars,
-                       ;; not a function word) so "to" doesn't cause
-                       ;; false matches between e.g. "to arrive" and
-                       ;; "to extend to".
-                       ((let* ((case-fold-search t)
-                               (words (split-string verb-gloss
-                                                    "[ ,;—.]+" t))
-                               (distinctive
-                                (car (seq-filter
-                                      (lambda (w)
-                                        (and (>= (length w) 4)
-                                             (not (member (downcase w)
-                                                          '("the" "verb"
-                                                            "noun")))))
-                                      words))))
-                          (and distinctive
-                               (string-match-p
-                                (regexp-quote distinctive)
-                                short-meaning)))
-                        short-meaning)
-                       ;; Otherwise, replace the non-curated gloss
-                       ;; (typically RY's "verb: do"/"a loss") with
-                       ;; the Hill-based morphology gloss.
-                       (t verb-gloss))))
-                ;; Display the punctuation-stripped form so ལ། renders
-                ;; as ལ [la], not as ལ། [la/].  `word-clean' already has
-                ;; trailing shad / punctuation removed higher up.
-                ;;
-                ;; DharmaMitra-style format:
-                ;;   N. Tibetan [wylie] ([[steinert-url][Steinert]])  [tag]
-                ;;      ★/◇ gloss
-                ;; The Steinert URL links to the web dictionary for the
-                ;; stripped root form (particles don't have useful entries).
-                (let* ((wylie-key
-                        (condition-case nil
-                            (when (fboundp 'tibetan-to-wylie-fixed)
-                              (downcase
-                               (string-trim
-                                (tibetan-to-wylie-fixed word-clean))))
-                          (error nil)))
-                       (steinert-link
-                        (when (and wylie-key
-                                   (fboundp 'tibetan-steinert-url-org)
-                                   ;; Skip Steinert links for pure
-                                   ;; particles / grammatical affixes.
-                                   (not (member tag
-                                                '("GENITIVE (GEN)"
-                                                  "CONVERBIAL: ABLATIVE CONVERB"
-                                                  "CONVERBIAL: SIMULTANEOUS CONVERB"
-                                                  "CONVERBIAL: CONCESSIVE CONVERB"
-                                                  "CONVERBIAL: CONDITIONAL CONVERB"))))
-                          (tibetan-steinert-url-org wylie-key))))
-                  (insert (format "%2d. %s" idx
-                                  (tibetan-analysis--format-word-with-wylie
-                                   word-clean)))
-                  (when steinert-link
-                    (insert (format " (%s)" steinert-link)))
-                  (when tag
-                    (insert (format "  [%s]" tag)))
-                  (when (and short-meaning (not (string-empty-p short-meaning)))
-                    ;; Put translation(s) on an indented continuation line
-                    ;; for every entry so they're visually easy to spot.
-                    ;; Stem-reference entries ("Pf. von X; DE // EN") keep
-                    ;; the stem ref on line 1 after " — " and move the
-                    ;; bilingual translation to an indented line 2.
-                    (let ((display-meaning
-                           (tibetan-analysis--format-bilingual-gloss
-                            short-meaning)))
-                      (if (string-match-p "\n" display-meaning)
-                          ;; Multi-line (stem-ref split): first chunk on
-                          ;; same line after " — ", rest indented.
-                          (let* ((lines (split-string display-meaning "\n"))
-                                 (first (car lines))
-                                 (rest (cdr lines)))
-                            (insert (format "  — %s" first))
-                            (dolist (ln rest)
-                              (insert (format "\n    %s" ln))))
-                        ;; Single-line gloss: move to its own indented
-                        ;; line for consistency with stem-ref entries.
-                        (insert (format "\n    — %s" display-meaning)))))
-                  (when (and source (string-prefix-p "Resources" source))
-                    (insert " ★"))
-                  (insert "\n"))
-                ;; Record the enriched gloss for reuse by the CAT Gloss
-                ;; section.  We store the ORIGINAL surface word (with
-                ;; particles still attached) so the CAT renderer can
-                ;; pattern-match on converb/case endings.
-                (push (cons word-clean short-meaning)
-                      enriched-vocab-pairs)
-                (setq idx (1+ idx)))))
-        (insert "[Word list extraction not available]\n"))
-      (setq enriched-vocab-pairs (nreverse enriched-vocab-pairs))
-      (insert "\n")
+                           ;; Verb-morphology enrichment: when the stripped
+                           ;; root is a verb in the Hill 2010 DB and the
+                           ;; current gloss is either missing, unhelpful
+                           ;; (e.g. RY "verb: do"), or short/non-curated,
+                           ;; swap in a morphology-aware gloss built from
+                           ;; the lemma and its stem class.  Resources and
+                           ;; Custom entries are hand-curated and always win;
+                           ;; we only augment if they don't already reference
+                           ;; the verb lemma explicitly.
+                           (verb-gloss
+                            (tibetan-analysis--verb-morphology-gloss root-form))
+                           (short-meaning
+                            (cond
+                             ;; No verb info → keep whatever we had.
+                             ((null verb-gloss) short-meaning)
+                             ;; No gloss at all yet → use verb gloss.
+                             ((or (null short-meaning)
+                                  (string-empty-p short-meaning))
+                              verb-gloss)
+                             ;; Curated Resources/Custom entry: don't replace
+                             ;; the human-written bilingual gloss.
+                             (curated-source-p
+                              short-meaning)
+                             ;; Current gloss already contains a stem
+                             ;; reference ("pf. of X — ...") from the
+                             ;; previous enrichment pass.  Leave it.
+                             ((and (fboundp 'tibetan-vocab--extract-stem-reference)
+                                   (tibetan-vocab--extract-stem-reference
+                                    short-meaning))
+                              short-meaning)
+                             ;; Current gloss already echoes the Hill meaning.
+                             ;; Look at the first *content* word (≥4 chars,
+                             ;; not a function word) so "to" doesn't cause
+                             ;; false matches between e.g. "to arrive" and
+                             ;; "to extend to".
+                             ((let* ((case-fold-search t)
+                                     (words (split-string verb-gloss
+                                                          "[ ,;—.]+" t))
+                                     (distinctive
+                                      (car (seq-filter
+                                            (lambda (w)
+                                              (and (>= (length w) 4)
+                                                   (not (member (downcase w)
+                                                                '("the" "verb"
+                                                                  "noun")))))
+                                            words))))
+                                (and distinctive
+                                     (string-match-p
+                                      (regexp-quote distinctive)
+                                      short-meaning)))
+                              short-meaning)
+                             ;; Otherwise, replace the non-curated gloss
+                             ;; (typically RY's "verb: do"/"a loss") with
+                             ;; the Hill-based morphology gloss.
+                             (t verb-gloss))))
+                      ;; Display the punctuation-stripped form so ལ། renders
+                      ;; as ལ [la], not as ལ། [la/].  `word-clean' already has
+                      ;; trailing shad / punctuation removed higher up.
+                      ;;
+                      ;; DharmaMitra-style format:
+                      ;;   N. Tibetan [wylie] ([[steinert-url][Steinert]])  [tag]
+                      ;;      ★/◇ gloss
+                      ;; The Steinert URL links to the web dictionary for the
+                      ;; stripped root form (particles don't have useful entries).
+                      (let* ((wylie-key
+                              (condition-case nil
+                                  (when (fboundp 'tibetan-to-wylie-fixed)
+                                    (downcase
+                                     (string-trim
+                                      (tibetan-to-wylie-fixed word-clean))))
+                                (error nil)))
+                             (steinert-link
+                              (when (and wylie-key
+                                         (fboundp 'tibetan-steinert-url-org)
+                                         ;; Skip Steinert links for pure
+                                         ;; particles / grammatical affixes.
+                                         (not (member tag
+                                                      '("GENITIVE (GEN)"
+                                                        "CONVERBIAL: ABLATIVE CONVERB"
+                                                        "CONVERBIAL: SIMULTANEOUS CONVERB"
+                                                        "CONVERBIAL: CONCESSIVE CONVERB"
+                                                        "CONVERBIAL: CONDITIONAL CONVERB"))))
+                                (tibetan-steinert-url-org wylie-key))))
+                        (insert (format "%2d. %s" idx
+                                        (tibetan-analysis--format-word-with-wylie
+                                         word-clean)))
+                        (when steinert-link
+                          (insert (format " (%s)" steinert-link)))
+                        (when tag
+                          (insert (format "  [%s]" tag)))
+                        (when (and short-meaning (not (string-empty-p short-meaning)))
+                          ;; Put translation(s) on an indented continuation line
+                          ;; for every entry so they're visually easy to spot.
+                          ;; Stem-reference entries ("Pf. von X; DE // EN") keep
+                          ;; the stem ref on line 1 after " — " and move the
+                          ;; bilingual translation to an indented line 2.
+                          (let ((display-meaning
+                                 (tibetan-analysis--format-bilingual-gloss
+                                  short-meaning)))
+                            (if (string-match-p "\n" display-meaning)
+                                ;; Multi-line (stem-ref split): first chunk on
+                                ;; same line after " — ", rest indented.
+                                (let* ((lines (split-string display-meaning "\n"))
+                                       (first (car lines))
+                                       (rest (cdr lines)))
+                                  (insert (format "  — %s" first))
+                                  (dolist (ln rest)
+                                    (insert (format "\n    %s" ln))))
+                              ;; Single-line gloss: move to its own indented
+                              ;; line for consistency with stem-ref entries.
+                              (insert (format "\n    — %s" display-meaning)))))
+                        (when (and source (string-prefix-p "Resources" source))
+                          (insert " ★"))
+                        (insert "\n"))
+                      ;; Record the enriched gloss for reuse by the CAT Gloss
+                      ;; section.  We store the ORIGINAL surface word (with
+                      ;; particles still attached) so the CAT renderer can
+                      ;; pattern-match on converb/case endings.
+                      (push (cons word-clean short-meaning)
+                            enriched-vocab-pairs)
+                      (setq idx (1+ idx)))))
+              (insert "[Word list extraction not available]\n"))
+            (setq enriched-vocab-pairs (nreverse enriched-vocab-pairs))
+            (insert "\n")
 
-      ;; ============================================================
-      ;; SECTION 1a (deferred): Interlinear Gloss + Particle Overview
-      ;; Now that enriched-vocab-pairs is ready, go back to the marker
-      ;; position and insert the interlinear sections before Claude
-      ;; Translation.
-      ;; ============================================================
-      (when (and enriched-vocab-pairs
-                (fboundp 'tibetan-interlinear-insert-sections))
-        (let ((bialek-data (condition-case nil
-                               (when (fboundp 'tibetan-analyze-grammar-bialek)
-                                 (tibetan-analyze-grammar-bialek tibetan-text))
-                             (error nil))))
-          (save-excursion
-            (goto-char interlinear-marker)
-            (tibetan-interlinear-insert-sections
-             enriched-vocab-pairs
-             bialek-data
-             tibetan-text
-             vocab-pairs))))
-      (when interlinear-marker
-        (set-marker interlinear-marker nil))
+            ;; ============================================================
+            ;; SECTION 1a (deferred): Interlinear Gloss + Particle Overview
+            ;; Now that enriched-vocab-pairs is ready, go back to the marker
+            ;; position and insert the interlinear sections before Claude
+            ;; Translation.
+            ;; ============================================================
+            (when (and enriched-vocab-pairs
+                       (fboundp 'tibetan-interlinear-insert-sections))
+              (let ((bialek-data (condition-case nil
+                                     (when (fboundp 'tibetan-analyze-grammar-bialek)
+                                       (tibetan-analyze-grammar-bialek tibetan-text))
+                                   (error nil))))
+                (save-excursion
+                  (goto-char interlinear-marker)
+                  (tibetan-interlinear-insert-sections
+                   enriched-vocab-pairs
+                   bialek-data
+                   tibetan-text
+                   vocab-pairs))))
+            (when interlinear-marker
+              (set-marker interlinear-marker nil))
 
-      ;; ============================================================
-      ;; SECTION 3b: Particle Map - visual particle identification
-      ;; ============================================================
-      (insert "** Particle Map\n")
-      (insert "Wylie with particles marked: =CASE= for case markers, ~CONVERB~ for converbs, Ø for zero-marked agents/patients\n\n")
-      ;; Generate annotated Wylie showing particles
-      (let ((annotated-wylie (tibetan-analysis--generate-particle-map tibetan-text particles verbs)))
-        (insert annotated-wylie)
-        (insert "\n\n"))
+            ;; ============================================================
+            ;; SECTION 3b: Particle Map - visual particle identification
+            ;; ============================================================
+            (insert "** Particle Map\n")
+            (insert "Wylie with particles marked: =CASE= for case markers, ~CONVERB~ for converbs, Ø for zero-marked agents/patients\n\n")
+            ;; Generate annotated Wylie showing particles
+            (let ((annotated-wylie (tibetan-analysis--generate-particle-map tibetan-text particles verbs)))
+              (insert annotated-wylie)
+              (insert "\n\n"))
 
-      ;; ============================================================
-      ;; SECTION 4: Grammatical Analysis (Bialek) - compact format
-      ;; ============================================================
-      (insert "** Grammatical Markers\n")
-      (let ((bialek-analysis (condition-case nil
-                                (when (fboundp 'tibetan-analyze-grammar-bialek)
-                                  (tibetan-analyze-grammar-bialek tibetan-text))
-                              (error nil))))
-        (if bialek-analysis
-            (dolist (a bialek-analysis)
-              (let ((particle (nth 0 a))
-                    (word (nth 1 a))
-                    (type (nth 2 a))
-                    (function (nth 3 a))
-                    (trans-guide (nth 4 a))
-                    (portfolio (nth 6 a)))
-                ;; Format: particle [wylie] in «word [wylie]» → TYPE: translation.
-                ;; Don't use =...= for Tibetan as it forces monospace font.
-                (insert (format "- %s in «%s» → %s: %s"
-                                (tibetan-analysis--format-word-with-wylie
-                                 particle)
-                                (tibetan-analysis--format-word-with-wylie
-                                 word)
-                                type
-                                (or trans-guide function)))
-                (when portfolio
-                  (insert (format " [%s]" portfolio)))
-                (insert "\n")))
-          (insert "[No grammatical markers detected]\n")))
-      (insert "\n")
+            ;; ============================================================
+            ;; SECTION 4: Grammatical Analysis (Bialek) - compact format
+            ;; ============================================================
+            (insert "** Grammatical Markers\n")
+            (let ((bialek-analysis (condition-case nil
+                                       (when (fboundp 'tibetan-analyze-grammar-bialek)
+                                         (tibetan-analyze-grammar-bialek tibetan-text))
+                                     (error nil))))
+              (if bialek-analysis
+                  (dolist (a bialek-analysis)
+                    (let ((particle (nth 0 a))
+                          (word (nth 1 a))
+                          (type (nth 2 a))
+                          (function (nth 3 a))
+                          (trans-guide (nth 4 a))
+                          (portfolio (nth 6 a)))
+                      ;; Format: particle [wylie] in «word [wylie]» → TYPE: translation.
+                      ;; Don't use =...= for Tibetan as it forces monospace font.
+                      (insert (format "- %s in «%s» → %s: %s"
+                                      (tibetan-analysis--format-word-with-wylie
+                                       particle)
+                                      (tibetan-analysis--format-word-with-wylie
+                                       word)
+                                      type
+                                      (or trans-guide function)))
+                      (when portfolio
+                        (insert (format " [%s]" portfolio)))
+                      (insert "\n")))
+                (insert "[No grammatical markers detected]\n")))
+            (insert "\n")
 
-      ;; ============================================================
-      ;; SECTION 4: Sentence Structure — per-clause verb lines
-      ;; ============================================================
-      ;; Round 1 annotations from the extractor are used here:
-      ;;   • Modal / reporting verbs are hidden from the main list
-      ;;     and shown as annotations on the content verb they chain to.
-      ;;   • Negation (ma-/mi-) is displayed as `NEG` on the verb.
-      ;;   • Suffix type (converb / nominalizer / ...) is shown alongside
-      ;;     the lemma so the clause role is obvious.
-      ;;   • Arguments are sorted by source-pos and only include units
-      ;;     that sit inside this verb's clause (see `analyze-arguments').
-      (insert "** Sentence Structure\n")
-      (if (and verbs (fboundp 'tibetan-analyze-arguments))
-          (let* ((content-verbs
-                  (cl-remove-if (lambda (v)
-                                  (or (alist-get 'is-modal v)
-                                      (alist-get 'is-reporter v)))
-                                verbs))
-                 (any-structure nil))
-            (dolist (verb content-verbs)
-              (when (and verb (listp verb) (consp (car verb)))
-                (let* ((lemma (alist-get 'lemma verb))
-                       (meaning (alist-get 'meaning verb))
-                       (suffix (alist-get 'suffix-type verb))
-                       (negated (alist-get 'negated verb))
-                       (modal-of (alist-get 'modal-of verb))
-                       (reports-p (alist-get 'reports-p verb))
-                       (arg-analysis (tibetan-analyze-arguments
-                                      verb multiword-units words verbs)))
-                  (when (or arg-analysis lemma)
-                    (setq any-structure t)
-                    (insert "- ")
-                    (when negated (insert "NEG "))
-                    (insert (tibetan-analysis--format-word-with-wylie lemma))
-                    (when (and meaning (not (string-empty-p meaning)))
-                      (insert (format " '%s'"
-                                      (car (split-string meaning "," t)))))
-                    (when suffix
-                      ;; suffix already starts with ", "; skip its leading comma
-                      (let ((s (if (string-prefix-p ", " suffix)
-                                   (substring suffix 2)
-                                 suffix)))
-                        (insert (format " [%s]" s))))
-                    (when modal-of
-                      (insert (format " +MODAL:%s" modal-of)))
-                    (when reports-p
-                      (insert (format " +SAYS:%s" reports-p)))
-                    (insert ":")
-                    (dolist (arg arg-analysis)
-                      (let ((marker (alist-get 'marker arg))
-                            (form (alist-get 'form arg))
-                            (is-topic (alist-get 'is-topic arg)))
-                        (unless is-topic
-                          (insert (format " %s(%s)" form (or marker "Ø"))))))
-                    (insert "\n")))))
-            (unless any-structure
-              (insert "[No argument structure detected]\n")))
-        (insert "[No verbs detected]\n"))
-      (insert "\n")
+            ;; ============================================================
+            ;; SECTION 4: Sentence Structure — per-clause verb lines
+            ;; ============================================================
+            ;; Round 1 annotations from the extractor are used here:
+            ;;   • Modal / reporting verbs are hidden from the main list
+            ;;     and shown as annotations on the content verb they chain to.
+            ;;   • Negation (ma-/mi-) is displayed as `NEG` on the verb.
+            ;;   • Suffix type (converb / nominalizer / ...) is shown alongside
+            ;;     the lemma so the clause role is obvious.
+            ;;   • Arguments are sorted by source-pos and only include units
+            ;;     that sit inside this verb's clause (see `analyze-arguments').
+            (insert "** Sentence Structure\n")
+            (if (and verbs (fboundp 'tibetan-analyze-arguments))
+                (let* ((content-verbs
+                        (cl-remove-if (lambda (v)
+                                        (or (alist-get 'is-modal v)
+                                            (alist-get 'is-reporter v)))
+                                      verbs))
+                       (any-structure nil))
+                  (dolist (verb content-verbs)
+                    (when (and verb (listp verb) (consp (car verb)))
+                      (let* ((lemma (alist-get 'lemma verb))
+                             (meaning (alist-get 'meaning verb))
+                             (suffix (alist-get 'suffix-type verb))
+                             (negated (alist-get 'negated verb))
+                             (modal-of (alist-get 'modal-of verb))
+                             (reports-p (alist-get 'reports-p verb))
+                             (arg-analysis (tibetan-analyze-arguments
+                                            verb multiword-units words verbs)))
+                        (when (or arg-analysis lemma)
+                          (setq any-structure t)
+                          (insert "- ")
+                          (when negated (insert "NEG "))
+                          (insert (tibetan-analysis--format-word-with-wylie lemma))
+                          (when (and meaning (not (string-empty-p meaning)))
+                            (insert (format " '%s'"
+                                            (car (split-string meaning "," t)))))
+                          (when suffix
+                            ;; suffix already starts with ", "; skip its leading comma
+                            (let ((s (if (string-prefix-p ", " suffix)
+                                         (substring suffix 2)
+                                       suffix)))
+                              (insert (format " [%s]" s))))
+                          (when modal-of
+                            (insert (format " +MODAL:%s" modal-of)))
+                          (when reports-p
+                            (insert (format " +SAYS:%s" reports-p)))
+                          (insert ":")
+                          (dolist (arg arg-analysis)
+                            (let ((marker (alist-get 'marker arg))
+                                  (form (alist-get 'form arg))
+                                  (is-topic (alist-get 'is-topic arg)))
+                              (unless is-topic
+                                (insert (format " %s(%s)" form (or marker "Ø"))))))
+                          (insert "\n")))))
+                  (unless any-structure
+                    (insert "[No argument structure detected]\n")))
+              (insert "[No verbs detected]\n"))
+            (insert "\n")
 
-      ;; ============================================================
-      ;; SECTION 4b: Clause Structure (Round-2) — optional
-      ;; ============================================================
-      ;; Gate on `tibetan-analysis-show-clause-structure' so users who
-      ;; prefer the compact legacy view can opt out without losing
-      ;; the Sentence Structure section above.
-      (when tibetan-analysis-show-clause-structure
-        (insert "** Clause Structure\n")
-        (let ((rendered (tibetan-analysis--render-clause-structure
-                         words verbs multiword-units)))
-          (if (and rendered (not (string-empty-p rendered)))
-              (insert rendered)
-            (insert "[Round-2 clause structure unavailable]\n")))
-        (insert "\n"))
-
-      ;; ============================================================
-      ;; SECTION 5: Verb Classification (Hill 2010) - detailed format
-      ;; ============================================================
-      (insert "** Verb Classification (Hill 2010)\n")
-      ;; Only show full records here; `minimal' entries (from the
-      ;; minor-verb / modal / reporting fallback sets) lack stem and
-      ;; case-frame data — they'd render as noise.
-      (let ((full-verbs (cl-remove-if (lambda (v)
-                                        (alist-get 'minimal v))
-                                      verbs)))
-        (if full-verbs
-            (dolist (verb full-verbs)
-              (when (and verb (listp verb) (consp (car verb)))
-                (let* ((lemma (alist-get 'lemma verb))
-                       (meaning (alist-get 'meaning verb))
-                       (present (or (alist-get 'present_stem verb) "—"))
-                       (past (or (alist-get 'past_stem verb) "—"))
-                       (future (or (alist-get 'future_stem verb) "—"))
-                       (imperative (or (alist-get 'imperative_stem verb) "—"))
-                       (vol (or (alist-get 'volitionality verb) "?"))
-                       (trans (or (alist-get 'transitivity verb) "?"))
-                       (frame (or (alist-get 'case_frame verb) "?"))
-                       (class (or (alist-get 'indigenous_class verb) "?")))
-                  (insert (format "- %s"
-                                  (tibetan-analysis--format-word-with-wylie
-                                   lemma)))
-                  (when meaning
-                    (insert (format " — %s" meaning)))
-                  (insert "\n")
-                  (insert (format "  STEMS: %s / %s / %s / %s\n"
-                                  (tibetan-analysis--format-word-with-wylie
-                                   present)
-                                  (tibetan-analysis--format-word-with-wylie
-                                   past)
-                                  (tibetan-analysis--format-word-with-wylie
-                                   future)
-                                  (tibetan-analysis--format-word-with-wylie
-                                   imperative)))
-                  (insert (format "  CLASS: %s, %s, %s\n" vol trans frame))
-                  (insert (format "  TIBETAN: %s\n\n"
-                                  (cond
-                                   ((string= class "tha_dad_pa")
-                                    "ཐ་དད་པ་ (transitive)")
-                                   ((string= class "tha_mi_dad_pa")
-                                    "ཐ་མི་དད་པ་ (intransitive)")
-                                   (t "—")))))))
-          (insert "[No Hill-DB verbs detected]\n")))
-      (insert "\n")
-
-      ;; NOTE: Zero-Marked NPs section removed - was producing confusing output
-
-      ;; ============================================================
-      ;; SECTION 7: Detailed Dictionary (rich entries with Sanskrit)
-      ;; ============================================================
-      (insert "** Detailed Dictionary\n")
-      (let ((vocab-list (condition-case nil
-                            (when (fboundp 'tibetan-vocab-extract-detailed)
-                              (tibetan-vocab-extract-detailed tibetan-text))
-                          (error nil))))
-        (if vocab-list
-            (progn
-              (dolist (entry vocab-list)
-                (let* ((tibetan (plist-get entry :tibetan))
-                       (wylie (plist-get entry :wylie))
-                       ;; Multi-source lookup: provided list first, then
-                       ;; Steinert block, then Rangjung Yeshe, others
-                       ;; only when they add a genuinely different gloss.
-                       ;; Sanskrit is emitted only when carried natively
-                       ;; by the source entry.
-                       (sources
-                        (condition-case nil
-                            (when (fboundp 'tibetan-vocab-multisource-entries)
-                              (tibetan-vocab-multisource-entries tibetan))
-                          (error nil)))
-                       ;; Provided-list entry gets a ★ marker on the head
-                       ;; line so students see at a glance that a curated
-                       ;; gloss exists for this word.
-                       (has-resources
-                        (cl-some (lambda (s)
-                                   (let ((src (plist-get s :source)))
-                                     (and src
-                                          (string-prefix-p "Resources" src))))
-                                 sources)))
-                  ;; Dictionary-style head line: ◆ word [wylie] ★
-                  ;; Route through the formatter so this stays in lock-step
-                  ;; with every other section.  If the multi-source entry
-                  ;; already carries a wylie string, let it win — otherwise
-                  ;; the formatter computes one from the Tibetan head.
-                  (insert (format "◆ %s"
-                                  (if (and wylie (stringp wylie)
-                                           (not (string-empty-p wylie))
-                                           (not (string= wylie tibetan)))
-                                      (format "%s [%s]" tibetan wylie)
-                                    (tibetan-analysis--format-word-with-wylie
-                                     tibetan))))
-                  (when has-resources (insert " ★"))
-                  (insert "\n")
-                  (if sources
-                      (dolist (src sources)
-                        (let* ((source-name (plist-get src :source))
-                               (gloss (or (plist-get src :detailed)
-                                          (plist-get src :primary)
-                                          "[no gloss]"))
-                               (skt (plist-get src :sanskrit))
-                               (formatted
-                                (tibetan-analysis--format-bilingual-gloss
-                                 gloss))
-                               (lines (split-string formatted "\n")))
-                          (insert (format "  [%s]\n" source-name))
-                          (dolist (ln lines)
-                            (insert (format "    %s\n" ln)))
-                          ;; Sanskrit only when the entry itself supplied it.
-                          (when (and skt
-                                     (not (string-empty-p (string-trim skt))))
-                            (insert (format "    Skt: %s\n" skt)))))
-                    ;; Fallback: legacy single-entry path if the
-                    ;; multi-source helper is unavailable.
-                    (let* ((detailed (plist-get entry :detailed))
-                           (primary (plist-get entry :primary))
-                           (sanskrit (plist-get entry :sanskrit))
-                           (source (plist-get entry :source))
-                           (meaning (or detailed primary "[not found]"))
-                           (formatted
-                            (tibetan-analysis--format-bilingual-gloss
-                             meaning))
-                           (lines (split-string formatted "\n")))
-                      (dolist (ln lines)
-                        (insert (format "  %s\n" ln)))
-                      (when sanskrit
-                        (insert (format "  Skt: %s\n" sanskrit)))
-                      (when source
-                        (insert (format "  [%s]\n" source)))))
-                  (insert "\n")))
+            ;; ============================================================
+            ;; SECTION 4b: Clause Structure (Round-2) — optional
+            ;; ============================================================
+            ;; Gate on `tibetan-analysis-show-clause-structure' so users who
+            ;; prefer the compact legacy view can opt out without losing
+            ;; the Sentence Structure section above.
+            (when tibetan-analysis-show-clause-structure
+              (insert "** Clause Structure\n")
+              (let ((rendered (tibetan-analysis--render-clause-structure
+                               words verbs multiword-units)))
+                (if (and rendered (not (string-empty-p rendered)))
+                    (insert rendered)
+                  (insert "[Round-2 clause structure unavailable]\n")))
               (insert "\n"))
-          ;; Fallback: use vocab-pairs if detailed system not available
-          (if vocab-pairs
-              (progn
-                (dolist (pair vocab-pairs)
-                  (let* ((word (car pair))
-                         (meaning (cdr pair))
-                         (root-form (tibetan-strip-particles word))
-                         (head (if (and root-form
-                                        (not (string-empty-p root-form))
-                                        (not (string= root-form word)))
-                                   root-form
-                                 word)))
-                    (insert (format "◆ %s\n"
-                                    (tibetan-analysis--format-word-with-wylie
-                                     head)))
-                    (insert (format "  %s\n\n" (or meaning "[not found]")))))
-                (insert "\n"))
-            (insert "[No dictionary entries available]\n\n"))))
 
-      ;; ============================================================
-      ;; SECTION 8: Provided Translations (at end — combine step)
-      ;; Shown last so students can compare their own word-by-word
-      ;; rendering against external translations as a final check.
-      ;; ============================================================
-      (insert "** Provided Translations\n")
-      ;; 8a: DharmaMitra AI translation
-      (insert "*** DharmaMitra\n")
-      (if (and translation
-               (not (string= translation "[Translation not available]"))
-               (not (string= translation "[DharmaMitra not loaded]")))
-          (insert (format "%s\n" translation))
-        (insert "[Not available — enable DharmaMitra access to generate]\n"))
-      (insert "\n")
-      ;; 8b: CAT rule-based gloss.  Prefer the enriched-vocab-pairs
-      ;; built during the Word/Particle List pass — those meanings
-      ;; already incorporate the Hill-morphology and Resources
-      ;; enrichment, so the CAT line stops showing "defeat" for the
-      ;; inflected past stem ཕམ and "to extend to" for སླེབ.  Falls
-      ;; back to the raw vocab-pairs on legacy paths.
-      (insert "*** CAT Gloss\n")
-      (let* ((cat-input (or enriched-vocab-pairs vocab-pairs))
-             (cat-trans (when cat-input
-                          (tibetan-analysis--build-cat-translation cat-input))))
-        (insert (format "%s\n" (or cat-trans "[Generate with vocabulary analysis]"))))
-      (insert "\n")
-      ;; 8c: Claude Vocabulary section.  DharmaMitra-style word-by-word
-      ;; analysis from Claude — the second tier in the three-tier
-      ;; vocabulary ranking:
-      ;;   1. Provided vocabulary (★ in the Word / Particle List)
-      ;;   2. Claude (this section — contextual glosses with grammar)
-      ;;   3. Steinert & Co. (URLs in the Word / Particle List)
-      ;; Populated asynchronously by `tibetan-analysis--insert-claude-sections'.
-      (insert "*** Claude Vocabulary\n")
-      (insert "\n")
-      ;; 8d: Claude Grammar section.  Translation is placed at the top
-      ;; of the file (level 2, right after Wylie) so it's the first
-      ;; thing students read; Grammar stays here at level 3 as a
-      ;; sibling of DharmaMitra / CAT Gloss so the pedagogical block
-      ;; is one cohesive unit.  Populated by
-      ;; `tibetan-analysis--insert-claude-sections' from the same
-      ;; Claude response that fills `** Claude Translation'.
-      (insert "*** Claude Grammar\n")
-      (insert "\n")
-      ;; 8d: Reference translations from external sources
-      (insert "*** Reference Translations\n")
-      (let* ((seg-num (and seg-id
-                            (condition-case nil
-                                (tibetan-analysis--extract-segment-number seg-id)
-                              (error nil))))
-             (ref-translations
-              (tibetan-analysis--find-reference-translations
-               tibetan-text seg-num source-text)))
-        (if ref-translations
-            (dolist (ref ref-translations)
-              (let ((source (car ref))
-                    (text (cdr ref)))
-                (insert (format "**** %s\n%s\n\n" source text))))
-          (insert "[Add reference translations here, e.g. from Blue Annals (Roerich), or other published translations]\n")))
-      (insert "\n")
+            ;; ============================================================
+            ;; SECTION 5: Verb Classification (Hill 2010) - detailed format
+            ;; ============================================================
+            (insert "** Verb Classification (Hill 2010)\n")
+            ;; Only show full records here; `minimal' entries (from the
+            ;; minor-verb / modal / reporting fallback sets) lack stem and
+            ;; case-frame data — they'd render as noise.
+            (let ((full-verbs (cl-remove-if (lambda (v)
+                                              (alist-get 'minimal v))
+                                            verbs)))
+              (if full-verbs
+                  (dolist (verb full-verbs)
+                    (when (and verb (listp verb) (consp (car verb)))
+                      (let* ((lemma (alist-get 'lemma verb))
+                             (meaning (alist-get 'meaning verb))
+                             (present (or (alist-get 'present_stem verb) "—"))
+                             (past (or (alist-get 'past_stem verb) "—"))
+                             (future (or (alist-get 'future_stem verb) "—"))
+                             (imperative (or (alist-get 'imperative_stem verb) "—"))
+                             (vol (or (alist-get 'volitionality verb) "?"))
+                             (trans (or (alist-get 'transitivity verb) "?"))
+                             (frame (or (alist-get 'case_frame verb) "?"))
+                             (class (or (alist-get 'indigenous_class verb) "?")))
+                        (insert (format "- %s"
+                                        (tibetan-analysis--format-word-with-wylie
+                                         lemma)))
+                        (when meaning
+                          (insert (format " — %s" meaning)))
+                        (insert "\n")
+                        (insert (format "  STEMS: %s / %s / %s / %s\n"
+                                        (tibetan-analysis--format-word-with-wylie
+                                         present)
+                                        (tibetan-analysis--format-word-with-wylie
+                                         past)
+                                        (tibetan-analysis--format-word-with-wylie
+                                         future)
+                                        (tibetan-analysis--format-word-with-wylie
+                                         imperative)))
+                        (insert (format "  CLASS: %s, %s, %s\n" vol trans frame))
+                        (insert (format "  TIBETAN: %s\n\n"
+                                        (cond
+                                         ((string= class "tha_dad_pa")
+                                          "ཐ་དད་པ་ (transitive)")
+                                         ((string= class "tha_mi_dad_pa")
+                                          "ཐ་མི་དད་པ་ (intransitive)")
+                                         (t "—")))))))
+                (insert "[No Hill-DB verbs detected]\n")))
+            (insert "\n")
 
-      (buffer-string))))
+            ;; NOTE: Zero-Marked NPs section removed - was producing confusing output
+
+            ;; ============================================================
+            ;; SECTION 7: Detailed Dictionary (rich entries with Sanskrit)
+            ;; ============================================================
+            (insert "** Detailed Dictionary\n")
+            (let ((vocab-list (condition-case nil
+                                  (when (fboundp 'tibetan-vocab-extract-detailed)
+                                    (tibetan-vocab-extract-detailed tibetan-text))
+                                (error nil))))
+              (if vocab-list
+                  (progn
+                    (dolist (entry vocab-list)
+                      (let* ((tibetan (plist-get entry :tibetan))
+                             (wylie (plist-get entry :wylie))
+                             ;; Multi-source lookup: provided list first, then
+                             ;; Steinert block, then Rangjung Yeshe, others
+                             ;; only when they add a genuinely different gloss.
+                             ;; Sanskrit is emitted only when carried natively
+                             ;; by the source entry.
+                             (sources
+                              (condition-case nil
+                                  (when (fboundp 'tibetan-vocab-multisource-entries)
+                                    (tibetan-vocab-multisource-entries tibetan))
+                                (error nil)))
+                             ;; Provided-list entry gets a ★ marker on the head
+                             ;; line so students see at a glance that a curated
+                             ;; gloss exists for this word.
+                             (has-resources
+                              (cl-some (lambda (s)
+                                         (let ((src (plist-get s :source)))
+                                           (and src
+                                                (string-prefix-p "Resources" src))))
+                                       sources)))
+                        ;; Dictionary-style head line: ◆ word [wylie] ★
+                        ;; Route through the formatter so this stays in lock-step
+                        ;; with every other section.  If the multi-source entry
+                        ;; already carries a wylie string, let it win — otherwise
+                        ;; the formatter computes one from the Tibetan head.
+                        (insert (format "◆ %s"
+                                        (if (and wylie (stringp wylie)
+                                                 (not (string-empty-p wylie))
+                                                 (not (string= wylie tibetan)))
+                                            (format "%s [%s]" tibetan wylie)
+                                          (tibetan-analysis--format-word-with-wylie
+                                           tibetan))))
+                        (when has-resources (insert " ★"))
+                        (insert "\n")
+                        (if sources
+                            (dolist (src sources)
+                              (let* ((source-name (plist-get src :source))
+                                     (gloss (or (plist-get src :detailed)
+                                                (plist-get src :primary)
+                                                "[no gloss]"))
+                                     (skt (plist-get src :sanskrit))
+                                     (formatted
+                                      (tibetan-analysis--format-bilingual-gloss
+                                       gloss))
+                                     (lines (split-string formatted "\n")))
+                                (insert (format "  [%s]\n" source-name))
+                                (dolist (ln lines)
+                                  (insert (format "    %s\n" ln)))
+                                ;; Sanskrit only when the entry itself supplied it.
+                                (when (and skt
+                                           (not (string-empty-p (string-trim skt))))
+                                  (insert (format "    Skt: %s\n" skt)))))
+                          ;; Fallback: legacy single-entry path if the
+                          ;; multi-source helper is unavailable.
+                          (let* ((detailed (plist-get entry :detailed))
+                                 (primary (plist-get entry :primary))
+                                 (sanskrit (plist-get entry :sanskrit))
+                                 (source (plist-get entry :source))
+                                 (meaning (or detailed primary "[not found]"))
+                                 (formatted
+                                  (tibetan-analysis--format-bilingual-gloss
+                                   meaning))
+                                 (lines (split-string formatted "\n")))
+                            (dolist (ln lines)
+                              (insert (format "  %s\n" ln)))
+                            (when sanskrit
+                              (insert (format "  Skt: %s\n" sanskrit)))
+                            (when source
+                              (insert (format "  [%s]\n" source)))))
+                        (insert "\n")))
+                    (insert "\n"))
+                ;; Fallback: use vocab-pairs if detailed system not available
+                (if vocab-pairs
+                    (progn
+                      (dolist (pair vocab-pairs)
+                        (let* ((word (car pair))
+                               (meaning (cdr pair))
+                               (root-form (tibetan-strip-particles word))
+                               (head (if (and root-form
+                                              (not (string-empty-p root-form))
+                                              (not (string= root-form word)))
+                                         root-form
+                                       word)))
+                          (insert (format "◆ %s\n"
+                                          (tibetan-analysis--format-word-with-wylie
+                                           head)))
+                          (insert (format "  %s\n\n" (or meaning "[not found]")))))
+                      (insert "\n"))
+                  (insert "[No dictionary entries available]\n\n"))))
+
+            ;; ============================================================
+            ;; SECTION 8: Provided Translations (at end — combine step)
+            ;; Shown last so students can compare their own word-by-word
+            ;; rendering against external translations as a final check.
+            ;; ============================================================
+            (insert "** Provided Translations\n")
+            ;; 8a: DharmaMitra AI translation
+            (insert "*** DharmaMitra\n")
+            (if (and translation
+                     (not (string= translation "[Translation not available]"))
+                     (not (string= translation "[DharmaMitra not loaded]")))
+                (insert (format "%s\n" translation))
+              (insert "[Not available — enable DharmaMitra access to generate]\n"))
+            (insert "\n")
+            ;; 8b: CAT rule-based gloss.  Prefer the enriched-vocab-pairs
+            ;; built during the Word/Particle List pass — those meanings
+            ;; already incorporate the Hill-morphology and Resources
+            ;; enrichment, so the CAT line stops showing "defeat" for the
+            ;; inflected past stem ཕམ and "to extend to" for སླེབ.  Falls
+            ;; back to the raw vocab-pairs on legacy paths.
+            (insert "*** CAT Gloss\n")
+            (let* ((cat-input (or enriched-vocab-pairs vocab-pairs))
+                   (cat-trans (when cat-input
+                                (tibetan-analysis--build-cat-translation cat-input))))
+              (insert (format "%s\n" (or cat-trans "[Generate with vocabulary analysis]"))))
+            (insert "\n")
+            ;; 8c: Claude Vocabulary section.  DharmaMitra-style word-by-word
+            ;; analysis from Claude — the second tier in the three-tier
+            ;; vocabulary ranking:
+            ;;   1. Provided vocabulary (★ in the Word / Particle List)
+            ;;   2. Claude (this section — contextual glosses with grammar)
+            ;;   3. Steinert & Co. (URLs in the Word / Particle List)
+            ;; Populated asynchronously by `tibetan-analysis--insert-claude-sections'.
+            (insert "*** Claude Vocabulary\n")
+            (insert "\n")
+            ;; 8d: Claude Grammar section.  Translation is placed at the top
+            ;; of the file (level 2, right after Wylie) so it's the first
+            ;; thing students read; Grammar stays here at level 3 as a
+            ;; sibling of DharmaMitra / CAT Gloss so the pedagogical block
+            ;; is one cohesive unit.  Populated by
+            ;; `tibetan-analysis--insert-claude-sections' from the same
+            ;; Claude response that fills `** Claude Translation'.
+            (insert "*** Claude Grammar\n")
+            (insert "\n")
+            ;; 8d: Reference translations from external sources
+            (insert "*** Reference Translations\n")
+            (let* ((seg-num (and seg-id
+                                 (condition-case nil
+                                     (tibetan-analysis--extract-segment-number seg-id)
+                                   (error nil))))
+                   (ref-translations
+                    (tibetan-analysis--find-reference-translations
+                     tibetan-text seg-num source-text)))
+              (if ref-translations
+                  (dolist (ref ref-translations)
+                    (let ((source (car ref))
+                          (text (cdr ref)))
+                      (insert (format "**** %s\n%s\n\n" source text))))
+                (insert "[Add reference translations here, e.g. from Blue Annals (Roerich), or other published translations]\n")))
+            (insert "\n")
+
+            (buffer-string))))
     (error
      ;; On error, return minimal analysis with error info
      (format "** Wylie Transliteration\n[Error during analysis]\n\n** Provided Translations\n- [Error: %s]\n\n** Vocabulary\n[Error]\n"

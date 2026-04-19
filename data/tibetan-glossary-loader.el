@@ -203,8 +203,15 @@ argument) to discard the existing hash and reload everything."
 ;; ============================================================================
 ;; AUTO-LOAD ON REQUIRE
 ;; ============================================================================
+;;
+;; Respect the test-harness opt-out `tibetan-skip-external-glossaries'
+;; so that test files which only need a few public helpers don't pay
+;; the cost of parsing 17 000 TSV entries at require-time.  Production
+;; callers (tibetan-cat.el, sentence-structure, etc.) never bind this
+;; flag, so their load path is unchanged.
 
-(load-all-glossaries)
+(unless (bound-and-true-p tibetan-skip-external-glossaries)
+  (load-all-glossaries))
 
 (provide 'tibetan-glossary-loader)
 ;;; tibetan-glossary-loader.el ends here
