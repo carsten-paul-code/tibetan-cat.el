@@ -112,5 +112,9 @@
 ;; Tigress-story regressions (MWU over-match, non-final terminative ר)
 (condition-case nil (require 'tibetan-tigress-regressions-test) (error nil))
 
+;; Bundled glossary + plain glossary loader (data/ directory)
+(condition-case nil (require 'tibetan-glossary-loader-test) (error nil))
+(condition-case nil (require 'tibetan-bundled-glossary-test) (error nil))
+
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here
