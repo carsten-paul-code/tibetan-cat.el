@@ -115,5 +115,9 @@
 ;; Glossary loader (data/ directory — canonical bundled module)
 (condition-case nil (require 'tibetan-glossary-loader-test) (error nil))
 
+;; Input-text filter (drops English descriptions / # comments / blank
+;; lines before Wylie conversion and parser tokenisation).
+(condition-case nil (require 'tibetan-analysis-filter-test) (error nil))
+
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here

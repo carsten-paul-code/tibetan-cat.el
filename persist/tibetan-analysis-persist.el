@@ -1344,6 +1344,46 @@ whitespace left behind."
     ;; Clean up multiple spaces left by removal
     (replace-regexp-in-string "  +" " " (string-trim cleaned))))
 
+(defun tibetan-analysis--filter-to-tibetan-lines (text)
+  "Return TEXT with non-Tibetan content lines dropped.
+
+Source files often interleave the Tibetan body with editorial
+material that the analyser must NOT treat as input:
+  - Parenthetical English descriptions on their own line,
+    e.g. `(Homage / author's dedication verses)'.
+  - Org-mode comment lines starting with `#'.
+  - Blank separator lines.
+  - Folio-marker-only lines.
+
+Lines that contain no Tibetan character (anywhere in the U+0F00
+block) are dropped entirely; lines that contain ANY Tibetan
+character are kept verbatim.  The surviving lines are joined with
+a single tsheg (U+0F0B) so that:
+  1. `tibetan-parse-enhanced' — which splits on tsheg — tokenises
+     the first word of each continuation line cleanly (a raw
+     newline does NOT split, producing spurious compound tokens
+     like `ལོ༎\\nརྒྱལ').
+  2. `tibetan-to-wylie-fixed' emits a space between the two words
+     (instead of the bare `lo//rgyal' it produces when the source
+     contains only a newline, which looks like a typo to readers
+     of the Wylie transliteration).
+
+Without this filter, `tibetan-to-wylie-fixed' renders the
+non-Tibetan portion as leading whitespace (producing a ~30-space
+indent on sections like Wylie Transliteration) and
+`tibetan-extract-vocabulary' tokenises the English words, matching
+some of them against Wylie glossary entries (the English word
+\"on\", for instance, matches the Wylie hash key and produces a
+bogus \"set\" gloss)."
+  (if (and text (stringp text))
+      (let ((tibetan-char-re "[ༀ-࿿]")
+            (kept '()))
+        (dolist (line (split-string text "\n"))
+          (when (string-match-p tibetan-char-re line)
+            (push (string-trim line) kept)))
+        (mapconcat #'identity (nreverse kept) "་"))
+    text))
+
 (defun tibetan-analysis--format-bilingual-gloss (gloss)
   "Reformat a German//English GLOSS for easy reading.
 If GLOSS has the shape
@@ -1503,6 +1543,12 @@ handy may omit this argument; only the inline-trans surfacing is
 affected, not the rest of the analysis."
   (condition-case err
       (progn
+        ;; Drop non-Tibetan lines (English descriptions, # comments,
+        ;; blank separators).  Required before Wylie conversion and
+        ;; parser tokenisation so English words don't collide with
+        ;; Wylie glossary keys.
+        (setq tibetan-text (tibetan-analysis--filter-to-tibetan-lines
+                            tibetan-text))
         ;; Strip folio markers before analysis (e.g. "(12a2)")
         (setq tibetan-text (tibetan-analysis--strip-folio-markers tibetan-text))
 
