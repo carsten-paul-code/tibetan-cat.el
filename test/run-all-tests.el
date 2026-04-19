@@ -109,5 +109,8 @@
 ;; Persistent sentence-level analysis (C-c s A / C-c s R / C-c s r)
 (condition-case nil (require 'tibetan-sentence-persist-test) (error nil))
 
+;; Tigress-story regressions (MWU over-match, non-final terminative ר)
+(condition-case nil (require 'tibetan-tigress-regressions-test) (error nil))
+
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here

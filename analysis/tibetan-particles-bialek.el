@@ -234,18 +234,28 @@ Returns list of (particle word case function translation-guide bialek-ref)."
                        "Portfolio §1.9 (Comitative)")
                   analysis))))))
 
-    ;; ========== TERMINATIVE -ར ON FINAL PIECE OF A COMPOUND ==========
+    ;; ========== TERMINATIVE -ར ON A COMPOUND PIECE ==========
     ;; Bialek's per-piece loop only matches a standalone ‘ར' — it avoids
     ;; matching ‘ར' as a suffix because in many words (འབྱོར, མར, པར …)
     ;; ‘ར' is the syllable-final consonant, not a case particle.
     ;;
-    ;; The construction we DO want to catch is the one seen in Milarepa
-    ;; seg-4: ཀོ་རོན་སར (“towards Ko ron sa”), where the terminative ‘ར'
-    ;; attaches to the last syllable of a multi-piece compound.  The
-    ;; discriminator is structural: the input has at least one tsheg,
-    ;; and the last piece is a short 2-char ‘Xར' form.  Standalone
-    ;; 2-char words like མར/པར/དར are unaffected because they lack the
-    ;; multi-piece context.
+    ;; The construction we catch here is ‘Xར' embedded inside a
+    ;; multi-piece form.  Two motivating cases:
+    ;;
+    ;;   ཀོ་རོན་སར   — terminative ‘ར' on the last piece (2-char `སར`).
+    ;;   སྙིང་རྗེར་ལྡན — terminative ‘ར' on the NON-final piece `རྗེར'
+    ;;                 (4-codepoint `r-j-e-r'), where stripping ‘ར' leaves
+    ;;                 the lexical stem `རྗེ' (lord/noble) before the
+    ;;                 verb `ལྡན' (to possess).
+    ;;
+    ;; Discriminators to avoid false positives on syllable-final ‘ར':
+    ;;  - input has at least one tsheg (multi-piece);
+    ;;  - for 2-char `Xར' pieces the original last-piece rule is safe;
+    ;;  - for longer `Xר' pieces we additionally require the piece NOT
+    ;;    to be a known verb stem, AND the stripped form to be a known
+    ;;    lemma (verb or vocabulary entry) — which rules out the
+    ;;    syllable-final ‘ར' of `འབྱོར' / `ངོ་མཚར' where the stripped
+    ;;    form isn't a standalone word.
     (when (and (stringp tibetan-text)
                (string-match-p "་" tibetan-text)
                (not (cl-some (lambda (a)
@@ -257,17 +267,41 @@ Returns list of (particle word case function translation-guide bialek-ref)."
       (let* ((pieces (split-string
                       (replace-regexp-in-string "[།༎༏༐༑༔]" "" tibetan-text)
                       "་" t))
-             (last-piece (car (last pieces))))
+             (last-piece (car (last pieces)))
+             (pending '()))
+        ;; Original rule: last piece is 2-char `Xར'.
         (when (and last-piece
                    (= (length last-piece) 2)
                    (string-suffix-p "ར" last-piece))
           (let ((root (mapconcat #'identity (butlast pieces) "་")))
-            (push (list "ར" last-piece "TERMINATIVE (ALL)"
+            (push (list last-piece
+                        (if (string-empty-p root) last-piece root))
+                  pending)))
+        ;; Extended rule: any piece (including non-final) longer than 2
+        ;; codepoints ending in `ར', where stripping `ར' leaves a known
+        ;; lemma and the piece itself isn't a verb stem.
+        (dolist (piece pieces)
+          (when (and (> (length piece) 2)
+                     (string-suffix-p "ར" piece)
+                     (fboundp 'tibetan-verb-lookup)
+                     (not (tibetan-verb-lookup piece))
+                     (let ((stem (substring piece 0 (1- (length piece)))))
+                       (or (ignore-errors (tibetan-verb-lookup stem))
+                           (and (fboundp 'tibetan-lookup-word)
+                                (ignore-errors
+                                  (tibetan-lookup-word stem))))))
+            (let ((stem (substring piece 0 (1- (length piece)))))
+              (unless (assoc piece pending)
+                (push (list piece stem) pending)))))
+        (dolist (p pending)
+          (let ((form (nth 0 p))
+                (root (nth 1 p)))
+            (push (list "ར" form "TERMINATIVE (ALL)"
                         (format "Marks '%s' as GOAL, DIRECTION, MANNER, or RESULT"
-                                (if (string-empty-p root) last-piece root))
+                                (if (string-empty-p root) form root))
                         (format "Translation: 'toward/into/as %s'"
-                                (if (string-empty-p root) last-piece root))
-                        "Bialek: Terminative ར on final piece of a compound"
+                                (if (string-empty-p root) form root))
+                        "Bialek: Terminative ར on compound piece"
                         "Portfolio §1.5 (Terminative)")
                   analysis)))))
 

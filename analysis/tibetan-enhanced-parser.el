@@ -88,6 +88,26 @@ Returns list of word strings."
   (let ((cleaned (replace-regexp-in-string "[།༎༏༐༑༔]" "" text)))
     (split-string cleaned "་" t)))
 
+(defconst tibetan-enhanced-parser--case-particle-tails
+  '("ར" "ལ" "ན" "ས" "སུ" "ཏུ" "དུ" "རུ" "ནས" "ལས" "དང"
+    "གི" "གྱི" "ཀྱི" "ཡི" "ནི" "འི" "པར" "བར"
+    "ཀྱིས" "གིས" "གྱིས" "ཡིས" "ས" "སྟེ" "ཏེ" "དེ" "ཅིང" "ཞིང" "ཤིང"
+    "པས" "བས")
+  "Syllables that mark a case/converb particle when they are the tail
+of a candidate multiword unit.  Used to reject Steinert MWU hits
+whose last syllable is itself a particle — those are phrasal idioms
+like `ཞིག་ཏུ' (\"as a...\") rather than lexicalised compounds.
+Nominaliser tails (`པ', `བ', `མ', …) are deliberately omitted: forms
+like `བསྐལ་པ' (kalpa) are legitimate lexical compounds.")
+
+(defun tibetan-enhanced-parser--case-particle-tail-p (joined)
+  "Return non-nil if JOINED (a `་'-joined string) ends in a case/converb
+particle listed in `tibetan-enhanced-parser--case-particle-tails'."
+  (let ((parts (split-string joined "་" t)))
+    (and parts
+         (member (car (last parts))
+                 tibetan-enhanced-parser--case-particle-tails))))
+
 (defun tibetan-find-multiword-units (words)
   "Find multi-word compound/proper noun units in WORDS list.
 Uses longest-match-first strategy.
@@ -143,45 +163,121 @@ Returns list of (start-index . end-index . entry-data) tuples."
                                    (gethash joined tibetan-compounds-dict)))
                         (proper-noun (when tibetan-proper-nouns-dict
                                       (gethash joined tibetan-proper-nouns-dict)))
-                        ;; Steinert fallback — the user's multi-syllable
-                        ;; compounds (`ནམ་ཞིག', `ཀློག་སློབ') often live
-                        ;; only here, not in comprehensive-vocab or
-                        ;; Resources.  `tibetan-extract-vocabulary' (the
+                        ;; Steinert fallback — the user's two-syllable
+                        ;; compounds (`ནམ་ཞིག', `ཀློག་སློབ', `ངོ་མཚར',
+                        ;; `བསྐལ་པ') often live only here, not in
+                        ;; comprehensive-vocab or Resources.
+                        ;; `tibetan-extract-vocabulary' (the
                         ;; Word/Particle List code path) already picks
                         ;; them up via `tibetan-lookup-word'; per the
                         ;; DRY rule, we need to see the same inventory
                         ;; so `multiword-units' stays in sync.
-                        ;; Width > 1 only: we don't want single-syllable
-                        ;; Steinert entries polluting `multiword-units'.
+                        ;;
+                        ;; Width == 2 only.  RangjungYeshe and IvesWaldo
+                        ;; include many multi-syllable idiomatic entries
+                        ;; (`ངོ་མཚར་དུ་གྱུར' = "marveled",
+                        ;; `བཅོམ་ལྡན་འདས་ཀྱིས་བཀའ་སྩལ་པ' = "the
+                        ;; Bhagavan replied") whose constituents are
+                        ;; still independent content words that the
+                        ;; verb / clause analysers need to see.
+                        ;; Capping at 2 keeps legitimate lexical
+                        ;; compounds while excluding phrasal idioms.
+                        ;;
+                        ;; Shadow check: when a Steinert 2-syllable hit
+                        ;; at position i would cover the first syllable
+                        ;; of a BETTER 2-syllable hit at position i+1
+                        ;; (e.g. `དུས་བསྐལ' shadowing the canonical
+                        ;; `བསྐལ་པ' at position 1 in `དུས་བསྐལ་པ་གྲངས'),
+                        ;; we reject the position-i match so the outer
+                        ;; loop falls through to len=1 and the shifted
+                        ;; MWU gets picked up on the next iteration.
                         (steinert-hit
-                         (when (and (> len 1)
+                         (when (and (= len 2)
                                     (not (or resources-vocab custom-vocab
                                              comp-vocab compound proper-noun))
+                                    (not (tibetan-enhanced-parser--case-particle-tail-p
+                                          joined))
                                     (fboundp 'tibetan-lookup-word-in-steinert))
                            (ignore-errors
-                             (tibetan-lookup-word-in-steinert joined)))))
+                             (let ((hit (tibetan-lookup-word-in-steinert
+                                         joined)))
+                               (when hit
+                                 (let* ((shift-end (+ i 3))
+                                        (shifted
+                                         (when (<= shift-end (length words))
+                                           (string-join
+                                            (cl-subseq words (1+ i) shift-end)
+                                            "་")))
+                                        (shadow
+                                         (and shifted
+                                              (not (tibetan-enhanced-parser--case-particle-tail-p
+                                                    shifted))
+                                              (tibetan-lookup-word-in-steinert
+                                               shifted))))
+                                   (unless shadow hit))))))))
                    (when (or resources-vocab custom-vocab
                              comp-vocab compound proper-noun steinert-hit)
-                     ;; Build data structure for display.  Resources /
-                     ;; Custom take precedence over the bundled sources.
-                     (let ((data (cond
-                                 (resources-vocab
-                                  `((english . ,resources-vocab)
-                                    (category . "resources")))
-                                 (custom-vocab
-                                  `((english . ,custom-vocab)
-                                    (category . "custom")))
-                                 (compound compound)
-                                 (proper-noun proper-noun)
-                                 (comp-vocab
-                                  `((english . ,comp-vocab)
-                                    (category . "vocabulary")))
-                                 (steinert-hit
-                                  `((english . ,steinert-hit)
-                                    (category . "steinert"))))))
-                       (push (list i (+ i len) joined data) matches))
-                     (setq found t)
-                     (setq i (+ i len)))))
+                     ;; Upgrade rule: a 2-syllable Steinert MWU followed
+                     ;; by a single-char case particle may extend to a
+                     ;; 3-syllable MWU when the 3-syllable form is ALSO
+                     ;; in Steinert *and* sourced from a curated
+                     ;; dictionary (Hopkins / JimValby / IvesWaldo) —
+                     ;; the 3-syllable form is then a lexicalised
+                     ;; locative/terminative compound (e.g. `ཕ་རོལ' +
+                     ;; `ན' → `ཕ་རོལ་ན' = "on the other side, beyond").
+                     ;; Rangjung Yeshe 3-syllable entries ending in a
+                     ;; particle (e.g. `འབའ་ཞིག་ཏུ' = "exclusively")
+                     ;; are phrasal: they shouldn't swallow the 2-syll
+                     ;; compound.  The source tag appears in the gloss
+                     ;; string as `[NN-SourceName]'.
+                     (let* ((effective-len len)
+                            (effective-joined joined)
+                            (effective-hit steinert-hit))
+                       (when (and steinert-hit
+                                  (= len 2)
+                                  (< (+ i 2) (length words))
+                                  (let ((next-word (nth (+ i 2) words)))
+                                    (member next-word
+                                            tibetan-enhanced-parser--case-particle-tails))
+                                  (fboundp 'tibetan-lookup-word-in-steinert))
+                         (let* ((upgraded-joined
+                                 (string-join
+                                  (cl-subseq words i (+ i 3)) "་"))
+                                (upgraded-hit
+                                 (ignore-errors
+                                   (tibetan-lookup-word-in-steinert
+                                    upgraded-joined))))
+                           (when (and upgraded-hit
+                                      (stringp upgraded-hit)
+                                      ;; Exclude Rangjung-Yeshe phrasal
+                                      ;; entries; accept curated
+                                      ;; lexicographic sources.
+                                      (not (string-match-p
+                                            "\\[[0-9]+-RangjungYeshe\\]"
+                                            upgraded-hit)))
+                             (setq effective-len 3
+                                   effective-joined upgraded-joined
+                                   effective-hit upgraded-hit))))
+                       (let ((data (cond
+                                   (resources-vocab
+                                    `((english . ,resources-vocab)
+                                      (category . "resources")))
+                                   (custom-vocab
+                                    `((english . ,custom-vocab)
+                                      (category . "custom")))
+                                   (compound compound)
+                                   (proper-noun proper-noun)
+                                   (comp-vocab
+                                    `((english . ,comp-vocab)
+                                      (category . "vocabulary")))
+                                   (effective-hit
+                                    `((english . ,effective-hit)
+                                      (category . "steinert"))))))
+                         (push (list i (+ i effective-len)
+                                     effective-joined data)
+                               matches))
+                       (setq found t)
+                       (setq i (+ i effective-len))))))
         (unless found
           (setq i (1+ i)))))
     (nreverse matches)))
