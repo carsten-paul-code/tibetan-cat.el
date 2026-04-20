@@ -391,6 +391,40 @@ the segment-level renderer output embedded."
          (string-match-p "^\\*\\* Claude Translation$"
                          (substring body start end)))))))
 
+(ert-deftest tibetan-sentence-main-clause-rendered-for-transitive ()
+  "An Erg-Abs transitive sentence (subject ERG + honorific verb
+present in the classifier DB) produces a `** Main Clause' section
+with a MAIN VERB line and the honorific verb's lemma.
+Uses `བཀའ་སྩལ' (present in the verb DB) to keep the assertion
+independent of the verb-extractor's past-stem resolution path."
+  (skip-unless (fboundp 'tibetan-analyze-round2))
+  (let* ((text "བཅོམ་ལྡན་འདས་ཀྱིས་བཀའ་སྩལ།")
+         (body (tibetan-sentence--render-main-clause text)))
+    (should body)
+    (should (string-match-p "^- MAIN VERB:" body))
+    (should (string-match-p "བཀའ་སྩལ" body))))
+
+(ert-deftest tibetan-sentence-main-clause-nil-for-no-text ()
+  "Empty / nil input returns nil (caller omits the section)."
+  (should (null (tibetan-sentence--render-main-clause nil)))
+  (should (null (tibetan-sentence--render-main-clause ""))))
+
+(ert-deftest tibetan-sentence-main-clause-nil-when-no-finite-verb ()
+  "Text with no finite verb (pure NP) returns nil — no main clause."
+  (skip-unless (fboundp 'tibetan-analyze-round2))
+  (should (null (tibetan-sentence--render-main-clause "ཆོས"))))
+
+(ert-deftest tibetan-sentence-main-clause-appears-in-auto-analysis ()
+  "The `** Main Clause' section is appended to the auto-analysis
+body emitted by `tibetan-sentence--render-auto-analysis' for a real
+Tibetan sentence with a recognised verb."
+  (skip-unless (fboundp 'tibetan-analyze-round2))
+  (let ((content (tibetan-sentence--render-auto-analysis
+                  "བཅོམ་ལྡན་འདས་ཀྱིས་བཀའ་སྩལ།")))
+    (should content)
+    (should (string-match-p "^\\*\\* Main Clause$" content))
+    (should (string-match-p "MAIN VERB" content))))
+
 (ert-deftest tibetan-sentence-scaffold-auto-analysis-strips-provided-translations ()
   "The embedded auto-analysis must NOT contain `** Provided
 Translations' (which would duplicate the sentence-level
