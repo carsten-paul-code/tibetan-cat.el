@@ -264,6 +264,29 @@ The formatter must rewrite brackets to parens."
     ;; And the pathological [[value-big]] sequence must NOT appear.
     (should-not (string-match-p "\\[\\[value-big\\]\\]" result))))
 
+(ert-deftest tibetan-interlinear-prefer-english-bilingual ()
+  "Bilingual `DE // EN' glosses are reduced to the English half."
+  (should (equal "name of a person; the cotton-clad"
+                 (tibetan-interlinear--prefer-english
+                  "Personenname; der baumwollgewandete [Yogin] aus der Mid-la-Familie // name of a person; the cotton-clad"))))
+
+(ert-deftest tibetan-interlinear-prefer-english-passthrough ()
+  "A monolingual gloss (no `//') is returned unchanged."
+  (should (equal "wisdom" (tibetan-interlinear--prefer-english "wisdom")))
+  (should (equal "jewel; precious"
+                 (tibetan-interlinear--prefer-english "jewel; precious"))))
+
+(ert-deftest tibetan-interlinear-truncate-uses-english-half ()
+  "Truncation for an interlinear-width bilingual gloss pulls text from
+the English side — the German half is no longer stranded."
+  (let ((result
+         (tibetan-interlinear--truncate-gloss
+          "Personenname; der baumwollgewandete Yogin // name of a person; the cotton-clad yogin"
+          30)))
+    (should (string-match-p "person" result))
+    (should-not (string-match-p "Personenname" result))
+    (should-not (string-match-p "baumwoll" result))))
+
 (ert-deftest tibetan-interlinear-format-gloss-mixed-brackets-sanitised ()
   "Brackets that appear INSIDE a longer gloss are also rewritten, so
 `[la] [(1) [accusative, adverbial]]' does not contain a stray `[[…]]'

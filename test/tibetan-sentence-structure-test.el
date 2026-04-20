@@ -235,6 +235,48 @@ are not in the finite-verb list and should stay weak until profiled."
     (should (eq result 'strong))))
 
 ;; ============================================================================
+;; DIALOGUE-FRAMING BOUNDARIES (Milarepa rnam-thar patterns)
+;; ============================================================================
+
+(ert-deftest tibetan-is-sentence-boundary-p-na-re-opens-dialogue ()
+  "`X ན་རེ།' (\"X said:\") opens a reported-speech frame and is a
+STRONG sentence boundary.  Without this the detector would
+fall through to the weak tier (>=2-char last syllable + shad)."
+  (should (eq 'strong
+              (tibetan-is-sentence-boundary-p "མི་ལ་རས་པ་ན་རེ།"))))
+
+(ert-deftest tibetan-is-sentence-boundary-p-ces-closes-quote ()
+  "`X ཅེས།' closes direct speech and is a STRONG boundary."
+  (should (eq 'strong
+              (tibetan-is-sentence-boundary-p "བདག་ནི་བྱང་ཆུབ་པ་ཡིན་ཅེས།"))))
+
+(ert-deftest tibetan-is-sentence-boundary-p-zhes-closes-quote ()
+  "`X ཞེས།' (the ཅེས variant) is also a STRONG boundary."
+  (should (eq 'strong
+              (tibetan-is-sentence-boundary-p "བདག་ནི་བྱང་ཆུབ་པ་ཡིན་ཞེས།"))))
+
+(ert-deftest tibetan-is-sentence-boundary-p-ces-skad-closes-quote ()
+  "The two-syllable closer `ཅེས་སྐད།' (\"with the words …\") is STRONG."
+  (should (eq 'strong
+              (tibetan-is-sentence-boundary-p "...གྲགས་སོ་ཅེས་སྐད།"))))
+
+(ert-deftest tibetan-is-sentence-boundary-p-ces-with-verb-stays-strong ()
+  "`X ཅེས་ཟེར།' — the verb path (step 7) still wins over the dialogue
+step; asserts we didn't break that by adding step 7b/c."
+  (should (eq 'strong
+              (tibetan-is-sentence-boundary-p "བདག་ནི་བྱང་ཆུབ་པ་ཡིན་ཅེས་ཟེར།"))))
+
+(ert-deftest tibetan-sentence-dialogue-patterns-defined ()
+  "The new dialogue-pattern defvars exist and are non-empty lists."
+  (should (boundp 'tibetan-sentence-dialogue-single-syllables))
+  (should (listp tibetan-sentence-dialogue-single-syllables))
+  (should (member "ཅེས" tibetan-sentence-dialogue-single-syllables))
+  (should (member "ཞེས" tibetan-sentence-dialogue-single-syllables))
+  (should (boundp 'tibetan-sentence-dialogue-two-syllable-patterns))
+  (should (listp tibetan-sentence-dialogue-two-syllable-patterns))
+  (should (member "ན་རེ" tibetan-sentence-dialogue-two-syllable-patterns)))
+
+;; ============================================================================
 ;; FINAL PARTICLE TESTS
 ;; ============================================================================
 

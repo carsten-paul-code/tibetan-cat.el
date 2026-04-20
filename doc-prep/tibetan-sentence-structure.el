@@ -129,6 +129,29 @@ written as two syllables rather than fused (e.g. པ་ལ vs. པར), and the
 fixed nominalizer + genitive + ཚེ pattern that introduces a temporal
 subordinate clause (e.g. ཡོད་པའི་ཚེ། \"while being\").")
 
+(defvar tibetan-sentence-dialogue-single-syllables
+  '("ཅེས" "ཞེས")
+  "Quotative markers that close direct speech with a shad.
+`X ཅེས།' and `X ཞེས།' (\"so saith X\") end a reported-speech
+sentence — a ubiquitous Milarepa rnam-thar pattern.  Without
+this list the detector sees just a multi-syllable phrase ending
+in shad and falls through to the weak tier; with it we promote
+to strong.")
+
+(defvar tibetan-sentence-dialogue-two-syllable-patterns
+  '("ན་རེ"
+    ;; Quotative closers with following speech verb that is NOT yet in
+    ;; the finite-verb list (the single-syllable verbs ARE, but the
+    ;; two-syllable combinations read more cleanly as one unit):
+    "ཅེས་སྐད"  ; ...ces skad    "with the words ..."
+    "ཞེས་སྐད") ; ...zhes skad   variant
+  "Two-syllable dialogue-framing patterns that close a sentence.
+
+`X ན་རེ།' — \"X said:\" — opens a quoted section and typically
+ends its own short sentence.  `ཅེས་སྐད' / `ཞེས་སྐད' ending
+patterns (`...ces skad') close reported speech.  Both are
+STRONG boundaries on the rnam-thar corpus.")
+
 (defun tibetan-extract-particle-text (particle)
   "Extract text from a particle, handling both string and list formats.
 If PARTICLE is a string, return it as a single-element list.
@@ -183,15 +206,24 @@ gate on confidence (e.g. the auto-segmenter defaulting to strong-only)
 can test the symbol explicitly with `eq'.
 
 Detection layers, in order:
-  1. Double shad (།།, ༎)                             → strong
-  2. No shad at all                                   → nil
-  3. Two-syllable non-boundary patterns (e.g. པ་ལ།)   → nil
-  4. Converb / clause-connective last syllable        → nil
-  5. Case particle last syllable                      → nil
-  6. Topic marker last syllable (ནི།)                 → nil
-  7. Sentence-final particle / finite verb            → strong
-  8. Bare single shad on multi-syllable phrase        → weak
-  9. Single-syllable phrase (likely fused ergative)   → nil"
+  1. Double shad (།།, ༎)                                 → strong
+  2. No shad at all                                       → nil
+  3. Two-syllable non-boundary patterns (e.g. པ་ལ།)       → nil
+  4. Converb / clause-connective last syllable            → nil
+  5. Case particle last syllable                          → nil
+  6. Topic marker last syllable (ནི།)                     → nil
+  7. Sentence-final particle / finite verb                → strong
+  7b. Dialogue two-syllable pattern (ན་རེ།, ཅེས་སྐད།)    → strong
+  7c. Quotative single-syllable closer (ཅེས།, ཞེས།)       → strong
+  8. Bare single shad on multi-syllable phrase            → weak
+  9. Single-syllable phrase (likely fused ergative)       → nil
+
+Steps 7b and 7c handle Milarepa-style dialogue framing: `X ན་རེ།'
+opens a quoted section (short framing sentence), and `X ཅེས།' or
+`X ཞེས།' closes one.  Without these, the detector fell through to
+the weak tier and required manual confirmation for every reported-
+speech boundary — costly on a rnam-thar corpus where dialogue is
+the dominant structure."
   (when (and text (> (length (string-trim text)) 0))
     (let* ((trimmed (string-trim text))
            (has-double-shad (or (string-suffix-p "།།" trimmed)
@@ -209,6 +241,14 @@ Detection layers, in order:
        ((member last-syl tibetan-case-particle-syllables) nil)
        ((member last-syl tibetan-topic-particle-syllables) nil)
        ((member last-syl tibetan-sentence-final-particles) 'strong)
+       ;; Dialogue framing — two-syllable patterns (ན་རེ།, ཅེས་སྐད།).
+       ((and last-two
+             (member last-two
+                     tibetan-sentence-dialogue-two-syllable-patterns))
+        'strong)
+       ;; Dialogue framing — single-syllable quotative closers (ཅེས།, ཞེས།).
+       ((member last-syl tibetan-sentence-dialogue-single-syllables)
+        'strong)
        ;; Bare single shad: weak boundary when the last syllable is
        ;; multi-character.  Single-character stems (e.g. fused ergative
        ;; ཁོས → ས) are too ambiguous; leave those as nil.

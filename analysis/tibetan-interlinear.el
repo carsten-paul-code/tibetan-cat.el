@@ -372,16 +372,37 @@ Returns something like:
 
     (mapconcat #'identity (nreverse parts) " ")))
 
+(defun tibetan-interlinear--prefer-english (meaning)
+  "If MEANING is a bilingual `DE // EN' gloss, return just the English half.
+Otherwise return MEANING unchanged.
+
+User-curated Resources entries routinely carry both halves
+separated by ` // ' — e.g. `Personenname; der baumwollgewandete
+[Yogin] aus der Mid-la-Familie // name of a person; the
+cotton-clad [yogin] from the Mid la family'.  Without this
+helper the interlinear would truncate the German half and leave
+the reader with a stub like `Personenname; der', which is
+semantically worthless at a glance.  We strip everything up to
+and including the first ` // ' and keep what follows, recursively
+in case the entry packs multiple `//' separators (take the last
+segment, which in practice is always English)."
+  (if (and meaning (string-match-p " // " meaning))
+      (car (last (split-string meaning " // " t)))
+    meaning))
+
 (defun tibetan-interlinear--truncate-gloss (meaning max-len)
   "Truncate MEANING to MAX-LEN characters for interlinear display.
-Tries to cut at a word boundary."
-  (if (<= (length meaning) max-len)
-      meaning
-    (let* ((cut (substring meaning 0 max-len))
-           (space-pos (cl-position ?\s cut :from-end t)))
-      (if (and space-pos (> space-pos (/ max-len 2)))
-          (substring cut 0 space-pos)
-        (concat (substring meaning 0 (- max-len 1)) "…")))))
+Tries to cut at a word boundary.  Bilingual `DE // EN' glosses are
+reduced to their English half first so the truncation never
+strands the reader on half a German phrase."
+  (let ((m (tibetan-interlinear--prefer-english meaning)))
+    (if (<= (length m) max-len)
+        m
+      (let* ((cut (substring m 0 max-len))
+             (space-pos (cl-position ?\s cut :from-end t)))
+        (if (and space-pos (> space-pos (/ max-len 2)))
+            (substring cut 0 space-pos)
+          (concat (substring m 0 (- max-len 1)) "…"))))))
 
 (defun tibetan-interlinear-generate-gloss (_vocab-pairs enriched-vocab-pairs
                                             bialek-analysis _tibetan-text)
