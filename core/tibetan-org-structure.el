@@ -105,7 +105,13 @@ below it."
 (defun tibetan-org-get-segment-text ()
   "Get Tibetan text from current segment.
 Works when positioned anywhere in or under a *** Segment heading.
-Returns nil if not in a segment (no error raised)."
+Returns nil if not in a segment (no error raised).
+
+Skips an `:PROPERTIES: … :END:' drawer immediately following the
+heading (used e.g. for `:FOLIO:' markers on Yogācārabhūmi segments)
+so the drawer body is not mistaken for Tibetan text.  Also skips any
+child `**** Working Translation' / other subheadings — only the
+segment's own body text is returned."
   (condition-case nil
       (save-excursion
         (when (tibetan-org-at-segment-p)
@@ -117,11 +123,25 @@ Returns nil if not in a segment (no error raised)."
           ;; especially when called from org-map-entries
           (save-restriction
             (org-narrow-to-subtree)
-            (let ((text (buffer-substring-no-properties
-                         (save-excursion
-                           (forward-line 1)  ; Skip the heading line
-                           (point))
-                         (point-max))))
+            (let* ((body-start
+                    (save-excursion
+                      (forward-line 1)          ; Past the heading line.
+                      ;; Skip a leading `:PROPERTIES: … :END:' drawer
+                      ;; if present — drawers are Org syntax for per-
+                      ;; heading metadata (e.g. :FOLIO: D3a3).
+                      (when (looking-at-p "[ \t]*:PROPERTIES:[ \t]*$")
+                        (when (re-search-forward
+                               "^[ \t]*:END:[ \t]*$" nil t)
+                          (forward-line 1)))
+                      (point)))
+                   (body-end
+                    (save-excursion
+                      (goto-char body-start)
+                      ;; Stop at the first child heading (any depth).
+                      (if (re-search-forward "^\\*+ " nil t)
+                          (line-beginning-position)
+                        (point-max))))
+                   (text (buffer-substring-no-properties body-start body-end)))
               (widen)
               (when (and text (not (string-empty-p (string-trim text))))
                 (string-trim text))))))

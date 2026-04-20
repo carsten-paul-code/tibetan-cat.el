@@ -157,6 +157,52 @@ at level 3, segments at level 4.")
       (should text)
       (should (string-match-p "སངས་རྒྱས" text)))))
 
+(ert-deftest tibetan-org-get-segment-text-skips-properties-drawer ()
+  "A `:PROPERTIES: … :END:' drawer immediately under a segment heading
+(used e.g. for `:FOLIO:' markers on YBh segments) must be skipped —
+only the real Tibetan body follows it.
+
+Regression for YBh segments 30–34 (2026-04-20): the extractor was
+returning the drawer body (`:PROPERTIES: :FOLIO: D3a3 :END:')
+concatenated with the Tibetan text, which occasionally tripped the
+structural analyser into `[Error during analysis]' (Wrong type
+argument: stringp, nil)."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* Text\n\n"
+            "*** Segment 30\n"
+            ":PROPERTIES:\n"
+            ":FOLIO: D3a3\n"
+            ":END:\n"
+            "གཞན་ཡང་བྱང་ཆུབ་སེམས་དཔའ་ནི།\n")
+    (goto-char (point-min))
+    (search-forward "*** Segment 30")
+    (let ((text (tibetan-org-get-segment-text)))
+      (should text)
+      (should (string-match-p "གཞན་ཡང་" text))
+      ;; The drawer contents must NOT leak into the returned text.
+      (should-not (string-match-p ":PROPERTIES:" text))
+      (should-not (string-match-p ":FOLIO:" text))
+      (should-not (string-match-p ":END:" text)))))
+
+(ert-deftest tibetan-org-get-segment-text-skips-child-headings ()
+  "A segment's own body stops at the next heading (any depth),
+so a `**** Working Translation' sibling subheading is not included."
+  (with-temp-buffer
+    (org-mode)
+    (insert "*** Segment 1\n"
+            "BODY-MARKER\n"
+            "\n"
+            "**** Working Translation\n"
+            "Translation-only body — must not appear in segment text.\n")
+    (goto-char (point-min))
+    (search-forward "*** Segment 1")
+    (let ((text (tibetan-org-get-segment-text)))
+      (should text)
+      (should (string-match-p "BODY-MARKER" text))
+      (should-not (string-match-p "Working Translation" text))
+      (should-not (string-match-p "Translation-only body" text)))))
+
 (ert-deftest tibetan-org-get-segment-text-nil-outside ()
   "Test that nil is returned when not in a segment."
   (tibetan-test-with-org-buffer tibetan-org-test--sample-org-buffer
