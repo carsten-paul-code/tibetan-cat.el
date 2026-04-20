@@ -775,17 +775,34 @@ stay consistent everywhere.")
 
 (defun tibetan-analysis--claude-segment-layout-p (buffer)
   "Return non-nil if BUFFER uses the segment-level analysis layout.
-The distinguishing marker is `** Wylie Transliteration' at org
-level 2 — present in per-segment analysis files (seg-NNN*.org) but
-not in sentence-level files (sent-NNN*.org), which use `* Wylie' at
-level 1.  Empty / brand-new buffers default to segment layout so
-fresh scaffolds get Translation promoted to level 2."
+
+Sentence-level files (sent-NNN*.org) carry a `#+SEGMENTS:' header
+listing their child segment numbers — a marker no segment file
+ever has.  We use that as the primary discriminator because the
+older heuristic (`** Wylie Transliteration' at level 2) became
+ambiguous after sentence files grew an embedded `* Auto-Analysis'
+block that reuses the segment-level renderer — both layouts now
+have `** Wylie Transliteration'.
+
+Fallback (pre-`#+SEGMENTS:' files): presence of a top-level
+`* Provided Translations' heading is a sentence-layout marker,
+because segment files keep Provided Translations at level 2
+inside Auto-Analysis.  Brand-new / empty buffers still default
+to segment layout so fresh per-segment scaffolds get Translation
+promoted to level 2."
   (with-current-buffer buffer
     (save-excursion
       (goto-char (point-min))
-      (or (re-search-forward "^\\*\\* Wylie Transliteration$" nil t)
-          ;; Fresh scaffold not yet populated — treat as segment.
-          (= (buffer-size) 0)))))
+      (cond
+       ;; Sentence file marker — #+SEGMENTS: header.
+       ((re-search-forward "^#\\+SEGMENTS:" nil t) nil)
+       ;; Sentence file marker — `* Provided Translations' at level 1.
+       ((progn
+          (goto-char (point-min))
+          (re-search-forward "^\\* Provided Translations$" nil t))
+        nil)
+       ;; Empty buffer or no sentence marker — segment layout.
+       (t t)))))
 
 (defun tibetan-analysis--migrate-legacy-claude-headings (buffer)
   "Migrate legacy `*** Claude' / `*** Claude Translation' in BUFFER.

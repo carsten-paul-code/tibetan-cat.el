@@ -111,16 +111,22 @@ Pass nil for any arg to leave that body empty."
     (claude-translation claude-grammar claude-context
      &optional claude-vocabulary)
   "Return a sentence-layout analysis body (four Claude sections at level 3).
-Pass nil for any of the CLAUDE-* args to leave that body empty."
+Pass nil for any of the CLAUDE-* args to leave that body empty.
+
+The layout mirrors a real sent-NNN.org as produced by
+`tibetan-sentence-persist': a `#+SEGMENTS:' header (the canonical
+marker that distinguishes sentence files from segment files) and
+`* Provided Translations' at org level 1 (top-level) wrapping the
+Claude subsections at level 3."
   (concat
    "#+TITLE: Sentence 1 Analysis\n"
+   "#+SEGMENTS: 1\n"
    "#+TIBETAN_HASH: cafebabe\n\n"
    "* Tibetan Text\n"
    "བདག་གིས་ལས་བྱས།\n\n"
-   "* Auto-Analysis\n"
-   ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
-   "** Provided Translations\n"
-   "*** DharmaMitra\n[stub]\n\n"
+   "* Provided Translations\n"
+   "*** Roehrich\n[stub]\n\n"
+   "*** Class Translation\n[stub]\n\n"
    "*** Claude Translation\n"
    (or claude-translation "")
    "\n\n"
@@ -133,7 +139,7 @@ Pass nil for any of the CLAUDE-* args to leave that body empty."
    "*** Claude Context\n"
    (or claude-context "")
    "\n\n"
-   "*** Reference Translations\n[none]\n\n"
+   "* Working Translation\n\n\n"
    "* My Notes\n\n\n"
    "* Footnotes\n\n"))
 
