@@ -804,6 +804,78 @@ promoted to level 2."
        ;; Empty buffer or no sentence marker — segment layout.
        (t t)))))
 
+(defun tibetan-analysis--claude-heading-inside-provided-p ()
+  "Return non-nil if POINT is currently inside `* Provided Translations'.
+Point should be on (or just after) a `*** Claude …' heading.  We
+look up to find the nearest preceding `^\\* ' level-1 heading
+and check whether its text is `Provided Translations'."
+  (save-excursion
+    (beginning-of-line)
+    (when (re-search-backward "^\\* " nil t)
+      (looking-at "^\\* Provided Translations$"))))
+
+(defun tibetan-analysis--reparent-orphaned-claude-subsections (buffer)
+  "Move level-3 Claude subsections that landed outside
+`* Provided Translations' back into that section.
+
+Earlier regenerate runs on sentence files (pre-reparent fix) could
+append `*** Claude Translation' / `*** Claude Vocabulary' /
+`*** Claude Grammar' at the end of the buffer (after `* Footnotes')
+rather than inside Provided Translations.  This helper walks each
+`^\\*\\*\\* Claude \\(Translation\\|Vocabulary\\|Grammar\\|Context\\)$'
+heading, checks whether it sits inside `* Provided Translations',
+and if not cuts the heading + body and re-inserts it at the end of
+the Provided Translations section.  No-op when no Provided
+Translations section exists or when no orphans are found."
+  (with-current-buffer buffer
+    (unless (save-excursion
+              (goto-char (point-min))
+              (not (re-search-forward "^\\* Provided Translations$" nil t)))
+      (let ((headings '("Claude Translation" "Claude Vocabulary"
+                        "Claude Grammar" "Claude Context")))
+        (dolist (heading headings)
+          (let (found-start body)
+            ;; Scan for an orphaned instance; capture + delete it.
+            (save-excursion
+              (goto-char (point-min))
+              (while (and (not found-start)
+                          (re-search-forward
+                           (format "^\\*\\*\\* %s$" (regexp-quote heading))
+                           nil t))
+                (unless (tibetan-analysis--claude-heading-inside-provided-p)
+                  (let* ((h-start (line-beginning-position))
+                         (body-start (progn (forward-line 1) (point)))
+                         (body-end
+                          (save-excursion
+                            (if (re-search-forward
+                                 (tibetan-analysis--claude-stop-re 3)
+                                 nil t)
+                                (line-beginning-position)
+                              (point-max))))
+                         (captured (string-trim
+                                    (buffer-substring-no-properties
+                                     body-start body-end))))
+                    (setq found-start h-start
+                          body captured)
+                    (delete-region h-start body-end)))))
+            ;; Re-insert inside Provided Translations at end.
+            (when found-start
+              (save-excursion
+                (goto-char (point-min))
+                (when (re-search-forward
+                       "^\\* Provided Translations$" nil t)
+                  (let ((section-end
+                         (save-excursion
+                           (if (re-search-forward "^\\* " nil t)
+                               (line-beginning-position)
+                             (point-max)))))
+                    (goto-char section-end)
+                    (skip-chars-backward " \t\n")
+                    (insert (format "\n\n*** %s\n%s\n"
+                                    heading
+                                    (if (string-empty-p body) ""
+                                      (concat body "\n"))))))))))))))
+
 (defun tibetan-analysis--migrate-legacy-claude-headings (buffer)
   "Migrate legacy `*** Claude' / `*** Claude Translation' in BUFFER.
 Segment-layout buffers (with `** Wylie Transliteration'):
@@ -815,7 +887,9 @@ Segment-layout buffers (with `** Wylie Transliteration'):
 
 Sentence-layout buffers (no `** Wylie Transliteration'):
 1. Rename bare `*** Claude' → `*** Claude Translation'.
-No level promotion — the sentence layout keeps Claude at level 3.
+2. Reparent any level-3 Claude subsection that escaped
+   `* Provided Translations' (e.g. appended after `* Footnotes' by
+   a previous regenerate run) back into that section.
 
 Both branches are no-ops when nothing to migrate."
   (with-current-buffer buffer
@@ -843,7 +917,14 @@ Both branches are no-ops when nothing to migrate."
                           (buffer-substring-no-properties body-start body-end))))
               (delete-region heading-start body-end)
               (tibetan-analysis--insert-claude-translation-heading
-               (current-buffer) body))))))))
+               (current-buffer) body))))))
+      ;; Step 3 (sentence only): reparent any level-3 Claude subsection
+      ;; that previously landed outside `* Provided Translations' back
+      ;; into it.  Repairs files written by the pre-fix regenerate run
+      ;; that appended orphaned Claude headings at end-of-buffer.
+      (unless (tibetan-analysis--claude-segment-layout-p buffer)
+        (tibetan-analysis--reparent-orphaned-claude-subsections buffer))))
+
 
 (defun tibetan-analysis--insert-claude-translation-heading (buffer body)
   "Insert `** Claude Translation' with BODY into BUFFER at the top.
@@ -1022,32 +1103,52 @@ whichever target heading is still missing.  Idempotent."
             (goto-char (point-max))
             (insert "\n** Claude Grammar\n\n"))))
        ;; -------------------------------------------------------------
-       ;; SENTENCE / LEGACY LAYOUT: all four headings at level 3.
-       ;; -------------------------------------------------------------
+       ;; SENTENCE LAYOUT: all four Claude headings at level 3 inside
+       ;; the TOP-LEVEL `* Provided Translations' section.
+       ;;
+       ;; Sentence files emit `* Provided Translations' at org level 1
+       ;; (as a peer of `* Tibetan Text' / `* Auto-Analysis'), with
+       ;; Roehrich / Class / Claude subsections at level 3 inside.
+       ;; The previous dolist-with-chained-prev algorithm worked on a
+       ;; fresh file (all four Claude headings missing) but collapsed
+       ;; when regenerate had just deleted and re-inserted the
+       ;; Auto-Analysis block: `--read-claude-sections' had grabbed
+       ;; Translation and Grammar bodies from their (bug-inserted)
+       ;; level-2 positions, the delete removed those headings, and
+       ;; the missing-heading restore then appended them at end of
+       ;; file (after `* Footnotes') instead of slotting into the
+       ;; actual Provided Translations section.
+       ;;
+       ;; This version anchors insertion on `* Provided Translations'
+       ;; directly.  Each missing Claude heading is placed at the end
+       ;; of that section (just before the next `* ' top-level
+       ;; heading or end-of-buffer), so the order becomes Roehrich,
+       ;; Class Translation, <existing Claude siblings>, <newly
+       ;; inserted>.  Fallback (truly no Provided Translations block
+       ;; at all) still appends at end of buffer so the headings
+       ;; exist SOMEWHERE for the replace-body path to find.
        (t
-        (let ((prev "Claude Translation"))
-          (dolist (heading '("Claude Translation" "Claude Vocabulary" "Claude Grammar" "Claude Context"))
-            (unless (save-excursion
-                      (goto-char (point-min))
-                      (re-search-forward
-                       (format "^\\*\\*\\* %s$" (regexp-quote heading))
-                       nil t))
-              (goto-char (point-min))
-              (cond
-               ;; Place after previous sibling if it exists.
-               ((re-search-forward
-                 (format "^\\*\\*\\* %s$" (regexp-quote prev)) nil t)
-                (forward-line 1)
-                (if (re-search-forward
-                     (tibetan-analysis--claude-stop-re 3) nil t)
-                    (beginning-of-line)
-                  (goto-char (point-max)))
-                (insert (format "*** %s\n\n\n" heading)))
-               ;; No previous sibling — append at end of buffer.
-               (t
-                (goto-char (point-max))
-                (insert (format "\n*** %s\n\n" heading)))))
-            (setq prev heading))))))))
+        (dolist (heading '("Claude Translation" "Claude Vocabulary"
+                           "Claude Grammar" "Claude Context"))
+          (unless (save-excursion
+                    (goto-char (point-min))
+                    (re-search-forward
+                     (format "^\\*\\*\\* %s$" (regexp-quote heading))
+                     nil t))
+            (goto-char (point-min))
+            (cond
+             ((re-search-forward "^\\* Provided Translations$" nil t)
+              (let ((section-end
+                     (save-excursion
+                       (if (re-search-forward "^\\* " nil t)
+                           (line-beginning-position)
+                         (point-max)))))
+                (goto-char section-end)
+                (skip-chars-backward " \t\n")
+                (insert (format "\n\n*** %s\n\n" heading))))
+             (t
+              (goto-char (point-max))
+              (insert (format "\n*** %s\n\n" heading)))))))))))
 
 (defun tibetan-analysis--replace-claude-section-body
     (buffer heading body &optional level)
