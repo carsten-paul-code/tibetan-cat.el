@@ -35,7 +35,14 @@
       :active (fboundp 'tibetan-doc-prep-validate)]
      ["AI Correct Buffer" tibetan-doc-prep-correct
       :help "AI-assisted correction of OCR errors"
-      :active (fboundp 'tibetan-doc-prep-correct)])
+      :active (fboundp 'tibetan-doc-prep-correct)]
+     "---"
+     ["Migrate 〔seg:N〕/〔trans:N〕 to Headings" tibetan-migrate-inline-segments-to-headings
+      :help "Convert paired inline 〔seg:N〕…〔/seg〕 + 〔trans:N〕…〔/trans〕 markers to *** Segment / **** Working Translation"
+      :active (fboundp 'tibetan-migrate-inline-segments-to-headings)]
+     ["Migrate bare 〔seg:N〕 to Headings" tibetan-migrate-bare-segments-to-headings
+      :help "Convert bare 〔seg:N〕…〔/seg〕 markers to *** Segment headings; flatten Tibetan-title headings to ** Section; hoist #+KEYWORD metadata to document header"
+      :active (fboundp 'tibetan-migrate-bare-segments-to-headings)])
     "---"
     ["Segment Info (C-c u i)" tibetan-segment-info
      :help "Show comprehensive segment analysis in side window"]
