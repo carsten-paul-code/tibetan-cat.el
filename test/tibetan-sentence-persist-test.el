@@ -1078,6 +1078,78 @@ afterwards (buffer killed, directory recursively deleted)."
       (should (string-match-p "#\\+SEGMENTS:[[:space:]]*1\\b" s1))
       (should (string-match-p "#\\+SEGMENTS:[[:space:]]*2[,[:space:]]+3" s2)))))
 
+(ert-deftest tibetan-sentence--fire-claude-on-new-files-stubbed ()
+  "`tibetan-sentence--fire-claude-on-new-files' calls
+`tibetan-sentence--request-claude' once per non-empty plist.
+
+Stubs `run-at-time' to execute the lambda immediately and
+`tibetan-sentence--request-claude' to record its (tibetan, seg-nums,
+filepath, source-file) arguments, then asserts all three calls happened
+with the expected contents."
+  (skip-unless (fboundp 'tibetan-sentence--fire-claude-on-new-files))
+  (let ((captured '()))
+    (cl-letf (((symbol-function 'run-at-time)
+               (lambda (_delay _repeat fn) (funcall fn)))
+              ((symbol-function 'tibetan-sentence--request-claude)
+               (lambda (tibetan seg-nums filepath source-file)
+                 (push (list :tibetan tibetan
+                             :seg-nums seg-nums
+                             :filepath filepath
+                             :source-file source-file)
+                       captured))))
+      (tibetan-sentence--fire-claude-on-new-files
+       (list (list :sent-num 1 :seg-nums '(1 2) :tibetan "text one"
+                   :filepath "/tmp/sent-001.org")
+             (list :sent-num 2 :seg-nums '(3) :tibetan "text two"
+                   :filepath "/tmp/sent-002.org"))
+       "/tmp/source.org"))
+    (setq captured (nreverse captured))
+    (should (= 2 (length captured)))
+    (should (equal "text one"           (plist-get (nth 0 captured) :tibetan)))
+    (should (equal '(1 2)               (plist-get (nth 0 captured) :seg-nums)))
+    (should (equal "/tmp/sent-001.org"  (plist-get (nth 0 captured) :filepath)))
+    (should (equal "/tmp/source.org"    (plist-get (nth 0 captured) :source-file)))
+    (should (equal "text two"           (plist-get (nth 1 captured) :tibetan)))))
+
+(ert-deftest tibetan-sentence-create-all-fires-claude-on-new-files ()
+  "After creating new sent-*.org, `create-all' queues a Claude request
+for each one when `tibetan-auto-fire-claude-on-create' is non-nil.
+
+Stubs `tibetan-sentence--fire-claude-on-new-files' directly so the
+fixture doesn't need to reach into gptel.  Asserts:
+  1. The fire helper was called exactly once (per create-all run).
+  2. The plist list length matches the number of newly-created files.
+  3. Pre-existing files are NOT passed to the fire helper."
+  (tibetan-sentence-test--with-source-and-analysis
+      source-buf source-file folder
+    ;; Pre-create sent-001.org to force a skip; sent-002 will be new.
+    (with-temp-file (expand-file-name "sent-001.org" folder)
+      (insert "pre-existing sent-001\n"))
+    (let ((fire-calls '()))
+      (cl-letf (((symbol-function 'tibetan-sentence--fire-claude-on-new-files)
+                 (lambda (plists _source)
+                   (push plists fire-calls))))
+        (with-current-buffer source-buf
+          (tibetan-sentence-create-all))
+        (should (= 1 (length fire-calls)))
+        (let ((plists (car fire-calls)))
+          (should (= 1 (length plists)))
+          (should (equal 2 (plist-get (car plists) :sent-num))))))))
+
+(ert-deftest tibetan-sentence-create-all-skips-claude-when-gated-off ()
+  "With `tibetan-auto-fire-claude-on-create' set to nil the fire
+helper is NOT called — preserving the old structure-only behaviour
+for users who want a two-step flow."
+  (tibetan-sentence-test--with-source-and-analysis
+      source-buf source-file folder
+    (let ((fire-calls 0))
+      (cl-letf (((symbol-function 'tibetan-sentence--fire-claude-on-new-files)
+                 (lambda (&rest _) (setq fire-calls (1+ fire-calls))))
+                (tibetan-auto-fire-claude-on-create nil))
+        (with-current-buffer source-buf
+          (tibetan-sentence-create-all))
+        (should (zerop fire-calls))))))
+
 (ert-deftest tibetan-sentence-create-all-skips-segment-subsections ()
   "Sibling subsections like `**** Working Translation' inside a segment
 must NOT leak into the sentence's concatenated Tibetan text.

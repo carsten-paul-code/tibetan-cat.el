@@ -1361,27 +1361,75 @@ Reports created / skipped counts on completion."
     (unless sentences
       (user-error "No `*** Sentence N' headings in the current buffer — run `C-c s S' first"))
     ;; Second pass: create each sent-NNN.org.
-    (dolist (s sentences)
-      (let* ((sent-num (plist-get s :sent-num))
-             (seg-nums (plist-get s :seg-nums))
-             (tibetan  (plist-get s :tibetan))
-             (filepath (tibetan-sentence--filepath sent-num)))
-        (cond
-         ((file-exists-p filepath)
-          (setq skipped (1+ skipped)))
-         (t
-          (condition-case _err
-              (progn
-                (tibetan-sentence--create-file
-                 sent-num seg-nums tibetan source-file)
-                (setq created (1+ created)))
-            (error (setq failed (1+ failed))))))))
-    (message "Sentence files: %d created, %d skipped (already existed), %d failed (total %d sentence%s)"
-             created skipped failed
-             (length sentences)
-             (if (= (length sentences) 1) "" "s"))
+    (let ((newly-created '()))
+      (dolist (s sentences)
+        (let* ((sent-num (plist-get s :sent-num))
+               (seg-nums (plist-get s :seg-nums))
+               (tibetan  (plist-get s :tibetan))
+               (filepath (tibetan-sentence--filepath sent-num)))
+          (cond
+           ((file-exists-p filepath)
+            (setq skipped (1+ skipped)))
+           (t
+            (condition-case _err
+                (progn
+                  (tibetan-sentence--create-file
+                   sent-num seg-nums tibetan source-file)
+                  (setq created (1+ created))
+                  ;; Remember what we wrote so Claude can be fired below.
+                  (push (list :sent-num sent-num
+                              :seg-nums seg-nums
+                              :tibetan tibetan
+                              :filepath filepath)
+                        newly-created))
+              (error (setq failed (1+ failed))))))))
+      (message "Sentence files: %d created, %d skipped (already existed), %d failed (total %d sentence%s)"
+               created skipped failed
+               (length sentences)
+               (if (= (length sentences) 1) "" "s"))
+      ;; Parallel to `tibetan-auto-analyze-document': fire Claude on
+      ;; every newly-created sent-*.org (throttled, async) so initial
+      ;; batch creation matches the single-file `C-c s A' behaviour
+      ;; that fires Claude on file birth.
+      (when (and (bound-and-true-p tibetan-auto-fire-claude-on-create)
+                 newly-created)
+        (tibetan-sentence--fire-claude-on-new-files
+         (nreverse newly-created) source-file)))
     `(:created ,created :skipped ,skipped :failed ,failed
       :total ,(length sentences))))
+
+(defun tibetan-sentence--fire-claude-on-new-files (plists source-file)
+  "Queue Claude translation requests for sentence files in PLISTS.
+
+Each PLIST has :sent-num, :seg-nums, :tibetan, :filepath.  Requests
+are staggered by `tibetan-auto-claude-request-delay' (defaulting to
+1.5s if the segment-level auto-analysis module isn't loaded), so 85
+new sentences take 85 × 1.5 ≈ 2 min of async queue time.  Individual
+failures are swallowed to `message'."
+  (let* ((delay-step (or (bound-and-true-p tibetan-auto-claude-request-delay)
+                         1.5))
+         (delay 0.0)
+         (count (length plists)))
+    (message "Queueing Claude requests for %d newly-created sentence file%s \
+(one every %.1fs, async)..."
+             count (if (= count 1) "" "s") delay-step)
+    (dolist (p plists)
+      (let ((filepath (plist-get p :filepath))
+            (tibetan  (plist-get p :tibetan))
+            (seg-nums (plist-get p :seg-nums))
+            (this-delay delay))
+        (when (and tibetan (not (string-empty-p tibetan)))
+          (run-at-time
+           this-delay nil
+           (lambda ()
+             (condition-case err
+                 (tibetan-sentence--request-claude
+                  tibetan seg-nums filepath source-file)
+               (error
+                (message "Sentence Claude request failed for %s: %s"
+                         (file-name-nondirectory filepath)
+                         (error-message-string err))))))
+          (setq delay (+ delay delay-step)))))))
 
 ;;;###autoload
 (defun tibetan-sentence-resegment ()

@@ -143,6 +143,50 @@ segments.  Fixed to `^\\*+ Segment '."
       (should (string-match-p "བཀྲ་ཤིས" (cdr (assoc 1 segments))))
       (should (string-match-p "པདྨ" (cdr (assoc 3 segments)))))))
 
+(ert-deftest tibetan-auto-fire-claude-on-create-defcustom-exists ()
+  "The gate defcustom exists and defaults to t."
+  (should (boundp 'tibetan-auto-fire-claude-on-create))
+  (should (eq t (default-value 'tibetan-auto-fire-claude-on-create))))
+
+(ert-deftest tibetan-auto--fire-claude-on-new-files-stubbed ()
+  "`tibetan-auto--fire-claude-on-new-files' queues one request per pair.
+
+Stubs `run-at-time' to execute the lambda immediately, and stubs
+`tibetan-analysis--request-claude-translation' to record its args;
+then asserts the stub was called for every pair with the expected
+(tibetan-text, filepath) arguments."
+  (skip-unless (fboundp 'tibetan-auto--fire-claude-on-new-files))
+  (let ((captured '()))
+    (cl-letf (((symbol-function 'run-at-time)
+               (lambda (_delay _repeat fn) (funcall fn)))
+              ((symbol-function 'tibetan-analysis--request-claude-translation)
+               (lambda (text filepath)
+                 (push (cons filepath text) captured))))
+      (tibetan-auto--fire-claude-on-new-files
+       '(("/tmp/seg-001.org" . "text-one")
+         ("/tmp/seg-002.org" . "text-two")
+         ("/tmp/seg-003.org" . "text-three"))))
+    (setq captured (nreverse captured))
+    (should (= 3 (length captured)))
+    (should (equal "/tmp/seg-001.org" (car (nth 0 captured))))
+    (should (equal "text-one"         (cdr (nth 0 captured))))
+    (should (equal "/tmp/seg-003.org" (car (nth 2 captured))))
+    (should (equal "text-three"       (cdr (nth 2 captured))))))
+
+(ert-deftest tibetan-auto--fire-claude-skips-empty-text ()
+  "Pairs whose Tibetan text is nil or empty are not queued."
+  (skip-unless (fboundp 'tibetan-auto--fire-claude-on-new-files))
+  (let ((count 0))
+    (cl-letf (((symbol-function 'run-at-time)
+               (lambda (_delay _repeat fn) (funcall fn)))
+              ((symbol-function 'tibetan-analysis--request-claude-translation)
+               (lambda (_text _filepath) (setq count (1+ count)))))
+      (tibetan-auto--fire-claude-on-new-files
+       '(("/tmp/seg-001.org" . "real text")
+         ("/tmp/seg-002.org" . "")
+         ("/tmp/seg-003.org" . nil))))
+    (should (= 1 count))))
+
 (ert-deftest tibetan-auto-collect-sentences-level-3-after-add-structure ()
   "Sentences at `*** Sentence N' (after `tibetan-add-sentence-structure')
 are picked up alongside the legacy `** Sentence N' layout.

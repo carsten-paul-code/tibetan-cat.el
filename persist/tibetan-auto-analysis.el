@@ -272,6 +272,27 @@ SOURCE-FILE is the path to the source document."
 ;; ============================================================================
 
 ;;;###autoload
+(defcustom tibetan-auto-fire-claude-on-create t
+  "Whether initial batch creation should fire Claude translation requests.
+
+When non-nil (default), `tibetan-auto-analyze-document' and
+`tibetan-sentence-create-all' queue staggered gptel requests for
+every newly-created `seg-*.org' (resp. `sent-*.org') file immediately
+after the structural analysis is written — so a single
+`C-c u B' / `C-c s N' produces both the structural skeleton AND
+Claude translations, matching what the single-file `C-c u A' /
+`C-c s A' commands have always done.
+
+Set to nil to skip the Claude step and rely on a subsequent
+`tibetan-auto-request-claude-translations' run.  Pre-existing files
+(skipped by the structural pass) are NOT re-fired regardless of this
+setting — use `C-u C-c u r' / `C-u C-c s r' for that.
+
+The fire is async and throttled by `tibetan-auto-claude-request-delay'
+(default 1.5s per request); results arrive in the background."
+  :type 'boolean
+  :group 'tibetan-cat)
+
 (defun tibetan-auto-analyze-document (&optional force)
   "Automatically generate analysis files for all segments and sentences.
 
@@ -281,6 +302,11 @@ Otherwise, skips existing files based on `tibetan-auto-skip-existing'.
 Creates:
 - analysis/seg-NNN-*.org for each segment (word-by-word analysis)
 - analysis/sent-NNN-*.org for each sentence (clause analysis)
+
+After the structural pass, if `tibetan-auto-fire-claude-on-create'
+is non-nil (default), queues Claude translation requests for every
+newly-created `seg-*.org'.  Requests are staggered by
+`tibetan-auto-claude-request-delay' (1.5s) and fire asynchronously.
 
 Progress is shown in the echo area."
   (interactive "P")
@@ -298,7 +324,8 @@ Progress is shown in the echo area."
          (created-segs 0)
          (created-sents 0)
          (skipped 0)
-         (current 0))
+         (current 0)
+         (newly-created-files '()))
 
     (when (= total 0)
       (error "No segments or sentences found. Run tibetan-prepare-document first"))
@@ -324,7 +351,10 @@ Progress is shown in the echo area."
           ;; Generate analysis
           (let ((auto-content (tibetan-analysis-generate-content seg-text)))
             (tibetan-analysis-create-file seg-num seg-text source-file auto-content)
-            (setq created-segs (1+ created-segs))))))
+            (setq created-segs (1+ created-segs))
+            ;; Track for the Claude-fire pass below.  Store (filepath . text)
+            ;; so we don't have to re-extract Tibetan from disk.
+            (push (cons filepath seg-text) newly-created-files)))))
 
     ;; Process sentences
     (when tibetan-auto-generate-sentences
@@ -343,9 +373,48 @@ Progress is shown in the echo area."
             (tibetan-auto--create-sentence-file sent-num sent-text source-file)
             (setq created-sents (1+ created-sents))))))
 
-    ;; Report results
+    ;; Report structural results BEFORE firing Claude so the user sees
+    ;; the two-phase progression clearly in the echo area.
     (message "Auto-analysis complete: %d segment files, %d sentence files created (%d skipped)"
-             created-segs created-sents skipped)))
+             created-segs created-sents skipped)
+
+    ;; Fire Claude for every newly-created segment file (throttled, async).
+    (when (and tibetan-auto-fire-claude-on-create
+               newly-created-files
+               (fboundp 'tibetan-analysis--request-claude-translation))
+      (tibetan-auto--fire-claude-on-new-files
+       (nreverse newly-created-files)))))
+
+(defun tibetan-auto--fire-claude-on-new-files (filepath-and-text-pairs)
+  "Queue Claude translation requests for FILEPATH-AND-TEXT-PAIRS.
+
+PAIRS is a list of (filepath . tibetan-text) cons cells.  Each request
+fires via `run-at-time' with an offset of
+`tibetan-auto-claude-request-delay' × index, so 97 new segments take
+97 × 1.5 ≈ 2.5 min of queue time.  Individual request failures are
+swallowed to `message' and do not abort the batch."
+  (let ((delay 0.0)
+        (count (length filepath-and-text-pairs)))
+    (message "Queueing Claude translation requests for %d newly-created file%s \
+(one every %.1fs, async)..."
+             count (if (= count 1) "" "s")
+             (or tibetan-auto-claude-request-delay 1.5))
+    (dolist (pair filepath-and-text-pairs)
+      (let ((filepath (car pair))
+            (text     (cdr pair))
+            (this-delay delay))
+        (when (and text (not (string-empty-p text)))
+          (run-at-time
+           this-delay nil
+           (lambda ()
+             (condition-case err
+                 (tibetan-analysis--request-claude-translation text filepath)
+               (error
+                (message "Claude request failed for %s: %s"
+                         (file-name-nondirectory filepath)
+                         (error-message-string err))))))
+          (setq delay (+ delay
+                         (or tibetan-auto-claude-request-delay 1.5))))))))
 
 
 ;; ============================================================================
