@@ -292,6 +292,39 @@
   ;; - Reports progress and a summary when done
 
 ;; ============================================================================
+;; RE-SEGMENTATION WORKFLOW - C-c s Z / C-c s X / C-c s N / C-c s U
+;; ============================================================================
+;;
+;; When the sentence boundary detector is upgraded (e.g. the dialogue-framing
+;; step added on 2026-04-20) a source file whose structure was laid down by
+;; an earlier pass may contain fewer/larger sentences than the new detector
+;; would now produce.  Re-running `C-c s S' is a no-op in that state — the
+;; sentence headings are already in place and the segment regex only matches
+;; three-asterisk `*** Segment' headings, not the `**** Segment' they were
+;; demoted to.  These four keys implement a safe archive-and-regenerate
+;; workflow:
+
+(global-set-key (kbd "C-c s Z") 'tibetan-sentence-resegment)
+  ;; One-shot re-segmentation orchestrator:
+  ;;   1. Archive existing sent-*.org into analysis/archive/<timestamp>/
+  ;;   2. Reset source structure (remove *** Sentence, re-promote segments)
+  ;;   3. Re-run the auto-segmenter (with the current detector)
+  ;;   4. Create fresh sent-NNN.org for every new sentence
+  ;; Single yes/no gate at the top; sub-command prompts are suppressed.
+
+(global-set-key (kbd "C-c s X") 'tibetan-sentence-archive-analysis-folder)
+  ;; Step 1 only: move every sent-*.org into analysis/archive/<timestamp>/.
+  ;; seg-*.org and other files are left alone.
+
+(global-set-key (kbd "C-c s U") 'tibetan-sentence-reset-structure)
+  ;; Step 2 only: remove `*** Sentence N' headings and re-promote
+  ;; `**** Segment M' back to `*** Segment M'.  Does not save — review first.
+
+(global-set-key (kbd "C-c s N") 'tibetan-sentence-create-all)
+  ;; Step 4 only: scaffold sent-NNN.org for every `*** Sentence N' heading
+  ;; in the source buffer.  Existing files are skipped (not overwritten).
+
+;; ============================================================================
 ;; DOCUMENT PREPARATION - C-c u P / C-c u Y
 ;; ============================================================================
 

@@ -409,5 +409,131 @@ ordering."
     (dolist (item result)
       (should (stringp item)))))
 
+;; ============================================================================
+;; RESET-STRUCTURE TESTS (dialogue-boundary re-segmentation workflow)
+;; ============================================================================
+;;
+;; These exercise `tibetan-sentence-reset-structure--counts' and
+;; `tibetan-sentence-reset-structure' against small in-memory buffers
+;; that mimic the post-auto-segmenter shape:
+;;
+;;   ** Section
+;;   *** Sentence N
+;;   **** Segment M
+;;     <body>
+;;
+;; After reset, the `*** Sentence' headings are gone and the `**** Segment'
+;; headers are re-promoted to `*** Segment' so the next run of
+;; `tibetan-add-sentence-structure' can pick them up again.
+
+(ert-deftest tibetan-sentence-reset-structure-counts-empty ()
+  "Fresh buffer with no structure → (0 . 0)."
+  (with-temp-buffer
+    (insert "** Section\n*** Segment 1\nfoo\n*** Segment 2\nbar\n")
+    (let ((c (tibetan-sentence-reset-structure--counts (current-buffer))))
+      (should (equal '(0 . 0) c)))))
+
+(ert-deftest tibetan-sentence-reset-structure-counts-populated ()
+  "Buffer with sentence structure returns correct counts."
+  (with-temp-buffer
+    (insert "** Section\n"
+            "*** Sentence 1\n"
+            "**** Segment 1\nfoo\n"
+            "**** Segment 2\nbar\n"
+            "*** Sentence 2\n"
+            "**** Segment 3\nbaz\n"
+            "**** Segment 4\nqux\n"
+            "*** Sentence 3\n"
+            "**** Segment 5\nquux\n")
+    (let ((c (tibetan-sentence-reset-structure--counts (current-buffer))))
+      (should (= 3 (car c)))
+      (should (= 5 (cdr c))))))
+
+(ert-deftest tibetan-sentence-reset-structure-removes-sentences ()
+  "After reset, `*** Sentence N' headings are gone."
+  (with-temp-buffer
+    (insert "** Section\n"
+            "*** Sentence 1\n"
+            "**** Segment 1\nfoo\n"
+            "*** Sentence 2\n"
+            "**** Segment 2\nbar\n")
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+      (tibetan-sentence-reset-structure))
+    (goto-char (point-min))
+    (should-not (re-search-forward "^\\*\\*\\* Sentence [0-9]+" nil t))))
+
+(ert-deftest tibetan-sentence-reset-structure-re-promotes-segments ()
+  "After reset, `**** Segment M' → `*** Segment M'."
+  (with-temp-buffer
+    (insert "** Section\n"
+            "*** Sentence 1\n"
+            "**** Segment 1\nfoo\n"
+            "**** Segment 2\nbar\n")
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+      (tibetan-sentence-reset-structure))
+    (goto-char (point-min))
+    (let ((promoted 0)
+          (remaining-four 0))
+      (while (re-search-forward "^\\*\\*\\* Segment [0-9]+" nil t)
+        (setq promoted (1+ promoted)))
+      (goto-char (point-min))
+      (while (re-search-forward "^\\*\\*\\*\\* Segment [0-9]+" nil t)
+        (setq remaining-four (1+ remaining-four)))
+      (should (= 2 promoted))
+      (should (= 0 remaining-four)))))
+
+(ert-deftest tibetan-sentence-reset-structure-idempotent ()
+  "Running reset twice on the same buffer is a no-op the second time."
+  (with-temp-buffer
+    (insert "** Section\n"
+            "*** Sentence 1\n"
+            "**** Segment 1\nfoo\n"
+            "*** Sentence 2\n"
+            "**** Segment 2\nbar\n")
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+      (tibetan-sentence-reset-structure)
+      (let ((content-after-first (buffer-string)))
+        (tibetan-sentence-reset-structure)
+        (should (string= content-after-first (buffer-string)))))))
+
+(ert-deftest tibetan-sentence-reset-structure-preserves-body-text ()
+  "Reset must not touch segment body text (Tibetan lines)."
+  (with-temp-buffer
+    (insert "** Section\n"
+            "*** Sentence 1\n"
+            "**** Segment 1\n"
+            "བདག་ནི་རྣལ་འབྱོར་པའི་དབང་ཕྱུག\n"
+            "*** Sentence 2\n"
+            "**** Segment 2\n"
+            "མི་ལ་རས་པའི་རྣམ་ཐར།\n")
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+      (tibetan-sentence-reset-structure))
+    (let ((s (buffer-string)))
+      (should (string-match-p "བདག་ནི་རྣལ་འབྱོར་པའི་དབང་ཕྱུག" s))
+      (should (string-match-p "མི་ལ་རས་པའི་རྣམ་ཐར།" s)))))
+
+(ert-deftest tibetan-sentence-reset-structure-cancel ()
+  "User says no → buffer unchanged."
+  (with-temp-buffer
+    (insert "** Section\n"
+            "*** Sentence 1\n"
+            "**** Segment 1\nfoo\n")
+    (let ((original (buffer-string)))
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) nil)))
+        (tibetan-sentence-reset-structure))
+      (should (string= original (buffer-string))))))
+
+(ert-deftest tibetan-sentence-reset-structure-nothing-to-do ()
+  "Buffer with no structure prints a friendly message without prompting."
+  (with-temp-buffer
+    (insert "** Section\n*** Segment 1\nfoo\n")
+    (let ((prompted nil)
+          (original (buffer-string)))
+      (cl-letf (((symbol-function 'yes-or-no-p)
+                 (lambda (&rest _) (setq prompted t) t)))
+        (tibetan-sentence-reset-structure))
+      (should-not prompted)
+      (should (string= original (buffer-string))))))
+
 (provide 'tibetan-sentence-structure-test)
 ;;; tibetan-sentence-structure-test.el ends here

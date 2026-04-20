@@ -434,6 +434,79 @@ the segment heading from *** to ****."
           (replace-match "**** Segment"))
         (message "Marked as start of Sentence %d" sent-num)))))
 
+;; ============================================================================
+;; RESET STRUCTURE — undoes what `tibetan-add-sentence-structure' did
+;; ============================================================================
+
+(defun tibetan-sentence-reset-structure--counts (buffer)
+  "Return (SENT-COUNT . SEG-COUNT) — how many `*** Sentence N' headings
+and how many `**** Segment M' (demoted) headings BUFFER contains.
+Used by the reset command to show the user what it will touch."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (let ((sents 0)
+            (segs  0))
+        (while (re-search-forward "^\\*\\*\\* Sentence [0-9]+\\b" nil t)
+          (setq sents (1+ sents)))
+        (goto-char (point-min))
+        (while (re-search-forward "^\\*\\*\\*\\* Segment " nil t)
+          (setq segs (1+ segs)))
+        (cons sents segs)))))
+
+;;;###autoload
+(defun tibetan-sentence-reset-structure ()
+  "Undo the effect of `tibetan-add-sentence-structure' on the current buffer.
+
+Two reversible edits:
+  1. Delete every `^\\*\\*\\* Sentence N$' heading line (and the
+     single trailing blank line that usually follows, if present).
+  2. Re-promote every `^\\*\\*\\*\\* Segment M' back to
+     `^\\*\\*\\* Segment M' so the next
+     `tibetan-add-sentence-structure' run can discover them again.
+
+Prompts with a summary of how many headings will be removed /
+promoted before touching the buffer.  Does NOT save; user reviews
+the edit, then `C-x C-s' when satisfied.  Idempotent — safe to
+run repeatedly.
+
+Intended use: before running `C-c s S' a SECOND time on a file
+whose structure is already in place.  The segment regex in the
+auto-segmenter only matches three-asterisk `*** Segment', so
+without resetting the demoted segments a re-run would silently
+find zero segments and do nothing useful."
+  (interactive)
+  (let* ((counts (tibetan-sentence-reset-structure--counts
+                  (current-buffer)))
+         (sents  (car counts))
+         (segs   (cdr counts)))
+    (cond
+     ((and (= sents 0) (= segs 0))
+      (message "Nothing to reset — buffer has no `*** Sentence' headings and no demoted `**** Segment' headings."))
+     ((not (yes-or-no-p
+            (format "Reset sentence structure? This will remove %d `*** Sentence N' heading%s and re-promote %d `**** Segment M' → `*** Segment M'. "
+                    sents (if (= sents 1) "" "s")
+                    segs)))
+      (message "Reset cancelled."))
+     (t
+      (save-excursion
+        ;; Step 1 — remove `*** Sentence N' heading lines (with a
+        ;; trailing blank line if present, so we don't leave
+        ;; run-together blank gaps).
+        (goto-char (point-min))
+        (while (re-search-forward "^\\*\\*\\* Sentence [0-9]+[^\n]*\n" nil t)
+          (replace-match "" t t)
+          (when (looking-at "^[ \t]*\n")
+            (delete-region (point) (line-beginning-position 2))))
+        ;; Step 2 — re-promote demoted segments.
+        (goto-char (point-min))
+        (while (re-search-forward "^\\(\\*\\*\\*\\)\\* Segment " nil t)
+          (replace-match "\\1 Segment " t nil nil 0)))
+      (message
+       "Reset: removed %d sentence heading%s; re-promoted %d segment heading%s.  Review, then `C-x C-s' to save."
+       sents (if (= sents 1) "" "s")
+       segs  (if (= segs 1)  "" "s"))))))
+
 
 (provide 'tibetan-sentence-structure)
 ;;; tibetan-sentence-structure.el ends here

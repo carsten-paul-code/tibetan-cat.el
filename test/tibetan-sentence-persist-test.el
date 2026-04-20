@@ -894,6 +894,216 @@ We capture the message via `current-message' after the call."
       (when (file-exists-p tmp) (delete-file tmp)))))
 
 ;; ============================================================================
+;; RE-SEGMENTATION WORKFLOW TESTS
+;; ============================================================================
+;;
+;; Coverage for the three commands behind `C-c s Z' (resegment):
+;;
+;;   - tibetan-sentence-archive-analysis-folder  moves sent-*.org
+;;   - tibetan-sentence-create-all               scaffolds per sentence
+;;   - tibetan-sentence-resegment                orchestrator
+;;
+;; All tests work in a freshly-created temp directory so we don't
+;; touch the user's real `analysis/' folder.  `yes-or-no-p' is
+;; stubbed where needed so the commands run unattended.
+
+(defmacro tibetan-sentence-test--with-source-and-analysis
+    (source-buf-var source-file-var folder-var &rest body)
+  "Bind SOURCE-BUF-VAR, SOURCE-FILE-VAR and FOLDER-VAR for tests.
+
+Creates:
+  - A temp directory $TMPDIR/tibetan-resegment-XXXX/
+  - A minimal source .org file at SOURCE-FILE-VAR inside that dir
+  - An empty `analysis/' subdirectory at FOLDER-VAR
+  - An open buffer on the source file bound to SOURCE-BUF-VAR
+
+BODY runs with those bindings live; the fixture is cleaned up
+afterwards (buffer killed, directory recursively deleted)."
+  (declare (indent 3))
+  `(let* ((root (make-temp-file "tibetan-resegment-" t))
+          (,source-file-var (expand-file-name "source.org" root))
+          (,folder-var (file-name-as-directory
+                        (expand-file-name "analysis" root))))
+     (make-directory ,folder-var t)
+     (with-temp-file ,source-file-var
+       (insert "#+TITLE: Test Source\n\n"
+               "** Section\n"
+               "*** Sentence 1\n"
+               "**** Segment 1\n"
+               "བདག་ནི་རྣལ་འབྱོར་པ།\n"
+               "*** Sentence 2\n"
+               "**** Segment 2\n"
+               "མི་ལ་རས་པ།\n"
+               "**** Segment 3\n"
+               "ཞེས་གསུངས།\n"))
+     (let ((,source-buf-var (find-file-noselect ,source-file-var)))
+       (unwind-protect
+           (progn ,@body)
+         (when (buffer-live-p ,source-buf-var)
+           (with-current-buffer ,source-buf-var
+             (set-buffer-modified-p nil))
+           (kill-buffer ,source-buf-var))
+         ;; Kill any sent-NNN buffers the commands opened.
+         (dolist (b (buffer-list))
+           (when (and (buffer-file-name b)
+                      (string-prefix-p root (buffer-file-name b)))
+             (with-current-buffer b (set-buffer-modified-p nil))
+             (kill-buffer b)))
+         (delete-directory root t)))))
+
+;; ---------------------------------------------------------------------------
+;; archive-analysis-folder
+;; ---------------------------------------------------------------------------
+
+(ert-deftest tibetan-sentence-archive-moves-all-sent-files ()
+  "Every sent-*.org is moved into `archive/<stamp>/'; seg-*.org is left alone."
+  (tibetan-sentence-test--with-source-and-analysis
+      source-buf source-file folder
+    (with-temp-file (expand-file-name "sent-001.org" folder)
+      (insert "sent-001 stub\n"))
+    (with-temp-file (expand-file-name "sent-002.org" folder)
+      (insert "sent-002 stub\n"))
+    (with-temp-file (expand-file-name "seg-001.org" folder)
+      (insert "seg-001 stub — must be preserved\n"))
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+      (let ((archive (tibetan-sentence-archive-analysis-folder folder)))
+        (should (stringp archive))
+        (should (file-directory-p archive))
+        (should-not (file-exists-p (expand-file-name "sent-001.org"
+                                                     folder)))
+        (should-not (file-exists-p (expand-file-name "sent-002.org"
+                                                     folder)))
+        (should (file-exists-p (expand-file-name "seg-001.org" folder)))
+        (should (file-exists-p (expand-file-name "sent-001.org"
+                                                 archive)))
+        (should (file-exists-p (expand-file-name "sent-002.org"
+                                                 archive)))))))
+
+(ert-deftest tibetan-sentence-archive-empty-folder ()
+  "Folder with no sent-*.org returns nil without creating archive/."
+  (tibetan-sentence-test--with-source-and-analysis
+      source-buf source-file folder
+    (let ((result (tibetan-sentence-archive-analysis-folder folder)))
+      (should (null result))
+      (should-not (file-directory-p (expand-file-name "archive" folder))))))
+
+(ert-deftest tibetan-sentence-archive-cancel ()
+  "User says no → sent-*.org files stay in place."
+  (tibetan-sentence-test--with-source-and-analysis
+      source-buf source-file folder
+    (with-temp-file (expand-file-name "sent-001.org" folder)
+      (insert "sent-001\n"))
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) nil)))
+      (let ((result (tibetan-sentence-archive-analysis-folder folder)))
+        (should (null result))
+        (should (file-exists-p (expand-file-name "sent-001.org"
+                                                 folder)))))))
+
+(ert-deftest tibetan-sentence-archive-timestamp-format ()
+  "Archive subdir is `archive/YYYY-MM-DD-HHMMSS/'."
+  (tibetan-sentence-test--with-source-and-analysis
+      source-buf source-file folder
+    (with-temp-file (expand-file-name "sent-001.org" folder)
+      (insert "sent-001\n"))
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+      (let* ((archive (tibetan-sentence-archive-analysis-folder folder))
+             (leaf (file-name-nondirectory
+                    (directory-file-name archive))))
+        (should (string-match-p "\\`[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}-[0-9]\\{6\\}\\'"
+                                leaf))))))
+
+;; ---------------------------------------------------------------------------
+;; create-all
+;; ---------------------------------------------------------------------------
+
+(ert-deftest tibetan-sentence-create-all-scaffolds-every-sentence ()
+  "One sent-NNN.org per `*** Sentence N' heading."
+  (tibetan-sentence-test--with-source-and-analysis
+      source-buf source-file folder
+    (with-current-buffer source-buf
+      (let ((result (tibetan-sentence-create-all)))
+        (should (= 2 (plist-get result :total)))
+        (should (= 2 (plist-get result :created)))
+        (should (= 0 (plist-get result :skipped)))
+        (should (= 0 (plist-get result :failed)))
+        (should (file-exists-p (expand-file-name "sent-001.org"
+                                                 folder)))
+        (should (file-exists-p (expand-file-name "sent-002.org"
+                                                 folder)))))))
+
+(ert-deftest tibetan-sentence-create-all-skips-existing ()
+  "Pre-existing sent-NNN.org is not clobbered; counts as skipped."
+  (tibetan-sentence-test--with-source-and-analysis
+      source-buf source-file folder
+    (let ((existing (expand-file-name "sent-001.org" folder)))
+      (with-temp-file existing
+        (insert "HAND-EDITED MARKER\n"))
+      (with-current-buffer source-buf
+        (let ((result (tibetan-sentence-create-all)))
+          (should (= 2 (plist-get result :total)))
+          (should (= 1 (plist-get result :created)))
+          (should (= 1 (plist-get result :skipped)))))
+      ;; Untouched.
+      (with-temp-buffer
+        (insert-file-contents existing)
+        (should (string-match-p "HAND-EDITED MARKER" (buffer-string)))))))
+
+(ert-deftest tibetan-sentence-create-all-errors-without-structure ()
+  "Without `*** Sentence N' headings the command errors out."
+  (tibetan-sentence-test--with-source-and-analysis
+      source-buf source-file folder
+    (with-current-buffer source-buf
+      (erase-buffer)
+      (insert "* Bare file with no sentence headings\n"
+              "*** Segment 1\nfoo\n")
+      (save-buffer)
+      (should-error (tibetan-sentence-create-all) :type 'user-error))))
+
+(ert-deftest tibetan-sentence-create-all-seg-nums-match-children ()
+  "Each created sent-NNN.org embeds the correct child segment numbers."
+  (tibetan-sentence-test--with-source-and-analysis
+      source-buf source-file folder
+    (with-current-buffer source-buf
+      (tibetan-sentence-create-all))
+    ;; sent-001 should cover Segment 1; sent-002 should cover 2 + 3.
+    (let ((s1 (with-temp-buffer
+                (insert-file-contents (expand-file-name "sent-001.org"
+                                                        folder))
+                (buffer-string)))
+          (s2 (with-temp-buffer
+                (insert-file-contents (expand-file-name "sent-002.org"
+                                                        folder))
+                (buffer-string))))
+      ;; `#+SEGMENTS:' header is the sentence-layout marker.
+      (should (string-match-p "#\\+SEGMENTS:[[:space:]]*1\\b" s1))
+      (should (string-match-p "#\\+SEGMENTS:[[:space:]]*2[,[:space:]]+3" s2)))))
+
+;; ---------------------------------------------------------------------------
+;; resegment orchestrator
+;; ---------------------------------------------------------------------------
+
+(ert-deftest tibetan-sentence-resegment-cancellation-is-noop ()
+  "If the top-level yes-or-no-p returns nil nothing changes."
+  (tibetan-sentence-test--with-source-and-analysis
+      source-buf source-file folder
+    (with-temp-file (expand-file-name "sent-001.org" folder)
+      (insert "OLD\n"))
+    (with-current-buffer source-buf
+      (let ((snapshot (buffer-string)))
+        (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) nil)))
+          (tibetan-sentence-resegment))
+        ;; Source buffer unchanged.
+        (should (string= snapshot (buffer-string)))
+        ;; sent-001.org still there in the folder root (not archived).
+        (should (file-exists-p (expand-file-name "sent-001.org" folder)))))))
+
+(ert-deftest tibetan-sentence-resegment-requires-source-file ()
+  "Running in a buffer without `buffer-file-name' errors out."
+  (with-temp-buffer
+    (insert "no file here\n")
+    (should-error (tibetan-sentence-resegment) :type 'user-error)))
+
+;; ============================================================================
 ;; HELPER FUNCTION
 ;; ============================================================================
 

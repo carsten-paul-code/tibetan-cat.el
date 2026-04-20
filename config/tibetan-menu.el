@@ -105,7 +105,20 @@
       :active (fboundp 'tibetan-add-sentence-structure)]
      ["Mark Sentence Start (C-c s m)" tibetan-mark-sentence-start
       :help "Manually mark current segment as starting a new sentence"
-      :active (fboundp 'tibetan-mark-sentence-start)])
+      :active (fboundp 'tibetan-mark-sentence-start)]
+     "---"
+     ["Re-segment Source (C-c s Z)" tibetan-sentence-resegment
+      :help "Archive old sent-*.org, reset structure, re-run auto-segmenter, create fresh sent-NNN.org"
+      :active (fboundp 'tibetan-sentence-resegment)]
+     ["Archive sent-*.org (C-c s X)" tibetan-sentence-archive-analysis-folder
+      :help "Move sent-*.org files into analysis/archive/<timestamp>/ (step 1 of resegment)"
+      :active (fboundp 'tibetan-sentence-archive-analysis-folder)]
+     ["Reset Sentence Structure (C-c s U)" tibetan-sentence-reset-structure
+      :help "Remove `*** Sentence' headings and re-promote `**** Segment' (step 2 of resegment)"
+      :active (fboundp 'tibetan-sentence-reset-structure)]
+     ["Create All sent-NNN.org (C-c s N)" tibetan-sentence-create-all
+      :help "Scaffold sent-NNN.org for every `*** Sentence N' heading (step 4 of resegment)"
+      :active (fboundp 'tibetan-sentence-create-all)])
     "---"
     ["Toggle Auto-Analysis (C-c u E)" tibetan-toggle-auto
      :help "Toggle automatic analysis as cursor moves between segments"

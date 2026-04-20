@@ -73,6 +73,17 @@
 ;; Silence byte-compile warnings when gptel is not installed.
 (declare-function gptel-request "gptel" (&optional prompt &rest args))
 
+;; Forward declarations for the auto-segmenter companion module.
+;; `tibetan-sentence-resegment' (defined below) chains the
+;; structural reset in `doc-prep/tibetan-sentence-structure.el'
+;; together with this module's archive + batch-create helpers.
+(declare-function tibetan-sentence-reset-structure
+                  "tibetan-sentence-structure" ())
+(declare-function tibetan-sentence-reset-structure--counts
+                  "tibetan-sentence-structure" (buffer))
+(declare-function tibetan-add-sentence-structure
+                  "tibetan-sentence-structure" ())
+
 (defconst tibetan-sentence-persist-version "1.0"
   "Version of the sentence analysis file format.")
 
@@ -1226,6 +1237,217 @@ Returns plist:
       (message "Sentence batch reanalysis: %d/%d ok (%d failed)%s"
                ok n (- n ok) (if dry-run " — dry run" ""))
       summary)))
+
+;; ============================================================================
+;; ARCHIVE + BATCH-CREATE — used when re-segmenting a source file
+;; ============================================================================
+
+(defun tibetan-sentence--analysis-folder ()
+  "Return the analysis folder path for the current source buffer.
+Falls back to `<cwd>/analysis/' when not in a source buffer."
+  (let ((base (or (and buffer-file-name
+                       (file-name-directory buffer-file-name))
+                  default-directory)))
+    (file-name-as-directory (expand-file-name "analysis" base))))
+
+;;;###autoload
+(defun tibetan-sentence-archive-analysis-folder (&optional folder)
+  "Move every `sent-NNN*.org' in FOLDER into a timestamped archive subdir.
+
+FOLDER defaults to the analysis folder of the current source
+buffer.  Creates `<folder>/archive/YYYY-MM-DD-HHMMSS/' and moves
+all `sent-*.org' files into it.  `seg-*.org' and any other files
+are left untouched.  Returns the archive directory path.
+
+Intended use: before re-segmenting a source file whose sentence
+numbering is about to change.  Archiving preserves the old
+analysis work so the user can compare or selectively restore
+content (Roehrich pastes, Class translations, Claude bodies,
+My Notes, Working Translation, Footnotes) into the freshly-
+generated sent files afterwards."
+  (interactive
+   (list (if current-prefix-arg
+             (read-directory-name "Analysis folder: ")
+           nil)))
+  (let* ((folder (or folder (tibetan-sentence--analysis-folder)))
+         (sent-files (when (file-directory-p folder)
+                       (directory-files folder t "\\`sent-[0-9]+.*\\.org\\'")))
+         (stamp (format-time-string "%Y-%m-%d-%H%M%S"))
+         (archive-dir (expand-file-name
+                       (concat "archive/" stamp "/")
+                       folder)))
+    (cond
+     ((not sent-files)
+      (message "No sent-*.org files in %s — nothing to archive." folder)
+      nil)
+     ((not (yes-or-no-p
+            (format "Archive %d sent-*.org file%s from %s into archive/%s/? "
+                    (length sent-files)
+                    (if (= (length sent-files) 1) "" "s")
+                    folder stamp)))
+      (message "Archive cancelled.")
+      nil)
+     (t
+      (make-directory archive-dir t)
+      (let ((moved 0))
+        (dolist (f sent-files)
+          (rename-file f (expand-file-name
+                          (file-name-nondirectory f) archive-dir))
+          (setq moved (1+ moved)))
+        (message "Archived %d sent-*.org file%s into %s"
+                 moved (if (= moved 1) "" "s") archive-dir)
+        archive-dir)))))
+
+;;;###autoload
+(defun tibetan-sentence-create-all ()
+  "Create a fresh `sent-NNN.org' analysis file for every `*** Sentence N'
+heading in the current source buffer.
+
+Iterates top-to-bottom, calling the same scaffold + create path
+used by `C-c s A'.  Any `sent-NNN.org' that already exists in
+the analysis folder is skipped (re-creation would clobber a file
+the user may have hand-edited since last segment change).  To
+regenerate from scratch, archive first with
+`tibetan-sentence-archive-analysis-folder'.
+
+Reports created / skipped counts on completion."
+  (interactive)
+  (unless buffer-file-name
+    (user-error "Current buffer has no source file"))
+  (let ((source-file buffer-file-name)
+        (created 0) (skipped 0) (failed 0)
+        (sentences '()))
+    ;; First pass: find every `*** Sentence N' heading and the set
+    ;; of child segments in its span.
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward "^\\*\\*\\* Sentence \\([0-9]+\\)\\b"
+                                nil t)
+        (let* ((sent-num (string-to-number (match-string 1)))
+               (start (match-end 0))
+               (end (save-excursion
+                      (or (and (re-search-forward
+                                "^\\*\\*\\* Sentence [0-9]+\\b" nil t)
+                               (match-beginning 0))
+                          (point-max))))
+               (seg-nums '())
+               (texts '()))
+          (save-excursion
+            (goto-char start)
+            (while (re-search-forward
+                    "^\\*\\*\\*\\* Segment \\([0-9]+\\)\\b" end t)
+              (let* ((n (string-to-number (match-string 1)))
+                     (body-start (progn (forward-line 1) (point)))
+                     (body-end
+                      (save-excursion
+                        (or (and (re-search-forward
+                                  "^\\*\\*\\*\\* Segment [0-9]+\\b"
+                                  end t)
+                                 (match-beginning 0))
+                            end))))
+                (push n seg-nums)
+                (push (string-trim
+                       (buffer-substring-no-properties
+                        body-start body-end))
+                      texts))))
+          (push (list :sent-num sent-num
+                      :seg-nums (nreverse seg-nums)
+                      :tibetan (string-trim
+                                (mapconcat #'identity (nreverse texts)
+                                           "\n")))
+                sentences))))
+    (setq sentences (nreverse sentences))
+    (unless sentences
+      (user-error "No `*** Sentence N' headings in the current buffer — run `C-c s S' first"))
+    ;; Second pass: create each sent-NNN.org.
+    (dolist (s sentences)
+      (let* ((sent-num (plist-get s :sent-num))
+             (seg-nums (plist-get s :seg-nums))
+             (tibetan  (plist-get s :tibetan))
+             (filepath (tibetan-sentence--filepath sent-num)))
+        (cond
+         ((file-exists-p filepath)
+          (setq skipped (1+ skipped)))
+         (t
+          (condition-case _err
+              (progn
+                (tibetan-sentence--create-file
+                 sent-num seg-nums tibetan source-file)
+                (setq created (1+ created)))
+            (error (setq failed (1+ failed))))))))
+    (message "Sentence files: %d created, %d skipped (already existed), %d failed (total %d sentence%s)"
+             created skipped failed
+             (length sentences)
+             (if (= (length sentences) 1) "" "s"))
+    `(:created ,created :skipped ,skipped :failed ,failed
+      :total ,(length sentences))))
+
+;;;###autoload
+(defun tibetan-sentence-resegment ()
+  "One-command re-segment workflow for an already-segmented source file.
+
+Runs the four steps in order, with a single top-level confirmation:
+
+  1. Archive `sent-NNN*.org' → `analysis/archive/<stamp>/'.
+  2. Reset source-file structure (remove `*** Sentence N' headings,
+     un-demote `**** Segment M' back to `*** Segment M').
+  3. Re-run the auto-segmenter (`tibetan-add-sentence-structure').
+  4. Create fresh `sent-NNN.org' for every new `*** Sentence N'.
+
+Step 1 calls `tibetan-sentence-archive-analysis-folder'; the
+individual commands' own interactive prompts are suppressed so
+the user only sees ONE yes/no gate at the top.  Save the source
+file yourself after reviewing the result — none of these steps
+auto-save.
+
+Intended use: after a boundary-detector upgrade (e.g. the
+dialogue-framing step added on 2026-04-20) where the auto-
+segmenter would now find more sentences than a previous pass.
+Manual cleanup via regexp is viable but fiddly; this command
+turns it into one confirmable operation."
+  (interactive)
+  (unless buffer-file-name
+    (user-error "Current buffer has no source file"))
+  (let* ((counts (tibetan-sentence-reset-structure--counts
+                  (current-buffer)))
+         (sents  (car counts))
+         (segs   (cdr counts))
+         (folder (tibetan-sentence--analysis-folder))
+         (sent-files (when (file-directory-p folder)
+                       (directory-files folder t
+                                        "\\`sent-[0-9]+.*\\.org\\'")))
+         (summary
+          (format "Resegment %s:
+  1. Archive %d existing sent-*.org file%s into archive/
+  2. Reset source: remove %d `*** Sentence' heading%s + re-promote %d `**** Segment' header%s
+  3. Re-run the auto-segmenter (dialogue-boundary detection active)
+  4. Create fresh sent-NNN.org for every new sentence
+Proceed? "
+                  (or (and buffer-file-name
+                           (file-name-nondirectory buffer-file-name))
+                      "<current buffer>")
+                  (length sent-files)
+                  (if (= (length sent-files) 1) "" "s")
+                  sents (if (= sents 1) "" "s")
+                  segs  (if (= segs  1) "" "s"))))
+    (cond
+     ((not (yes-or-no-p summary))
+      (message "Resegment cancelled — nothing changed."))
+     (t
+      ;; Step 1 — archive (bypass its own prompt).
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+        (tibetan-sentence-archive-analysis-folder folder))
+      ;; Step 2 — reset structure (bypass its own prompt).
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+        (tibetan-sentence-reset-structure))
+      ;; Step 3 — re-segment.  Save first so the reset edit isn't
+      ;; pending when the auto-segmenter walks the buffer.
+      (when (buffer-modified-p) (save-buffer))
+      (tibetan-add-sentence-structure)
+      (when (buffer-modified-p) (save-buffer))
+      ;; Step 4 — batch-create.
+      (tibetan-sentence-create-all)
+      (message "Resegment complete.  Review the source file and the new sent-*.org files; old work is in analysis/archive/.")))))
 
 (provide 'tibetan-sentence-persist)
 ;;; tibetan-sentence-persist.el ends here
