@@ -1338,11 +1338,12 @@ Reports created / skipped counts on completion."
                     "^\\*\\*\\*\\* Segment \\([0-9]+\\)\\b" end t)
               (let* ((n (string-to-number (match-string 1)))
                      (body-start (progn (forward-line 1) (point)))
+                     ;; Stop at the next Org heading (any level) so
+                     ;; sibling subsections like `**** Working Translation'
+                     ;; don't leak into the segment's Tibetan body.
                      (body-end
                       (save-excursion
-                        (or (and (re-search-forward
-                                  "^\\*\\*\\*\\* Segment [0-9]+\\b"
-                                  end t)
+                        (or (and (re-search-forward "^\\*+ " end t)
                                  (match-beginning 0))
                             end))))
                 (push n seg-nums)

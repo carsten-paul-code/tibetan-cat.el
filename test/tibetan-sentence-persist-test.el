@@ -1078,6 +1078,63 @@ afterwards (buffer killed, directory recursively deleted)."
       (should (string-match-p "#\\+SEGMENTS:[[:space:]]*1\\b" s1))
       (should (string-match-p "#\\+SEGMENTS:[[:space:]]*2[,[:space:]]+3" s2)))))
 
+(ert-deftest tibetan-sentence-create-all-skips-segment-subsections ()
+  "Sibling subsections like `**** Working Translation' inside a segment
+must NOT leak into the sentence's concatenated Tibetan text.
+
+Regression for a bug spotted on Milarepa 2026-04-20: the body-end
+detector was anchored on the next `**** Segment' heading, so any
+`**** Working Translation' or similar sibling under a segment would
+be scooped into the segment's body.  The fix stops at any Org
+heading (`^\\*+ ')."
+  (let* ((root (make-temp-file "tibetan-wt-leak-" t))
+         (source-file (expand-file-name "source.org" root))
+         (folder (file-name-as-directory
+                  (expand-file-name "analysis" root))))
+    (make-directory folder t)
+    (with-temp-file source-file
+      (insert "#+TITLE: WT leak test\n\n"
+              "** Section\n"
+              "*** Sentence 1\n"
+              "**** Segment 1\n"
+              "TIBETAN-SEG-1\n"
+              "\n"
+              "**** Working Translation\n"
+              "ENGLISH-WT-1\n"
+              "\n"
+              "**** Segment 2\n"
+              "TIBETAN-SEG-2\n"
+              "\n"
+              "**** Working Translation\n"
+              "ENGLISH-WT-2\n"))
+    (let ((buf (find-file-noselect source-file)))
+      (unwind-protect
+          (with-current-buffer buf
+            (tibetan-sentence-create-all)
+            (let ((s (with-temp-buffer
+                       (insert-file-contents
+                        (expand-file-name "sent-001.org" folder))
+                       (buffer-string))))
+              (should (string-match-p "TIBETAN-SEG-1" s))
+              (should (string-match-p "TIBETAN-SEG-2" s))
+              ;; Working-Translation body lines must NOT be part of
+              ;; the sentence's Tibetan text.
+              (should-not (string-match-p "ENGLISH-WT-1" s))
+              (should-not (string-match-p "ENGLISH-WT-2" s))
+              ;; And the subheading itself must not show up in the
+              ;; Tibetan Text section either.
+              (should-not (string-match-p "^\\*\\*\\*\\* Working Translation"
+                                          s))))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf))
+        (dolist (b (buffer-list))
+          (when (and (buffer-file-name b)
+                     (string-prefix-p root (buffer-file-name b)))
+            (with-current-buffer b (set-buffer-modified-p nil))
+            (kill-buffer b)))
+        (delete-directory root t)))))
+
 ;; ---------------------------------------------------------------------------
 ;; resegment orchestrator
 ;; ---------------------------------------------------------------------------

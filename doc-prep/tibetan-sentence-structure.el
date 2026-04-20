@@ -389,15 +389,26 @@ Into:
         (when starts (setq current-sent (1+ current-sent)))
         (setq prev-conf conf)))
     ;; Second pass: walk back-to-front and rewrite headings in place.
+    ;;
+    ;; Every segment (regardless of whether it starts a new sentence)
+    ;; must be demoted from `*** Segment' to `**** Segment' so that
+    ;; continuation segments end up nested *inside* their parent
+    ;; `*** Sentence' heading rather than orphaned as siblings at
+    ;; the same level.  Sentence-starter segments additionally get
+    ;; a `*** Sentence N' heading inserted above them.
+    ;;
+    ;; Walking back-to-front keeps every segment's recorded `:pos'
+    ;; valid after earlier insertions (those positions are later
+    ;; in the buffer and thus processed first).
     (dolist (seg annotated) ; annotated is already in reverse order
-      (when (plist-get seg :starts-sentence)
-        (let ((pos (plist-get seg :pos))
-              (sent-num (plist-get seg :sentence-num)))
-          (goto-char pos)
-          (insert (format "*** Sentence %d\n" sent-num))
-          (forward-line 0)
-          (when (looking-at "\\*\\*\\* Segment")
-            (replace-match "**** Segment")))))
+      (let ((pos (plist-get seg :pos)))
+        (goto-char pos)
+        (when (plist-get seg :starts-sentence)
+          (insert (format "*** Sentence %d\n"
+                          (plist-get seg :sentence-num)))
+          (forward-line 0))
+        (when (looking-at "\\*\\*\\* Segment")
+          (replace-match "**** Segment"))))
     (message "Added sentence structure: %d sentences (%s)"
              (1- current-sent)
              (if include-weak "strong + weak" "strong only"))))

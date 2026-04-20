@@ -205,6 +205,104 @@ are not in the finite-verb list and should stay weak until profiled."
   (skip-unless (fboundp 'tibetan-add-sentence-structure))
   (should (commandp 'tibetan-add-sentence-structure)))
 
+(ert-deftest tibetan-add-sentence-structure-demotes-continuation-segments ()
+  "Every segment inside a multi-segment sentence must be demoted to `**** Segment'.
+
+Regression for a pre-existing bug (surfaced 2026-04-20 on Milarepa):
+the second-pass loop only demoted segments whose boundary started
+a new sentence, leaving mid-sentence segments orphaned at the same
+`***' level as their parent sentence heading.  The docstring's own
+example shows the expected layout —
+
+  ** Section
+  *** Sentence 1
+  **** Segment 1
+  **** Segment 2   <-- must be demoted too
+  *** Sentence 2
+  **** Segment 3
+
+— but the previous implementation produced
+
+  *** Sentence 1
+  **** Segment 1
+  *** Segment 2    <-- bug: orphan
+
+for any segment whose predecessor did not end in a sentence-final
+particle / finite verb.  Here we construct a 3-segment scenario
+where segment 1 ends in the topic marker `ནི' (no boundary), so
+segment 2 must continue sentence 1, and segment 3 (after segment 2's
+strong sentence-final `ཡིན་ནོ༎') starts a fresh sentence."
+  (skip-unless (fboundp 'tibetan-add-sentence-structure))
+  (with-temp-buffer
+    (org-mode)
+    (insert "** Section\n"
+            "*** Segment 1\n"
+            "བདག་ནི།\n"
+            "*** Segment 2\n"
+            "རྣལ་འབྱོར་པ་ཡིན་ནོ༎\n"
+            "*** Segment 3\n"
+            "མི་ལ་རས་པའི་རྣམ་ཐར།\n")
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+      (tibetan-add-sentence-structure))
+    (let ((s (buffer-string)))
+      ;; Every segment must now be at `****' level — no bare `*** Segment'.
+      (should-not (string-match-p "^\\*\\*\\* Segment [0-9]+" s))
+      ;; All three segments should be present at `**** Segment'.
+      (should (string-match-p "^\\*\\*\\*\\* Segment 1\\b" s))
+      (should (string-match-p "^\\*\\*\\*\\* Segment 2\\b" s))
+      (should (string-match-p "^\\*\\*\\*\\* Segment 3\\b" s))
+      ;; At least one `*** Sentence' heading exists.
+      (should (string-match-p "^\\*\\*\\* Sentence 1\\b" s)))))
+
+(ert-deftest tibetan-add-sentence-structure-groups-continuation-under-sentence ()
+  "A continuation segment must appear *inside* its parent sentence.
+Concretely: segment 2 (which does not start a new sentence because
+segment 1 ends in `ནི') must be positioned between Sentence 1 and
+Sentence 2 in the buffer."
+  (skip-unless (fboundp 'tibetan-add-sentence-structure))
+  (with-temp-buffer
+    (org-mode)
+    (insert "** Section\n"
+            "*** Segment 1\n"
+            "བདག་ནི།\n"
+            "*** Segment 2\n"
+            "རྣལ་འབྱོར་པ་ཡིན་ནོ༎\n"
+            "*** Segment 3\n"
+            "མི་ལ་རས་པའི་རྣམ་ཐར།\n")
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+      (tibetan-add-sentence-structure))
+    (goto-char (point-min))
+    (let ((sent-1-pos (progn (re-search-forward "^\\*\\*\\* Sentence 1\\b")
+                             (match-beginning 0)))
+          (seg-2-pos  (progn (re-search-forward "^\\*\\*\\*\\* Segment 2\\b")
+                             (match-beginning 0)))
+          (next-sentence-or-end
+           (save-excursion
+             (or (and (re-search-forward "^\\*\\*\\* Sentence [0-9]+" nil t)
+                      (match-beginning 0))
+                 (point-max)))))
+      (should (< sent-1-pos seg-2-pos))
+      (should (< seg-2-pos next-sentence-or-end)))))
+
+(ert-deftest tibetan-add-sentence-structure-idempotent-on-demoted ()
+  "Running add-sentence-structure on an already-demoted buffer is a no-op
+wrt the demoted segments (we can't re-detect boundaries on `****' lines —
+by design the segment regex matches only `***'). Safety net: the function
+should not crash or corrupt the buffer when no `*** Segment' lines exist."
+  (skip-unless (fboundp 'tibetan-add-sentence-structure))
+  (with-temp-buffer
+    (org-mode)
+    (insert "** Section\n"
+            "*** Sentence 1\n"
+            "**** Segment 1\n"
+            "བདག་ནི།\n"
+            "**** Segment 2\n"
+            "ཡིན་ནོ༎\n")
+    (let ((before (buffer-string)))
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+        (tibetan-add-sentence-structure))
+      (should (string= before (buffer-string))))))
+
 ;; ============================================================================
 ;; MARK SENTENCE START TESTS
 ;; ============================================================================
