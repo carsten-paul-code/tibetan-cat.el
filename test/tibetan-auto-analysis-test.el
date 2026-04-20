@@ -143,6 +143,75 @@ segments.  Fixed to `^\\*+ Segment '."
       (should (string-match-p "བཀྲ་ཤིས" (cdr (assoc 1 segments))))
       (should (string-match-p "པདྨ" (cdr (assoc 3 segments)))))))
 
+(ert-deftest tibetan-auto-claude-needs-request-matches-two-star-translation ()
+  "`tibetan-auto--claude-needs-request-p' matches `^\\*\\* Claude Translation'
+(two stars, with suffix) — the actual placement produced by the current
+`tibetan-analysis--generate-claude-section' in the `* Auto-Analysis' block.
+
+Regression for YBh batch Claude fill 2026-04-20: the detector was
+anchored on `^\\*\\*\\* Claude\\$' (three stars, no suffix) which matches
+neither the two-star Auto-Analysis placement nor the three-star
+`*** Claude Translation' Provided-Translations placement."
+  (skip-unless (fboundp 'tibetan-auto--claude-needs-request-p))
+  (let ((tmp (make-temp-file "claude-needs-" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp
+            (insert "* Tibetan Text\nསངས་རྒྱས།\n\n"
+                    "* Auto-Analysis\n"
+                    "** Wylie Transliteration\nsangs rgyas\n\n"
+                    "** Claude Translation\n"
+                    "[Requesting translation...]\n\n"
+                    "** Claude Grammar\n\n"
+                    "* My Notes\n\n"))
+          (should (tibetan-auto--claude-needs-request-p tmp)))
+      (when (file-exists-p tmp) (delete-file tmp)))))
+
+(ert-deftest tibetan-auto-claude-needs-request-matches-three-star-translation ()
+  "Also matches `^\\*\\*\\* Claude Translation' (three stars, suffixed) —
+the Provided-Translations placement used by sentence-level sent-*.org."
+  (skip-unless (fboundp 'tibetan-auto--claude-needs-request-p))
+  (let ((tmp (make-temp-file "claude-needs-" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp
+            (insert "* Tibetan Text\nསངས་རྒྱས།\n\n"
+                    "* Provided Translations\n"
+                    "*** Claude Translation\n"
+                    "[Requesting translation...]\n\n"))
+          (should (tibetan-auto--claude-needs-request-p tmp)))
+      (when (file-exists-p tmp) (delete-file tmp)))))
+
+(ert-deftest tibetan-auto-claude-needs-request-nil-when-filled ()
+  "Returns nil when the Translation block holds a real (non-placeholder)
+translation body."
+  (skip-unless (fboundp 'tibetan-auto--claude-needs-request-p))
+  (let ((tmp (make-temp-file "claude-needs-" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp
+            (insert "* Tibetan Text\nསངས་རྒྱས།\n\n"
+                    "* Auto-Analysis\n"
+                    "** Claude Translation\n"
+                    "I pay homage to the Buddha.\n\n"
+                    "** Claude Grammar\nSome grammar notes.\n\n"))
+          (should-not (tibetan-auto--claude-needs-request-p tmp)))
+      (when (file-exists-p tmp) (delete-file tmp)))))
+
+(ert-deftest tibetan-auto-claude-needs-request-matches-fail-stub ()
+  "Fail stubs (`[Claude request failed: ...]') count as still-needing —
+so re-running the fill picks them up again."
+  (skip-unless (fboundp 'tibetan-auto--claude-needs-request-p))
+  (let ((tmp (make-temp-file "claude-needs-" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp
+            (insert "* Auto-Analysis\n"
+                    "** Claude Translation\n"
+                    "[Claude request failed: HTTP 500 — re-run C-c u R later]\n\n"))
+          (should (tibetan-auto--claude-needs-request-p tmp)))
+      (when (file-exists-p tmp) (delete-file tmp)))))
+
 (ert-deftest tibetan-auto-fire-claude-on-create-defcustom-exists ()
   "The gate defcustom exists and defaults to t."
   (should (boundp 'tibetan-auto-fire-claude-on-create))

@@ -446,25 +446,35 @@ of analysis file FILEPATH.  Returns a trimmed string, or nil."
             (and text (not (string-empty-p text)) text)))))))
 
 (defun tibetan-auto--claude-needs-request-p (filepath)
-  "Non-nil if FILEPATH's *** Claude section is empty or still a placeholder.
-We consider a translation \"missing\" when the Claude block contains
-only the default `[Requesting translation...]' placeholder, a
-`[Claude unavailable: ...]' error marker, or is blank."
+  "Non-nil if FILEPATH's Claude translation block is still a placeholder.
+
+Matches the Claude Translation heading at any supported depth and form:
+  * `^\\*+ Claude$'              (legacy — singular Claude block)
+  * `^\\*+ Claude Translation$'  (current — structured three-part layout
+                                  where Translation lives separately from
+                                  Grammar/Vocabulary)
+
+A translation is considered missing when the body under the first such
+heading is blank, or begins with one of the standard placeholders:
+`[Requesting translation...]', `[Claude unavailable...]',
+`[Not available...]', or the `[Claude request failed...]' fail-stub."
   (when (and filepath (file-exists-p filepath))
     (with-temp-buffer
       (insert-file-contents filepath)
       (goto-char (point-min))
-      (when (re-search-forward "^\\*\\*\\* Claude$" nil t)
+      (when (re-search-forward
+             "^\\*+ Claude\\(?: Translation\\)?[ \t]*$" nil t)
         (forward-line 1)
         (let* ((start (point))
-               (end (if (re-search-forward "^\\*\\*\\*\\|^\\*\\*[^*]" nil t)
+               (end (if (re-search-forward "^\\*+ " nil t)
                         (line-beginning-position)
                       (point-max)))
                (body (string-trim (buffer-substring-no-properties start end))))
           (or (string-empty-p body)
               (string-match-p "\\`\\[Requesting translation" body)
               (string-match-p "\\`\\[Claude unavailable" body)
-              (string-match-p "\\`\\[Not available" body)))))))
+              (string-match-p "\\`\\[Not available" body)
+              (string-match-p "\\`\\[Claude request failed" body)))))))
 
 (defun tibetan-auto--analysis-files (folder)
   "Return the list of per-segment analysis files under FOLDER.
