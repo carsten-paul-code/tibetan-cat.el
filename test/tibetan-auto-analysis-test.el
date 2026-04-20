@@ -212,6 +212,60 @@ so re-running the fill picks them up again."
           (should (tibetan-auto--claude-needs-request-p tmp)))
       (when (file-exists-p tmp) (delete-file tmp)))))
 
+(ert-deftest tibetan-auto-analyze-skip-check-matches-create-path ()
+  "`tibetan-auto-analyze-document' must SKIP an existing `seg-NNN.org'
+on a second run — not overwrite it.
+
+Regression for 2026-04-20 YBh disaster: the skip check computed
+`filepath' via `(tibetan-analysis-get-filepath seg-num source-file)'
+which returns a SUFFIXED path like `seg-NNN-<shortname>.org', while
+`tibetan-analysis-create-file' internally re-computes the path WITHOUT
+source-file and writes to the UNSUFFIXED `seg-NNN.org'.  The mismatch
+meant every existing seg-NNN.org was silently overwritten on every
+re-run, wiping Claude translations.  Fix: drop the source-file arg
+from the skip-check `get-filepath' call so the two paths match."
+  (skip-unless (fboundp 'tibetan-auto-analyze-document))
+  (skip-unless (fboundp 'tibetan-analysis-get-filepath))
+  (let* ((root (make-temp-file "auto-skip-" t))
+         (source-file (expand-file-name "gotrapatala.org" root))
+         (folder (file-name-as-directory
+                  (expand-file-name "analysis" root))))
+    (unwind-protect
+        (progn
+          (make-directory folder t)
+          ;; Minimal source with a single *** Segment 1.
+          (with-temp-file source-file
+            (insert "#+TITLE: YBh test\n\n"
+                    "* Tibetan Text\n\n"
+                    "*** Segment 1\n"
+                    "བཀྲ་ཤིས།\n"))
+          (let ((buf (find-file-noselect source-file)))
+            (unwind-protect
+                (with-current-buffer buf
+                  (org-mode)
+                  ;; Under real `tibetan-analysis-get-folder' (pins the
+                  ;; folder to source-file's directory) the output ends
+                  ;; up in `<root>/analysis/seg-001.org'.
+                  (let ((expected (expand-file-name "seg-001.org" folder)))
+                    ;; Pre-seed a file with a distinctive marker so we
+                    ;; can detect an unwanted overwrite.
+                    (with-temp-file expected
+                      (insert "MARKER-BEFORE-REANALYZE\n"))
+                    ;; Suppress Claude fire so the test doesn't need
+                    ;; gptel + network.
+                    (let ((tibetan-auto-fire-claude-on-create nil))
+                      (tibetan-auto-analyze-document))
+                    ;; Marker must still be in the file — meaning the
+                    ;; skip-check correctly matched.
+                    (with-temp-buffer
+                      (insert-file-contents expected)
+                      (should (string-match-p "MARKER-BEFORE-REANALYZE"
+                                              (buffer-string))))))
+              (when (buffer-live-p buf)
+                (with-current-buffer buf (set-buffer-modified-p nil))
+                (kill-buffer buf)))))
+      (delete-directory root t))))
+
 (ert-deftest tibetan-auto-fire-claude-on-create-defcustom-exists ()
   "The gate defcustom exists and defaults to t."
   (should (boundp 'tibetan-auto-fire-claude-on-create))

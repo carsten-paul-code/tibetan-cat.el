@@ -341,7 +341,17 @@ Progress is shown in the echo area."
       (setq current (1+ current))
       (let* ((seg-num (car seg))
              (seg-text (cdr seg))
-             (filepath (tibetan-analysis-get-filepath seg-num source-file)))
+             ;; IMPORTANT: do NOT pass source-file here.
+             ;; `tibetan-analysis-get-filepath' with a source-file arg
+             ;; returns `seg-NNN-<shortname>.org' (suffixed), but
+             ;; `tibetan-analysis-create-file' internally calls
+             ;; `get-filepath' WITHOUT source-file and writes to the
+             ;; unsuffixed `seg-NNN.org'.  Passing source-file here
+             ;; would mean the skip-check looks for a file that
+             ;; never exists — so existing `seg-NNN.org' files get
+             ;; OVERWRITTEN instead of skipped.  Keep the path in
+             ;; sync by matching what create-file actually writes.
+             (filepath (tibetan-analysis-get-filepath seg-num)))
 
         (tibetan-auto--report-progress current total
                                         (format "Segment %d" seg-num))
