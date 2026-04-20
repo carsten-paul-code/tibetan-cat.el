@@ -343,19 +343,28 @@ Just some prose, no sentence headings here.
     (should-not (string-match-p "^#\\+SOURCE:" body))))
 
 (ert-deftest tibetan-sentence-scaffold-section-headings ()
-  "Scaffold has all required top-level and Provided-Translations sub-headings."
+  "Scaffold has all required top-level and Provided-Translations sub-headings.
+The layout is `* Tibetan Text', `* Auto-Analysis' (or legacy `* Wylie'
+fallback when the segment renderer is unavailable), then
+`* Provided Translations' with Roehrich / Class / Claude subsections,
+followed by the user sections (Working Translation / My Notes /
+Footnotes)."
   (let ((body (tibetan-sentence--scaffold 1 '(1) "x" "x" "/tmp/f.org")))
-    (should (string-match-p "^\\* Tibetan Text$"           body))
-    (should (string-match-p "^\\* Wylie$"                  body))
-    (should (string-match-p "^\\* Provided Translations$"  body))
-    (should (string-match-p "^\\*\\*\\* Roehrich$"         body))
+    (should (string-match-p "^\\* Tibetan Text$"            body))
+    ;; EITHER `* Auto-Analysis' (renderer active) OR `* Wylie'
+    ;; (renderer unavailable / no Tibetan in test input).  The scaffold
+    ;; MUST carry at least one of the two.
+    (should (or (string-match-p "^\\* Auto-Analysis$" body)
+                (string-match-p "^\\* Wylie$"         body)))
+    (should (string-match-p "^\\* Provided Translations$"   body))
+    (should (string-match-p "^\\*\\*\\* Roehrich$"          body))
     (should (string-match-p "^\\*\\*\\* Class Translation$" body))
     (should (string-match-p "^\\*\\*\\* Claude Translation$" body))
-    (should (string-match-p "^\\*\\*\\* Claude Grammar$"   body))
-    (should (string-match-p "^\\*\\*\\* Claude Context$"   body))
-    (should (string-match-p "^\\* Working Translation$"    body))
-    (should (string-match-p "^\\* My Notes$"               body))
-    (should (string-match-p "^\\* Footnotes$"              body))))
+    (should (string-match-p "^\\*\\*\\* Claude Grammar$"    body))
+    (should (string-match-p "^\\*\\*\\* Claude Context$"    body))
+    (should (string-match-p "^\\* Working Translation$"     body))
+    (should (string-match-p "^\\* My Notes$"                body))
+    (should (string-match-p "^\\* Footnotes$"               body))))
 
 (ert-deftest tibetan-sentence-scaffold-tibetan-text-embedded ()
   "Scaffold embeds the tibetan-text payload under * Tibetan Text."
@@ -363,12 +372,53 @@ Just some prose, no sentence headings here.
                1 '(1) "བཀྲ་ཤིས།" nil "/tmp/f.org")))
     (should (string-match-p "\\* Tibetan Text\nབཀྲ་ཤིས།" body))))
 
+(ert-deftest tibetan-sentence-scaffold-auto-analysis-on-tibetan-input ()
+  "A Tibetan-containing sentence gets a `* Auto-Analysis' block with
+the segment-level renderer output embedded."
+  (skip-unless (fboundp 'tibetan-analysis-generate-content))
+  (let ((body (tibetan-sentence--scaffold
+               1 '(1) "བཀྲ་ཤིས་བདེ་ལེགས།" nil "/tmp/f.org")))
+    (should (string-match-p "^\\* Auto-Analysis$" body))
+    ;; Segment-level section that MUST come from generate-content.
+    (should (string-match-p "^\\*\\* Wylie Transliteration$" body))
+    ;; Segment-level Claude headings are STRIPPED — a sentence file
+    ;; uses the top-level `* Provided Translations' block instead.
+    (should-not
+     (let ((start (string-match "^\\* Auto-Analysis$" body))
+           (end   (or (string-match "^\\* Provided Translations$" body)
+                      (length body))))
+       (when start
+         (string-match-p "^\\*\\* Claude Translation$"
+                         (substring body start end)))))))
+
+(ert-deftest tibetan-sentence-scaffold-auto-analysis-strips-provided-translations ()
+  "The embedded auto-analysis must NOT contain `** Provided
+Translations' (which would duplicate the sentence-level
+`* Provided Translations' at top level)."
+  (skip-unless (fboundp 'tibetan-analysis-generate-content))
+  (let* ((body (tibetan-sentence--scaffold
+                1 '(1) "བཀྲ་ཤིས་བདེ་ལེགས།" nil "/tmp/f.org"))
+         (auto-start (string-match "^\\* Auto-Analysis$" body))
+         (auto-end (or (string-match "^\\* Provided Translations$" body)
+                       (length body))))
+    (when auto-start
+      (let ((auto-block (substring body auto-start auto-end)))
+        (should-not (string-match-p "^\\*\\* Provided Translations$"
+                                    auto-block))))))
+
 (ert-deftest tibetan-sentence-scaffold-wylie-fallback ()
-  "Scaffold inserts placeholder when wylie is nil/empty."
+  "Scaffold falls back to a standalone `* Wylie' block when the
+segment renderer returns no useful output (no Tibetan content in
+the input, renderer unavailable, etc.).  The Wylie body shows the
+`[Wylie transliteration not available]' placeholder when wylie is
+nil or empty."
   (let ((body-nil   (tibetan-sentence--scaffold 1 '(1) "x" nil "/t.org"))
         (body-empty (tibetan-sentence--scaffold 1 '(1) "x" "" "/t.org")))
+    ;; No Tibetan in "x" → auto-analysis empty → fallback Wylie block.
+    (should (string-match-p "^\\* Wylie$" body-nil))
     (should (string-match-p "\\[Wylie transliteration not available\\]"
                             body-nil))
+    (should (string-match-p "^\\* Wylie$" body-empty))
     (should (string-match-p "\\[Wylie transliteration not available\\]"
                             body-empty))))
 

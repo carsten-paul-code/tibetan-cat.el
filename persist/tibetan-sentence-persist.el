@@ -357,12 +357,94 @@ the corresponding heading has real content, not placeholder text)."
 ;; FILE CREATION (scaffold)
 ;; ============================================================================
 
+(defconst tibetan-sentence--segment-claude-sections
+  '("** Claude Translation"
+    "** Claude Grammar"
+    "** Provided Translations")
+  "Level-2 headings stripped from segment-level auto-analysis output
+before it is embedded in a sentence file's `* Auto-Analysis' block.
+
+The segment-level renderer emits its own `** Claude Translation',
+`** Claude Grammar', and `** Provided Translations' subtrees.
+Sentence files carry their own top-level `* Provided Translations'
+with a discourse-focused Claude pass (different prompt, different
+analysis), so replicating the segment-level Claude scaffolding
+would produce two conflicting Claude conversations in one file.
+Dropping these three subtrees keeps the auto-analysis content
+strictly parser-sourced at the sentence level.")
+
+(defun tibetan-sentence--strip-segment-claude-sections (content)
+  "Return CONTENT with segment-level Claude sections removed.
+Uses the segment-module splitter so heading boundaries are
+consistent with the rest of the tool."
+  (if (not (and content (stringp content) (not (string-empty-p content))))
+      ""
+    (let* ((split (tibetan-analysis--split-level2-sections content))
+           (preamble (car split))
+           (sections
+            (cl-remove-if
+             (lambda (pair)
+               (member (car pair)
+                       tibetan-sentence--segment-claude-sections))
+             (cdr split))))
+      (concat (or preamble "")
+              (mapconcat (lambda (p) (concat (car p) "\n" (cdr p)))
+                         sections "")))))
+
+(defun tibetan-sentence--render-auto-analysis (tibetan-text)
+  "Return the body of the `* Auto-Analysis' block for TIBETAN-TEXT.
+
+Runs the segment-level renderer
+\(`tibetan-analysis-generate-content') on the concatenated
+sentence text and strips segment-level Claude scaffolding.  The
+result is the same parser-driven analysis the per-segment files
+carry (Wylie / Particle Map / Interlinear Gloss / Verb
+Classification / Word-Particle List / Grammatical Markers /
+Sentence Structure / Clause Structure / Detailed Dictionary),
+but computed over the whole sentence so cross-segment compounds
+and clause chains surface in one place.
+
+Returns nil when the renderer is unavailable or the text has no
+Tibetan content (so the caller can emit a placeholder instead of
+a misleading empty section).  The Tibetan-content check reuses
+`tibetan-analysis--filter-to-tibetan-lines' — a sentence whose
+only text is Latin / `#' comments / blank lines gets no
+auto-analysis block at all."
+  (when (and tibetan-text
+             (stringp tibetan-text)
+             (not (string-empty-p (string-trim tibetan-text)))
+             (fboundp 'tibetan-analysis-generate-content)
+             (fboundp 'tibetan-analysis--filter-to-tibetan-lines))
+    (let ((filtered (tibetan-analysis--filter-to-tibetan-lines
+                     tibetan-text)))
+      (when (and filtered
+                 (not (string-empty-p (string-trim filtered))))
+        (condition-case _err
+            (let ((content (tibetan-analysis-generate-content tibetan-text)))
+              (when (and content (not (string-empty-p content)))
+                (tibetan-sentence--strip-segment-claude-sections content)))
+          (error nil))))))
+
 (defun tibetan-sentence--scaffold (sent-num seg-nums tibetan-text wylie source-file)
   "Return the scaffold body for a new sent-NNN.org file (as string).
 SENT-NUM is the sentence number, SEG-NUMS the list of contained
 segment numbers, TIBETAN-TEXT the concatenated child text,
-WYLIE its transliteration (may be nil), SOURCE-FILE the absolute
-path of the source org buffer."
+WYLIE its transliteration (may be nil — retained as a fallback
+when `tibetan-analysis-generate-content' is unavailable),
+SOURCE-FILE the absolute path of the source org buffer.
+
+The scaffold now embeds the segment-level auto-analysis output
+\(minus segment-Claude scaffolding) under `* Auto-Analysis', so
+every sent-NNN.org carries Wylie, Particle Map, Interlinear Gloss,
+Verb Classification, Word/Particle List, Grammatical Markers,
+Sentence Structure (per-clause), Clause Structure, and Detailed
+Dictionary on the concatenated sentence text — the \"extended
+sequence analysis\" view where cross-segment compounds and long
+clause chains surface naturally.  The top-level `* Provided
+Translations' block (Roehrich / Class / Claude Translation /
+Claude Grammar / Claude Context) remains where it was — that's
+the sentence-scoped discourse analysis, not the segment-level
+word-by-word one."
   (let* ((source-name (and source-file
                            (file-name-nondirectory source-file)))
          (date (format-time-string "%Y-%m-%d"))
@@ -383,11 +465,24 @@ path of the source org buffer."
       (insert "* Tibetan Text\n")
       (insert tibetan-text)
       (insert "\n\n")
-      (insert "* Wylie\n")
-      (if (and wylie (not (string-empty-p wylie)))
-          (insert wylie)
-        (insert "[Wylie transliteration not available]"))
-      (insert "\n\n")
+      ;; * Auto-Analysis — extended-segment-analysis output on the
+      ;; concatenated sentence text.  Falls back to a standalone
+      ;; `* Wylie' block on the older layout when the segment
+      ;; renderer is not available (e.g. degraded test harness).
+      (let ((auto (tibetan-sentence--render-auto-analysis tibetan-text)))
+        (cond
+         (auto
+          (insert "* Auto-Analysis\n")
+          (insert ":PROPERTIES:\n:GENERATED: t\n:END:\n\n")
+          (insert auto)
+          (unless (string-suffix-p "\n" auto) (insert "\n"))
+          (insert "\n"))
+         (t
+          (insert "* Wylie\n")
+          (if (and wylie (not (string-empty-p wylie)))
+              (insert wylie)
+            (insert "[Wylie transliteration not available]"))
+          (insert "\n\n"))))
       (insert "* Provided Translations\n")
       (insert "*** Roehrich\n")
       (insert "[Hand-paste the published Roehrich English here]\n\n")
@@ -476,20 +571,44 @@ the `* Tibetan Text' / `* Wylie' bodies."
           (goto-char (car bounds))
           (insert "* Tibetan Text\n" tibetan-text "\n\n")))
 
-      ;; Update the Wylie body.
-      (let ((bounds (tibetan-sentence--find-section-bounds
-                     (current-buffer) "Wylie")))
+      ;; Auto-Analysis: remove any legacy `* Wylie' standalone section
+      ;; (pre-extended-analysis layout) and install / replace
+      ;; `* Auto-Analysis' with the segment-level renderer output on
+      ;; the current concatenated text.  Falls back to the standalone
+      ;; Wylie block if the renderer isn't available.
+      (let ((old-wylie (tibetan-sentence--find-section-bounds
+                        (current-buffer) "Wylie")))
+        (when old-wylie
+          (delete-region (car old-wylie) (cdr old-wylie))))
+      (let* ((auto (tibetan-sentence--render-auto-analysis tibetan-text))
+             (bounds (tibetan-sentence--find-section-bounds
+                      (current-buffer) "Auto-Analysis")))
         (cond
-         (bounds
+         ((and auto bounds)
           (delete-region (car bounds) (cdr bounds))
           (goto-char (car bounds))
-          (insert "* Wylie\n"
-                  (if (and wylie (not (string-empty-p wylie)))
-                      wylie
-                    "[Wylie transliteration not available]")
-                  "\n\n"))
+          (insert "* Auto-Analysis\n"
+                  ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                  auto
+                  (if (string-suffix-p "\n" auto) "\n" "\n\n")))
+         (auto
+          ;; Insert fresh after Tibetan Text.
+          (let ((tib (tibetan-sentence--find-section-bounds
+                      (current-buffer) "Tibetan Text")))
+            (when tib
+              (goto-char (cdr tib))
+              (insert "* Auto-Analysis\n"
+                      ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                      auto
+                      (if (string-suffix-p "\n" auto) "\n" "\n\n")))))
+         (bounds
+          ;; Renderer unavailable but an Auto-Analysis section exists;
+          ;; leave it alone (nothing valid to replace it with).
+          nil)
          (t
-          ;; Wylie section missing — insert it after Tibetan Text.
+          ;; Renderer unavailable and no Auto-Analysis: fall back to
+          ;; inserting a standalone Wylie block (legacy shape) so the
+          ;; file still carries SOMETHING useful.
           (let ((tib (tibetan-sentence--find-section-bounds
                       (current-buffer) "Tibetan Text")))
             (when tib
