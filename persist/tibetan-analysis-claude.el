@@ -71,6 +71,7 @@
 (defvar gptel-api-key)
 (defvar gptel-backend)
 (defvar gptel-model)
+(defvar gptel-cache)                    ; gptel prompt-caching toggle
 (declare-function gptel-request "gptel" (&optional prompt &rest args))
 (declare-function gptel-make-anthropic "gptel" (name &rest args))
 
@@ -658,7 +659,20 @@ failures are reported via `message' and the placeholder."
                     (prompts (tibetan-analysis--build-claude-prompts
                               tibetan-text src analysis-file))
                     (system-prompt (car prompts))
-                    (user-prompt   (cdr prompts)))
+                    (user-prompt   (cdr prompts))
+                    ;; Prompt caching: the system prompt is identical
+                    ;; across every seg-*.org in a document (it's
+                    ;; `tibetan-analysis--claude-system-prompt' +
+                    ;; the source file's `#+TIBETAN_CLAUDE_CONTEXT'
+                    ;; block).  Marking it as an Anthropic cached
+                    ;; prefix means every request after the first
+                    ;; within the 5-minute TTL pays only 10% of the
+                    ;; normal input cost on the cached portion.
+                    ;; One-time write overhead is +25% on the first
+                    ;; request; savings compound from request 2 on.
+                    ;; See gptel-anthropic.el line ~213 for the
+                    ;; `cache_control: {"type": "ephemeral"}' wiring.
+                    (gptel-cache '(system)))
                (gptel-request
                 user-prompt
                 :system system-prompt

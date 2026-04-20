@@ -72,6 +72,7 @@
 
 ;; Silence byte-compile warnings when gptel is not installed.
 (declare-function gptel-request "gptel" (&optional prompt &rest args))
+(defvar gptel-cache)                    ; gptel prompt-caching toggle
 
 ;; Forward declarations for the auto-segmenter companion module.
 ;; `tibetan-sentence-resegment' (defined below) chains the
@@ -991,7 +992,13 @@ Translation section if retries are exhausted."
                     (prompts (tibetan-sentence--build-claude-prompts
                               tibetan-text seg-nums src folder))
                     (system-prompt (car prompts))
-                    (user-prompt   (cdr prompts)))
+                    (user-prompt   (cdr prompts))
+                    ;; Cache the system prompt (identical across every
+                    ;; sent-*.org in a document) — see equivalent binding
+                    ;; in `tibetan-analysis--request-claude-translation'.
+                    ;; 5-min TTL; per-batch savings compound from the
+                    ;; second request onward.
+                    (gptel-cache '(system)))
                (gptel-request
                 user-prompt
                 :system system-prompt
