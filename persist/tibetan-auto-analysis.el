@@ -118,15 +118,23 @@ Returns alist of (SEGMENT-NUMBER . TIBETAN-TEXT) sorted by number."
 
 (defun tibetan-auto--collect-segments ()
   "Collect all segments from current buffer.
-Supports both hierarchical org segments (*** Segment N) and inline
-〔seg:N〕...〔/seg〕 markers produced by `tibetan-doc-format'. The
-hierarchical form wins if present; otherwise the inline form is used.
+
+Supports both hierarchical org segments at any heading level (`***'
+in the fresh-prep layout or `****' after `tibetan-add-sentence-structure'
+demoted them under `*** Sentence N' wrappers) and inline `〔seg:N〕…〔/seg〕'
+markers produced by `tibetan-doc-format'.  The hierarchical form wins
+if present; otherwise the inline form is used.
+
+The heading regex is `^\\*+ Segment ' so both `*** Segment 1' and
+`**** Segment 1' are picked up.  Sentence wrappers (`*** Sentence N')
+are NOT matched because the literal word differs.
+
 Returns alist of (SEGMENT-NUMBER . TIBETAN-TEXT)."
   (let ((org-segs
          (save-excursion
            (goto-char (point-min))
            (let ((segments '()))
-             (while (re-search-forward "^\\*\\*\\* Segment \\([0-9]+\\)" nil t)
+             (while (re-search-forward "^\\*+ Segment \\([0-9]+\\)" nil t)
                (let* ((seg-num (string-to-number (match-string 1)))
                       (text (when (fboundp 'tibetan-org-get-segment-text)
                               (tibetan-org-get-segment-text))))
@@ -139,11 +147,16 @@ Returns alist of (SEGMENT-NUMBER . TIBETAN-TEXT)."
 
 (defun tibetan-auto--collect-sentences ()
   "Collect all sentences from current buffer.
+
+Heading regex `^\\*+ Sentence ' to match both the legacy `** Sentence N'
+layout produced by `tibetan-prepare-document' and the current
+`*** Sentence N' layout produced by `tibetan-add-sentence-structure'.
+
 Returns alist of (SENTENCE-NUMBER . COMBINED-TEXT)."
   (save-excursion
     (goto-char (point-min))
     (let ((sentences '()))
-      (while (re-search-forward "^\\*\\* Sentence \\([0-9]+\\)" nil t)
+      (while (re-search-forward "^\\*+ Sentence \\([0-9]+\\)" nil t)
         (let* ((sent-num (string-to-number (match-string 1)))
                (start-pos (point)))
           ;; Move to sentence heading

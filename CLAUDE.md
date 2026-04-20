@@ -214,6 +214,42 @@ Two cross-cutting cleanups:
 - MWU spans truncate at verb positions (Resources-supplied MWU like
   `ཡུལ་འཐོན' no longer absorbs the verb into the NP head).
 
+### 5.7 Sentence re-segmentation workflow + bare-seg migrator (done, tested, 2026-04-20)
+
+Two related workflows added/fixed for the Milarepa re-segmentation
+and Josefine layout-harmonisation passes:
+
+1. **Re-segmentation orchestrator** (`persist/tibetan-sentence-persist.el`):
+   - `tibetan-sentence-resegment` (`C-c s Z`) — orchestrator chaining
+     archive → reset → re-segment → create-all behind a single yes/no.
+   - Sub-commands: `…-archive-analysis-folder` (`C-c s X`),
+     `…-reset-structure` (`C-c s U`, actually lives in
+     `doc-prep/tibetan-sentence-structure.el`), `…-create-all`
+     (`C-c s N`).
+   - Tests: 18 ERT (8 reset, 4 archive, 4 create-all, 2 resegment).
+2. **Segment-structure demotion fix** (`doc-prep/tibetan-sentence-structure.el`):
+   `tibetan-add-sentence-structure' previously only demoted the first
+   segment of each sentence, leaving continuation segments orphaned
+   at `*** Segment' sibling of `*** Sentence'.  Fixed; all segments
+   now demote to `**** Segment'.  +3 ERT tests.
+3. **WT-leak fix in `create-all`**: body-end detector now stops at
+   any heading (`^\\*+ `) instead of only `**** Segment', so sibling
+   `**** Working Translation' doesn't leak into the sentence's
+   concatenated Tibetan text.  +1 ERT test.
+4. **Bare-seg migrator** (`doc-prep/tibetan-segment-migrate.el`):
+   `tibetan-migrate-bare-segments-to-headings` — converts
+   `〔seg:N〕…〔/seg〕' markers (no `〔trans:N〕' pairs — the
+   Thar-rgyan / Josefine pipeline) to `*** Segment M' headings.
+   Pipeline: split+flatten Tibetan-title headings to `** Section',
+   hoist `#+KEYWORD:' metadata to document header, renumber from 1,
+   drop segments that become empty after hoisting.  +10 ERT tests.
+5. **Yogācārabhūmi Wylie preparation** (`doc-prep/tibetan-ybh-prep.py`):
+   Python script (pyewts dependency) that prepares a Wylie Derge-style
+   śāstra source into the Milarepa segment layout.  Used 2026-04-20
+   to prep `gotrapatala.org' (97 segments × 97 sentences, 97 :FOLIO:
+   properties inheritance-filled).  Install pyewts with
+   `pip3 install --break-system-packages --user --no-build-isolation pyewts'.
+
 ### 5.6 Bug fixes shipped this round
 - **`པ' / `པའི' tagged as verbs (P1 from §6).** Added
   `tibetan-verb-detect--nominalizer-set' in

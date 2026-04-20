@@ -113,6 +113,60 @@
         (should (string-match-p "སངས་རྒྱས" text))
         (should (string-match-p "ཆོས" text))))))
 
+(ert-deftest tibetan-auto-collect-segments-level-4-after-sentence-wrap ()
+  "Segments at `**** Segment N' (after `tibetan-add-sentence-structure')
+are picked up alongside the legacy `*** Segment N' layout.
+
+Regression for YBh prep 2026-04-20: the collector's heading regex was
+hardcoded to three asterisks, so running `C-c u B' on a source that
+had already gone through the sentence-structure pass returned zero
+segments.  Fixed to `^\\*+ Segment '."
+  (skip-unless (fboundp 'tibetan-auto--collect-segments))
+  (with-temp-buffer
+    (org-mode)
+    (when (fboundp 'org-set-regexps-and-options) (org-set-regexps-and-options))
+    (font-lock-ensure)
+    (insert "* Text\n\n"
+            "*** Sentence 1\n"
+            "**** Segment 1\nབཀྲ་ཤིས།\n"
+            "**** Segment 2\nབདེ་ལེགས།\n"
+            "*** Sentence 2\n"
+            "**** Segment 3\nཔདྨ།\n")
+    (when (fboundp 'org-set-regexps-and-options) (org-set-regexps-and-options))
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (let ((segments (tibetan-auto--collect-segments)))
+      (should (= 3 (length segments)))
+      (should (assoc 1 segments))
+      (should (assoc 2 segments))
+      (should (assoc 3 segments))
+      (should (string-match-p "བཀྲ་ཤིས" (cdr (assoc 1 segments))))
+      (should (string-match-p "པདྨ" (cdr (assoc 3 segments)))))))
+
+(ert-deftest tibetan-auto-collect-sentences-level-3-after-add-structure ()
+  "Sentences at `*** Sentence N' (after `tibetan-add-sentence-structure')
+are picked up alongside the legacy `** Sentence N' layout.
+
+Regression for YBh prep 2026-04-20: same hardcoded-depth bug as the
+segment collector, at `^\\*\\* Sentence' instead of `^\\*+ Sentence'."
+  (skip-unless (fboundp 'tibetan-auto--collect-sentences))
+  (with-temp-buffer
+    (org-mode)
+    (when (fboundp 'org-set-regexps-and-options) (org-set-regexps-and-options))
+    (font-lock-ensure)
+    (insert "* Text\n\n"
+            "*** Sentence 1\n"
+            "**** Segment 1\nབཀྲ་ཤིས།\n"
+            "*** Sentence 2\n"
+            "**** Segment 2\nབདེ་ལེགས།\n")
+    (when (fboundp 'org-set-regexps-and-options) (org-set-regexps-and-options))
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (let ((sentences (tibetan-auto--collect-sentences)))
+      (should (= 2 (length sentences)))
+      (should (assoc 1 sentences))
+      (should (assoc 2 sentences)))))
+
 ;; ============================================================================
 ;; SENTENCE COLLECTION TESTS
 ;; ============================================================================
