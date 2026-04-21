@@ -962,6 +962,48 @@ Handles: verb་ཅིང་, verb་སྟེ་, verb་བར་, verb་བ�
 ;; VOCABULARY EXTRACTION
 ;; ============================================================================
 
+(defconst tibetan-extract-vocab--particle-tails
+  '("ར" "ལ" "ན" "ས" "སུ" "ཏུ" "དུ" "རུ" "ནས" "ལས" "དང"
+    "གི" "གྱི" "ཀྱི" "ཡི" "ནི" "འི" "པར" "བར"
+    "ཀྱིས" "གིས" "གྱིས" "ཡིས" "སྟེ" "ཏེ" "དེ"
+    "ཅིང" "ཞིང" "ཤིང" "པས" "བས")
+  "Case / converb particle tails that disqualify a compound lookup.
+When the LAST syllable of a candidate 2-, 3-, or 4-syllable compound
+matches one of these, `tibetan-extract-vocabulary' falls through to
+the single-syllable loop so the stem and particle are tokenised
+separately — matching the Particle Map's grammatical split.
+
+Deliberately excludes nominaliser tails (`པ', `བ', `མ') because forms
+like `བསྐལ་པ' (kalpa) and `ཆོས་ཉིད' are legitimate lexical compounds
+that should be picked up as a unit.
+
+Kept in sync with `tibetan-enhanced-parser--case-particle-tails';
+see the comment in the MWU helper for the rationale.")
+
+(defun tibetan-extract-vocab--tail-is-particle-p (joined)
+  "Return non-nil when JOINED (a `་'-joined Tibetan compound) ends
+in a case or converb particle listed in
+`tibetan-extract-vocab--particle-tails'."
+  (let ((parts (split-string joined "་" t)))
+    (and parts
+         (member (car (last parts))
+                 tibetan-extract-vocab--particle-tails))))
+
+(defun tibetan-extract-vocab--head-is-particle-p (joined)
+  "Return non-nil when JOINED starts with a case or converb particle
+listed in `tibetan-extract-vocab--particle-tails'.
+
+A particle can never legitimately be the HEAD of a compound — it's
+always attached to a preceding content word.  This rejection
+prevents the greedy compound loop from stranding a particle with
+the following word: e.g. after `བདག་ལ' has split into stem + LA,
+the next iteration starts at `ལ' and must not be allowed to pick
+up `ལ་སྟོད' (\"Latö, western Tsang\") as a 2-syllable compound."
+  (let ((parts (split-string joined "་" t)))
+    (and parts
+         (member (car parts)
+                 tibetan-extract-vocab--particle-tails))))
+
 (defun tibetan-extract-vocabulary (tibetan-text)
   "Extract vocabulary from TIBETAN-TEXT with meanings.
 Returns list of (word . meaning) pairs.
@@ -1017,7 +1059,26 @@ overridden per-buffer with #+TIBETAN_DICT_PRIORITY."
                   (setq found t)
                   (setq matched-len 2)))) ;; close setq, let*, when, outer let
 
-            ;; SECOND: Greedy matching - try 4, 3, 2 syllable compounds
+            ;; SECOND: Greedy matching - try 4, 3, 2 syllable compounds.
+            ;;
+            ;; Reject any compound whose TAIL syllable is a case or
+            ;; converb particle — otherwise dictionary idioms like
+            ;; `བདག་ལ' (Skt. naḥ "to me") and `སྟོད་ནས' (Skt. uparimāt
+            ;; "from above") would be picked up as single units,
+            ;; obscuring the grammatical split `bdag` + LA and
+            ;; `stod` + NAS that every downstream section (Particle
+            ;; Map, Clause Structure, Grammatical Markers) otherwise
+            ;; renders correctly.  The same gate is applied on the
+            ;; MWU side by `tibetan-enhanced-parser--case-particle-
+            ;; tail-p'; we keep the two code paths in sync so the
+            ;; Word / Particle List, Interlinear Gloss, Detailed
+            ;; Dictionary, and CAT Gloss all agree with the Particle
+            ;; Map's grammatical tokenisation.
+            ;;
+            ;; User-curated compounds with particle tails (uncommon
+            ;; but possible — e.g. a Resources entry for a lexicalised
+            ;; idiom) should be added to the Resources vocab file,
+            ;; which takes priority earlier in the lookup chain.
             (unless found
               (cl-loop for compound-len from 4 downto 2
                        until found
@@ -1025,14 +1086,16 @@ overridden per-buffer with #+TIBETAN_DICT_PRIORITY."
                        do
                        (let* ((syls-raw (cl-loop for j from i below (+ i compound-len)
                                                  collect (string-trim (nth j words))))
-                              (compound-raw (mapconcat #'identity syls-raw "་"))
-                              ;; Use bilingual lookup for compounds
-                              (meaning (tibetan-lookup-word compound-raw)))
-                         ;; If found, record and skip forward
-                         (when meaning
-                           (push (cons compound-raw meaning) vocab)
-                           (setq found t)
-                           (setq matched-len compound-len)))))
+                              (compound-raw (mapconcat #'identity syls-raw "་")))
+                         (unless (or (tibetan-extract-vocab--tail-is-particle-p
+                                       compound-raw)
+                                     (tibetan-extract-vocab--head-is-particle-p
+                                      compound-raw))
+                           (let ((meaning (tibetan-lookup-word compound-raw)))
+                             (when meaning
+                               (push (cons compound-raw meaning) vocab)
+                               (setq found t)
+                               (setq matched-len compound-len)))))))
 
             ;; THIRD: If no compound found, lookup single word using bilingual lookup
             (unless found

@@ -400,7 +400,23 @@ analysis (C-c u A)."
           (unless (or (string-empty-p syl-clean)
                       (gethash syl-clean seen))
 
-            ;; Greedy matching: try 4, 3, 2 syllable compounds first
+            ;; Greedy matching: try 4, 3, 2 syllable compounds first.
+            ;;
+            ;; Reject any compound whose head OR tail syllable is a
+            ;; case / converb particle — those should be tokenised
+            ;; separately so the Detailed Dictionary shows the stem
+            ;; and the particle as their own entries, matching the
+            ;; Word / Particle List and Particle Map.  Without this,
+            ;; dictionary idioms like `བདག་ལ' ("to me", Skt. naḥ) and
+            ;; `སྟོད་ནས' ("from above", Skt. uparimāt) would be picked
+            ;; up as single lexical units, hiding the grammatical
+            ;; split that downstream sections (Clause Structure,
+            ;; Grammatical Markers) otherwise render correctly.
+            ;;
+            ;; See `tibetan-extract-vocab--tail-is-particle-p' +
+            ;; `--head-is-particle-p' in `core/tibetan-vocabulary.el'
+            ;; for the sibling Word/Particle List code path kept in
+            ;; sync with this one.
             (cl-loop for compound-len from 4 downto 2
                      until found
                      when (<= (+ i compound-len) num-syllables)
@@ -409,20 +425,24 @@ analysis (C-c u A)."
                                            collect (replace-regexp-in-string
                                                     "[།༎༏]" ""
                                                     (string-trim (nth j syllables)))))
-                            (compound (mapconcat #'identity syls "་"))
-                            (entry (tibetan-vocab-lookup-detailed compound)))
-                       (when entry
-                         (puthash compound t seen)
-                         (push (list :tibetan compound
-                                     :wylie (plist-get entry :wylie)
-                                     :primary (plist-get entry :primary)
-                                     :detailed (plist-get entry :detailed)
-                                     :sanskrit (plist-get entry :sanskrit)
-                                     :source (plist-get entry :source)
-                                     :compound-p t)
-                               vocab-list)
-                         (setq found t)
-                         (setq matched-len compound-len))))
+                            (compound (mapconcat #'identity syls "་")))
+                       (unless (or (and (fboundp 'tibetan-extract-vocab--tail-is-particle-p)
+                                        (tibetan-extract-vocab--tail-is-particle-p compound))
+                                   (and (fboundp 'tibetan-extract-vocab--head-is-particle-p)
+                                        (tibetan-extract-vocab--head-is-particle-p compound)))
+                         (let ((entry (tibetan-vocab-lookup-detailed compound)))
+                           (when entry
+                             (puthash compound t seen)
+                             (push (list :tibetan compound
+                                         :wylie (plist-get entry :wylie)
+                                         :primary (plist-get entry :primary)
+                                         :detailed (plist-get entry :detailed)
+                                         :sanskrit (plist-get entry :sanskrit)
+                                         :source (plist-get entry :source)
+                                         :compound-p t)
+                                   vocab-list)
+                             (setq found t)
+                             (setq matched-len compound-len))))))
 
             ;; Try single syllable if no compound found
             (unless found

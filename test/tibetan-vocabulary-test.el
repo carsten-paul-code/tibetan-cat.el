@@ -429,6 +429,66 @@ When both glossary and custom exist, result is formatted as 'glossary (DE: custo
     (should (listp vocab))
     (should (= (length vocab) 0))))
 
+(ert-deftest tibetan-extract-vocabulary-rejects-particle-tail-compound ()
+  "Compounds whose tail syllable is a case / converb particle are
+tokenised as stem + particle, not glued into a single lookup key.
+
+Regression for Milarepa seg-026 (2026-04-21): `བདག་ལ' (Skt. naḥ
+\"to me\") and `སྟོད་ནས' (Skt. uparimāt \"from above\") are real
+Steinert entries that were being picked up as 2-syllable compounds
+by the greedy MWU pass, hiding the grammatical `bdag + LA' /
+`stod + NAS' split that Particle Map, Clause Structure, and
+Grammatical Markers render correctly.
+
+The fix rejects any compound whose LAST syllable is in
+`tibetan-extract-vocab--particle-tails'."
+  (let ((tibetan-current-resources-vocab nil)
+        (tibetan-current-custom-vocab nil)
+        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
+    ;; Seed the idiomatic 2-syllable compound AND the stem alone.
+    (puthash "བདག་ལ" "to me [compound idiom]"
+             tibetan-comprehensive-vocabulary)
+    (puthash "བདག" "self"
+             tibetan-comprehensive-vocabulary)
+    (let* ((vocab (tibetan-extract-vocabulary "བདག་ལ"))
+           (keys (mapcar #'car vocab)))
+      ;; The compound with particle tail must NOT be picked.
+      (should-not (member "བདག་ལ" keys))
+      ;; The stem alone must be recognised.
+      (should (member "བདག" keys)))))
+
+(ert-deftest tibetan-extract-vocabulary-rejects-particle-head-compound ()
+  "Compounds whose first syllable is a case / converb particle are
+rejected — a particle cannot legitimately be the HEAD of a compound.
+
+Without this, after `བདག་ལ' splits into `bdag' + LA, the next
+iteration starting at `ལ' would be allowed to pick up `ལ་སྟོད'
+(\"Latö, western Tsang\" — a real place name in the dictionary),
+stranding the particle with the following content word."
+  (let ((tibetan-current-resources-vocab nil)
+        (tibetan-current-custom-vocab nil)
+        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
+    ;; Seed the particle-head 2-syllable compound AND the stem alone.
+    (puthash "ལ་སྟོད" "Latö, western Tsang"
+             tibetan-comprehensive-vocabulary)
+    (puthash "སྟོད" "upper part"
+             tibetan-comprehensive-vocabulary)
+    (let* ((vocab (tibetan-extract-vocabulary "ལ་སྟོད"))
+           (keys (mapcar #'car vocab)))
+      (should-not (member "ལ་སྟོད" keys))
+      (should (member "སྟོད" keys)))))
+
+(ert-deftest tibetan-extract-vocabulary-keeps-legitimate-compounds ()
+  "Compounds without particle tails — e.g. `སངས་རྒྱས' (Buddha) —
+remain intact.  The particle-guard must not over-reject."
+  (let ((tibetan-current-resources-vocab nil)
+        (tibetan-current-custom-vocab nil)
+        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
+    (puthash "སངས་རྒྱས" "Buddha, awakened one"
+             tibetan-comprehensive-vocabulary)
+    (let ((vocab (tibetan-extract-vocabulary "སངས་རྒྱས")))
+      (should (assoc "སངས་རྒྱས" vocab)))))
+
 ;; ============================================================================
 ;; FORMATTING TESTS
 ;; ============================================================================
