@@ -2313,7 +2313,13 @@ If analysis exists, check if source has changed and warn."
               (message "WARNING: Source text has changed since last analysis!"))
             (let ((buf (find-file-noselect filepath)))
               (with-current-buffer buf
-                (tibetan-analysis-setup-faces))
+                (tibetan-analysis-setup-faces)
+                ;; Always land at the top of the analysis file.  Without
+                ;; this, `save-place-mode' (or the mid-insert point left
+                ;; by Claude's async callback before the last save)
+                ;; would drop the cursor near the bottom — confusing
+                ;; when you expect to see Tibetan Text first.
+                (goto-char (point-min)))
               (display-buffer-in-side-window buf
                                              '((side . right)
                                                (window-width . 0.5)))))
@@ -2324,7 +2330,8 @@ If analysis exists, check if source has changed and warn."
           (message "Created analysis file: %s" new-filepath)
           (let ((buf (find-file-noselect new-filepath)))
             (with-current-buffer buf
-              (tibetan-analysis-setup-faces))
+              (tibetan-analysis-setup-faces)
+              (goto-char (point-min)))
             (display-buffer-in-side-window buf
                                            '((side . right)
                                              (window-width . 0.5))))

@@ -356,7 +356,7 @@ Third line།"))
     (goto-char (point-min))
     ;; Check headers
     (should (search-forward "#+TITLE: Test Title" nil t))
-    (should (search-forward "#+STARTUP: fold" nil t))
+    (should (search-forward "#+STARTUP: showall" nil t))
     ;; Check structure
     (goto-char (point-min))
     (should (search-forward "*** Segment 1" nil t))

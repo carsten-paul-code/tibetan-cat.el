@@ -1073,9 +1073,14 @@ source buffer must visit a file"))
           (message "WARNING: Sentence %d source text has changed since last analysis"
                    sent-num))
         (let ((buf (find-file-noselect filepath)))
-          (when (fboundp 'tibetan-analysis-setup-faces)
-            (with-current-buffer buf
-              (tibetan-analysis-setup-faces)))
+          (with-current-buffer buf
+            (when (fboundp 'tibetan-analysis-setup-faces)
+              (tibetan-analysis-setup-faces))
+            ;; Land at the top so the reader sees `* Tibetan Text'
+            ;; first — `save-place-mode' or the async-Claude-insert
+            ;; callback would otherwise leave the cursor near the
+            ;; bottom of the file.
+            (goto-char (point-min)))
           (display-buffer-in-side-window
            buf '((side . right) (window-width . 0.5)))))
        (t
@@ -1083,9 +1088,10 @@ source buffer must visit a file"))
                         sent-num seg-nums tib-text source-file)))
           (message "Created sentence analysis: %s" newpath)
           (let ((buf (find-file-noselect newpath)))
-            (when (fboundp 'tibetan-analysis-setup-faces)
-              (with-current-buffer buf
-                (tibetan-analysis-setup-faces)))
+            (with-current-buffer buf
+              (when (fboundp 'tibetan-analysis-setup-faces)
+                (tibetan-analysis-setup-faces))
+              (goto-char (point-min)))
             (display-buffer-in-side-window
              buf '((side . right) (window-width . 0.5))))
           (condition-case err

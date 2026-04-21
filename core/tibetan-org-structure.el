@@ -390,7 +390,10 @@ With prefix arg or TITLE, prompts for document title."
     ;; Insert headers
     (insert (format "#+TITLE: %s\n" title))
     (insert (format "#+DATE: %s\n" (format-time-string "%Y-%m-%d")))
-    (insert "#+STARTUP: fold\n")
+    ;; `showall' so newly-prepared documents open with every sentence
+    ;; and segment heading already expanded — scholars want to see the
+    ;; whole text at once, not have to TAB through folds.
+    (insert "#+STARTUP: showall\n")
     (insert "#+PROPERTY: header-args :eval no\n\n")
 
     ;; Insert main heading
