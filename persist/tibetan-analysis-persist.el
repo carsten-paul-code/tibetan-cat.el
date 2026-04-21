@@ -1538,14 +1538,21 @@ keeps German // English pairs side by side."
   '("** Wylie Transliteration"
     "** Particle Map"
     "** Interlinear Gloss"
-    "** Verb Classification (Hill 2010)"
     "** Claude Translation"
-    "** Claude Grammar")
+    "** Claude Grammar"
+    "** Verb Classification (Hill 2010)")
   "Section headings (at org level-2) that should appear first in the
 `* Auto-Analysis' output, in this exact order.  Any level-2 section
 NOT listed here is kept and emitted afterwards in the order it was
 generated.  `** Claude Grammar' is promoted from its legacy
-level-3 home inside `** Provided Translations' before the reorder.")
+level-3 home inside `** Provided Translations' before the reorder.
+
+Reader flow: after the Wylie reading and the particle-annotated map,
+the Interlinear Gloss gives the word-for-word trot.  Claude's fluent
+Translation and Grammar analysis follow immediately — the sequence a
+student would want to *read first* (sense → explanation) — before
+the parser-side Verb Classification, Word/Particle List, and clause
+structure surfaces below for deep reference.")
 
 (defun tibetan-analysis--split-level2-sections (content)
   "Split CONTENT into an ordered list of level-2 section cons cells.

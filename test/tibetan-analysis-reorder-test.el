@@ -95,11 +95,15 @@ first, before any other sections."
                    "** Detailed Dictionary\ndd\n\n"))
          (reordered (tibetan-analysis--reorder-auto-content content))
          (headings (tibetan-analysis-reorder-test--headings reordered))
+         ;; Priority order 2026-04-21: Claude Translation + Grammar now
+         ;; come BEFORE Verb Classification so readers see the fluent
+         ;; translation + grammar explanation first, and the parser-side
+         ;; Hill verb classification after.
          (expected-prefix '("** Wylie Transliteration"
                             "** Particle Map"
                             "** Interlinear Gloss"
-                            "** Verb Classification (Hill 2010)"
-                            "** Claude Translation")))
+                            "** Claude Translation"
+                            "** Verb Classification (Hill 2010)")))
     (should (equal (cl-subseq headings 0 (length expected-prefix))
                    expected-prefix))
     ;; Every unlisted section still appears somewhere in the output.
@@ -127,6 +131,39 @@ order after reorder."
     ;; Non-priority preserve their original order (Zeta before Alpha
     ;; before Beta).
     (should (equal tail '("** Zeta" "** Alpha" "** Beta")))))
+
+(ert-deftest tibetan-analysis-reorder-claude-before-verb-classification ()
+  "Claude Translation AND Claude Grammar must land between the
+Interlinear Gloss and the Verb Classification.
+
+The fluent translation + its grammar commentary should be what the
+reader sees right after the word-for-word trot, before the parser's
+Hill-based verb table.  Regression for user-reported section order
+request 2026-04-21."
+  (let* ((content (concat
+                   "** Verb Classification (Hill 2010)\nverbs\n\n"
+                   "** Interlinear Gloss\nig\n\n"
+                   "** Claude Translation\nct\n\n"
+                   "** Claude Grammar\ncg\n\n"
+                   "** Wylie Transliteration\nwylie\n\n"
+                   "** Particle Map\npmap\n\n"))
+         (reordered (tibetan-analysis--reorder-auto-content content))
+         (headings (tibetan-analysis-reorder-test--headings reordered))
+         (cl-trans-pos  (cl-position "** Claude Translation" headings
+                                     :test #'string=))
+         (cl-gram-pos   (cl-position "** Claude Grammar" headings
+                                     :test #'string=))
+         (vc-pos        (cl-position "** Verb Classification (Hill 2010)"
+                                     headings :test #'string=))
+         (ig-pos        (cl-position "** Interlinear Gloss" headings
+                                     :test #'string=)))
+    (should cl-trans-pos)
+    (should cl-gram-pos)
+    (should vc-pos)
+    (should ig-pos)
+    (should (< ig-pos cl-trans-pos))
+    (should (< cl-trans-pos cl-gram-pos))
+    (should (< cl-gram-pos vc-pos))))
 
 (ert-deftest tibetan-analysis-reorder-missing-priority-section-is-ok ()
   "The reorder must not require every priority section to be present —
