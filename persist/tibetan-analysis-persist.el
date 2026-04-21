@@ -2091,6 +2091,7 @@ affected, not the rest of the analysis."
             ;;     the lemma so the clause role is obvious.
             ;;   • Arguments are sorted by source-pos and only include units
             ;;     that sit inside this verb's clause (see `analyze-arguments').
+            ;;
             (insert "** Sentence Structure\n")
             (if (and verbs (fboundp 'tibetan-analyze-arguments))
                 (let* ((content-verbs
@@ -2284,9 +2285,30 @@ affected, not the rest of the analysis."
             ;; Translations' so it can take its priority slot.
             (tibetan-analysis--reorder-auto-content (buffer-string)))))
     (error
-     ;; On error, return minimal analysis with error info
-     (format "** Wylie Transliteration\n[Error during analysis]\n\n** Provided Translations\n- [Error: %s]\n\n** Vocabulary\n[Error]\n"
-             (error-message-string err)))))
+     ;; On error, return a minimal analysis that STILL preserves the
+     ;; most important user-facing sections:
+     ;;   - Wylie Transliteration (computed independently, usually works)
+     ;;   - Claude Translation placeholder (so `tibetan-auto-request-
+     ;;     claude-translations' can still fire and fill it in)
+     ;;   - Claude Grammar placeholder (likewise)
+     ;; Followed by a visible `[ANALYSIS ERROR]' marker so the user can
+     ;; spot the file and investigate.  Previously this emitted only
+     ;; three stub sections (Wylie/Provided/Vocabulary) with `[Error]'
+     ;; bodies, which meant a parser failure on ONE corner-case verb
+     ;; form (e.g. YBh seg-30..34's `gyur pa'o') stripped an otherwise-
+     ;; usable analysis file down to unusable scaffolding.
+     (let ((wylie (condition-case nil
+                      (when (and (stringp tibetan-text)
+                                 (fboundp 'tibetan-to-wylie-fixed))
+                        (tibetan-to-wylie-fixed tibetan-text))
+                    (error nil))))
+       (concat "** Wylie Transliteration\n"
+               (or wylie "[Wylie conversion unavailable]")
+               "\n\n"
+               "** Claude Translation\n[Requesting translation...]\n\n"
+               "** Claude Grammar\n\n\n"
+               (format "** [Analysis error — partial file only]\nParser failure for this segment: %s\n\nThe structural analysis sections (Particle Map, Interlinear Gloss, Word/Particle List, Verb Classification, Grammatical Markers, Sentence Structure, Clause Structure, Detailed Dictionary) could not be generated.  The Tibetan Text and Claude sections above should still be usable.\n\nTo retry: `C-c u R' on this segment, or check the source segment's Tibetan for an unusual construction.\n"
+                       (error-message-string err)))))))
 
 ;; ============================================================================
 ;; MAIN COMMANDS
