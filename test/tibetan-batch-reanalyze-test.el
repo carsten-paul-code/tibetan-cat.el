@@ -290,6 +290,87 @@ twice does not change the order."
       (when (file-exists-p file) (delete-file file))
       (when (file-exists-p tmp) (delete-directory tmp t)))))
 
+(ert-deftest tibetan-reanalyze-grammar-picks-up-claude-particles ()
+  "Pass 6c round-trip: a fixture file carrying a populated
+`*** Claude Particles' body + `** Claude Grammar' prose must
+produce, after `reanalyze-file', a `** Grammar' section that
+includes the per-occurrence Portfolio sub-function headings
+(`§ 1.1.1 Genitive Attribute — attributive') and the Portfolio
+description snippet.
+
+Stubs both `tibetan-analysis-generate-content' (to emit the
+expected merged-Grammar scaffold so the reanalyse path exercises
+the Claude-Particles threading without needing the full
+vocabulary/glossary stack) and the Portfolio snippet lookup
+helper so the test doesn't depend on the user's Portfolio file."
+  (let* ((tmp (make-temp-file "tibetan-pass6c-" t))
+         (file (expand-file-name "seg-042.org" tmp)))
+    (unwind-protect
+        (progn
+          ;; Fixture: analysis file with populated Claude Particles.
+          (tibetan-batch-test--write-file
+           file
+           (concat
+            "#+TITLE: Segment 42 Analysis\n"
+            "#+TIBETAN_HASH: cafe\n"
+            "#+ANALYSIS_VERSION: 1.0\n\n"
+            "* Tibetan Text\n"
+            "མཐུའི་མན་ངག\n\n"
+            "* My Notes\nCarsten's note.\n\n"
+            "* Working Translation\n\n"
+            "* Auto-Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+            "** Wylie Transliteration\nmthu'i man ngag\n\n"
+            "** Claude Translation\nInstructions of/on magical power.\n\n"
+            "** Claude Grammar\nA bare genitive compound.\n\n"
+            "** Provided Translations\n"
+            "*** DharmaMitra\n[stub]\n\n"
+            "*** Claude Vocabulary\n(empty)\n\n"
+            "*** Claude Particles\n"
+            "mthu'i, 'i, 1.1.1, attributive\n\n"
+            "* Footnotes\n"))
+          ;; Stubs.
+          (cl-letf*
+              (((symbol-function 'tibetan-analysis-generate-content)
+                (lambda (&rest _args)
+                  ;; Emit a mini Grammar section using the threaded
+                  ;; dynamic var — this is what the real renderer
+                  ;; does via `--render-grammar-section'.
+                  (let* ((particles tibetan-analysis--claude-particles-for-render)
+                         (tuple (car particles))
+                         (sub-id (and tuple (plist-get tuple :sub-id)))
+                         (label  (and tuple (plist-get tuple :label))))
+                    (concat
+                     "** Grammar\n*** Particles in This Segment\n"
+                     (if (and sub-id label)
+                         (format "- མཐུའི [mthu'i] · འི ['i] · GEN\n  § %s Genitive Attribute — %s\n    Attributive genitive: X-'i Y = 'Y of X'.\n"
+                                 sub-id label)
+                       "- མཐུའི [mthu'i] · GEN\n")
+                     "\n"))))
+               ;; Portfolio lookup returns a deterministic snippet.
+               ((symbol-function 'tibetan-interlinear-portfolio-function-snippet)
+                (lambda (_key _sub-id)
+                  (cons "Genitive Attribute"
+                        "Attributive genitive: X-'i Y = 'Y of X'."))))
+            (let ((r (tibetan-analysis-reanalyze-file file)))
+              (should (plist-get r :ok))
+              (should (plist-get r :claude-preserved))))
+          ;; Inspect the regenerated file.
+          (with-temp-buffer
+            (insert-file-contents file)
+            (let ((s (buffer-string)))
+              ;; Portfolio snippet rendered inline under the Grammar particle.
+              (should (string-match-p "§ 1\\.1\\.1 Genitive Attribute" s))
+              (should (string-match-p "attributive" s))
+              ;; User content preserved through the round-trip.
+              (should (string-match-p "Carsten's note" s))
+              ;; Claude sections preserved (not regenerated to placeholder).
+              (should (string-match-p "Instructions of/on magical power" s))
+              (should (string-match-p "A bare genitive compound" s))
+              ;; Claude Particles still present after round-trip.
+              (should (string-match-p "mthu'i, 'i, 1\\.1\\.1, attributive" s)))))
+      (when (file-exists-p file) (delete-file file))
+      (when (file-exists-p tmp) (delete-directory tmp t)))))
+
 (ert-deftest tibetan-create-file-uses-canonical-layout ()
   "Fresh `tibetan-analysis-create-file' emits sections in the
 canonical order (user sections ABOVE Auto-Analysis, Footnotes last)."

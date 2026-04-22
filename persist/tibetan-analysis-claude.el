@@ -1309,6 +1309,23 @@ a single buffer's layout drives heading levels consistently."
       (:grammar     "Claude Grammar"     3)
       (:context     "Claude Context"     3))))
 
+(defcustom tibetan-analysis-auto-regen-on-claude-arrival t
+  "When non-nil, the Grammar section is re-rendered after Claude
+populates `*** Claude Particles' so the Portfolio snippets appear
+inline without requiring a manual `C-c u R'.
+
+Pass 6c (2026-04-22) introduced `## Particles' tuples that let the
+Grammar section's `*** Particles in This Segment' attach per-
+occurrence Bialek Portfolio function snippets.  Those tuples
+arrive in Claude's response async; without this auto-regen the
+student has to re-run reanalyse by hand to see the enriched
+Grammar section.
+
+Set to nil to keep the Pass 6b compact Grammar shape and do the
+enriched re-render only on explicit reanalyse."
+  :type 'boolean
+  :group 'tibetan-cat)
+
 (defun tibetan-analysis--insert-claude-sections (response analysis-file)
   "Parse RESPONSE and write its sections into ANALYSIS-FILE.
 RESPONSE is the raw markdown returned by Claude; it is split by
@@ -1318,7 +1335,14 @@ the buffer's effective section-order (see
 filled in is written under its corresponding org heading at the
 configured level.  Legacy `*** Claude' and `*** Claude Translation'
 placements are migrated to the current two-section segment layout on
-first write; sentence files keep the legacy three-section layout."
+first write; sentence files keep the legacy three-section layout.
+
+When Claude's response includes a `## Particles' block AND
+`tibetan-analysis-auto-regen-on-claude-arrival' is non-nil, the
+Grammar section is re-rendered from scratch so the per-occurrence
+Bialek Portfolio snippets (§1.5.1 Place, §2.11.1 Sequential, ...)
+land inline under each particle without requiring a manual
+reanalyse."
   (when (and response (file-exists-p analysis-file))
     (let* ((sections (tibetan-analysis--parse-claude-sections response))
            (buf (or (find-buffer-visiting analysis-file)
@@ -1339,7 +1363,22 @@ first write; sentence files keep the legacy three-section layout."
            buf (plist-get sections :vocabulary)))
         (save-buffer))
       (message "Claude sections inserted into %s"
-               (file-name-nondirectory analysis-file)))))
+               (file-name-nondirectory analysis-file))
+      ;; Pass 6c auto-regen: when Particles tuples just arrived, run a
+      ;; non-Claude-refiring reanalyse so the Grammar section picks
+      ;; them up via the dynamic `claude-particles-for-render' var
+      ;; and emits `§ X.Y Portfolio-title' + snippet per occurrence.
+      ;; Guarded by a customvar so power users can opt out.
+      (when (and tibetan-analysis-auto-regen-on-claude-arrival
+                 (plist-get sections :particles)
+                 (fboundp 'tibetan-analysis-reanalyze-file))
+        (condition-case err
+            (tibetan-analysis-reanalyze-file analysis-file
+                                             :re-request-claude nil)
+          (error
+           (message "Claude auto-regen skipped for %s: %s"
+                    (file-name-nondirectory analysis-file)
+                    (error-message-string err))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Claude Vocabulary → Word / Particle List merge

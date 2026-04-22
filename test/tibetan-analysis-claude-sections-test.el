@@ -888,5 +888,66 @@ headings — `** Claude Translation' and `** Claude Grammar' at level 2,
         (should (string-match-p "◇ bdag, pronoun" content))
         (should-not (string-match-p "◇ bdag, noun" content))))))
 
+(ert-deftest tibetan-claude-sections-auto-regen-on-particles-arrival ()
+  "Pass 6c: when Claude's response includes a `## Particles' block,
+`--insert-claude-sections' automatically calls `reanalyze-file'
+(without re-requesting Claude) so the Grammar section picks up
+the new tuples and re-renders with Portfolio snippets inline.
+
+Gated by `tibetan-analysis-auto-regen-on-claude-arrival' (default
+t).  Test asserts the regen is invoked when Particles arrives, AND
+skipped when the customvar is nil, AND skipped when the response
+has no Particles block (even with the customvar default on)."
+  (let* ((tmp (make-temp-file "tibetan-auto-regen-" t))
+         (file (expand-file-name "seg-009.org" tmp))
+         (regen-calls '()))
+    (unwind-protect
+        (progn
+          ;; Minimal file with the required heading scaffolding so
+          ;; `--insert-claude-sections' doesn't trip on missing heads
+          ;; before it reaches the auto-regen branch.
+          (with-temp-file file
+            (insert "#+TITLE: Seg 9\n\n* Tibetan Text\nfoo\n\n"
+                    "* Auto-Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nfoo /\n\n"
+                    "** Provided Translations\n"
+                    "*** DharmaMitra\n[stub]\n\n"
+                    "*** Claude Vocabulary\n\n\n"
+                    "* Footnotes\n"))
+          (cl-letf (((symbol-function 'tibetan-analysis-reanalyze-file)
+                     (lambda (fp &rest args)
+                       (push (cons fp args) regen-calls)
+                       `(:file ,fp :ok t))))
+            ;; 1. Default on — particles arrival triggers regen.
+            (let ((tibetan-analysis-auto-regen-on-claude-arrival t)
+                  (response (concat
+                             "## Translation\nX.\n\n"
+                             "## Grammar\nY.\n\n"
+                             "## Particles\n"
+                             "mthu'i, 'i, 1.1.1, attributive\n")))
+              (tibetan-analysis--insert-claude-sections response file))
+            (should (= 1 (length regen-calls)))
+            ;; Regen called with `:re-request-claude nil' to prevent
+            ;; an infinite Claude-arrival → regen → Claude-arrival loop.
+            (let ((args (cdr (car regen-calls))))
+              (should (equal (plist-get args :re-request-claude) nil)))
+            ;; 2. Opt-out: customvar nil → no regen.
+            (setq regen-calls '())
+            (let ((tibetan-analysis-auto-regen-on-claude-arrival nil)
+                  (response (concat
+                             "## Translation\nX.\n\n"
+                             "## Particles\n"
+                             "mthu'i, 'i, 1.1.1, attributive\n")))
+              (tibetan-analysis--insert-claude-sections response file))
+            (should (zerop (length regen-calls)))
+            ;; 3. No Particles block → no regen even with customvar on.
+            (setq regen-calls '())
+            (let ((tibetan-analysis-auto-regen-on-claude-arrival t)
+                  (response "## Translation\nNo particles block.\n"))
+              (tibetan-analysis--insert-claude-sections response file))
+            (should (zerop (length regen-calls)))))
+      (when (file-exists-p file) (delete-file file))
+      (when (file-exists-p tmp) (delete-directory tmp t)))))
+
 (provide 'tibetan-analysis-claude-sections-test)
 ;;; tibetan-analysis-claude-sections-test.el ends here
