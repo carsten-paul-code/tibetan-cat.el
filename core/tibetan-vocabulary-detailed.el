@@ -568,6 +568,50 @@ near-duplicates and only the first is shown."
          (s (string-trim s)))
     (if (> (length s) 80) (substring s 0 80) s)))
 
+(defconst tibetan-vocab--sanskrit-diacritics
+  '(?ā ?ī ?ū ?ṛ ?ṝ ?ḷ ?ḹ ?ṁ ?ṃ ?ḥ ?ṇ ?ṅ ?ñ ?ṭ ?ḍ ?ś ?ṣ
+    ?Ā ?Ī ?Ū ?Ṛ ?Ṇ ?Ṅ ?Ñ ?Ṭ ?Ḍ ?Ś ?Ṣ ?Ṃ ?Ḥ)
+  "Characters that signal IAST-transliterated Sanskrit.
+Used by `tibetan-vocab--looks-like-sanskrit-p' as a quick filter to
+distinguish real Sanskrit (e.g. `pāramitā', `ātman', `uparimāt')
+from Wylie cross-references that sometimes end up in the `Sanskrit'
+field (e.g. `ste', `{gzhi yis/}', `bdag nyid').")
+
+(defun tibetan-vocab--looks-like-sanskrit-p (text)
+  "Return non-nil when TEXT appears to be genuine Sanskrit content
+rather than a Wylie cross-reference masquerading in the Sanskrit field.
+
+Heuristic:
+  1. Devanāgarī characters (U+0900–U+097F) → Sanskrit.  True positive.
+  2. Any IAST diacritic (see `tibetan-vocab--sanskrit-diacritics') →
+     Sanskrit.  Real Sanskrit transliteration nearly always has them.
+  3. Curly-brace Wylie citation `{...}' → Wylie cross-ref, not Sanskrit.
+  4. Leading `=' sign — common Steinert convention for Wylie
+     cross-references (`= {gzhi yis/}', `= ste') — not Sanskrit.
+  5. Otherwise, if every token is ASCII lowercase without diacritics,
+     assume Wylie (e.g. `ste', `bdag nyid').
+
+False positives are cheaper than false negatives (losing real Sanskrit),
+so when in doubt we fall through to `t'."
+  (when (and text (stringp text))
+    (let ((s (string-trim text)))
+      (cond
+       ((string-empty-p s) nil)
+       ;; Wylie cross-refs via curly-brace citation.
+       ((string-match-p "{[^}]*}" s) nil)
+       ;; Steinert's leading-= Wylie cross-ref marker.
+       ((string-match-p "\\`[ \t]*=[ \t]" s) nil)
+       ;; Devanāgarī block — definitely Sanskrit.
+       ((string-match-p "[ऀ-ॿ]" s) t)
+       ;; IAST diacritic character — strong Sanskrit signal.
+       ((cl-some (lambda (c) (memq c tibetan-vocab--sanskrit-diacritics))
+                 (string-to-list s))
+        t)
+       ;; Plain ASCII lowercase without any diacritics looks like Wylie.
+       ((string-match-p "\\`[-a-z0-9 '/]+\\'" s) nil)
+       ;; Anything else — probably safe to display.
+       (t t)))))
+
 (defun tibetan-vocab--make-source-entry (seen source-name raw-gloss
                                               native-sanskrit wylie)
   "Build a source-entry plist for RAW-GLOSS, or return nil to skip.
@@ -590,6 +634,11 @@ text — never synthesised from elsewhere."
            (skt (let ((s (or native-sanskrit (plist-get parsed :sanskrit))))
                   (and s (stringp s)
                        (not (string-empty-p (string-trim s)))
+                       ;; Only surface the field if it's genuine Sanskrit —
+                       ;; not a Wylie cross-reference that happens to be
+                       ;; stored in this slot (e.g. `ste', `{gzhi yis/}').
+                       ;; See `tibetan-vocab--looks-like-sanskrit-p'.
+                       (tibetan-vocab--looks-like-sanskrit-p s)
                        (string-trim s))))
            (fp (tibetan-vocab--dedup-fingerprint
                 (or detailed primary ""))))
@@ -601,6 +650,43 @@ text — never synthesised from elsewhere."
               :detailed detailed
               :sanskrit skt
               :wylie wylie)))))
+
+(defcustom tibetan-vocab-detailed-max-sources 3
+  "Maximum number of source entries emitted per term in the Detailed
+Dictionary.  Resources and Custom entries are ALWAYS preserved — the
+cap only trims subsequent automatic-dictionary hits (Steinert /
+Rangjung Yeshe / Bundled / DharmaMitra).  Raise this to see the
+underlying polysemy in full; lower it to compact the section.
+
+Default 3 strikes a balance: one curated source (if present) + up to
+three reference glosses covers the sense space for class reading
+without turning each entry into a wall of near-duplicates."
+  :type 'integer
+  :group 'tibetan-cat)
+
+(defun tibetan-vocab-detailed-cap-entries (entries)
+  "Return ENTRIES trimmed per `tibetan-vocab-detailed-max-sources'.
+Resources and Custom entries (user-curated) are always kept; the cap
+only applies to subsequent automatic-dictionary sources.  Order is
+preserved.
+
+Example: with max=3 and entries
+  (Resources Custom Steinert/01 Steinert/02 Rangjung DharmaMitra)
+returns
+  (Resources Custom Steinert/01 Steinert/02 Rangjung)
+(2 curated kept + 3 automatic = 5 total)."
+  (when entries
+    (let ((curated '())
+          (others '())
+          (cap (or tibetan-vocab-detailed-max-sources 3)))
+      (dolist (e entries)
+        (let ((src (plist-get e :source)))
+          (if (and src (or (string-prefix-p "Resources" src)
+                           (string-prefix-p "Custom" src)))
+              (push e curated)
+            (push e others))))
+      (append (nreverse curated)
+              (seq-take (nreverse others) cap)))))
 
 (defun tibetan-vocab-multisource-entries (word)
   "Return an ordered, deduplicated list of dictionary entries for WORD.
@@ -681,7 +767,13 @@ when the source entry carries it natively."
                         (tibetan-lookup-word-in-dharmamitra (or tibetan word))
                       (error nil))))
             (when dm (add "DharmaMitra" dm)))))
-      (nreverse results))))
+      ;; Apply the source cap on output: Resources / Custom always kept
+      ;; (user-curated — never trimmed), automatic-dictionary hits
+      ;; (Steinert / RY / Bundled / DharmaMitra) limited to
+      ;; `tibetan-vocab-detailed-max-sources' (default 3) so content
+      ;; words don't produce a wall of near-duplicate glosses in the
+      ;; Detailed Dictionary section.
+      (tibetan-vocab-detailed-cap-entries (nreverse results)))))
 
 ;; ============================================================================
 ;; INTEGRATION FUNCTION - For analysis generation

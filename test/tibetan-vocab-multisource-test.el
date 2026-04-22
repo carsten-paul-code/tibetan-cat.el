@@ -355,5 +355,99 @@ off as `(1) [accusative'."
     (should (string-match-p "accusative, adverbial" primary))
     (should-not (string= primary "(1) [accusative"))))
 
+;; ============================================================================
+;; Pass B (2026-04-22) — Sanskrit detector, source cap, particle exemption
+;; ============================================================================
+
+(ert-deftest tibetan-vocab-looks-like-sanskrit-iast ()
+  "IAST-transliterated Sanskrit (macrons, ṛ, ṃ, ś, ṣ, etc.) is
+recognised as genuine Sanskrit."
+  (should (tibetan-vocab--looks-like-sanskrit-p "pāramitā"))
+  (should (tibetan-vocab--looks-like-sanskrit-p "ātman"))
+  (should (tibetan-vocab--looks-like-sanskrit-p "uparimāt"))
+  (should (tibetan-vocab--looks-like-sanskrit-p "dṛṣṭa"))
+  (should (tibetan-vocab--looks-like-sanskrit-p "saṃsāra")))
+
+(ert-deftest tibetan-vocab-looks-like-sanskrit-rejects-wylie-xref ()
+  "Wylie cross-references that end up in the :sanskrit field are NOT
+reported as Sanskrit — they're Tibetan romanisation, not Sanskrit.
+Regression guard for 2026-04-22: entries like `Skt: ste',
+`Skt: bdag nyid', `Skt: {gzhi yis/}' were surfacing as fake Sanskrit
+in the Detailed Dictionary before this filter."
+  ;; Pure ASCII lowercase, no diacritics — looks like Wylie.
+  (should-not (tibetan-vocab--looks-like-sanskrit-p "ste"))
+  (should-not (tibetan-vocab--looks-like-sanskrit-p "bdag nyid"))
+  (should-not (tibetan-vocab--looks-like-sanskrit-p "byed pa"))
+  ;; Curly-brace Wylie citation — common in Steinert output.
+  (should-not (tibetan-vocab--looks-like-sanskrit-p "{gzhi yis/}"))
+  ;; Leading `= ' marker — Steinert's Wylie cross-ref convention.
+  (should-not (tibetan-vocab--looks-like-sanskrit-p "= {gzhi yis/}"))
+  (should-not (tibetan-vocab--looks-like-sanskrit-p "= ste")))
+
+(ert-deftest tibetan-vocab-looks-like-sanskrit-accepts-devanagari ()
+  "Sanskrit in Devanāgarī is unambiguously accepted."
+  (should (tibetan-vocab--looks-like-sanskrit-p "आत्मन्"))
+  (should (tibetan-vocab--looks-like-sanskrit-p "संसार")))
+
+(ert-deftest tibetan-vocab-looks-like-sanskrit-empty-nil ()
+  "Empty or nil input returns nil without signalling."
+  (should-not (tibetan-vocab--looks-like-sanskrit-p nil))
+  (should-not (tibetan-vocab--looks-like-sanskrit-p ""))
+  (should-not (tibetan-vocab--looks-like-sanskrit-p "   ")))
+
+(ert-deftest tibetan-vocab-cap-entries-preserves-curated ()
+  "Resources / Custom entries are always kept regardless of the cap —
+only automatic-dictionary sources get trimmed."
+  (let ((tibetan-vocab-detailed-max-sources 2))
+    (let ((result (tibetan-vocab-detailed-cap-entries
+                   (list (list :source "Resources (provided)" :primary "A")
+                         (list :source "Custom" :primary "B")
+                         (list :source "Steinert/01-Hopkins" :primary "C")
+                         (list :source "Steinert/02-RY" :primary "D")
+                         (list :source "Rangjung Yeshe" :primary "E")
+                         (list :source "DharmaMitra" :primary "F")))))
+      ;; 2 curated kept + 2 automatic (cap=2) = 4 total.
+      (should (= 4 (length result)))
+      ;; Curated come first.
+      (should (string= "Resources (provided)"
+                       (plist-get (nth 0 result) :source)))
+      (should (string= "Custom" (plist-get (nth 1 result) :source))))))
+
+(ert-deftest tibetan-vocab-cap-entries-trims-automatic-only ()
+  "When there are no Resources / Custom entries, the cap applies to all."
+  (let ((tibetan-vocab-detailed-max-sources 3))
+    (let ((result (tibetan-vocab-detailed-cap-entries
+                   (list (list :source "Steinert/01" :primary "A")
+                         (list :source "Steinert/02" :primary "B")
+                         (list :source "Steinert/08" :primary "C")
+                         (list :source "Rangjung Yeshe" :primary "D")
+                         (list :source "DharmaMitra" :primary "E")))))
+      (should (= 3 (length result))))))
+
+(ert-deftest tibetan-vocab-cap-entries-nil-input ()
+  "Nil / empty input returns nil without error."
+  (should (null (tibetan-vocab-detailed-cap-entries nil)))
+  (should (null (tibetan-vocab-detailed-cap-entries '()))))
+
+(ert-deftest tibetan-analysis-detailed-dict-particle-p ()
+  "Single-syllable case/converb particles are detected as particles."
+  (skip-unless (fboundp 'tibetan-analysis--detailed-dict-is-particle-p))
+  (should (tibetan-analysis--detailed-dict-is-particle-p "ལ"))
+  (should (tibetan-analysis--detailed-dict-is-particle-p "ནས"))
+  (should (tibetan-analysis--detailed-dict-is-particle-p "ཏེ"))
+  (should (tibetan-analysis--detailed-dict-is-particle-p "ནི"))
+  (should (tibetan-analysis--detailed-dict-is-particle-p "གི"))
+  (should (tibetan-analysis--detailed-dict-is-particle-p "ཀྱི")))
+
+(ert-deftest tibetan-analysis-detailed-dict-content-word-not-particle ()
+  "Multi-syllable content words and lexical items are NOT flagged as
+particles (or they'd lose their dictionary entries)."
+  (skip-unless (fboundp 'tibetan-analysis--detailed-dict-is-particle-p))
+  (should-not (tibetan-analysis--detailed-dict-is-particle-p "བདག"))
+  (should-not (tibetan-analysis--detailed-dict-is-particle-p "སྟོད"))
+  (should-not (tibetan-analysis--detailed-dict-is-particle-p "འོངས"))
+  (should-not (tibetan-analysis--detailed-dict-is-particle-p "བྱང་ཆུབ"))
+  (should-not (tibetan-analysis--detailed-dict-is-particle-p "སངས་རྒྱས")))
+
 (provide 'tibetan-vocab-multisource-test)
 ;;; tibetan-vocab-multisource-test.el ends here

@@ -1426,6 +1426,20 @@ unrelated reasons."
         (format "%s;\n%s // %s" de-ref de-rest en-rest))
        (t gloss)))))
 
+(defun tibetan-analysis--detailed-dict-is-particle-p (tibetan)
+  "Return non-nil when TIBETAN is a pure case / converb particle.
+Matches a single-syllable token (no tsheg / word break) whose text
+appears in `tibetan-extract-vocab--particle-tails' — the same list
+used by the MWU loop and vocabulary extractor.  Particle entries in
+the Detailed Dictionary get a compact one-line rendering pointing
+at the Particle Overview section instead of a verbose multi-source
+dump."
+  (and (stringp tibetan)
+       (boundp 'tibetan-extract-vocab--particle-tails)
+       (not (string-match-p "་" tibetan))
+       (member (string-trim tibetan)
+               tibetan-extract-vocab--particle-tails)))
+
 (defun tibetan-analysis--render-detailed-dictionary (tibetan-text vocab-pairs)
   "Render the `** Detailed Dictionary' section for TIBETAN-TEXT.
 Inserts into the current buffer.  TIBETAN-TEXT is the raw input
@@ -1477,8 +1491,13 @@ keeps German // English pairs side by side."
                                 (tibetan-analysis--format-word-with-wylie
                                  tibetan))))
               (when has-resources (insert " ★"))
-              (insert "\n")
-              (if sources
+              (if (tibetan-analysis--detailed-dict-is-particle-p tibetan)
+                  ;; Particle: short compact entry, skip the multi-source dump.
+                  ;; See `** Particle Overview' earlier in the file for
+                  ;; the grammatical function.
+                  (insert " — particle (see Particle Overview above)\n")
+                (insert "\n")
+                (if sources
                   (dolist (src sources)
                     (let* ((source-name (plist-get src :source))
                            (gloss (or (plist-get src :detailed)
@@ -1512,7 +1531,7 @@ keeps German // English pairs side by side."
                   (when sanskrit
                     (insert (format "  Skt: %s\n" sanskrit)))
                   (when source
-                    (insert (format "  [%s]\n" source)))))
+                    (insert (format "  [%s]\n" source))))))
               (insert "\n")))
           (insert "\n"))
       ;; Fallback: use vocab-pairs if detailed system not available.
