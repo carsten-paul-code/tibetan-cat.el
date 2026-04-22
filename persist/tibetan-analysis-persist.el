@@ -228,14 +228,22 @@ AUTO-CONTENT is the generated analysis content (string)."
       (insert "* Tibetan Text\n")
       (insert tibetan-text)
       (insert "\n\n")
+      ;; User-edited sections FIRST — `My Notes' and `Working
+      ;; Translation' live immediately below the Tibetan so they are
+      ;; within a glance and a scroll-pane of the source text during
+      ;; class prep (matches Carsten's classroom flow 2026-04-22).
+      ;; `Footnotes' stays at the bottom because it's typically
+      ;; populated after the full analysis has been read.
+      ;; `Auto-Analysis' is position-independent: regen locates it by
+      ;; name via `tibetan-analysis-find-section-bounds', not by order.
+      (insert "* My Notes\n\n\n")
+      (insert "* Working Translation\n\n\n")
       (insert "* Auto-Analysis\n")
       (insert ":PROPERTIES:\n")
       (insert ":GENERATED: t\n")
       (insert ":END:\n\n")
       (insert auto-content)
       (insert "\n\n")
-      (insert "* My Notes\n\n\n")
-      (insert "* Working Translation\n\n\n")
       (insert "* Footnotes\n\n"))
     filepath))
 
@@ -296,55 +304,92 @@ Working Translation, Footnotes."
 
 (defun tibetan-analysis-regenerate-auto (filepath tibetan-text auto-content)
   "Regenerate the Auto-Analysis section in FILEPATH.
-Preserves user sections (My Notes, Working Translation, Footnotes).
-Updates hash and last-analyzed date."
-  (let ((user-sections (tibetan-analysis-get-user-sections filepath))
-        (hash (tibetan-analysis-compute-hash tibetan-text))
-        (date (format-time-string "%Y-%m-%d")))
+Preserves user sections (My Notes, Working Translation, Footnotes)
+and reshapes the file into the canonical section order:
+
+  * Tibetan Text
+  * My Notes                     — user-edited (above Auto-Analysis
+  * Working Translation            so notes sit beside the Tibetan
+                                   during class-prep reading)
+  * Auto-Analysis                — regenerated
+  * Footnotes                    — user-edited, footnote-like tail
+
+Any pre-existing section content for My Notes / Working Translation
+/ Footnotes is preserved verbatim; only its position in the file
+may change.  Files already in canonical order are left untouched
+except for Auto-Analysis + header metadata.  Idempotent: repeated
+runs produce identical output.
+
+Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
+  (let* ((user-sections (tibetan-analysis-get-user-sections filepath))
+         (my-notes
+          (cdr (assoc "My Notes" user-sections)))
+         (working-translation
+          (cdr (assoc "Working Translation" user-sections)))
+         (footnotes
+          (cdr (assoc "Footnotes" user-sections)))
+         (hash (tibetan-analysis-compute-hash tibetan-text))
+         (date (format-time-string "%Y-%m-%d"))
+         ;; Capture the existing file header (everything before the
+         ;; first `* ' heading) so we keep `#+TITLE', `#+SOURCE' etc.
+         (header
+          (with-temp-buffer
+            (insert-file-contents filepath)
+            (goto-char (point-min))
+            (if (re-search-forward "^\\* " nil t)
+                (buffer-substring-no-properties
+                 (point-min) (line-beginning-position))
+              ""))))
     (with-current-buffer (find-file-noselect filepath)
-      ;; Update hash
+      ;; Full rewrite into canonical order.  We read everything we
+      ;; want to preserve into local vars above, erase the buffer,
+      ;; then re-emit in the canonical shape — cleaner than trying
+      ;; to splice with in-place edits when sections may be in any
+      ;; pre-existing order.
+      (erase-buffer)
+      (insert header)
+      ;; Ensure header ends with a blank line before `* '
+      (unless (or (string-empty-p header)
+                  (string-suffix-p "\n\n" header))
+        (insert "\n"))
+      ;; Update hash + date in the re-emitted header
       (goto-char (point-min))
-      (when (re-search-forward "^#\\+TIBETAN_HASH: .+$" nil t)
-        (replace-match (format "#+TIBETAN_HASH: %s" hash)))
-
-      ;; Update last-analyzed date
+      (if (re-search-forward "^#\\+TIBETAN_HASH: .+$" nil t)
+          (replace-match (format "#+TIBETAN_HASH: %s" hash))
+        ;; Insert missing hash line just after #+TITLE
+        (goto-char (point-min))
+        (when (re-search-forward "^#\\+TITLE:.+$" nil t)
+          (end-of-line)
+          (insert (format "\n#+TIBETAN_HASH: %s" hash))))
       (goto-char (point-min))
-      (when (re-search-forward "^#\\+LAST_ANALYZED: .+$" nil t)
-        (replace-match (format "#+LAST_ANALYZED: %s" date)))
-
-      ;; Update Tibetan text
-      (let ((tib-bounds (tibetan-analysis-find-section-bounds (current-buffer) "Tibetan Text")))
-        (when tib-bounds
-          (goto-char (car tib-bounds))
-          (delete-region (car tib-bounds) (cdr tib-bounds))
-          (insert "* Tibetan Text\n")
-          (insert tibetan-text)
-          (insert "\n\n")))
-
-      ;; Update Auto-Analysis section
-      (let ((auto-bounds (tibetan-analysis-find-section-bounds (current-buffer) "Auto-Analysis")))
-        (when auto-bounds
-          (goto-char (car auto-bounds))
-          (delete-region (car auto-bounds) (cdr auto-bounds))
-          (insert "* Auto-Analysis\n")
-          (insert ":PROPERTIES:\n")
-          (insert ":GENERATED: t\n")
-          (insert ":END:\n\n")
-          (insert auto-content)
-          (insert "\n\n")))
-
-      ;; Restore user sections (in case they got clobbered)
-      (dolist (section user-sections)
-        (let ((name (car section))
-              (content (cdr section)))
-          (let ((bounds (tibetan-analysis-find-section-bounds (current-buffer) name)))
-            (unless bounds
-              ;; Section missing, add it at end
-              (goto-char (point-max))
-              (insert content)))))
-
+      (if (re-search-forward "^#\\+LAST_ANALYZED: .+$" nil t)
+          (replace-match (format "#+LAST_ANALYZED: %s" date))
+        (goto-char (point-max))
+        (when (re-search-backward "^#\\+" nil t)
+          (end-of-line)
+          (insert (format "\n#+LAST_ANALYZED: %s" date))))
+      ;; Now append sections in canonical order
+      (goto-char (point-max))
+      (insert "* Tibetan Text\n")
+      (insert tibetan-text)
+      (insert "\n\n")
+      ;; My Notes — preserved.  If not present before, emit an empty
+      ;; placeholder so the section exists for the user to edit into.
+      (insert (or my-notes "* My Notes\n\n\n"))
+      (unless (string-suffix-p "\n\n" (or my-notes ""))
+        (insert "\n"))
+      (insert (or working-translation "* Working Translation\n\n\n"))
+      (unless (string-suffix-p "\n\n" (or working-translation ""))
+        (insert "\n"))
+      (insert "* Auto-Analysis\n")
+      (insert ":PROPERTIES:\n")
+      (insert ":GENERATED: t\n")
+      (insert ":END:\n\n")
+      (insert auto-content)
+      (insert "\n\n")
+      (insert (or footnotes "* Footnotes\n\n"))
       (save-buffer)
-      (message "Re-analyzed segment. User notes preserved."))))
+      (message "Re-analyzed segment. User notes preserved and reshaped."))))
 
 ;; ============================================================================
 ;; GENERATE AUTO-CONTENT - Improved format with inline annotations

@@ -210,5 +210,113 @@ and returns a summary plist."
       (dolist (f files) (when (file-exists-p f) (delete-file f)))
       (when (file-exists-p tmp) (delete-directory tmp t)))))
 
+;; ----------------------------------------------------------------------------
+;; Pass 6a: canonical layout — My Notes + Working Translation ABOVE
+;; Auto-Analysis; Footnotes stays at the bottom.  Legacy files with the
+;; reverse ordering are reshaped on re-analysis.
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-batch-test--section-position (content section-name)
+  "Return character position of `* SECTION-NAME' in CONTENT, or nil."
+  (let ((pattern (format "^\\* %s$" (regexp-quote section-name))))
+    (when (string-match pattern content)
+      (match-beginning 0))))
+
+(ert-deftest tibetan-reanalyze-reshapes-into-canonical-layout ()
+  "After reanalysis, section order is:
+  Tibetan Text → My Notes → Working Translation → Auto-Analysis → Footnotes.
+Legacy files (where user sections come after Auto-Analysis) get
+reshaped on the next re-analysis.  Idempotent: running reanalysis
+twice does not change the order."
+  (let* ((tmp (make-temp-file "tibetan-layout-" t))
+         (file (expand-file-name "seg-012.org" tmp)))
+    (unwind-protect
+        (progn
+          ;; Legacy-shaped sample — My Notes / Working Translation /
+          ;; Footnotes sit BELOW Auto-Analysis (the old default).
+          (tibetan-batch-test--sample-file
+           file
+           :notes "Important class note"
+           :translation "Working drop"
+           :footnotes "Footnote alpha")
+          ;; Sanity: legacy shape has Auto-Analysis BEFORE My Notes.
+          (with-temp-buffer
+            (insert-file-contents file)
+            (let* ((s (buffer-string))
+                   (auto (tibetan-batch-test--section-position s "Auto-Analysis"))
+                   (notes (tibetan-batch-test--section-position s "My Notes")))
+              (should (and auto notes))
+              (should (< auto notes))))
+          ;; Run the reanalysis (stub generate-content)
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (tibetan-batch-test--stub-generate "RESHAPE")))
+            (let ((r (tibetan-analysis-reanalyze-file file)))
+              (should (plist-get r :ok))))
+          ;; After reanalysis, order must be canonical.
+          (with-temp-buffer
+            (insert-file-contents file)
+            (let* ((s (buffer-string))
+                   (tib (tibetan-batch-test--section-position s "Tibetan Text"))
+                   (notes (tibetan-batch-test--section-position s "My Notes"))
+                   (wt   (tibetan-batch-test--section-position s "Working Translation"))
+                   (auto (tibetan-batch-test--section-position s "Auto-Analysis"))
+                   (foot (tibetan-batch-test--section-position s "Footnotes")))
+              (should (and tib notes wt auto foot))
+              (should (< tib notes))
+              (should (< notes wt))
+              (should (< wt auto))
+              (should (< auto foot))
+              ;; User content survived the reshape
+              (should (string-match-p "Important class note" s))
+              (should (string-match-p "Working drop" s))
+              (should (string-match-p "Footnote alpha" s))
+              ;; Auto-Analysis content was regenerated
+              (should (string-match-p "STUB RESHAPE" s))))
+          ;; Idempotency — re-running leaves the same order.
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (tibetan-batch-test--stub-generate "RESHAPE2")))
+            (tibetan-analysis-reanalyze-file file))
+          (with-temp-buffer
+            (insert-file-contents file)
+            (let* ((s (buffer-string))
+                   (notes (tibetan-batch-test--section-position s "My Notes"))
+                   (auto (tibetan-batch-test--section-position s "Auto-Analysis"))
+                   (foot (tibetan-batch-test--section-position s "Footnotes")))
+              (should (< notes auto))
+              (should (< auto foot))
+              ;; Still preserves user content through the second round
+              (should (string-match-p "Important class note" s))
+              (should (string-match-p "Footnote alpha" s)))))
+      (when (file-exists-p file) (delete-file file))
+      (when (file-exists-p tmp) (delete-directory tmp t)))))
+
+(ert-deftest tibetan-create-file-uses-canonical-layout ()
+  "Fresh `tibetan-analysis-create-file' emits sections in the
+canonical order (user sections ABOVE Auto-Analysis, Footnotes last)."
+  (let* ((tmp (make-temp-file "tibetan-newfile-" t))
+         (source-file (expand-file-name "source.org" tmp)))
+    (unwind-protect
+        (let ((default-directory tmp))
+          ;; Minimal source file for `get-filepath' to resolve against.
+          (with-temp-file source-file (insert "#+TITLE: T\n* Segment 1\nfoo\n"))
+          ;; Patch get-filepath so the analysis path is inside our tmpdir.
+          (cl-letf (((symbol-function 'tibetan-analysis-get-filepath)
+                     (lambda (_seg-id &optional _source)
+                       (expand-file-name "seg-001.org" tmp))))
+            (tibetan-analysis-create-file
+             1 "བདག་" source-file "** Wylie\nbdag /\n"))
+          (with-temp-buffer
+            (insert-file-contents (expand-file-name "seg-001.org" tmp))
+            (let* ((s (buffer-string))
+                   (notes (tibetan-batch-test--section-position s "My Notes"))
+                   (wt   (tibetan-batch-test--section-position s "Working Translation"))
+                   (auto (tibetan-batch-test--section-position s "Auto-Analysis"))
+                   (foot (tibetan-batch-test--section-position s "Footnotes")))
+              (should (and notes wt auto foot))
+              (should (< notes wt))
+              (should (< wt auto))
+              (should (< auto foot)))))
+      (when (file-exists-p tmp) (delete-directory tmp t)))))
+
 (provide 'tibetan-batch-reanalyze-test)
 ;;; tibetan-batch-reanalyze-test.el ends here
