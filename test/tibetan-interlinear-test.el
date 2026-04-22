@@ -423,5 +423,90 @@ actual Portfolio file loaded."
     (should (null (tibetan-interlinear-portfolio-function-snippet nil "1.1.1")))
     (should (null (tibetan-interlinear-portfolio-function-snippet "terminative" nil)))))
 
+;; ============================================================================
+;; PASS 7: Portfolio reference block for Claude system prompt
+;; ============================================================================
+
+(ert-deftest tibetan-interlinear-portfolio-reference-block-empty-when-no-portfolio ()
+  "Without a loaded Portfolio, the reference-block generator returns
+an empty string — callers inject it unconditionally and the Claude
+prompt simply omits the section when there's nothing to say."
+  (cl-letf (((symbol-function 'tibetan-interlinear--get-portfolio)
+             (lambda () nil)))
+    (should (equal "" (tibetan-interlinear-portfolio-reference-block)))))
+
+(ert-deftest tibetan-interlinear-portfolio-reference-block-lists-sections ()
+  "The reference block lists each parsed Portfolio section with its
+ACTUAL section number + title — from the parsed cache, not a
+hardcoded Bialek-canonical list.  When Carsten's Portfolio has
+Terminative at §1.6 (rather than §1.5 as in some Bialek textbook
+numbering), the block says `§1.6 Terminative' exactly."
+  (cl-letf (((symbol-function 'tibetan-interlinear--get-portfolio)
+             (lambda ()
+               '(("genitive"
+                  :section "1.1"
+                  :title "Genitive"
+                  :intro "..."
+                  :functions
+                  ((("1.1.1" . "Genitive Attribute") . "Attributive desc.")
+                   (("1.1.2" . "Genitive with Postpositions") . "With pp.")))
+                 ("ergative"
+                  :section "1.3"
+                  :title "Ergative"
+                  :intro "..."
+                  :functions
+                  ((("1.3.1" . "Subject of Transitive Verbs") . "Agent.")))
+                 ("dative"
+                  :section "1.5"
+                  :title "Dative"
+                  :intro "..."
+                  :functions nil)
+                 ("terminative"
+                  :section "1.6"
+                  :title "Terminative"
+                  :intro "..."
+                  :functions
+                  ((("1.6.1" . "Place / Location") . "Place.")
+                   (("1.6.3" . "Time")             . "Time.")))))))
+    (let ((block (tibetan-interlinear-portfolio-reference-block)))
+      ;; Must mention every parsed section with its actual number.
+      (should (string-match-p "§1\\.1 Genitive" block))
+      (should (string-match-p "§1\\.3 Ergative" block))
+      (should (string-match-p "§1\\.5 Dative" block))
+      (should (string-match-p "§1\\.6 Terminative" block))
+      ;; Sub-section IDs from each section appear.
+      (should (string-match-p "1\\.1\\.1 Genitive Attribute" block))
+      (should (string-match-p "1\\.6\\.1 Place / Location" block))
+      (should (string-match-p "1\\.6\\.3 Time" block))
+      ;; CRITICAL: the Bialek-canonical `1.5.1 Terminative-Place'
+      ;; number (which Claude has been outputting as a guess) must NOT
+      ;; appear as a Portfolio sub-ID — Carsten's Portfolio puts this
+      ;; under §1.6.1, not §1.5.1.
+      (should-not (string-match-p "1\\.5\\.1.*Terminative" block)))))
+
+(ert-deftest tibetan-interlinear-portfolio-reference-block-instructs-claude ()
+  "The reference block carries an instruction that tells Claude to use
+the EXACT section IDs listed — not to extrapolate or guess based on
+textbook numbering."
+  (cl-letf (((symbol-function 'tibetan-interlinear--get-portfolio)
+             (lambda ()
+               '(("genitive" :section "1.1" :title "Genitive"
+                  :intro "." :functions nil)))))
+    (let ((block (tibetan-interlinear-portfolio-reference-block)))
+      (should (string-match-p "EXACT" block)))))
+
+(ert-deftest tibetan-interlinear-portfolio-reference-block-sections-without-functions ()
+  "A Portfolio section whose `:functions' alist is empty still appears
+in the reference — just without sub-IDs.  When Claude tags a
+particle for such a section, it'll use the top-level §N.N only,
+which is still useful.  Avoids silently dropping sections and
+confusing Claude about which particles are covered at all."
+  (cl-letf (((symbol-function 'tibetan-interlinear--get-portfolio)
+             (lambda ()
+               '(("elative" :section "1.8" :title "Elative"
+                  :intro "." :functions nil)))))
+    (let ((block (tibetan-interlinear-portfolio-reference-block)))
+      (should (string-match-p "§1\\.8 Elative" block)))))
+
 (provide 'tibetan-interlinear-test)
 ;;; tibetan-interlinear-test.el ends here

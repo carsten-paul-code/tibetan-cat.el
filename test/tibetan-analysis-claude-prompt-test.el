@@ -270,5 +270,48 @@ attached to the user prompt as a 'Glossary for this passage' block."
           (should (stringp tibetan-test--captured-prompt)))
       (delete-directory analysis-dir t))))
 
+;; ============================================================================
+;; PASS 7: Portfolio reference injection
+;; ============================================================================
+
+(ert-deftest tibetan-claude-prompt-injects-portfolio-reference-when-loaded ()
+  "When a Portfolio is loaded, the built system prompt carries the
+Portfolio reference block — so Claude tags `## Particles' sub-IDs
+using the user's actual numbering (e.g. §1.6 Terminative) rather
+than guessing from textbook-canonical numbering (§1.5)."
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (cl-letf (((symbol-function 'tibetan-interlinear--get-portfolio)
+               (lambda ()
+                 '(("terminative" :section "1.6" :title "Terminative"
+                    :intro "..." :functions
+                    ((("1.6.1" . "Place / Location") . "Place desc.")))))))
+      (let* ((prompts (tibetan-analysis--build-claude-prompts
+                       "བདག་" source-file))
+             (system (car prompts)))
+        ;; The built system prompt includes the Portfolio reference.
+        (should (string-match-p "§1\\.6 Terminative" system))
+        (should (string-match-p "1\\.6\\.1 Place / Location" system))))))
+
+(ert-deftest tibetan-claude-prompt-no-portfolio-no-injection ()
+  "When NO Portfolio is loaded, no reference block is injected into
+the system prompt.  The static prompt instruction may mention the
+phrase `Portfolio section reference' (as a forward-reference to
+the injected block), but the actual two-space-indented `§N.N'
+bullet list that the helper emits must be absent.  Callers that
+don't set `tibetan-interlinear-portfolio-file' still get a
+well-formed prompt."
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (cl-letf (((symbol-function 'tibetan-interlinear--get-portfolio)
+               (lambda () nil)))
+      (let* ((prompts (tibetan-analysis--build-claude-prompts
+                       "བདག་" source-file))
+             (system (car prompts)))
+        ;; The INJECTED block — a two-space-indented `§N.N Title' line —
+        ;; must NOT appear.  The static prompt instruction mentions the
+        ;; name of the block as a forward-reference; that's allowed.
+        (should-not (string-match-p "^  §[0-9]" system))))))
+
 (provide 'tibetan-analysis-claude-prompt-test)
 ;;; tibetan-analysis-claude-prompt-test.el ends here

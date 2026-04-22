@@ -177,17 +177,21 @@ or `bslabs nas' or `der'.  For a standalone particle use the \
 particle's Wylie (`nas').
   2. particle — the particle's Wylie alone: `'i', `nas', `r', `la', \
 `ni', `pas', `ste', etc.
-  3. portfolio-sub-id — the exact Bialek Portfolio sub-section ID \
-that applies to this specific occurrence.  Format: `N.N.N' for case \
-particles (1.1.1 = Genitive Attribute; 1.5.1 = Terminative Place; \
-1.5.3 = Terminative Time; 1.5.6 = Terminative Result; etc.) and \
-`N.NN.N' for converbs (2.11.1 = V+nas temporal sequential; \
-2.11.2 = V+nas causal; 2.4.1 = V+ste coordinative; etc.).  If \
-you are not sure which sub-ID applies, give the top-level ID \
-(e.g. `1.5' for any terminative) rather than guessing wrong.
+  3. portfolio-sub-id — the EXACT sub-section ID from the user's \
+Portfolio.  The Portfolio's section numbering is supplied below \
+(look for `Portfolio section reference' — check it first, use its \
+numbers, do NOT guess based on textbook-canonical numbering which \
+may differ from the user's edition).  Format: `N.N.N' for case \
+particles, `N.NN.N' or `N.N.N' for converbs.  If no sub-ID in the \
+reference matches the function, use the TOP-LEVEL `N.N' of the \
+best-matching section and flag the mismatch in field 4.  If no \
+section at all matches (e.g. V+nas is not listed), use the closest \
+parent section (for V+nas try Elative §N.N) and label accordingly.
   4. short-function-label — a 1–3-word English label naming the \
 specific function: `place', `time', `attributive', `sequential', \
-`causal', `manner', `concessive', etc.  Lowercase.
+`causal', `manner', `concessive', etc.  Lowercase.  When a \
+mismatch forced a fallback ID in field 3, prefix the label with \
+`approx-' (e.g. `approx-sequential') so the renderer can flag it.
 
 Use these exact particles for case: `'i', `kyi', `gyi', `gi', `yi' \
 (GEN); `gis', `gyis', `kyis', `'is', `yis' (ERG); `r', `ru', `su', \
@@ -195,11 +199,12 @@ Use these exact particles for case: `'i', `kyi', `gyi', `gi', `yi' \
 `dang' (COM).  Converbs: `nas', `te', `ste', `de', `cing', `zhing', \
 `shing', `pas', `bas', `na', `kyang', `yang', `'ang'.
 
-Example (for a seg containing `der mthu'i ... bslabs nas ... tshim nas'):
-  der, r, 1.5.1, place
+Example format (numbers below are illustrative; use the Portfolio \
+reference for real IDs):
+  der, r, 1.6.1, place
   mthu'i, 'i, 1.1.1, attributive
-  bslabs nas, nas, 2.11.1, sequential-temporal
-  tshim nas, nas, 2.11.2, causal-sequential
+  bslabs nas, nas, 1.8.2, approx-sequential-temporal
+  tshim nas, nas, 1.8.4, approx-causal-sequential
 
 Use only these headings. No preamble, no closing remarks.
 
@@ -556,8 +561,32 @@ forms of grounding:
             (when parts
               (concat "\n\nSource metadata for this passage:\n"
                       (mapconcat #'identity (nreverse parts) "\n")))))
+         ;; Pass 7 (2026-04-22): inject the user's actual Portfolio
+         ;; structure into the system prompt so Claude's `## Particles'
+         ;; output uses the Portfolio's own section numbering.  Without
+         ;; this, Claude guesses Bialek-textbook-canonical IDs (§1.5
+         ;; Terminative, §2.11 V+nas) that don't match Carsten's
+         ;; Portfolio (§1.6 Terminative, no V+nas at §2.11) — the
+         ;; resulting `portfolio-sub-id' values fail the lookup in
+         ;; `tibetan-interlinear-portfolio-function-snippet' and the
+         ;; Grammar section omits the Portfolio description text.
+         ;;
+         ;; The block lands in the SYSTEM prompt (rather than the user
+         ;; prompt) because it's invariant per Portfolio file — same
+         ;; across all segments — so Anthropic prompt caching serves
+         ;; it from cache at 10% of normal input cost on requests 2..N
+         ;; within the 5-min TTL.
+         (portfolio-ref
+          (and (fboundp 'tibetan-interlinear-portfolio-reference-block)
+               (condition-case nil
+                   (tibetan-interlinear-portfolio-reference-block)
+                 (error ""))))
+         (portfolio-block
+          (and portfolio-ref (not (string-empty-p portfolio-ref))
+               (concat "\n\n" portfolio-ref)))
          (system (concat tibetan-analysis--claude-system-prompt
-                         (or src-block "")))
+                         (or src-block "")
+                         (or portfolio-block "")))
          (glossary-block
           (when glossary
             (concat

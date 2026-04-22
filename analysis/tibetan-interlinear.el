@@ -691,6 +691,83 @@ user's Portfolio source."
                    when (and (consp key) (equal (car key) sub-id))
                    return (cons (cdr key) (cdr fn))))))))
 
+(defun tibetan-interlinear-portfolio-reference-block ()
+  "Return a markdown-style reference block listing every parsed
+Portfolio section + sub-section with its ACTUAL numbering from the
+user's Portfolio file.
+
+The block is designed to be injected into the Claude system prompt
+so Claude's `## Particles' output uses EXACTLY the section IDs the
+user's Portfolio defines — not Bialek-canonical numbers that may
+diverge (Carsten's Portfolio has Terminative at §1.6; some Bialek
+textbook editions have it at §1.5).  Without this the Grammar
+section's `*** Particles in This Segment' renderer fails to resolve
+Portfolio snippets for correctly-tagged particles, because
+`tibetan-interlinear-portfolio-function-snippet' looks up IDs in
+the parsed cache.
+
+Returns an empty string when no Portfolio is loaded — callers
+concatenate unconditionally and the prompt simply omits the block.
+
+Format:
+  Portfolio section reference (use these EXACT numbers in ...):
+    §1.1 Genitive — 1.1.1 Genitive Attribute; 1.1.2 Genitive with...
+    §1.3 Ergative — 1.3.1 Subject of Transitive Verbs; ...
+    §1.5 Dative
+    §1.6 Terminative — 1.6.1 Place / Location; 1.6.3 Time; ..."
+  (let ((portfolio (tibetan-interlinear--get-portfolio)))
+    (if (null portfolio)
+        ""
+      (let ((lines '())
+            ;; Sort by section number so the block reads in
+            ;; natural order (1.1 → 1.3 → 1.6 → 2.1 → ...).
+            (sorted
+             (sort (copy-sequence portfolio)
+                   (lambda (a b)
+                     (let ((sa (plist-get (cdr a) :section))
+                           (sb (plist-get (cdr b) :section)))
+                       (and sa sb
+                            (tibetan-interlinear--section-lt sa sb)))))))
+        (dolist (entry sorted)
+          (let* ((section (plist-get (cdr entry) :section))
+                 (title   (plist-get (cdr entry) :title))
+                 (functions (plist-get (cdr entry) :functions))
+                 (sub-line
+                  (when functions
+                    (mapconcat
+                     (lambda (fn)
+                       (let ((id (caar fn))
+                             (sub-title (cdar fn)))
+                         (format "%s %s" id sub-title)))
+                     functions "; "))))
+            (when (and section title)
+              (push (if sub-line
+                        (format "  §%s %s — %s" section title sub-line)
+                      (format "  §%s %s" section title))
+                    lines))))
+        (concat
+         "Portfolio section reference (use these EXACT numbers in "
+         "`portfolio-sub-id'; if a particle function is not covered "
+         "by any section here, fall back to the closest parent "
+         "section number and flag the mismatch in the `label' field):\n"
+         (mapconcat #'identity (nreverse lines) "\n"))))))
+
+(defun tibetan-interlinear--section-lt (a b)
+  "Compare two Portfolio section-number strings numerically.
+`1.2' < `1.10'; `1.9' < `2.1'.  Simple numeric tuple compare —
+each dot-separated component is parsed as an integer."
+  (let ((na (mapcar #'string-to-number (split-string a "\\.")))
+        (nb (mapcar #'string-to-number (split-string b "\\."))))
+    (catch 'done
+      (while (or na nb)
+        (let ((xa (or (car na) 0))
+              (xb (or (car nb) 0)))
+          (cond
+           ((< xa xb) (throw 'done t))
+           ((> xa xb) (throw 'done nil))
+           (t (setq na (cdr na) nb (cdr nb))))))
+      nil)))
+
 (defun tibetan-interlinear--truncate-para (text max-len)
   "Truncate TEXT to approximately MAX-LEN characters at a sentence boundary."
   (if (<= (length text) max-len)
