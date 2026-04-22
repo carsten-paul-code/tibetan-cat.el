@@ -1041,6 +1041,77 @@ the preceding word) must render with
         (should (tibetan-particle-map-faces-test--any-face-eq
                  f 'tibetan-analysis-converb-particle-face))))))
 
+(ert-deftest tibetan-analysis-particle-map-delimiters-hidden ()
+  "The `=' / `~' delimiters wrapping Particle Map markers must be
+rendered INVISIBLE so students see a clean `'i' in magenta and
+`nas' in orange — not the delimiter characters.  Matches org's
+own `org-hide-emphasis-markers' behaviour for clean-boundary
+tokens but works even for compound-embedded markers where org's
+emphasis parser doesn't fire.
+
+Implementation detail: we use `invisible' with a namespaced
+symbol that's added to `buffer-invisibility-spec' by
+`tibetan-analysis-setup-faces'.  Both conditions must be true for
+rendering to hide the delimiters — just the property isn't enough."
+  (require 'org)
+  (with-temp-buffer
+    (insert "der mthu='i= man ngag bslabs ~nas~ song /\n")
+    (org-mode)
+    (tibetan-analysis-setup-faces)
+    (font-lock-ensure (point-min) (point-max))
+    ;; Case-particle opening `=' (embedded in compound, col 8).
+    (let ((open-pos (save-excursion
+                      (goto-char (point-min))
+                      (and (re-search-forward "='i=" nil t)
+                           (match-beginning 0)))))
+      (should open-pos)
+      (let ((inv (get-text-property open-pos 'invisible)))
+        ;; The `=' character has an `invisible' property set.
+        (should inv)
+        ;; And that property value is in the buffer's invisibility
+        ;; spec — otherwise the property is a no-op visually.
+        (should (or (eq inv t)
+                    (and (listp buffer-invisibility-spec)
+                         (or (memq inv buffer-invisibility-spec)
+                             (assq inv buffer-invisibility-spec)))
+                    (and (not (listp buffer-invisibility-spec))
+                         buffer-invisibility-spec)))))
+    ;; Converb `~' delimiter (not in a compound, but same treatment).
+    (let ((conv-pos (save-excursion
+                      (goto-char (point-min))
+                      (and (re-search-forward "~nas~" nil t)
+                           (match-beginning 0)))))
+      (should conv-pos)
+      (let ((inv (get-text-property conv-pos 'invisible)))
+        (should inv)))))
+
+(ert-deftest tibetan-analysis-particle-map-content-stays-visible ()
+  "The content INSIDE the delimiters (the actual particle letters
+`'i', `nas', `gis', ...) must NOT have the `invisible' property —
+only the wrapping `=' / `~' characters are hidden.  Regression
+guard that the invisibility treatment doesn't accidentally hide
+the particle text itself."
+  (require 'org)
+  (with-temp-buffer
+    (insert "der mthu='i= man bslabs ~nas~\n")
+    (org-mode)
+    (tibetan-analysis-setup-faces)
+    (font-lock-ensure (point-min) (point-max))
+    ;; The apostrophe inside `='i=' (col 9, the `'' character).
+    (let ((content-pos (save-excursion
+                         (goto-char (point-min))
+                         (and (re-search-forward "='i=" nil t)
+                              (1+ (match-beginning 0))))))
+      (should content-pos)
+      (should-not (get-text-property content-pos 'invisible)))
+    ;; The `n' inside `~nas~'.
+    (let ((content-pos (save-excursion
+                         (goto-char (point-min))
+                         (and (re-search-forward "~nas~" nil t)
+                              (1+ (match-beginning 0))))))
+      (should content-pos)
+      (should-not (get-text-property content-pos 'invisible)))))
+
 (ert-deftest tibetan-analysis-particle-map-face-setup-is-idempotent ()
   "Running `tibetan-analysis-setup-faces' twice in the same buffer
 must not double-install the font-lock keywords (no duplicated rules,

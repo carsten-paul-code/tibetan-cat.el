@@ -110,12 +110,38 @@ markers.  Customise to taste."
   "Non-nil if faces have already been set up for this buffer.")
 
 (defconst tibetan-analysis--particle-map-font-lock-keywords
-  '(("\\(=[^=\n]+=\\)" 1 'tibetan-analysis-case-particle-face prepend)
-    ("\\(~[^~\n]+~\\)" 1 'tibetan-analysis-converb-particle-face prepend))
+  ;; Each regex has THREE capture groups:
+  ;;   1. opening delimiter  (`=' or `~') — face + invisible
+  ;;   2. particle content   (`'i' / `nas' / ...)   — face only
+  ;;   3. closing delimiter  — face + invisible
+  ;; The delimiters get `invisible' set to a namespaced symbol that
+  ;; `tibetan-analysis-setup-faces' adds to the buffer-invisibility-
+  ;; spec.  Result: students see a clean `'i' in magenta and `nas'
+  ;; in orange, with no surrounding `=' / `~' characters — same UX
+  ;; as `org-hide-emphasis-markers' for clean-boundary tokens but
+  ;; extended to compound-embedded markers where org's emphasis
+  ;; parser doesn't fire.
+  '(("\\(=\\)\\([^=\n]+\\)\\(=\\)"
+     (1 '(face tibetan-analysis-case-particle-face
+          invisible tibetan-analysis-particle-marker)
+        prepend)
+     (2 'tibetan-analysis-case-particle-face prepend)
+     (3 '(face tibetan-analysis-case-particle-face
+          invisible tibetan-analysis-particle-marker)
+        prepend))
+    ("\\(~\\)\\([^~\n]+\\)\\(~\\)"
+     (1 '(face tibetan-analysis-converb-particle-face
+          invisible tibetan-analysis-particle-marker)
+        prepend)
+     (2 'tibetan-analysis-converb-particle-face prepend)
+     (3 '(face tibetan-analysis-converb-particle-face
+          invisible tibetan-analysis-particle-marker)
+        prepend)))
   "Font-lock keywords for Particle Map markers in analysis buffers.
 
 `=X=' → magenta (`tibetan-analysis-case-particle-face')
 `~X~' → orange  (`tibetan-analysis-converb-particle-face')
+Delimiters are rendered invisible; content stays visible.
 
 Why font-lock rather than relying on `org-mode's emphasis parser:
 org's emphasis regexp requires a word-boundary PRE character before
@@ -123,13 +149,18 @@ the opening marker.  The Particle Map renders compact Wylie
 compounds like `mthu='i='' and `bslabs ~nas~' where the leading `='
 or `~' is embedded in the token — preceded by a letter, not
 whitespace.  Org silently skips emphasis parsing there; students
-see plain-color markers instead of the intended magenta / orange.
+see plain-color markers instead of the intended magenta / orange,
+and org's own `org-hide-emphasis-markers' feature doesn't hide
+them either (same reason: no emphasis parse, nothing to hide).
 
 Font-lock bypasses the PRE requirement entirely, applying the
-face wherever the regex matches.  The `prepend' face-combining
-puts our explicit face ahead of any org-verbatim / org-code the
-emphasis parser DID add for clean word-boundary tokens, so
-rendering stays uniform across both forms.")
+face wherever the regex matches AND marking the delimiters
+invisible — the three-group structure lets us treat the content
+(group 2) and the wrapping (groups 1 + 3) differently.  The
+`prepend' face-combining puts our explicit face ahead of any
+org-verbatim / org-code the emphasis parser DID add for clean
+word-boundary tokens, so rendering stays uniform across both
+forms.")
 
 (defun tibetan-analysis-setup-faces ()
   "Setup faces for analysis buffers.
@@ -151,6 +182,13 @@ parser which doesn't fire for compound-embedded markers like
     ;; org's emphasis parser would skip.
     (face-remap-add-relative 'org-verbatim :height 1.0)
     (face-remap-add-relative 'org-code :height 1.0)
+
+    ;; Register the namespaced invisibility symbol used by the
+    ;; Particle Map font-lock rules to hide `=' / `~' delimiters.
+    ;; Using a symbol (rather than `t') means only OUR markers
+    ;; become invisible — org's own invisibility regions (drawers,
+    ;; folded headings, link targets) are unaffected.
+    (add-to-invisibility-spec 'tibetan-analysis-particle-marker)
 
     ;; Install buffer-local font-lock rules for the Particle Map markers.
     ;; Done buffer-locally via `font-lock-add-keywords' with `nil' mode
