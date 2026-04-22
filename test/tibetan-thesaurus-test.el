@@ -781,5 +781,129 @@ gloss."
               (let ((args (cdar calls)))
                 (should (equal (plist-get args :re-request-claude) nil))))))))))
 
+;; ============================================================================
+;; TRANSLATION-GAP REPORT — bilingual-completeness audit for a document
+;; ============================================================================
+;;
+;; User prep flow (2026-04-22): before starting a German-target document,
+;; scan the analysis folder to see which thesaurus entries need German
+;; primaries filled in.  Frequency-sorted so the user tackles the most
+;; impactful terms first.  `bilingual-incomplete' = EITHER `:primary-de'
+;; OR `:primary-en' missing (still a Kramer placeholder) — both halves
+;; must be present for the dictionary to be usable against a target
+;; language choice.
+
+(ert-deftest tibetan-thesaurus-translation-gaps-flags-incomplete-entries ()
+  "`tibetan-thesaurus-translation-gaps' scans an analysis folder,
+counts the frequency of each Wylie term in the combined Tibetan
+Text sections, joins against the thesaurus index, and returns a
+list of gap plists for entries where EITHER side of the bilingual
+gloss is still a placeholder.
+
+Frequency-sorted: most-frequent gap first.  Used to prioritise
+which zettels to hand-fill during German-target document prep."
+  (tibetan-thesaurus-test--with-tmp-dir thes
+    (tibetan-thesaurus-test--with-tmp-dir analysis
+      ;; Zettel A: complete bilingual → NOT a gap.
+      (tibetan-thesaurus-test--write-zettel
+       (expand-file-name "sems.org" thes)
+       :wylie "sems" :english "mind" :german "Geist")
+      ;; Zettel B: German side is a placeholder → gap.
+      (tibetan-thesaurus-test--write-zettel
+       (expand-file-name "mthu.org" thes)
+       :wylie "mthu" :english "power, force"
+       :german "[to be added]")
+      ;; Zettel C: English side is a placeholder → gap.
+      (tibetan-thesaurus-test--write-zettel
+       (expand-file-name "bdag.org" thes)
+       :wylie "bdag" :german "Selbst"
+       :english "[to be researched]")
+      ;; Segment files using the terms.  sems appears twice, mthu
+      ;; once, bdag once — so frequency order is sems > mthu/bdag.
+      (tibetan-thesaurus-test--write-analysis-file
+       (expand-file-name "seg-001.org" analysis)
+       "sems bdag gis mthu bslabs")
+      (tibetan-thesaurus-test--write-analysis-file
+       (expand-file-name "seg-002.org" analysis)
+       "sems la brten nas")
+      (let ((tibetan-thesaurus-directory thes))
+        (tibetan-thesaurus-reload)
+        (let ((gaps (tibetan-thesaurus-translation-gaps analysis)))
+          ;; `sems' is complete → NOT in gaps.
+          (should-not (cl-some (lambda (g)
+                                 (equal (plist-get g :wylie) "sems"))
+                               gaps))
+          ;; `mthu' and `bdag' are both in the gap list.
+          (should (cl-some (lambda (g)
+                             (equal (plist-get g :wylie) "mthu")) gaps))
+          (should (cl-some (lambda (g)
+                             (equal (plist-get g :wylie) "bdag")) gaps))
+          ;; Each gap carries :frequency and :missing (`de' | `en' | `both').
+          (let ((mthu-gap (cl-find-if
+                          (lambda (g) (equal (plist-get g :wylie) "mthu"))
+                          gaps)))
+            (should (= 1 (plist-get mthu-gap :frequency)))
+            (should (equal (plist-get mthu-gap :missing) "de")))
+          (let ((bdag-gap (cl-find-if
+                          (lambda (g) (equal (plist-get g :wylie) "bdag"))
+                          gaps)))
+            (should (equal (plist-get bdag-gap :missing) "en"))))))))
+
+(ert-deftest tibetan-thesaurus-translation-gaps-sorted-by-frequency ()
+  "Gaps sorted descending by frequency so the highest-impact
+entry appears first — the user tackles it first."
+  (tibetan-thesaurus-test--with-tmp-dir thes
+    (tibetan-thesaurus-test--with-tmp-dir analysis
+      (tibetan-thesaurus-test--write-zettel
+       (expand-file-name "a.org" thes) :wylie "mthu"
+       :english "[to be researched]" :german "[to be added]")
+      (tibetan-thesaurus-test--write-zettel
+       (expand-file-name "b.org" thes) :wylie "bdag"
+       :english "[to be researched]" :german "[to be added]")
+      ;; `bdag' appears 3x, `mthu' once.
+      (tibetan-thesaurus-test--write-analysis-file
+       (expand-file-name "seg-001.org" analysis)
+       "bdag bdag bdag mthu")
+      (let ((tibetan-thesaurus-directory thes))
+        (tibetan-thesaurus-reload)
+        (let ((gaps (tibetan-thesaurus-translation-gaps analysis)))
+          (should (= 2 (length gaps)))
+          (should (equal (plist-get (car gaps) :wylie) "bdag"))
+          (should (equal (plist-get (cadr gaps) :wylie) "mthu"))
+          (should (= 3 (plist-get (car gaps) :frequency)))
+          (should (= 1 (plist-get (cadr gaps) :frequency))))))))
+
+(ert-deftest tibetan-thesaurus-translation-gaps-ignores-unreferenced ()
+  "A thesaurus entry that's incomplete BUT doesn't appear in any
+analysis is NOT reported as a gap.  Filling it wouldn't improve
+the current document, so leave it out of the prep prioritisation."
+  (tibetan-thesaurus-test--with-tmp-dir thes
+    (tibetan-thesaurus-test--with-tmp-dir analysis
+      (tibetan-thesaurus-test--write-zettel
+       (expand-file-name "orphan.org" thes) :wylie "gzhan"
+       :english "[to be researched]" :german "[to be added]")
+      (tibetan-thesaurus-test--write-analysis-file
+       (expand-file-name "seg-001.org" analysis) "bdag sems")
+      (let ((tibetan-thesaurus-directory thes))
+        (tibetan-thesaurus-reload)
+        (should (null (tibetan-thesaurus-translation-gaps analysis)))))))
+
+(ert-deftest tibetan-thesaurus-translation-gaps-both-sides-missing ()
+  "Entries missing BOTH sides carry `:missing \"both\"' — a worse
+gap to flag with a different label (user knows the entry is a
+blank stub rather than half-done)."
+  (tibetan-thesaurus-test--with-tmp-dir thes
+    (tibetan-thesaurus-test--with-tmp-dir analysis
+      (tibetan-thesaurus-test--write-zettel
+       (expand-file-name "a.org" thes) :wylie "mthu"
+       :english "[to be researched]" :german "[to be added]")
+      (tibetan-thesaurus-test--write-analysis-file
+       (expand-file-name "seg-001.org" analysis) "mthu")
+      (let ((tibetan-thesaurus-directory thes))
+        (tibetan-thesaurus-reload)
+        (let ((gap (car (tibetan-thesaurus-translation-gaps analysis))))
+          (should gap)
+          (should (equal (plist-get gap :missing) "both")))))))
+
 (provide 'tibetan-thesaurus-test)
 ;;; tibetan-thesaurus-test.el ends here

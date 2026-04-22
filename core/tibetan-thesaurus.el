@@ -590,33 +590,11 @@ segment content for Wylie matches."
     ""))
 
 (defun tibetan-thesaurus--wylie-mentioned-p (wylie text)
-  "Return non-nil if WYLIE appears as a word-boundary token in TEXT.
-Matching is word-boundary-safe so a zettel for `mthu' doesn't
-spuriously claim a segment containing `mthun' / `mthuri'.  The
-bounds are defined via `\\b' — so for Wylie strings containing
-spaces (`rnam par shes pa'), each segment of the Wylie must be
-individually word-bounded.  Simpler heuristic: look for WYLIE
-surrounded by non-word chars or line edges.
-
-Uses case-sensitive matching so `DE' in metadata doesn't match
-`de' in Wylie."
-  (when (and wylie text (not (string-empty-p wylie)) (not (string-empty-p text)))
-    (let ((case-fold-search nil)
-          ;; Tibetan Wylie transcription routinely converts the syllable
-          ;; separator `་' to a space, so the analysis file's Tibetan
-          ;; Text section in Wylie form mirrors the thesaurus key
-          ;; verbatim.  Build a regex that allows the Tibetan-text
-          ;; spellings with or without trailing `་' and with either
-          ;; space or tsheg between syllables.
-          (flex-wylie (replace-regexp-in-string
-                       " +" "[ ་]+" (regexp-quote wylie))))
-      ;; Anchored left edge: start-of-buffer OR non-word char.
-      ;; Anchored right edge: end-of-buffer OR non-word char.
-      (string-match-p
-       (concat "\\(?:\\`\\|[^-a-z0-9']\\)"
-               flex-wylie
-               "\\(?:\\'\\|[^-a-z0-9']\\)")
-       text))))
+  "Return non-nil if WYLIE appears as a token sequence in TEXT.
+Tokenised match (see `--tokenise-wylie-text') so `mthu' doesn't
+match `mthun' / `mthuri' and multi-syllable keys are compared
+syllable-by-syllable.  Case-sensitive."
+  (> (tibetan-thesaurus--count-mentions wylie text) 0))
 
 (defun tibetan-thesaurus-segments-affected-by-zettel (zettel-path analysis-dir)
   "Return the list of analysis files under ANALYSIS-DIR whose
@@ -737,6 +715,172 @@ rendering without blindly batch-regenerating the whole folder."
       (message "Thesaurus rerun complete: %d/%d succeeded"
                (length done) n))
     (nreverse done)))
+
+;;;###autoload
+(defun tibetan-thesaurus-translation-gaps (analysis-dir)
+  "Scan ANALYSIS-DIR and return a list of thesaurus entries whose
+bilingual gloss is INCOMPLETE (either German or English primary
+still a placeholder) AND which are referenced by at least one
+segment's Tibetan Text.
+
+Return format: list of plists, sorted by descending frequency:
+
+  (:wylie WYLIE
+   :frequency N
+   :missing  \"de\" | \"en\" | \"both\"
+   :zettel-path PATH
+   :sanskrit SKT              ;; may be nil / placeholder
+   :primary-en GLOSS-OR-NIL
+   :primary-de GLOSS-OR-NIL)
+
+Primes the German-target document-prep workflow: fill the
+high-frequency gaps first, so the Interlinear + CAT Gloss render
+cleanly for the document's most-used terms as early as possible.
+
+Returns nil when no thesaurus is configured or the folder is
+empty."
+  (when (and tibetan-thesaurus-directory
+             (file-directory-p (or analysis-dir "")))
+    (let ((index (tibetan-thesaurus--ensure-index))
+          (freq (make-hash-table :test 'equal)))
+      (when (and index (> (hash-table-count index) 0))
+        ;; 1. Count Wylie occurrences across every segment's Tibetan Text.
+        ;; For each thesaurus Wylie key, scan each segment's text for
+        ;; the word-boundary-safe pattern.  This is O(|wylies| × |files|)
+        ;; but both sides are small in practice (~hundreds).
+        (let ((files (directory-files
+                      analysis-dir t "\\`seg-[0-9]+.*\\.org\\'")))
+          (dolist (f files)
+            (let ((text (tibetan-thesaurus--tibetan-text-of f)))
+              (maphash
+               (lambda (wylie _entries)
+                 (let ((count (tibetan-thesaurus--count-mentions
+                               wylie text)))
+                   (when (> count 0)
+                     (puthash wylie
+                              (+ count (gethash wylie freq 0))
+                              freq))))
+               index))))
+        ;; 2. For each referenced Wylie, check bilingual completeness
+        ;; in the FIRST zettel entry (usually only one per Wylie; if
+        ;; multiple, report the first — user can iterate later).
+        (let (gaps)
+          (maphash
+           (lambda (wylie count)
+             (let* ((entry (car (gethash wylie index)))
+                    (en (plist-get entry :primary-en))
+                    (de (plist-get entry :primary-de))
+                    (missing (cond
+                              ((and (null en) (null de)) "both")
+                              ((null en) "en")
+                              ((null de) "de")
+                              (t nil))))
+               (when missing
+                 (push (list :wylie wylie
+                             :frequency count
+                             :missing missing
+                             :zettel-path (plist-get entry :path)
+                             :sanskrit (plist-get entry :sanskrit)
+                             :primary-en en
+                             :primary-de de)
+                       gaps))))
+           freq)
+          ;; Sort descending by frequency, stable on Wylie for tie-breaks.
+          (sort gaps (lambda (a b)
+                       (let ((fa (plist-get a :frequency))
+                             (fb (plist-get b :frequency)))
+                         (if (= fa fb)
+                             (string< (plist-get a :wylie)
+                                      (plist-get b :wylie))
+                           (> fa fb))))))))))
+
+(defun tibetan-thesaurus--tokenise-wylie-text (text)
+  "Split TEXT into a flat list of Wylie tokens.
+Uses whitespace, tsheg (`་'), slash (`/' — the shad marker),
+and Tibetan punctuation as delimiters.  Case-sensitive."
+  (when (and text (stringp text))
+    (split-string text "[ \t\n་།༎༏/]+" t)))
+
+(defun tibetan-thesaurus--count-mentions (wylie text)
+  "Count word-boundary-safe occurrences of WYLIE in TEXT.
+
+Tokenise TEXT (whitespace, `་', `/', punctuation) and scan for
+consecutive token matches against the tokens of WYLIE.  Handles
+multi-syllable Wylie keys like `rnam par shes pa' cleanly —
+each of its 4 syllable-tokens must appear consecutively in the
+text.  Word boundaries are implicit from tokenisation, so
+`mthu' never matches inside `mthun'.
+
+Case-sensitive matching so `DE' in metadata doesn't match `de'
+in Wylie."
+  (if (or (null wylie) (null text)
+          (string-empty-p wylie) (string-empty-p text))
+      0
+    (let* ((wylie-tokens (tibetan-thesaurus--tokenise-wylie-text wylie))
+           (text-tokens  (tibetan-thesaurus--tokenise-wylie-text text))
+           (n (length wylie-tokens))
+           (count 0))
+      (when (> n 0)
+        (let ((i 0) (len (length text-tokens)))
+          (while (<= (+ i n) len)
+            (let ((match t) (k 0))
+              (while (and match (< k n))
+                (unless (string= (nth k wylie-tokens)
+                                 (nth (+ i k) text-tokens))
+                  (setq match nil))
+                (cl-incf k))
+              (if match
+                  (progn (cl-incf count)
+                         (setq i (+ i n)))
+                (cl-incf i))))))
+      count)))
+
+;;;###autoload
+(defun tibetan-thesaurus-translation-gaps-display (analysis-dir)
+  "Interactive `*Thesaurus Gaps*' buffer listing bilingual-incomplete
+thesaurus entries referenced by segments in ANALYSIS-DIR, sorted
+by descending frequency.  Each line names the Wylie, frequency,
+which side is missing, Sanskrit term, and the zettel path.
+
+Click (org-link) on a zettel path to jump in for editing.
+
+Shows `All thesaurus entries are bilingual-complete.' when no
+gaps remain for the folder."
+  (interactive
+   (list (read-directory-name "Analysis folder: ")))
+  (let ((gaps (tibetan-thesaurus-translation-gaps analysis-dir))
+        (buf (get-buffer-create "*Thesaurus Gaps*")))
+    (with-current-buffer buf
+      (read-only-mode -1)
+      (erase-buffer)
+      (org-mode)
+      (insert (format "Translation-gap report — %s\n\n" analysis-dir))
+      (if (null gaps)
+          (insert "All referenced thesaurus entries are bilingual-complete.\n\n"
+                  "Either there are no gaps, or no thesaurus is configured.\n")
+        (insert (format
+                 "%d thesaurus entr%s need bilingual completion.\n"
+                 (length gaps)
+                 (if (= 1 (length gaps)) "y" "ies")))
+        (insert "Fill the highest-frequency entries first for\n"
+                "maximum impact on the document's rendered output.\n\n")
+        (insert "| Freq | Wylie | Missing | Sanskrit | Zettel |\n")
+        (insert "|------|-------|---------|----------|--------|\n")
+        (dolist (g gaps)
+          (insert (format "| %4d | %s | %s | %s | [[file:%s][edit]] |\n"
+                          (plist-get g :frequency)
+                          (plist-get g :wylie)
+                          (plist-get g :missing)
+                          (or (plist-get g :sanskrit) "?")
+                          (plist-get g :zettel-path))))
+        (insert "\nTip: `C-c C-o' on `edit' opens the zettel.\n"
+                "After filling a gap, save with `C-x C-s' and run\n"
+                "M-x tibetan-thesaurus-reload\n"
+                "so subsequent reanalyses pick up the new gloss.\n"))
+      (read-only-mode 1)
+      (goto-char (point-min)))
+    (display-buffer buf)
+    gaps))
 
 ;;;###autoload
 (defun tibetan-thesaurus-audit-folder-display (analysis-dir)

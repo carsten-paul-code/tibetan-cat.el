@@ -226,6 +226,15 @@
   ;; contains.  Helps the user see the surface area of a recent
   ;; thesaurus editing session before spending Claude API credits.
 
+(define-key tibetan-thesaurus-prefix-map (kbd "g")
+  'tibetan-thesaurus-translation-gaps-display)
+  ;; Translation-gap report.  Open `*Thesaurus Gaps*' showing
+  ;; thesaurus entries referenced by the analyses in a folder
+  ;; whose bilingual DE / EN primary is still a placeholder.
+  ;; Sorted by descending frequency — fill the top entries first
+  ;; for maximum impact on the rendered document output.
+  ;; Primary prep tool when starting a new German-target document.
+
 (define-key tibetan-thesaurus-prefix-map (kbd "L")
   'tibetan-analysis-set-source-target-lang)
   ;; Set `#+TIBETAN_TARGET_LANG:' (de / en) on the current source
