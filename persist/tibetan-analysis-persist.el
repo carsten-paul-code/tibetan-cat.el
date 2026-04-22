@@ -1447,11 +1447,20 @@ dump."
        (member (string-trim tibetan)
                tibetan-extract-vocab--particle-tails)))
 
-(defun tibetan-analysis--render-detailed-dictionary (tibetan-text vocab-pairs)
+(defun tibetan-analysis--render-detailed-dictionary
+    (tibetan-text vocab-pairs &optional bialek-analysis)
   "Render the `** Detailed Dictionary' section for TIBETAN-TEXT.
 Inserts into the current buffer.  TIBETAN-TEXT is the raw input
 string; VOCAB-PAIRS is the segmentation's (word . gloss) alist used
 as a legacy fallback when the multi-source helper is unavailable.
+BIALEK-ANALYSIS, if non-nil, is the output of
+`tibetan-analyze-grammar-bialek'; its grammatical tags let the
+renderer split stem+particle compounds the same way the Interlinear
+Gloss does, so a click on `[[term-mthu][mthu]]' in the Interlinear
+lands on the `<<term-mthu>>' anchor emitted here (not a separate
+`<<term-mthu-i>>' for the inflected form).  When the analysis is
+omitted the renderer falls back to `tibetan-strip-particles' for a
+narrower (unambiguous-particles-only) strip.
 
 The section body is produced by `tibetan-vocab-extract-detailed'
 when present, enriched via `tibetan-vocab-multisource-entries' for
@@ -1464,12 +1473,58 @@ keeps German // English pairs side by side."
   (let ((vocab-list (condition-case nil
                         (when (fboundp 'tibetan-vocab-extract-detailed)
                           (tibetan-vocab-extract-detailed tibetan-text))
-                      (error nil))))
+                      (error nil)))
+        ;; Index bialek grammar tags so we can reuse the Interlinear's
+        ;; stem/particle splitter.  (WORD → TAG-STRING), same shape the
+        ;; Interlinear builds in `tibetan-interlinear-generate-gloss'.
+        (bialek-by-word (make-hash-table :test 'equal))
+        ;; Dedupe: track anchors already rendered this section so two
+        ;; vocab entries that normalise to the same stem (e.g. a
+        ;; segment containing both `mthu' and `mthu'i') only produce
+        ;; one Detailed Dictionary block.
+        (seen-anchors (make-hash-table :test 'equal)))
+    (dolist (a bialek-analysis)
+      (let ((word (nth 1 a))
+            (type (nth 2 a)))
+        (when (and word type)
+          (puthash word type bialek-by-word))))
     (if vocab-list
         (progn
           (dolist (entry vocab-list)
-            (let* ((tibetan (plist-get entry :tibetan))
-                   (wylie (plist-get entry :wylie))
+            (let* ((raw-tibetan (plist-get entry :tibetan))
+                   ;; Stem/particle split.  Two paths:
+                   ;;   1. Prefer the Interlinear's splitter when we
+                   ;;      have a bialek tag for this word — identical
+                   ;;      semantics to the Interlinear anchor, so
+                   ;;      `term-xxx' links round-trip correctly.
+                   ;;   2. Fall back to `tibetan-strip-particles' when
+                   ;;      no tag exists — conservative multi-char
+                   ;;      particle strip keeps pre-existing behaviour.
+                   (bialek-tag (gethash raw-tibetan bialek-by-word))
+                   (stem-tibetan
+                    (cond
+                     ((and bialek-tag
+                           (fboundp 'tibetan-interlinear--split-word-particle))
+                      (car (tibetan-interlinear--split-word-particle
+                            raw-tibetan bialek-tag)))
+                     ((fboundp 'tibetan-strip-particles)
+                      (let ((s (tibetan-strip-particles raw-tibetan)))
+                        (if (and s (not (string-empty-p s))) s raw-tibetan)))
+                     (t raw-tibetan)))
+                   ;; Canonical tsheg-trim for the tibetan display — the
+                   ;; stripper occasionally leaves a trailing `་'.
+                   (tibetan
+                    (replace-regexp-in-string "[་ \t]+$" ""
+                                              (or stem-tibetan raw-tibetan)))
+                   ;; Wylie for the stem.  Recompute from the stripped
+                   ;; Tibetan rather than reusing the entry's `:wylie'
+                   ;; (which was built from the particle-bearing form).
+                   (wylie
+                    (condition-case nil
+                        (when (and tibetan (fboundp 'tibetan-to-wylie-fixed))
+                          (downcase (string-trim
+                                     (tibetan-to-wylie-fixed tibetan))))
+                      (error (plist-get entry :wylie))))
                    ;; Multi-source lookup: already ranked (Thesaurus →
                    ;; Resources/Custom → corpus-specific → Hopkins2015
                    ;; → 84000Dict → RangjungYeshe → others → Bundled/
@@ -1511,6 +1566,10 @@ keeps German // English pairs side by side."
                          (condition-case nil
                              (tibetan-steinert-url-org wylie)
                            (error nil)))))
+              ;; Skip duplicates: a segment that contains `mthu' and
+              ;; `mthu'i' both normalise to `term-mthu', render once.
+              (unless (and anchor (gethash anchor seen-anchors))
+                (when anchor (puthash anchor t seen-anchors))
               ;; Anchor target — invisible radio anchor that the
               ;; Interlinear link jumps to.  Kept on its own line so
               ;; it doesn't interfere with the visible head line.
@@ -1576,7 +1635,7 @@ keeps German // English pairs side by side."
                     (insert (format "  Skt: %s\n" sanskrit)))
                   (when source
                     (insert (format "  [%s]\n" source))))))
-              (insert "\n")))
+              (insert "\n"))))
           (insert "\n"))
       ;; Fallback: use vocab-pairs if detailed system not available.
       (if vocab-pairs
@@ -2279,8 +2338,19 @@ doesn't apply and the default ranking is used."
             ;; Rendered by the dedicated helper; kept as its own
             ;; function so the output stays testable in isolation and
             ;; the orchestrator can narrate sections one-per-call.
+            ;; The bialek analysis is threaded through so the
+            ;; renderer can split word+particle compounds the same
+            ;; way the Interlinear does — anchoring `mthu'i' under
+            ;; `<<term-mthu>>' so the Interlinear's jump link
+            ;; resolves to the real stem entry.
             ;; ============================================================
-            (tibetan-analysis--render-detailed-dictionary tibetan-text vocab-pairs)
+            (let ((bialek-for-dd
+                   (condition-case nil
+                       (when (fboundp 'tibetan-analyze-grammar-bialek)
+                         (tibetan-analyze-grammar-bialek tibetan-text))
+                     (error nil))))
+              (tibetan-analysis--render-detailed-dictionary
+               tibetan-text vocab-pairs bialek-for-dd))
 
             ;; ============================================================
             ;; SECTION 8: Provided Translations (at end — combine step)

@@ -550,5 +550,88 @@ radio-target jumping."
   (should (null (tibetan-vocab-term-anchor nil)))
   (should (null (tibetan-vocab-term-anchor "   "))))
 
+;; ----------------------------------------------------------------------------
+;; Pass 5a.1: Detailed Dictionary renders under the STEM so Interlinear
+;; `[[term-xxx][wylie]]' links resolve.
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-test--render-dd (tibetan-text bialek-analysis)
+  "Call `tibetan-analysis--render-detailed-dictionary' in a temp buffer.
+Returns the rendered string.  Multi-source entries are stubbed so
+the test doesn't depend on SQLite / Steinert / RY glossary state."
+  (with-temp-buffer
+    (cl-letf (((symbol-function 'tibetan-vocab-extract-detailed)
+               (lambda (_text)
+                 ;; Stub: return the segmented words we want the
+                 ;; renderer to iterate over.  `:tibetan' carries
+                 ;; the particle-bearing form like the real parser
+                 ;; produces; `:wylie' is the matching Wylie.
+                 (list (list :tibetan "མཐུའི"   :wylie "mthu'i")
+                       (list :tibetan "དེ"      :wylie "de"))))
+              ((symbol-function 'tibetan-vocab-multisource-entries)
+               (lambda (word)
+                 (when (equal word "མཐུ")
+                   (list (list :source "Steinert/01-Hopkins2015"
+                               :primary "power; force")))))
+              ((symbol-function 'tibetan-steinert-url-org)
+               (lambda (_w) "[[https://fake.example/][Steinert]]"))
+              ((symbol-function 'tibetan-to-wylie-fixed)
+               (lambda (tib)
+                 (cond ((equal tib "མཐུ") "mthu")
+                       ((equal tib "དེ") "de")
+                       (t tib)))))
+      (tibetan-analysis--render-detailed-dictionary
+       tibetan-text nil bialek-analysis)
+      (buffer-string))))
+
+(ert-deftest tibetan-analysis-dd-anchors-under-stem ()
+  "With a bialek GEN tag on `མཐུའི', the Detailed Dictionary emits
+`<<term-mthu>>' (not `<<term-mthu-i>>') so the Interlinear's
+`[[term-mthu][mthu]]' link resolves."
+  (skip-unless (fboundp 'tibetan-analysis--render-detailed-dictionary))
+  (let* ((bialek (list (list "འི" "མཐུའི" "GENITIVE (GEN)")))
+         (output (tibetan-test--render-dd "མཐུའི" bialek)))
+    (should (string-match-p "<<term-mthu>>" output))
+    (should-not (string-match-p "<<term-mthu-i>>" output))
+    ;; Head line shows the stem, not the particle-bearing form.
+    (should (string-match-p "◆ མཐུ \\[mthu\\]" output))))
+
+(ert-deftest tibetan-analysis-dd-deduplicates-stems ()
+  "If two vocab entries normalise to the same stem, only one entry
+is rendered (no duplicate `<<anchor>>' / `◆' head line)."
+  (skip-unless (fboundp 'tibetan-analysis--render-detailed-dictionary))
+  ;; Stub extract-detailed to return both `མཐུ' and `མཐུའི' — they
+  ;; should collapse to a single `term-mthu' entry in the output.
+  (with-temp-buffer
+    (cl-letf (((symbol-function 'tibetan-vocab-extract-detailed)
+               (lambda (_text)
+                 (list (list :tibetan "མཐུ"    :wylie "mthu")
+                       (list :tibetan "མཐུའི" :wylie "mthu'i"))))
+              ((symbol-function 'tibetan-vocab-multisource-entries)
+               (lambda (_w) nil))
+              ((symbol-function 'tibetan-steinert-url-org)
+               (lambda (_w) nil))
+              ((symbol-function 'tibetan-to-wylie-fixed)
+               (lambda (tib) (if (equal tib "མཐུ") "mthu" tib))))
+      (let* ((bialek (list (list "འི" "མཐུའི" "GENITIVE (GEN)")))
+             (_ (tibetan-analysis--render-detailed-dictionary
+                 "མཐུ་མཐུའི" nil bialek))
+             (output (buffer-string))
+             (anchor-count
+              (length (split-string output "<<term-mthu>>" t))))
+        ;; "<<term-mthu>>" appears exactly once → buffer split yields
+        ;; 2 pieces (before and after).
+        (should (= 2 anchor-count))))))
+
+(ert-deftest tibetan-analysis-dd-no-bialek-falls-back-to-strip-particles ()
+  "Without a bialek tag the renderer uses `tibetan-strip-particles'
+to compute the stem — conservative multi-char particles only."
+  (skip-unless (and (fboundp 'tibetan-analysis--render-detailed-dictionary)
+                    (fboundp 'tibetan-strip-particles)))
+  (let* ((bialek nil)    ;; no grammar tag → fallback path
+         (output (tibetan-test--render-dd "མཐུའི" bialek)))
+    ;; `tibetan-strip-particles' knows `འི' is genitive, so it strips.
+    (should (string-match-p "<<term-mthu>>" output))))
+
 (provide 'tibetan-vocab-multisource-test)
 ;;; tibetan-vocab-multisource-test.el ends here
