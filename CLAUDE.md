@@ -25,33 +25,41 @@ editing. Last updated 2026-04-15 (post P0/P1/P2 + display-consistency
 
 These are hard preferences. Treat them as rules, not suggestions.
 
-1. **Test first.** For any non-trivial change, write or extend an ERT
+1. **Bug fixing always first.** If a bug surfaces during any session
+   — live review of an analysis file, a regression spotted mid-
+   feature, a failing ERT test, a warning Claude notices in passing —
+   fix the bug BEFORE continuing the current feature work. Don't
+   defer with a "I'll flag it for later"; the correct default is to
+   pause the feature, fix the bug (tests + commit), then resume.
+   Only defer when (a) the bug is clearly out of scope for this
+   session AND (b) you explicitly ask Carsten and he says OK.
+2. **Test first.** For any non-trivial change, write or extend an ERT
    test before (or alongside) the implementation. The repo has a deep
    ERT suite — respect it, keep it green. Stub external dependencies
    (SQLite, network, glossary files) so tests don't require the full
    environment.
-2. **Aim close to perfect.** He is not looking for "ship it" output;
+3. **Aim close to perfect.** He is not looking for "ship it" output;
    he wants careful, correct code. If a solution is 80% there, say so
    and propose the remaining work rather than declaring it done.
-3. **Preserve user content.** Any operation that regenerates analysis
+4. **Preserve user content.** Any operation that regenerates analysis
    files must preserve `* My Notes`, `* Working Translation`,
    `* Footnotes`, and an existing `*** Claude` translation. If you
    touch the regenerate / batch-reanalyze path, add a test that
    asserts preservation.
-4. **Persistent analysis is the canonical workflow.** He uses `C-c u A`
+5. **Persistent analysis is the canonical workflow.** He uses `C-c u A`
    (persistent analysis file per segment) — not `C-c u i` (classroom /
    scratch view). Design features around the persistent-file flow
    first; the classroom view is secondary.
-5. **Don't silently change behaviour.** If a fix alters what users see
+6. **Don't silently change behaviour.** If a fix alters what users see
    in their analysis files, say so and ask before rewriting files he
    has invested hours annotating.
-6. **German and English side by side.** Many glosses are bilingual
+7. **German and English side by side.** Many glosses are bilingual
    (`DE // EN`). Don't collapse this — the `tibetan-analysis--format-bilingual-gloss`
    helper exists for a reason. Resources/Custom entries are hand-written
    and must never be truncated or rewritten.
-7. **Small, focused edits.** He prefers one logical change per pass
+8. **Small, focused edits.** He prefers one logical change per pass
    with tests, rather than sweeping rewrites.
-8. **Explain what you're about to do before doing it** for anything
+9. **Explain what you're about to do before doing it** for anything
    that touches more than one module, then run the tests after.
 
 ## 3. Repository shape
