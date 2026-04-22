@@ -23,6 +23,11 @@
 ;; Soft dependency: Steinert SQLite dictionary supplies Sanskrit
 ;; equivalents and a broad fallback gloss source. Load if available.
 (require 'tibetan-steinert nil t)
+;; Soft dependency: user-editable multilingual thesaurus (Pass 5b).
+;; When loaded, `tibetan-thesaurus-lookup' is consulted at rank 1 of
+;; `tibetan-vocab-multisource-entries'.  Missing module → no
+;; thesaurus hits; the rest of the pipeline is unaffected.
+(require 'tibetan-thesaurus nil t)
 
 ;; ============================================================================
 ;; DETAILED VOCABULARY CACHE
@@ -823,10 +828,50 @@ when the source entry carries it natively."
                       word))
            (results '())
            (seen (make-hash-table :test 'equal)))
-      (cl-flet ((add (source-name raw-gloss &optional native-skt)
+      (cl-flet ((add (source-name raw-gloss &optional native-skt &rest extras)
                   (let ((e (tibetan-vocab--make-source-entry
                             seen source-name raw-gloss native-skt wylie)))
-                    (when e (push e results)))))
+                    (when e
+                      ;; Merge any extra plist fields from EXTRAS onto
+                      ;; the entry (e.g. `:zettel-id' for Thesaurus)
+                      ;; so downstream renderers can surface them.
+                      (while extras
+                        (setq e (plist-put e (car extras) (cadr extras)))
+                        (setq extras (cddr extras)))
+                      (push e results)))))
+        ;; 0. Thesaurus (Kramer-seeded, user-editable) — rank 1.
+        ;;    The student's chosen rendering wins over Resources, all
+        ;;    Steinert sub-dictionaries, RY, and Bundled.  Lookup uses
+        ;;    the Wylie key from the zettel's `- Wylie: ...' field.
+        (when (fboundp 'tibetan-thesaurus-lookup)
+          (let ((th-entries (ignore-errors
+                              (tibetan-thesaurus-lookup wylie))))
+            (dolist (th th-entries)
+              (let* ((de (plist-get th :primary-de))
+                     (en (plist-get th :primary-en))
+                     ;; Bilingual gloss format matches the existing
+                     ;; `tibetan-analysis--format-bilingual-gloss'
+                     ;; expectation (DE // EN); either half may be
+                     ;; nil if the zettel hasn't filled it in yet.
+                     (gloss (cond
+                             ((and de en) (format "%s // %s" de en))
+                             (de de)
+                             (en en)
+                             (t nil))))
+                (when gloss
+                  ;; Override `:primary' and `:detailed' AFTER the
+                  ;; add so the full bilingual `DE // EN' string
+                  ;; survives — the default `parse-entry' would trim
+                  ;; `:primary' at the first comma, losing the
+                  ;; English half and breaking the Interlinear's
+                  ;; `prefer-english' split.
+                  (add "Thesaurus (Kramer)"
+                       gloss
+                       (plist-get th :sanskrit)
+                       :zettel-id   (plist-get th :id)
+                       :zettel-path (plist-get th :path)
+                       :primary     gloss
+                       :detailed    gloss))))))
         ;; 1. Resources (provided per-document list)
         (when (and (boundp 'tibetan-current-resources-vocab)
                    tibetan-current-resources-vocab)

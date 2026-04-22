@@ -1704,14 +1704,29 @@ keeps German // English pairs side by side."
                         (when (fboundp 'tibetan-vocab-multisource-entries)
                           (tibetan-vocab-multisource-entries tibetan))
                       (error nil)))
-                   ;; Provided-list entry gets a ★ marker on the head
-                   ;; line so students see at a glance that a curated
-                   ;; gloss exists for this word.
-                   (has-resources
+                   ;; `★' marker fires when a CURATED source is
+                   ;; available — either a per-document Resources /
+                   ;; Custom list OR a Thesaurus zettel.  Both indicate
+                   ;; the gloss is under user control rather than auto-
+                   ;; extracted from a generic dictionary, so they
+                   ;; share the visual emphasis.
+                   (has-curated
                     (cl-some (lambda (s)
                                (let ((src (plist-get s :source)))
                                  (and src
-                                      (string-prefix-p "Resources" src))))
+                                      (or (string-prefix-p "Resources" src)
+                                          (string-prefix-p "Custom" src)
+                                          (string-prefix-p "Thesaurus" src)))))
+                             sources))
+                   ;; Thesaurus zettel id, if a Thesaurus entry is in
+                   ;; the source list.  Drives the `[[id:XYZ]
+                   ;; [Thesaurus ↗]]' back-link on the head line.
+                   (thesaurus-zettel-id
+                    (cl-some (lambda (s)
+                               (and (stringp (plist-get s :source))
+                                    (string-prefix-p "Thesaurus"
+                                                     (plist-get s :source))
+                                    (plist-get s :zettel-id)))
                              sources))
                    ;; Genuine Sanskrit (if any source carries it) —
                    ;; displayed on the head line for instant visibility.
@@ -1753,7 +1768,15 @@ keeps German // English pairs side by side."
                                  tibetan))))
               (when sanskrit-on-head
                 (insert (format " · %s" sanskrit-on-head)))
-              (when has-resources (insert " ★"))
+              (when has-curated (insert " ★"))
+              ;; Thesaurus zettel back-link — `[[id:XYZ][Thesaurus ↗]]'
+              ;; clickable from the analysis buffer to the user's
+              ;; thesaurus entry (org-id resolver opens the zettel).
+              ;; Positioned before the Steinert link so the curated
+              ;; source is reached first when scanning left-to-right.
+              (when thesaurus-zettel-id
+                (insert (format " ([[id:%s][Thesaurus ↗]])"
+                                thesaurus-zettel-id)))
               ;; External Steinert link as a small ↗ marker.  Clickable
               ;; org link syntax, kept short so the head line stays
               ;; scannable.

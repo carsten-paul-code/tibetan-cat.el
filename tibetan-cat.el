@@ -159,6 +159,36 @@
          "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/WS25-26/Hausarbeiten/Tibetisch III/Hausarbeit_Tibetisch_III.org")))
 
 ;; ============================================================================
+;; CONFIGURATION — THESAURUS (Pass 5b)
+;; ============================================================================
+
+;; The thesaurus is a user-editable multilingual glossary — Sanskrit,
+;; Wylie, English, German — stored as one org-zettel per term.  Lookup
+;; during vocabulary analysis surfaces thesaurus entries at rank 1
+;; (above Resources / corpus-specific / Hopkins / RY / everything else)
+;; so the student's chosen translation stays consistent across every
+;; analysis in a document AND across related documents.
+;;
+;; To seed from Kramer's glossary on first use:
+;;   M-x tibetan-thesaurus-initialize-from-kramer
+;; Subsequent edits to thesaurus zettels are the user's own.
+(when (boundp 'tibetan-thesaurus-directory)
+  (setq tibetan-thesaurus-directory
+        (expand-file-name
+         "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/thesaurus/")))
+
+(when (boundp 'tibetan-thesaurus-kramer-source-directory)
+  (setq tibetan-thesaurus-kramer-source-directory
+        (expand-file-name
+         "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/zettelkasten/")))
+
+;; Thesaurus init is more specific than `*.org' in the Kramer source
+;; directory (the zettelkasten holds many non-Kramer files too).  The
+;; default Thesaurus-directory file pattern is `*.org' because after
+;; `initialize-from-kramer' copies only the Kramer files, every org
+;; file in the thesaurus dir is by construction a thesaurus entry.
+
+;; ============================================================================
 ;; LOAD KEYBINDINGS
 ;; ============================================================================
 

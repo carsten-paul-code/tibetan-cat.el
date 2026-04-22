@@ -91,6 +91,9 @@
 ;; Multi-source Detailed Dictionary rendering
 (condition-case nil (require 'tibetan-vocab-multisource-test) (error nil))
 
+;; Thesaurus (Pass 5b) — Kramer-seeded user-editable glossary at rank 1
+(condition-case nil (require 'tibetan-thesaurus-test) (error nil))
+
 ;; Source-aware Claude prompt (reads #+TIBETAN_CLAUDE_CONTEXT: and friends)
 (condition-case nil (require 'tibetan-analysis-claude-prompt-test) (error nil))
 
