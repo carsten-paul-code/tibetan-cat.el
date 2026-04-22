@@ -282,6 +282,194 @@ falls through to the next-ranked source silently."
       (and index (gethash clean index)))))
 
 ;; ---------------------------------------------------------------------------
+;; Entry creation — new thesaurus zettels from Wylie + optional scaffolding
+;; ---------------------------------------------------------------------------
+
+(defun tibetan-thesaurus--slugify-wylie (wylie)
+  "Turn WYLIE into a filename-safe slug.
+Spaces become `-', apostrophes are dropped, anything outside
+`[a-z0-9-]' is replaced with `-'.  Multi-dash runs collapse to
+one.  Empty input returns the literal `entry' so the caller still
+gets a valid filename component."
+  (if (or (null wylie) (string-empty-p (string-trim wylie)))
+      "entry"
+    (let* ((s (downcase (string-trim wylie)))
+           (s (replace-regexp-in-string "[' \t]+" "-" s))
+           (s (replace-regexp-in-string "[^a-z0-9-]" "" s))
+           (s (replace-regexp-in-string "-+" "-" s))
+           (s (replace-regexp-in-string "\\`-\\|-\\'" "" s)))
+      (if (string-empty-p s) "entry" s))))
+
+(cl-defun tibetan-thesaurus-new-entry
+    (wylie &key sanskrit english german)
+  "Create a new thesaurus zettel for WYLIE and return its absolute path.
+Optional fields prefill the scaffold:
+  :sanskrit — `#+title:' and `** Sanskrit / - Term:' values
+  :english  — `** English / - Primary translation:'
+  :german   — `** German / - Primary translation:'
+
+Placement: `tibetan-thesaurus-directory' / TIMESTAMP--WYLIE__user.org
+where TIMESTAMP is the current time in Denote's `%Y%m%dT%H%M%S'
+shape and WYLIE is the Wylie slugified via `--slugify-wylie'.
+The `:ID:' property equals TIMESTAMP so org's `id:' link scheme
+resolves cleanly.
+
+Errors:
+  · `tibetan-thesaurus-directory' unset  → user-error.
+  · File already exists                  → user-error (never
+    overwrites existing content; a rare timestamp collision
+    on the same second means the user should retry).
+
+Side-effect: the cached thesaurus index is invalidated so the
+next `tibetan-thesaurus-lookup' sees the new entry without a
+manual `tibetan-thesaurus-reload'."
+  (unless tibetan-thesaurus-directory
+    (user-error
+     "`tibetan-thesaurus-directory' is not set — configure it first"))
+  (unless (file-directory-p tibetan-thesaurus-directory)
+    (make-directory tibetan-thesaurus-directory t))
+  (let* ((timestamp (format-time-string "%Y%m%dT%H%M%S"))
+         (slug (tibetan-thesaurus--slugify-wylie wylie))
+         (filename (format "%s--%s__user.org" timestamp slug))
+         (path (expand-file-name filename tibetan-thesaurus-directory))
+         (title (or (and sanskrit (string-trim sanskrit)) (string-trim wylie)))
+         (en (or english "[to be researched]"))
+         (de (or german  "[to be added]"))
+         (skt (or sanskrit "[to be added]")))
+    (when (file-exists-p path)
+      (user-error "Thesaurus file already exists: %s" path))
+    (with-temp-file path
+      (insert ":PROPERTIES:\n"
+              (format ":ID: %s\n" timestamp)
+              ":END:\n"
+              (format "#+title: %s\n" title)
+              (format "#+date: [%s]\n" (format-time-string "%Y-%m-%d"))
+              "#+filetags: :thesaurus:user:\n\n"
+              "* Multilingual Terms\n"
+              "** Sanskrit\n"
+              (format "- Term: %s\n" skt)
+              (format "- IAST: %s\n" skt)
+              "- Etymology: [to be researched]\n\n"
+              "** Tibetan\n"
+              "- Term: [Tibetan script to be added]\n"
+              (format "- Wylie: %s\n" (string-trim wylie))
+              "- Phonetic: [to be added]\n"
+              "- Etymology: [to be researched]\n\n"
+              "** English\n"
+              (format "- Primary translation: %s\n" en)
+              "- Alternative translations: [to be researched]\n\n"
+              "** German\n"
+              (format "- Primary translation: %s\n" de)
+              "- Alternative translations: [to be researched]\n\n"
+              "* Definition\n"
+              "** Brief Definition\n[To be developed]\n\n"
+              "** Extended Definition\n[To be developed]\n\n"
+              "* Notes and Commentary\n"
+              "[Entry created via `tibetan-thesaurus-new-entry'.]\n"))
+    ;; Invalidate cache so the new zettel is visible to the next lookup.
+    (tibetan-thesaurus-reload)
+    path))
+
+;;;###autoload
+(defun tibetan-thesaurus-new-entry-interactively ()
+  "Prompt for a Wylie term and create a new thesaurus zettel.
+Thin interactive wrapper around `tibetan-thesaurus-new-entry'.
+Uses the Wylie on the current line (when available via
+`--wylie-at-point') as the default, so in an analysis buffer
+the user can `C-c u z n RET' to create an entry for the term
+the cursor is already on."
+  (interactive)
+  (let* ((default (tibetan-thesaurus--wylie-at-point))
+         (wylie (read-string
+                 (if default
+                     (format "Wylie for new thesaurus entry (default %s): "
+                             default)
+                   "Wylie for new thesaurus entry: ")
+                 nil nil default)))
+    (when (and wylie (not (string-empty-p wylie)))
+      (let ((path (tibetan-thesaurus-new-entry wylie)))
+        (find-file path)
+        (message "Created thesaurus entry: %s" path)))))
+
+;; ---------------------------------------------------------------------------
+;; edit-at-point — resolve the Wylie of the word at point in an analysis buffer
+;; ---------------------------------------------------------------------------
+
+(defun tibetan-thesaurus--wylie-at-point ()
+  "Return the Wylie string visible on the current line, or nil.
+
+Looks for a `[WYLIE]' token bounded by square brackets — the
+convention used by the Detailed Dictionary head line (`◆ TIBETAN
+[mthu] ★ …') and the Interlinear Gloss (`[[term-mthu][mthu]] …').
+Multi-word Wylie inside a single bracket pair (e.g. `rnam par
+shes pa') is returned whole.
+
+Returns nil when the current line has no `[...]' match — the
+caller can then prompt the user for a Wylie interactively."
+  (save-excursion
+    (beginning-of-line)
+    (let ((line-end (line-end-position))
+          ;; Case-SENSITIVE matching is essential: the meta-token
+          ;; filter below uses `[A-Z]+' to reject uppercase-only
+          ;; labels like `[GEN]' / `[TERM]' / `[CASE]'.  Without
+          ;; binding `case-fold-search' to nil, Emacs's default
+          ;; case-insensitive regex would match lowercase Wylie
+          ;; strings like `mthu' against `[A-Z]+' and we'd filter
+          ;; out the one we actually want.
+          (case-fold-search nil))
+      ;; Scan for the first `[XXX]' on the line where XXX is Wylie-like
+      ;; (lowercase letters, apostrophes, spaces, digits).  The org-link
+      ;; pattern `[[url][label]]' has letters outside the brackets; our
+      ;; regex is anchored to `[' followed by Wylie-shaped content.
+      (when (re-search-forward
+             "\\[\\([-a-z0-9' ]+\\)\\]" line-end t)
+        (let ((match (string-trim (match-string 1))))
+          ;; Exclude meta-tokens like [GEN], [TERM], [CASE], [Requesting...]
+          (unless (or (string-match-p "\\`[A-Z]+\\'" match)
+                      (string-match-p "\\`\\[" match))
+            match))))))
+
+;;;###autoload
+(defun tibetan-thesaurus-edit-at-point ()
+  "Open the thesaurus zettel for the Wylie term on the current line.
+When multiple zettels are indexed for the same Wylie key, prompt
+the user to pick one.  When no entry exists, offer to create a
+new one via `tibetan-thesaurus-new-entry'.
+
+Falls back to prompting the user for a Wylie when the current
+line has no bracketed token."
+  (interactive)
+  (let* ((from-buffer (tibetan-thesaurus--wylie-at-point))
+         (wylie (or from-buffer
+                    (read-string "Wylie term: "))))
+    (when (and wylie (not (string-empty-p wylie)))
+      (let* ((hits (tibetan-thesaurus-lookup wylie))
+             (entry
+              (cond
+               ((null hits)
+                (if (yes-or-no-p
+                     (format "No thesaurus entry for `%s'.  Create one? "
+                             wylie))
+                    (let ((new-path (tibetan-thesaurus-new-entry wylie)))
+                      (list :path new-path))
+                  nil))
+               ((= 1 (length hits)) (car hits))
+               (t
+                (let* ((choices
+                        (mapcar (lambda (h)
+                                  (cons (format "%s — %s"
+                                                (or (plist-get h :sanskrit) "?")
+                                                (or (plist-get h :primary-en) ""))
+                                        h))
+                                hits))
+                       (pick (completing-read
+                              "Pick thesaurus entry: "
+                              (mapcar #'car choices) nil t)))
+                  (cdr (assoc pick choices)))))))
+        (when entry
+          (find-file (plist-get entry :path)))))))
+
+;; ---------------------------------------------------------------------------
 ;; One-shot initialization — copy Kramer zettels into the user's thesaurus
 ;; ---------------------------------------------------------------------------
 

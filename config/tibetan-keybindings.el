@@ -181,6 +181,46 @@
   ;; - Shows translation in minibuffer
 
 ;; ============================================================================
+;; THESAURUS - C-c u z (prefix)
+;; ============================================================================
+;;
+;; Pass 5b (user-editable multilingual glossary at rank 1 of the
+;; vocabulary pipeline) + Pass 5b.2 (create / edit entries from an
+;; analysis buffer).  Thesaurus entries are org zettels carrying
+;; Sanskrit · Wylie · English · German per term; edits propagate to
+;; every analysis that references the Wylie key on next reanalysis.
+;;
+;; Bound under `C-c u z' (zettelkasten) — `t'/`T' are already taken
+;; by CAT translation commands.
+
+(defvar tibetan-thesaurus-prefix-map (make-sparse-keymap)
+  "Keymap for thesaurus commands — prefix `C-c u z'.")
+
+(define-key tibetan-thesaurus-prefix-map (kbd "e")
+  'tibetan-thesaurus-edit-at-point)
+  ;; Open the thesaurus zettel for the Wylie on the current line.
+  ;; If no entry exists, offers to create one.  Falls back to
+  ;; prompting for a Wylie when the line has no bracketed token.
+
+(define-key tibetan-thesaurus-prefix-map (kbd "n")
+  'tibetan-thesaurus-new-entry-interactively)
+  ;; Create a new thesaurus zettel.  Prompts for the Wylie term;
+  ;; defaults to the Wylie on the current line when available.
+
+(define-key tibetan-thesaurus-prefix-map (kbd "r")
+  'tibetan-thesaurus-reload)
+  ;; Clear the cached thesaurus index — next lookup rebuilds from
+  ;; disk.  Call after editing a zettel outside Emacs.
+
+(define-key tibetan-thesaurus-prefix-map (kbd "i")
+  'tibetan-thesaurus-initialize-from-kramer)
+  ;; One-shot init: copy the 342 Kramer glossary zettels into the
+  ;; configured `tibetan-thesaurus-directory'.  Idempotent — pre-
+  ;; existing destination files are skipped.
+
+(global-set-key (kbd "C-c u z") tibetan-thesaurus-prefix-map)
+
+;; ============================================================================
 ;; MITRA AI TRANSLATION - C-c u m / C-c u M
 ;; ============================================================================
 

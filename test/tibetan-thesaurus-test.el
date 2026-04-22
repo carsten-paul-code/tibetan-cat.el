@@ -442,5 +442,160 @@ rather than silently doing nothing — bad config should be visible."
     (should-error (tibetan-thesaurus-initialize-from-kramer)
                   :type 'user-error)))
 
+;; ============================================================================
+;; PASS 5b.2 — Create / edit thesaurus entries from analysis buffer
+;; ============================================================================
+
+(ert-deftest tibetan-thesaurus-new-entry-creates-file-with-scaffold ()
+  "`tibetan-thesaurus-new-entry' creates a fresh zettel in the
+thesaurus directory with a Kramer-shaped scaffold (header, `** Sanskrit',
+`** Tibetan', `** English', `** German' sections) and returns its
+absolute path.  The `:ID:' property is a Denote-style timestamp;
+`#+title:' holds the Sanskrit term (or a placeholder when unset);
+the `- Wylie:' field is prefilled from the argument.
+
+Uses a stubbed `current-time' so the test is deterministic."
+  (tibetan-thesaurus-test--with-tmp-dir tmp
+    (let ((tibetan-thesaurus-directory tmp))
+      (cl-letf (((symbol-function 'format-time-string)
+                 (lambda (fmt &optional _time _zone)
+                   ;; Return deterministic timestamp matching the
+                   ;; Denote `YYYYMMDDTHHMMSS' shape our code uses.
+                   (if (equal fmt "%Y%m%dT%H%M%S")
+                       "20260422T140000"
+                     ""))))
+        (let ((path (tibetan-thesaurus-new-entry "mthu")))
+          (should path)
+          (should (file-exists-p path))
+          ;; Filename: TIMESTAMP--WYLIE-SLUG__user.org
+          (should (string-match-p "20260422T140000--mthu__user\\.org\\'" path))
+          (with-temp-buffer
+            (insert-file-contents path)
+            (let ((s (buffer-string)))
+              (should (string-match-p ":ID: 20260422T140000" s))
+              ;; #+title defaults to the Wylie when no Sanskrit is
+              ;; supplied — the user fills it in on edit.
+              (should (string-match-p "^#\\+title: mthu" s))
+              ;; Structural sections present for editing.
+              (should (string-match-p "^\\*\\* Sanskrit" s))
+              (should (string-match-p "^\\*\\* Tibetan" s))
+              (should (string-match-p "^\\*\\* English" s))
+              (should (string-match-p "^\\*\\* German" s))
+              ;; Wylie field prefilled.
+              (should (string-match-p "^- Wylie: mthu" s)))))))))
+
+(ert-deftest tibetan-thesaurus-new-entry-slugifies-wylie-multi-syllable ()
+  "Multi-syllable Wylie (e.g. `rnam par shes pa') is slugified into
+a filename-safe form (spaces → dashes, apostrophes dropped) so the
+filename stays valid on case-folding filesystems.  The `- Wylie:'
+field inside the file keeps the ORIGINAL spaces for lookup."
+  (tibetan-thesaurus-test--with-tmp-dir tmp
+    (let ((tibetan-thesaurus-directory tmp))
+      (cl-letf (((symbol-function 'format-time-string)
+                 (lambda (_fmt &optional _ _) "20260422T140100")))
+        (let ((path (tibetan-thesaurus-new-entry "rnam par shes pa")))
+          (should (string-match-p
+                   "20260422T140100--rnam-par-shes-pa__user\\.org\\'"
+                   path))
+          (with-temp-buffer
+            (insert-file-contents path)
+            ;; Wylie field keeps original spaces.
+            (should (string-match-p "^- Wylie: rnam par shes pa$"
+                                    (buffer-string)))))))))
+
+(ert-deftest tibetan-thesaurus-new-entry-propagates-optional-fields ()
+  "Optional Sanskrit / English / German arguments land in the
+scaffold: `#+title:' becomes the Sanskrit term, and each `- Primary
+translation:' field is populated from the kwargs."
+  (tibetan-thesaurus-test--with-tmp-dir tmp
+    (let ((tibetan-thesaurus-directory tmp))
+      (cl-letf (((symbol-function 'format-time-string)
+                 (lambda (_fmt &optional _ _) "20260422T140200")))
+        (let ((path (tibetan-thesaurus-new-entry
+                     "mthu"
+                     :sanskrit "bala"
+                     :english "sorcery, magical force"
+                     :german "Zauberkraft")))
+          (with-temp-buffer
+            (insert-file-contents path)
+            (let ((s (buffer-string)))
+              (should (string-match-p "^#\\+title: bala" s))
+              (should (string-match-p
+                       "^- Primary translation: sorcery, magical force" s))
+              (should (string-match-p
+                       "^- Primary translation: Zauberkraft" s)))))))))
+
+(ert-deftest tibetan-thesaurus-new-entry-refuses-to-overwrite ()
+  "If a file with the same name already exists, `new-entry' raises
+a user-error rather than clobbering — protects existing edits from
+a spuriously-deterministic timestamp collision."
+  (tibetan-thesaurus-test--with-tmp-dir tmp
+    (let ((tibetan-thesaurus-directory tmp))
+      (cl-letf (((symbol-function 'format-time-string)
+                 (lambda (_fmt &optional _ _) "20260422T140300")))
+        (let ((path (expand-file-name
+                     "20260422T140300--mthu__user.org" tmp)))
+          (with-temp-file path (insert "existing content\n"))
+          (should-error (tibetan-thesaurus-new-entry "mthu")
+                        :type 'user-error)
+          ;; File content unchanged.
+          (with-temp-buffer
+            (insert-file-contents path)
+            (should (string= (buffer-string) "existing content\n"))))))))
+
+(ert-deftest tibetan-thesaurus-new-entry-requires-thesaurus-directory ()
+  "Without a configured `tibetan-thesaurus-directory', the command
+raises a user-error with clear guidance — no silent fallback."
+  (let ((tibetan-thesaurus-directory nil))
+    (should-error (tibetan-thesaurus-new-entry "mthu")
+                  :type 'user-error)))
+
+(ert-deftest tibetan-thesaurus-new-entry-invalidates-cache ()
+  "After creating a new entry, the cached index must be refreshed
+so subsequent `lookup' calls find the new zettel without requiring
+a manual `tibetan-thesaurus-reload'."
+  (tibetan-thesaurus-test--with-tmp-dir tmp
+    (let ((tibetan-thesaurus-directory tmp))
+      (cl-letf (((symbol-function 'format-time-string)
+                 (lambda (_fmt &optional _ _) "20260422T140400")))
+        ;; Prime the cache so it's populated with zero entries.
+        (tibetan-thesaurus-reload)
+        (should (null (tibetan-thesaurus-lookup "mthu")))
+        ;; Create a new entry.
+        (tibetan-thesaurus-new-entry "mthu" :english "power")
+        ;; Lookup sees it without an explicit reload.
+        (let ((hits (tibetan-thesaurus-lookup "mthu")))
+          (should hits)
+          (should (equal (plist-get (car hits) :primary-en) "power")))))))
+
+;; ============================================================================
+;; edit-at-point — resolve Wylie under point and jump to / create zettel
+;; ============================================================================
+
+(ert-deftest tibetan-thesaurus-wylie-at-point-from-detailed-dict-head ()
+  "`tibetan-thesaurus--wylie-at-point' extracts the Wylie from a
+Detailed Dictionary head line `◆ TIBETAN [WYLIE] ...' regardless
+of where on the line point is positioned."
+  (with-temp-buffer
+    (insert "◆ མཐུ [mthu] ★ (Steinert ↗)\n")
+    (goto-char (point-min))
+    (should (equal "mthu"
+                   (tibetan-thesaurus--wylie-at-point))))
+  ;; Multi-word Wylie inside brackets is returned whole.
+  (with-temp-buffer
+    (insert "◆ རྣམ་པར་ཤེས་པ [rnam par shes pa] (Steinert ↗)\n")
+    (goto-char (point-min))
+    (forward-char 5)
+    (should (equal "rnam par shes pa"
+                   (tibetan-thesaurus--wylie-at-point)))))
+
+(ert-deftest tibetan-thesaurus-wylie-at-point-no-bracketed-wylie ()
+  "On a line without a `[WYLIE]' token, `--wylie-at-point' returns
+nil — the caller falls back to prompting the user."
+  (with-temp-buffer
+    (insert "This is an ordinary line of text\n")
+    (goto-char (point-min))
+    (should (null (tibetan-thesaurus--wylie-at-point)))))
+
 (provide 'tibetan-thesaurus-test)
 ;;; tibetan-thesaurus-test.el ends here
