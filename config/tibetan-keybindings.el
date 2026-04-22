@@ -218,6 +218,22 @@
   ;; configured `tibetan-thesaurus-directory'.  Idempotent — pre-
   ;; existing destination files are skipped.
 
+(define-key tibetan-thesaurus-prefix-map (kbd "a")
+  'tibetan-thesaurus-audit-folder-display)
+  ;; Audit an analysis folder for stale segments — pop up a
+  ;; `*Thesaurus Audit*' buffer listing analyses whose LAST_ANALYZED
+  ;; date predates a thesaurus zettel's mtime for a term the segment
+  ;; contains.  Helps the user see the surface area of a recent
+  ;; thesaurus editing session before spending Claude API credits.
+
+(define-key tibetan-thesaurus-prefix-map (kbd "R")
+  'tibetan-thesaurus-rerun-affected-by-zettel)
+  ;; Re-analyse every segment under an analysis folder whose Tibetan
+  ;; Text contains the Wylie key of a specific thesaurus zettel.
+  ;; Preserves Claude sections (only the parser-side output is
+  ;; refreshed).  Prompts for both the zettel path and the analysis
+  ;; folder.
+
 (global-set-key (kbd "C-c u z") tibetan-thesaurus-prefix-map)
 
 ;; ============================================================================

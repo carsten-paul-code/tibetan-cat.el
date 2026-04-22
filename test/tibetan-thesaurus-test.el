@@ -597,5 +597,189 @@ nil — the caller falls back to prompting the user."
     (goto-char (point-min))
     (should (null (tibetan-thesaurus--wylie-at-point)))))
 
+;; ============================================================================
+;; PASS 5d — cross-document consistency audit
+;; ============================================================================
+;;
+;; When the user edits a thesaurus entry, every analysis file that
+;; referenced the term was generated AGAINST the pre-edit gloss — so
+;; its Interlinear / CAT Gloss / Word List output is now stale.  The
+;; audit tools here surface those stale analyses so the user can
+;; re-run targeted reanalysis (rather than blindly batch-regenerating
+;; the whole folder and burning Claude API tokens).
+
+(defun tibetan-thesaurus-test--write-analysis-file (path body)
+  "Write a minimal analysis file at PATH with BODY as the
+Tibetan Text.  `#+LAST_ANALYZED' is set to a deterministic
+pre-2020 date so we can craft mtime-vs-date comparisons freely."
+  (with-temp-file path
+    (insert "#+TITLE: Test Segment Analysis\n"
+            "#+LAST_ANALYZED: 2020-01-01\n\n"
+            "* Tibetan Text\n"
+            body
+            "\n\n"
+            "* Auto-Analysis\n"
+            ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+            "** Wylie Transliteration\n" body "\n\n")))
+
+(ert-deftest tibetan-thesaurus-audit-flags-analyses-older-than-zettel ()
+  "`tibetan-thesaurus-audit-folder' returns a list of analysis
+files whose `#+LAST_ANALYZED' date predates the modification time
+of a thesaurus zettel for a term that appears in the analysis's
+Tibetan Text.
+
+Crafted scenario: one analysis covers the term `mthu', the
+thesaurus has been recently edited for that term, so the analysis
+is stale.  A second analysis that covers a different term (`bdag',
+no thesaurus edit) is NOT flagged."
+  (tibetan-thesaurus-test--with-tmp-dir thes
+    (tibetan-thesaurus-test--with-tmp-dir analysis
+      ;; Stale-because-edited: mthu zettel just written.
+      (let ((mthu-zettel (expand-file-name "20260422--mthu.org" thes)))
+        (tibetan-thesaurus-test--write-zettel
+         mthu-zettel :wylie "mthu" :english "power"))
+      ;; Not edited: bdag zettel from a year ago.
+      (let ((bdag-zettel (expand-file-name "20250101--bdag.org" thes)))
+        (tibetan-thesaurus-test--write-zettel
+         bdag-zettel :wylie "bdag" :english "self")
+        ;; Back-date the mtime.  (date 2025-01-01 is earlier than
+        ;; the analysis's LAST_ANALYZED 2020-01-01 → wait, actually
+        ;; our analysis file LAST_ANALYZED is 2020-01-01 which is
+        ;; earlier than both zettels.  We need to FUTURE-DATE
+        ;; mthu's mtime and PAST-DATE bdag's.)
+        (set-file-times bdag-zettel (date-to-time "2019-01-01T00:00:00")))
+      ;; Two analysis files.  One uses mthu (stale); one uses bdag (fresh).
+      (let ((seg-mthu (expand-file-name "seg-001.org" analysis))
+            (seg-bdag (expand-file-name "seg-002.org" analysis)))
+        (tibetan-thesaurus-test--write-analysis-file
+         seg-mthu "bdag gis mthu bslabs")
+        (tibetan-thesaurus-test--write-analysis-file
+         seg-bdag "bdag gzhan mthong")
+        (let ((tibetan-thesaurus-directory thes))
+          (tibetan-thesaurus-reload)
+          (let ((stale (tibetan-thesaurus-audit-folder analysis)))
+            ;; At least the mthu analysis is flagged.
+            (should (cl-some (lambda (item)
+                               (string-suffix-p "seg-001.org"
+                                                (plist-get item :analysis-file)))
+                             stale))
+            ;; The bdag-only analysis is NOT flagged (its zettel
+            ;; predates the analysis).
+            (should-not (cl-some (lambda (item)
+                                   (string-suffix-p "seg-002.org"
+                                                    (plist-get item :analysis-file)))
+                                 stale))
+            ;; Each stale item carries the list of stale Wylie terms.
+            (let ((item (cl-find-if
+                         (lambda (i)
+                           (string-suffix-p "seg-001.org"
+                                            (plist-get i :analysis-file)))
+                         stale)))
+              (should (member "mthu" (plist-get item :stale-terms))))))))))
+
+(ert-deftest tibetan-thesaurus-audit-empty-folder-returns-empty ()
+  "An analysis folder with no files returns an empty list, not
+nil.  Callers that iterate the result safely regardless of folder
+state."
+  (tibetan-thesaurus-test--with-tmp-dir thes
+    (tibetan-thesaurus-test--with-tmp-dir analysis
+      (let ((tibetan-thesaurus-directory thes))
+        (tibetan-thesaurus-reload)
+        (let ((result (tibetan-thesaurus-audit-folder analysis)))
+          (should (listp result))
+          (should (null result)))))))
+
+(ert-deftest tibetan-thesaurus-audit-no-thesaurus-returns-empty ()
+  "When no thesaurus is configured, the audit is a no-op (empty
+list).  The stale-detection needs the index; without it there's
+nothing to compare against."
+  (tibetan-thesaurus-test--with-tmp-dir analysis
+    (let ((seg (expand-file-name "seg-001.org" analysis)))
+      (tibetan-thesaurus-test--write-analysis-file seg "bdag mthu"))
+    (let ((tibetan-thesaurus-directory nil))
+      (tibetan-thesaurus-reload)
+      (let ((result (tibetan-thesaurus-audit-folder analysis)))
+        (should (null result))))))
+
+(ert-deftest tibetan-thesaurus-segments-affected-by-zettel ()
+  "`tibetan-thesaurus-segments-affected-by-zettel' takes a
+thesaurus zettel path + analysis folder, returns the paths of
+segments whose Tibetan Text contains the zettel's Wylie key.
+Used by the targeted rerun command below."
+  (tibetan-thesaurus-test--with-tmp-dir thes
+    (tibetan-thesaurus-test--with-tmp-dir analysis
+      (let ((mthu-zettel (expand-file-name "mthu.org" thes)))
+        (tibetan-thesaurus-test--write-zettel
+         mthu-zettel :wylie "mthu" :english "power")
+        (let ((seg-001 (expand-file-name "seg-001.org" analysis))
+              (seg-002 (expand-file-name "seg-002.org" analysis))
+              (seg-003 (expand-file-name "seg-003.org" analysis)))
+          (tibetan-thesaurus-test--write-analysis-file
+           seg-001 "bdag gis mthu bslabs nas")
+          (tibetan-thesaurus-test--write-analysis-file
+           seg-002 "bdag gzhan mthong")  ;; no mthu
+          (tibetan-thesaurus-test--write-analysis-file
+           seg-003 "mthu chen yod")  ;; mthu present
+          (let ((affected (tibetan-thesaurus-segments-affected-by-zettel
+                           mthu-zettel analysis)))
+            (should (cl-some (lambda (f) (string-suffix-p "seg-001.org" f))
+                             affected))
+            (should (cl-some (lambda (f) (string-suffix-p "seg-003.org" f))
+                             affected))
+            (should-not (cl-some (lambda (f) (string-suffix-p "seg-002.org" f))
+                                 affected))))))))
+
+(ert-deftest tibetan-thesaurus-segments-affected-by-zettel-word-boundary ()
+  "Matching is word-boundary-safe: a zettel with Wylie `mthu' does
+NOT match a segment containing `mthuri' or `mthun' — those are
+distinct words whose Wylie happens to start with `mthu'."
+  (tibetan-thesaurus-test--with-tmp-dir thes
+    (tibetan-thesaurus-test--with-tmp-dir analysis
+      (let ((mthu-zettel (expand-file-name "mthu.org" thes)))
+        (tibetan-thesaurus-test--write-zettel
+         mthu-zettel :wylie "mthu" :english "power")
+        ;; Analysis uses `mthun' (a different word), not `mthu'.
+        (let ((seg (expand-file-name "seg-001.org" analysis)))
+          (tibetan-thesaurus-test--write-analysis-file
+           seg "bdag mthun pa yin")
+          (let ((affected (tibetan-thesaurus-segments-affected-by-zettel
+                           mthu-zettel analysis)))
+            (should (null affected))))))))
+
+(ert-deftest tibetan-thesaurus-rerun-affected-re-analyzes-segments ()
+  "`tibetan-thesaurus-rerun-affected-by-zettel' runs
+`tibetan-analysis-reanalyze-file' on every segment under
+ANALYSIS-DIR whose Tibetan Text contains the zettel's Wylie
+key, and returns the list of paths that were re-analysed.
+
+The re-analysis passes `:re-request-claude nil' so existing
+Claude Translation / Grammar / Particles content is preserved —
+only the parser-side output is refreshed from the new thesaurus
+gloss."
+  (tibetan-thesaurus-test--with-tmp-dir thes
+    (tibetan-thesaurus-test--with-tmp-dir analysis
+      (let ((mthu-zettel (expand-file-name "mthu.org" thes)))
+        (tibetan-thesaurus-test--write-zettel
+         mthu-zettel :wylie "mthu" :english "power")
+        (let ((seg-001 (expand-file-name "seg-001.org" analysis))
+              (seg-002 (expand-file-name "seg-002.org" analysis))
+              (calls '()))
+          (tibetan-thesaurus-test--write-analysis-file
+           seg-001 "bdag gis mthu bslabs")
+          (tibetan-thesaurus-test--write-analysis-file
+           seg-002 "bdag gzhan mthong")    ;; no mthu → untouched
+          (cl-letf (((symbol-function 'tibetan-analysis-reanalyze-file)
+                     (lambda (path &rest args)
+                       (push (cons path args) calls)
+                       `(:file ,path :ok t))))
+            (let ((rerun (tibetan-thesaurus-rerun-affected-by-zettel
+                          mthu-zettel analysis)))
+              ;; Only seg-001 (contains mthu) was re-analysed.
+              (should (= 1 (length rerun)))
+              (should (string-suffix-p "seg-001.org" (car rerun)))
+              ;; `:re-request-claude nil' passed so Claude isn't re-fired.
+              (let ((args (cdar calls)))
+                (should (equal (plist-get args :re-request-claude) nil))))))))))
+
 (provide 'tibetan-thesaurus-test)
 ;;; tibetan-thesaurus-test.el ends here

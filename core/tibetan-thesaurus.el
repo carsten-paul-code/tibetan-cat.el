@@ -535,5 +535,244 @@ destination thesaurus directory (created if absent)"))
           :source src
           :dest dest)))
 
+;; ---------------------------------------------------------------------------
+;; Pass 5d — cross-document consistency audit
+;; ---------------------------------------------------------------------------
+;;
+;; Problem: when the user edits a thesaurus zettel (changes an English
+;; gloss, corrects a Sanskrit, splits a sense), every existing analysis
+;; file that referenced the term was generated AGAINST the pre-edit
+;; state.  Its Interlinear / CAT Gloss / Word List output is now out of
+;; sync with the thesaurus.  A blind batch reanalysis of the folder
+;; works but burns Claude API tokens on the ~95% of analyses that
+;; weren't affected by the edit.
+;;
+;; Two tools here:
+;;   · `tibetan-thesaurus-audit-folder' — list analyses whose
+;;     LAST_ANALYZED date predates the mtime of a thesaurus zettel
+;;     for a term the analysis's Tibetan Text contains.
+;;   · `tibetan-thesaurus-segments-affected-by-zettel' — for a
+;;     specific zettel, find every analysis whose Tibetan Text
+;;     contains its Wylie key.  Feeds a targeted rerun command.
+
+(defun tibetan-thesaurus--parse-last-analyzed (analysis-file)
+  "Return the `#+LAST_ANALYZED:' date as an Emacs time value, or nil.
+Date format expected: `YYYY-MM-DD' (what
+`tibetan-analysis-create-file' writes).  Returns nil on malformed
+or missing header so callers can decide the fallback."
+  (when (and analysis-file (file-readable-p analysis-file))
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (goto-char (point-min))
+      (when (re-search-forward
+             "^#\\+LAST_ANALYZED:[ \t]*\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\)"
+             nil t)
+        (condition-case nil
+            (date-to-time (concat (match-string 1) "T00:00:00"))
+          (error nil))))))
+
+(defun tibetan-thesaurus--tibetan-text-of (analysis-file)
+  "Return the body of the `* Tibetan Text' section of ANALYSIS-FILE,
+or an empty string.  Used by audit/affected queries to scan
+segment content for Wylie matches."
+  (if (and analysis-file (file-readable-p analysis-file))
+      (with-temp-buffer
+        (insert-file-contents analysis-file)
+        (goto-char (point-min))
+        (if (re-search-forward "^\\* Tibetan Text[ \t]*\n" nil t)
+            (let ((start (point))
+                  (end (save-excursion
+                         (if (re-search-forward "^\\* " nil t)
+                             (line-beginning-position)
+                           (point-max)))))
+              (string-trim (buffer-substring-no-properties start end)))
+          ""))
+    ""))
+
+(defun tibetan-thesaurus--wylie-mentioned-p (wylie text)
+  "Return non-nil if WYLIE appears as a word-boundary token in TEXT.
+Matching is word-boundary-safe so a zettel for `mthu' doesn't
+spuriously claim a segment containing `mthun' / `mthuri'.  The
+bounds are defined via `\\b' — so for Wylie strings containing
+spaces (`rnam par shes pa'), each segment of the Wylie must be
+individually word-bounded.  Simpler heuristic: look for WYLIE
+surrounded by non-word chars or line edges.
+
+Uses case-sensitive matching so `DE' in metadata doesn't match
+`de' in Wylie."
+  (when (and wylie text (not (string-empty-p wylie)) (not (string-empty-p text)))
+    (let ((case-fold-search nil)
+          ;; Tibetan Wylie transcription routinely converts the syllable
+          ;; separator `་' to a space, so the analysis file's Tibetan
+          ;; Text section in Wylie form mirrors the thesaurus key
+          ;; verbatim.  Build a regex that allows the Tibetan-text
+          ;; spellings with or without trailing `་' and with either
+          ;; space or tsheg between syllables.
+          (flex-wylie (replace-regexp-in-string
+                       " +" "[ ་]+" (regexp-quote wylie))))
+      ;; Anchored left edge: start-of-buffer OR non-word char.
+      ;; Anchored right edge: end-of-buffer OR non-word char.
+      (string-match-p
+       (concat "\\(?:\\`\\|[^-a-z0-9']\\)"
+               flex-wylie
+               "\\(?:\\'\\|[^-a-z0-9']\\)")
+       text))))
+
+(defun tibetan-thesaurus-segments-affected-by-zettel (zettel-path analysis-dir)
+  "Return the list of analysis files under ANALYSIS-DIR whose
+Tibetan Text contains the Wylie key of the thesaurus ZETTEL-PATH.
+
+Drives `tibetan-thesaurus-rerun-affected' — after editing one
+zettel, this finds exactly the segments that need re-analysis
+and leaves the rest untouched.
+
+When ZETTEL-PATH is unreadable or has no `- Wylie:' field, or
+ANALYSIS-DIR doesn't exist, returns nil."
+  (let* ((entry (tibetan-thesaurus--parse-file zettel-path))
+         (wylie (and entry (plist-get entry :wylie))))
+    (when (and wylie
+               (file-directory-p (or analysis-dir "")))
+      (let ((files (directory-files
+                    analysis-dir t "\\`seg-[0-9]+.*\\.org\\'"))
+            (affected '()))
+        (dolist (f files)
+          (let ((text (tibetan-thesaurus--tibetan-text-of f)))
+            (when (tibetan-thesaurus--wylie-mentioned-p wylie text)
+              (push f affected))))
+        (nreverse affected)))))
+
+;;;###autoload
+(defun tibetan-thesaurus-audit-folder (analysis-dir)
+  "Scan ANALYSIS-DIR for analysis files whose last-analyzed date
+predates a thesaurus zettel's modification time for a term that
+appears in the analysis's Tibetan Text.  Return a list of plists:
+
+  (:analysis-file PATH
+   :stale-terms    (WYLIE1 WYLIE2 ...)
+   :zettel-paths   (Z1 Z2 ...))
+
+Each item flags one analysis as stale and names the Wylie terms
+whose thesaurus entries post-date it.  An empty list means every
+analysis in the folder is up-to-date with the current thesaurus.
+
+Returns nil when no thesaurus is configured — without an index
+there's nothing to compare against.
+
+Interactive callers use `tibetan-thesaurus-audit-folder-display'
+(below) to open a formatted results buffer; this function is
+the data-only core."
+  (when (and tibetan-thesaurus-directory
+             (file-directory-p (or analysis-dir "")))
+    (let ((index (tibetan-thesaurus--ensure-index))
+          (stale '()))
+      (when (and index (> (hash-table-count index) 0))
+        (let ((files (directory-files
+                      analysis-dir t "\\`seg-[0-9]+.*\\.org\\'")))
+          (dolist (f files)
+            (let* ((analyzed-time (tibetan-thesaurus--parse-last-analyzed f))
+                   (text (tibetan-thesaurus--tibetan-text-of f))
+                   (stale-terms '())
+                   (stale-zettels '()))
+              (when (and analyzed-time text (not (string-empty-p text)))
+                (maphash
+                 (lambda (wylie entries)
+                   (when (tibetan-thesaurus--wylie-mentioned-p wylie text)
+                     (dolist (entry entries)
+                       (let* ((path (plist-get entry :path))
+                              (mtime (and path
+                                          (file-exists-p path)
+                                          (file-attribute-modification-time
+                                           (file-attributes path)))))
+                         (when (and mtime
+                                    (time-less-p analyzed-time mtime))
+                           (cl-pushnew wylie stale-terms :test #'equal)
+                           (cl-pushnew path stale-zettels :test #'equal))))))
+                 index)
+                (when stale-terms
+                  (push (list :analysis-file f
+                              :stale-terms (nreverse stale-terms)
+                              :zettel-paths (nreverse stale-zettels))
+                        stale)))))))
+      (nreverse stale))))
+
+;;;###autoload
+(defun tibetan-thesaurus-rerun-affected-by-zettel (zettel-path analysis-dir)
+  "Re-analyse every segment under ANALYSIS-DIR whose Tibetan Text
+contains the Wylie key of ZETTEL-PATH.  Preserves Claude sections
+(`:re-request-claude nil') — only the parser-side output is
+refreshed from the new thesaurus gloss.  Returns the list of
+re-analysed file paths.
+
+Typical use: after editing a thesaurus zettel to correct a gloss,
+  M-x tibetan-thesaurus-rerun-affected-by-zettel
+gets every analysis that mentions the term picking up the new
+rendering without blindly batch-regenerating the whole folder."
+  (interactive
+   (list (read-file-name "Thesaurus zettel: "
+                         tibetan-thesaurus-directory nil t)
+         (read-directory-name "Analysis folder: ")))
+  (unless (fboundp 'tibetan-analysis-reanalyze-file)
+    (user-error "`tibetan-analysis-reanalyze-file' not available"))
+  (let* ((affected (tibetan-thesaurus-segments-affected-by-zettel
+                    zettel-path analysis-dir))
+         (n (length affected))
+         (i 0)
+         (done '()))
+    (when (called-interactively-p 'any)
+      (message "Re-analysing %d segment(s) affected by %s"
+               n (file-name-nondirectory zettel-path)))
+    (dolist (f affected)
+      (cl-incf i)
+      (when (called-interactively-p 'any)
+        (message "[%d/%d] %s" i n (file-name-nondirectory f)))
+      (condition-case err
+          (progn
+            (tibetan-analysis-reanalyze-file f :re-request-claude nil)
+            (push f done))
+        (error
+         (message "Rerun failed for %s: %s"
+                  (file-name-nondirectory f)
+                  (error-message-string err)))))
+    (when (called-interactively-p 'any)
+      (message "Thesaurus rerun complete: %d/%d succeeded"
+               (length done) n))
+    (nreverse done)))
+
+;;;###autoload
+(defun tibetan-thesaurus-audit-folder-display (analysis-dir)
+  "Interactive wrapper around `tibetan-thesaurus-audit-folder' that
+opens a formatted *Thesaurus Audit* buffer listing every stale
+analysis and the Wylie terms that triggered the flag.  Users
+invoke this after a thesaurus editing session to see the
+surface area of the change."
+  (interactive
+   (list (read-directory-name "Analysis folder to audit: ")))
+  (let ((stale (tibetan-thesaurus-audit-folder analysis-dir))
+        (buf (get-buffer-create "*Thesaurus Audit*")))
+    (with-current-buffer buf
+      (read-only-mode -1)
+      (erase-buffer)
+      (insert (format "Thesaurus audit — %s\n\n" analysis-dir))
+      (if (null stale)
+          (insert "All analyses are up-to-date with the current thesaurus.\n")
+        (insert (format "%d stale analysis file(s):\n\n"
+                        (length stale)))
+        (dolist (item stale)
+          (insert (format "  %s\n"
+                          (file-name-nondirectory
+                           (plist-get item :analysis-file))))
+          (insert (format "    stale terms: %s\n"
+                          (mapconcat #'identity
+                                     (plist-get item :stale-terms)
+                                     ", ")))
+          (insert "\n"))
+        (insert "\nTo refresh one analysis: M-x tibetan-analysis-reanalyze-file\n")
+        (insert "To refresh every analysis for one zettel: \n")
+        (insert "  M-x tibetan-thesaurus-rerun-affected-by-zettel\n"))
+      (read-only-mode 1)
+      (goto-char (point-min)))
+    (display-buffer buf)
+    stale))
+
 (provide 'tibetan-thesaurus)
 ;;; tibetan-thesaurus.el ends here
