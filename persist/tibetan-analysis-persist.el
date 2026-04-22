@@ -82,6 +82,30 @@ only affected the next time they are regenerated."
   "Face for roman (non-Tibetan) text in analysis buffers."
   :group 'tibetan-cat)
 
+(defface tibetan-analysis-case-particle-face
+  '((((class color) (background light)) :foreground "magenta3" :weight bold)
+    (((class color) (background dark))  :foreground "magenta1" :weight bold)
+    (t :inherit org-verbatim))
+  "Face for case-particle markers in the Particle Map.
+Applied by remapping `org-verbatim' in analysis buffers so that
+`=CASE=' wrappings used for genitive / ergative / terminative /
+dative / locative / topic / comitative particles stand out visually
+(magenta, bold) alongside the orange `~CONVERB~' wrappings.
+Customise to taste — the default magenta matches common Buddhist-
+studies classroom convention for case marking."
+  :group 'tibetan-cat)
+
+(defface tibetan-analysis-converb-particle-face
+  '((((class color) (background light)) :foreground "dark orange" :weight bold)
+    (((class color) (background dark))  :foreground "orange1" :weight bold)
+    (t :inherit org-code))
+  "Face for converb markers in the Particle Map.
+Applied by remapping `org-code' in analysis buffers so that
+`~CONVERB~' wrappings (ablative, coordinative, simultaneous,
+causal, concessive converbs) are visually distinct from case
+markers.  Customise to taste."
+  :group 'tibetan-cat)
+
 (defvar-local tibetan-analysis--faces-setup nil
   "Non-nil if faces have already been set up for this buffer.")
 
@@ -89,17 +113,25 @@ only affected the next time they are regenerated."
   "Setup faces for analysis buffers.
 Ensures Tibetan text remains readable at all heading levels and in
 verbatim/code blocks which otherwise might use smaller fonts.
-Only applies once per buffer to prevent accumulation."
+Also differentiates case particles (magenta) from converbs (orange)
+in the Particle Map by remapping `org-verbatim' and `org-code'
+respectively.  Only applies once per buffer to prevent accumulation."
   (unless tibetan-analysis--faces-setup
     ;; Ensure headings don't get too small (level 3+ used for dictionary entries)
     (face-remap-add-relative 'org-level-1 :height 1.1)
     (face-remap-add-relative 'org-level-2 :height 1.05)
     (face-remap-add-relative 'org-level-3 :height 1.0)  ; Keep readable for Tibetan headings
 
-    ;; Ensure verbatim (=...=) and code (~...~) don't shrink - they contain Tibetan particles
-    ;; Use variable-pitch to allow proper Tibetan font rendering
-    (face-remap-add-relative 'org-verbatim :height 1.0)
-    (face-remap-add-relative 'org-code :height 1.0)
+    ;; Particle-map highlighting: `=CASE=' (verbatim) → magenta,
+    ;; `~CONVERB~' (code) → orange.  The height :1.0 remap is merged
+    ;; into the same face-remap so existing users get both effects
+    ;; (readable size + color) in one setup call.
+    (face-remap-add-relative 'org-verbatim
+                             :height 1.0
+                             :inherit 'tibetan-analysis-case-particle-face)
+    (face-remap-add-relative 'org-code
+                             :height 1.0
+                             :inherit 'tibetan-analysis-converb-particle-face)
 
     (setq tibetan-analysis--faces-setup t)))
 
@@ -1345,20 +1377,31 @@ inline markup."
                              "ste" "te" "de"               ; sequential
                              "nas"))                        ; after-converb
          (final-particles '("ro" "so" "to" "no" "do" "'o" "ngo"))
-         (result wylie))
+         (result wylie)
+         ;; Force case-sensitive matching for the particle passes.
+         ;; Without this, the lowercase regex `\bnas\b' (case-
+         ;; particle pass) also matches the already-uppercased `NAS'
+         ;; produced by the converb pass (or vice versa) and wraps
+         ;; the result into nonsense `=~NAS~=' soup.  Case-folding
+         ;; defaults to t in batch; explicitly binding nil here
+         ;; keeps the passes independent.
+         (case-fold-search nil))
 
-    ;; Mark case particles with =PARTICLE=
-    (dolist (p case-particles)
-      (setq result (replace-regexp-in-string
-                    (format "\\b%s\\b" (regexp-quote p))
-                    (format "=%s=" (upcase p))
-                    result)))
-
-    ;; Mark converb particles with ~PARTICLE~
+    ;; Mark converb particles first (`~PARTICLE~').  Converbs are
+    ;; more functionally salient for V+nas / V+ste chains; doing
+    ;; them first means a bare `nas' is never mis-wrapped as a
+    ;; case particle before the converb pass sees it.
     (dolist (p converb-particles)
       (setq result (replace-regexp-in-string
                     (format "\\b%s\\b" (regexp-quote p))
                     (format "~%s~" (upcase p))
+                    result)))
+
+    ;; Mark case particles with `=PARTICLE='.
+    (dolist (p case-particles)
+      (setq result (replace-regexp-in-string
+                    (format "\\b%s\\b" (regexp-quote p))
+                    (format "=%s=" (upcase p))
                     result)))
 
     ;; Mark sentence-final particles with *PARTICLE*
@@ -1734,15 +1777,13 @@ function Claude identified.  When passed, each Bialek line gains a
 specific sub-function heading and the matching Portfolio snippet
 text.  When nil, falls back to the compact parser-only list."
   (insert "** Grammar\n")
-  (insert "Three angles on the grammar of this segment: a visual\n")
-  (insert "particle map, a compact reference of each particle\n")
-  (insert "with its Portfolio section, and — in `** Claude Grammar'\n")
-  (insert "below — a prose summary of the clause-chain.\n\n")
+  (insert "Particles in this segment.  See `** Claude Grammar' below for\n")
+  (insert "the prose reading.\n\n")
   ;; ------------------------------------------------------------------
   ;; Sub-section 1: Particle Map (annotated Wylie)
   ;; ------------------------------------------------------------------
   (insert "*** Particle Map\n")
-  (insert "=CASE=: case marker · ~CONVERB~: converbial · Ø: zero-marked argument\n\n")
+  (insert "=CASE= (magenta) · ~CONVERB~ (orange) · Ø zero-marked\n\n")
   (let ((annotated-wylie (tibetan-analysis--generate-particle-map
                           tibetan-text particles verbs)))
     (insert annotated-wylie)
@@ -1797,14 +1838,24 @@ text.  When nil, falls back to the compact parser-only list."
                              (fboundp 'tibetan-interlinear-portfolio-function-snippet)
                              (tibetan-interlinear-portfolio-function-snippet
                               portfolio-key sub-id))))
-          ;; Header line: particle [wylie] in «word [wylie]» — TYPE [§X.Y]
-          (insert (format "- %s in «%s» — %s"
-                          (tibetan-analysis--format-word-with-wylie particle)
-                          (tibetan-analysis--format-word-with-wylie word)
-                          type))
-          (when portfolio
-            (insert (format "  [%s]" portfolio)))
-          (insert "\n")
+          ;; Header line.  Two shapes:
+          ;;   · standalone (word == particle):   PARTICLE · TYPE [§X.Y]
+          ;;   · clitic (word contains particle): WORD · PARTICLE · TYPE [§X.Y]
+          ;; The « » wrapping and the double word-in-word pattern of
+          ;; Pass 6b read as noise when the word IS just the particle
+          ;; (`ནས [nas] in «ནས [nas]»').  Compact format drops that.
+          (let ((standalone-p (equal word particle)))
+            (insert (format "- %s"
+                            (tibetan-analysis--format-word-with-wylie
+                             (if standalone-p particle word))))
+            (unless standalone-p
+              (insert (format " · %s"
+                              (tibetan-analysis--format-word-with-wylie
+                               particle))))
+            (insert (format " · %s" type))
+            (when portfolio
+              (insert (format "  [%s]" portfolio)))
+            (insert "\n"))
           ;; Claude-assigned sub-function + Portfolio snippet, if any.
           (cond
            ;; Full hit: sub-ID + Portfolio snippet (self-contained).
@@ -2161,23 +2212,48 @@ it with `let' around the call when Claude data is available."
                                   (t gram-role)))
                            ;; Primary lookup: route through the SAME multi-source
                            ;; pipeline that the Detailed Dictionary section uses,
-                           ;; taking the first entry.  This is the Resources-first
-                           ;; priority chain — without it, the Word/Particle List
-                           ;; would silently pick a Steinert/IvesWaldo gloss while
-                           ;; the Detailed Dictionary correctly shows the curated
-                           ;; Resources entry, leaving the two sections out of
-                           ;; lock-step.  Falls back to the stripped root form
-                           ;; (e.g. སླེབ་པའི → སླེབ་པ).
+                           ;; taking the HIGHEST-RANKED entry across both the
+                           ;; full word and its stem form.  This is the
+                           ;; Resources-first priority chain.
+                           ;;
+                           ;; Bug fixed 2026-04-22: the previous implementation
+                           ;; was `(or word-lookup stem-lookup)', which
+                           ;; short-circuits on any word-level hit including a
+                           ;; low-rank Bundled / DharmaMitra entry.  For
+                           ;; `mthu'i' the word-level lookup returned a Bundled
+                           ;; hit (rank 9) so the stem lookup (`mthu' → Resources
+                           ;; rank 2, Hopkins rank 4, ...) was never tried, and
+                           ;; the Interlinear Gloss silently dropped the curated
+                           ;; German // English gloss + ★ that the Detailed
+                           ;; Dictionary correctly surfaced.
+                           ;;
+                           ;; Fix: run BOTH lookups, concatenate, re-apply the
+                           ;; ranker, pick the top.  Stem entries dominate for
+                           ;; particle-bearing words (`mthu'i' → `mthu' wins);
+                           ;; full-word entries dominate for compounds with no
+                           ;; strippable suffix (`grogs po' → `grogs po' wins,
+                           ;; because `strip-particles' leaves it alone and the
+                           ;; second lookup is a no-op).
                            (detailed-entry
                             (condition-case nil
                                 (when (fboundp 'tibetan-vocab-multisource-entries)
-                                  (or (car (tibetan-vocab-multisource-entries
-                                            word-clean))
-                                      (and root-form
-                                           (not (string-empty-p root-form))
-                                           (not (string= root-form word-clean))
-                                           (car (tibetan-vocab-multisource-entries
-                                                 root-form)))))
+                                  (let* ((word-entries
+                                          (tibetan-vocab-multisource-entries
+                                           word-clean))
+                                         (stem-entries
+                                          (and root-form
+                                               (not (string-empty-p root-form))
+                                               (not (string= root-form
+                                                             word-clean))
+                                               (tibetan-vocab-multisource-entries
+                                                root-form)))
+                                         (combined
+                                          (append word-entries stem-entries)))
+                                    (when combined
+                                      (if (fboundp 'tibetan-vocab--sort-entries-by-rank)
+                                          (car (tibetan-vocab--sort-entries-by-rank
+                                                combined))
+                                        (car combined)))))
                               (error nil)))
                            ;; Multi-source labels Resources as "Resources (provided)";
                            ;; downstream checks need to recognise both that and the

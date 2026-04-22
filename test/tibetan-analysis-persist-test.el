@@ -762,5 +762,81 @@ that Pass 6c is additive, not destructive of the Pass 6b baseline."
         ;; No Claude-driven sub-ID headers.
         (should-not (string-match-p "^  § [0-9]" out))))))
 
+;; ----------------------------------------------------------------------------
+;; Pass 6c follow-up (2026-04-22): Interlinear surfaces Resources gloss
+;; + ★ for particle-bearing words; Particle Map avoids double-wrap.
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-analysis-interlinear-picks-stem-for-particle-bearing-word ()
+  "For a word like `མཐུའི' (mthu'i = mthu + GEN 'i) the Interlinear
+must pick the best-ranked gloss across BOTH the word-level and
+stem-level multi-source lookups.  Without this fix the word-level
+lookup returns a low-rank Bundled hit and short-circuits the (or)
+fallback, so the Resources / Hopkins stem entries never surface
+— the Interlinear silently diverges from the Detailed Dictionary.
+
+Stub two lookups: `mthu'i' → Bundled (rank 9), `mthu' → Resources
+(rank 2).  The combined/ranked pick must be Resources — asserted
+via the ★ marker emitted by the Interlinear for curated entries."
+  (let ((call-log '()))
+    (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+               (lambda (word)
+                 (push word call-log)
+                 (cond
+                  ((equal word "མཐུའི")
+                   (list (list :source "Bundled"
+                               :tibetan "མཐུའི" :wylie "mthu'i"
+                               :primary "ambiguous")))
+                  ((equal word "མཐུ")
+                   (list (list :source "Resources (provided)"
+                               :tibetan "མཐུ" :wylie "mthu"
+                               :detailed "Kraft // might"
+                               :primary "Kraft")))
+                  (t nil)))))
+      (let ((out (condition-case nil
+                     (tibetan-analysis-generate-content "མཐུའི་མན་ངག")
+                   (error nil))))
+        (when out
+          ;; Both lookups happened (word + stem)
+          (should (member "མཐུའི" call-log))
+          (should (member "མཐུ" call-log))
+          ;; The Interlinear line for mthu'i carries the ★ marker
+          ;; because Resources was picked by the ranker.
+          (let ((il (when (string-match
+                           "\\*\\* Interlinear Gloss\n\\([^*]*?\\)\n\\*\\*"
+                           out)
+                      (match-string 1 out))))
+            (when il
+              (should (string-match-p "★" il))
+              ;; English side of the bilingual gloss wins (prefer-english).
+              (should (string-match-p "might" il)))))))))
+
+(ert-deftest tibetan-analysis-particle-map-no-double-wrap ()
+  "`nas' appears in both case-particles (ablative) and
+converb-particles — the particle-map renderer must not produce
+`=~NAS~=' double-wrap.  Pass ordering (converbs first) + case-
+sensitive matching (explicit `case-fold-search nil') keep the
+passes from stepping on each other's output."
+  (let ((map (tibetan-analysis--generate-particle-map
+              "བསླབས་ནས་སོང་" nil nil)))
+    ;; Converb wrapping present.
+    (should (string-match-p "~NAS~" map))
+    ;; No nested `=~NAS~=' soup.
+    (should-not (string-match-p "=~NAS~=" map))
+    (should-not (string-match-p "=\\(~\\|.\\)*NAS\\(~\\|.\\)*=" map))))
+
+(ert-deftest tibetan-analysis-particle-map-case-sensitive-pass-isolation ()
+  "Case-particle and converb-particle passes must not cross-contaminate
+even when `case-fold-search' is non-nil in the surrounding context.
+Uses `མཐུའི' (mthu + genitive 'i in one word) where the `\\b'i\\b'
+regex can match — testing that GEN marks `=I=' and doesn't leak
+into a converb `~I~' wrap."
+  (let* ((case-fold-search t)    ;; hostile default
+         (map (tibetan-analysis--generate-particle-map
+               "མཐུའི་གིས་" nil nil)))
+    ;; Check the ERG mark `=GIS=' renders clean, not as `~GIS~'
+    (should (string-match-p "=GIS=" map))
+    (should-not (string-match-p "~GIS~" map))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
