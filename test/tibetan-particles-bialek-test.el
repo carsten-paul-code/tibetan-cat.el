@@ -57,6 +57,110 @@
     (should (listp result))
     (should (> (length result) 0))))
 
+;; ----------------------------------------------------------------------------
+;; Regression — single-char ergative `s' on vowel-final stems
+;; ----------------------------------------------------------------------------
+;;
+;; Reproduced 2026-04-22 on Milarepa seg-30: Claude's `## Particles'
+;; tagged `des, s, 1.3.1, instrumental' but the Grammar section's
+;; `*** Particles in This Segment' showed no entry for `des' because
+;; `tibetan-analyze-cases-bialek' did not detect the single-char
+;; ergative `s' on vowel-final stems.  Multi-char forms (`gis',
+;; `kyis', `gyis') fire correctly; the contracted single-char form is
+;; the gap.
+;;
+;; Bialek Portfolio §1.3.1 (Ergative/Instrumental) explicitly teaches
+;; the single-char form — `de + s' → `des', `kho + s' → `khos' — as
+;; the vowel-final variant of ergative marking.  The analyser must
+;; match it without over-matching verb past stems like `byas'
+;; (past of byed: `bya' + `s' is NOT a V-s converb, it's the
+;; inflected past) or consonant-final words ending in `-Cs' that
+;; aren't morphologically `stem + s'.
+
+(defun tibetan-bialek-test--ergative-types (result)
+  "Return the list of unique case-type labels in RESULT that match
+ERGATIVE / INSTRUMENTAL."
+  (let ((types '()))
+    (dolist (item result)
+      (let ((type (nth 2 item)))
+        (when (and type (string-match-p "ERGATIVE\\|INSTRUMENTAL" type))
+          (push type types))))
+    (delete-dups types)))
+
+(ert-deftest tibetan-analyze-cases-bialek-ergative-s-vowel-final-stem ()
+  "Single-char ergative `s' on vowel-final stems (`des', `khos',
+`bus', `mos', `mthus') must be detected as ERGATIVE/INSTRUMENTAL.
+Regression guard for the seg-30 `des' bug where Claude's tagged
+instrumental function landed in `*** Claude Particles' but had no
+bialek entry in the Grammar section to attach under."
+  (dolist (word '("དེས"      ;; de + s    (demonstrative)
+                  "ཁོས"       ;; kho + s   (3rd-person pronoun)
+                  "བུས"       ;; bu + s    (child)
+                  "མོས"       ;; mo + s    (3rd-person feminine / she)
+                  "མཐུས"))    ;; mthu + s  (power)
+    (let* ((result (tibetan-analyze-cases-bialek word))
+           (erg (tibetan-bialek-test--ergative-types result)))
+      (should erg)
+      ;; Useful ancillary: the bialek entry should name the full word
+      ;; in its `word' slot so the Grammar renderer can anchor a
+      ;; Claude tuple on it.
+      (let ((words (mapcar (lambda (item) (nth 1 item)) result)))
+        (should (member word words))))))
+
+(ert-deftest tibetan-analyze-cases-bialek-ergative-s-does-not-match-verb-past-stems ()
+  "Past / imperative verb stems that happen to end in `s' must NOT
+be mis-detected as ergative case.  The Hill DB guard (identical in
+spirit to the fix for `bslabs' in `analyze-converbs-bialek' from
+2026-04-22) prevents `byas' (past of byed) / `mdzad' / `phyag'-
+style stems from getting a spurious ERG tag."
+  (dolist (verb-stem '("བྱས"       ;; past of བྱེད (byed)
+                       "གསུངས"     ;; past of གསུང (gsung)
+                       "སྨྲས"       ;; past of སྨྲ (smra)
+                       "བསླབས"))    ;; past of སློབ (slob)
+    (let* ((result (tibetan-analyze-cases-bialek verb-stem))
+           (erg (tibetan-bialek-test--ergative-types result)))
+      (should-not erg))))
+
+(ert-deftest tibetan-analyze-cases-bialek-ergative-s-preserves-distinct-particles ()
+  "Stripping a single-char ergative `s' must not steal particles
+that already have a more specific rule — `las' stays ABLATIVE, not
+ergative; `nas' stays its own thing (ablative converb path);
+`ཀྱིས' / `གིས' / `གྱིས' keep their ergative tag via the
+multi-char rule, not the single-s rule."
+  ;; ལས — ablative, NOT ergative
+  (let* ((result (tibetan-analyze-cases-bialek "ལས"))
+         (types  (mapcar (lambda (item) (nth 2 item)) result)))
+    (should (cl-some (lambda (type) (string-match-p "ABLATIVE" type)) types))
+    (should-not (cl-some (lambda (type)
+                           (and type (string-match-p "ERGATIVE" type)))
+                         types)))
+  ;; Multi-char ergative forms — existing rule still works.
+  (dolist (word '("བདག་གིས" "ལྷ་ཀྱིས" "མོ་གྱིས"))
+    (let* ((result (tibetan-analyze-cases-bialek word))
+           (erg (tibetan-bialek-test--ergative-types result)))
+      (should erg))))
+
+(ert-deftest tibetan-analyze-cases-bialek-ergative-s-rejects-bare-consonant-s ()
+  "Words where the pre-`s' char is itself a consonant (so the stem
+would be Wylie-ill-formed, not a real word) must NOT be flagged
+ergative.  `sems' / `mams' / `bus' of the `bus'=child case all
+need stem VOWEL-final; a single `s' at the end after `m' or `s'
+is part of the root, not a clitic.
+
+This is the over-strip-prevention half of the fix."
+  ;; `sems' = mind.  Stripping `s' → `sem' which isn't a word
+  ;; and `sems' itself is a noun lemma.  Should NOT be ergative.
+  (let* ((result (tibetan-analyze-cases-bialek "སེམས"))
+         (erg (tibetan-bialek-test--ergative-types result)))
+    (should-not erg))
+  ;; `lus' = body.  Strip → `lu' — not a word.  Should NOT be
+  ;; ergative.  Edge case: `lus' does end in a vowel under Wylie
+  ;; (`u' vowel before `s').  The safety is that `lus' is itself a
+  ;; known noun lemma, and the detector prefers the lemma reading.
+  (let* ((result (tibetan-analyze-cases-bialek "ལུས"))
+         (erg (tibetan-bialek-test--ergative-types result)))
+    (should-not erg)))
+
 (ert-deftest tibetan-analyze-cases-bialek-genitive ()
   "Test detection of genitive case particles."
   (let ((result (tibetan-analyze-cases-bialek "པདྨའི")))

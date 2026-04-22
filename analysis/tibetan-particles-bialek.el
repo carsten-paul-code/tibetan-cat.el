@@ -35,6 +35,34 @@ Returns empty string if indices are out of range or invalid."
             "")))
     (error "")))
 
+(defconst tibetan-particles-bialek--single-s-erg-stems
+  '("དེ"     ;; de — demonstrative "that"
+    "འདི"    ;; 'di — demonstrative "this"
+    "ཁོ"     ;; kho — 3rd person pronoun "he"
+    "མོ"     ;; mo — 3rd person pronoun "she"
+    "ང"      ;; nga — 1st person pronoun "I"
+    "སུ"     ;; su — interrogative "who"
+    "བུ"     ;; bu — common noun "son/child"
+    "མཐུ")   ;; mthu — common noun "power"
+  "Whitelist of Tibetan stems that canonically take the single-char
+ergative `ས' in Classical Tibetan (Bialek Portfolio §1.3.1).
+
+Used by `tibetan-analyze-cases-bialek' to distinguish morphological
+splits (`des' = `de' + `s' — ergative) from lemmas that happen to
+end in `-Vs' (`lus' body, `sems' mind, `dus' time, `nus' ability
+— all consonant-final syllables where the final `s' is part of
+the root, NOT a clitic).
+
+Design rationale (2026-04-22): naïve heuristics (\"stem is in
+vocab\", \"stem ends in a vowel letter\") produce false positives
+because `ལ' / `ལུ' / `ན' live in `tibetan-lookup-word' as letter
+or short-lemma entries.  A whitelist is more restrictive but
+predictable — the canonical pronoun/demonstrative set is small,
+stable, and covers the 95% case.  Extend this list when a genuine
+classical-Tibetan single-s ergative surfaces on a stem not listed
+here; add a test in `tibetan-particles-bialek-test.el' first (per
+CLAUDE.md rule 2 \"test first — regression-first for bugs\").")
+
 ;; ============================================================================
 ;; BIALEK GRAMMAR ANALYSIS - CASE PARTICLES
 ;; ============================================================================
@@ -48,7 +76,13 @@ Returns list of (particle word case function translation-guide bialek-ref)."
     (dolist (word words)
       (cond
        ;; ========== ERGATIVE/INSTRUMENTAL (agent OR instrument/means) ==========
-       ;; Note: Same particles mark both agent (ergative) and instrument/means
+       ;; Note: Same particles mark both agent (ergative) and instrument/means.
+       ;; Portfolio §1.3.1 teaches two shapes: multi-char `gis'/`kyis'/`gyis'/
+       ;; `'is'/`yis' after consonant-final stems, and single-char `s' after
+       ;; vowel-final stems (`de + s' → `des', `kho + s' → `khos').  The two
+       ;; shapes are handled by two separate cond branches here — the multi-
+       ;; char one is unambiguous, the single-char one needs guards against
+       ;; mis-stripping verb past stems and non-clitic consonant-final forms.
        ((or (string-suffix-p "ཀྱིས" word) (string-suffix-p "གྱིས" word)
             (string-suffix-p "གིས" word) (string-suffix-p "འིས" word) (string-suffix-p "ཡིས" word)
             (string= "ས" word))  ; Standalone ས
@@ -74,6 +108,53 @@ Returns list of (particle word case function translation-guide bialek-ref)."
                        "Bialek: Ergative/Instrumental (standalone)"
                        "Portfolio §1.3 (Ergative/Instrumental)")
                   analysis))))
+
+       ;; ========== ERGATIVE: single-char `s' on vowel-final stems ==========
+       ;; Portfolio §1.3.1: `de + s' → `des', `kho + s' → `khos', `bu + s' →
+       ;; `bus', `mthu + s' → `mthus'.  This is the contracted form of the
+       ;; ergative after vowel-final stems (in contrast to the multi-char
+       ;; `gis'/`kyis'/`gyis' after consonant-final stems handled above).
+       ;;
+       ;; The hard part is telling `des' (morphological split) apart from
+       ;; lemmas that happen to end in `-Vs' (`lus' body, `sems' mind,
+       ;; `dus' time, `nus' ability, `rus' bone, ...).  Naïve "stem in
+       ;; vocab" fails because `lu' is a known Tibetan letter/lemma.
+       ;; The safe approach is a WHITELIST of stems that canonically
+       ;; take single-s ergative in Classical Tibetan — demonstratives
+       ;; and pronouns primarily, plus a short list of common short
+       ;; vowel-final nouns.  Grow as genuine use-cases surface.
+       ;;
+       ;; Guards beyond the whitelist:
+       ;;   · Word must NOT be in the Hill verb DB (`byas' etc. are
+       ;;     past inflections, not clitic splits).
+       ;;   · The multi-char ergative branch above handles `gis' /
+       ;;     `kyis' / `gyis' etc., so bdag-gis never reaches here.
+       ;;   · The elative/ablative branch later handles `las' and `nas',
+       ;;     but cond falls through in order — we must exclude them
+       ;;     explicitly here so the ERG branch doesn't steal them.
+       ((and (string-suffix-p "ས" word)
+             (> (length word) 1)
+             ;; Not a known inflected verb form.
+             (not (and (fboundp 'tibetan-verb-lookup)
+                       (ignore-errors (tibetan-verb-lookup word))))
+             ;; Exclude the two particles that belong to the ABL branch
+             ;; later in this cond; ordering would otherwise mis-tag them.
+             (not (member word '("ལས" "ནས")))
+             ;; Stem must be on the whitelist of canonical single-s
+             ;; ergative-taking stems.
+             (let ((stem (tibetan-particles-safe-substring
+                          word 0 (- (length word) 1))))
+               (and (> (length stem) 0)
+                    (member stem
+                            tibetan-particles-bialek--single-s-erg-stems))))
+        (let ((stem (tibetan-particles-safe-substring
+                     word 0 (- (length word) 1))))
+          (push (list "ས" word "ERGATIVE/INSTRUMENTAL (ERG/INST)"
+                      (format "Marks '%s' as AGENT or INSTRUMENT/MEANS (single-char ergative)" stem)
+                      (format "Translation: 'by %s' (agent) or 'by means of %s' (instrument)" stem stem)
+                      "Bialek: vowel-final stem + ergative ས"
+                      "Portfolio §1.3.1 (Ergative/Instrumental, single-char)")
+                analysis)))
 
        ;; ========== GENITIVE (possession, modification) ==========
        ((or (string-suffix-p "ཀྱི" word) (string-suffix-p "གྱི" word)
