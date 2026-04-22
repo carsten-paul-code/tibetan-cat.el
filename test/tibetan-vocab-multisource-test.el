@@ -449,5 +449,106 @@ particles (or they'd lose their dictionary entries)."
   (should-not (tibetan-analysis--detailed-dict-is-particle-p "བྱང་ཆུབ"))
   (should-not (tibetan-analysis--detailed-dict-is-particle-p "སངས་རྒྱས")))
 
+;; ----------------------------------------------------------------------------
+;; Pass 5a: dictionary ranker, Sanskrit finder, term-anchor slug
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-vocab-rank-source-orders-layers ()
+  "Source ranker returns a strict ordering for the 10 documented layers,
+independent of corpus setting."
+  (skip-unless (fboundp 'tibetan-vocab-rank-source))
+  (let ((tibetan-vocab--corpus nil))
+    (should (= 1  (tibetan-vocab-rank-source "Thesaurus")))
+    (should (= 2  (tibetan-vocab-rank-source "Resources/YBh")))
+    (should (= 2  (tibetan-vocab-rank-source "Custom")))
+    (should (= 4  (tibetan-vocab-rank-source "Steinert/01-Hopkins2015")))
+    (should (= 5  (tibetan-vocab-rank-source "Steinert/43-84000Dict")))
+    (should (= 6  (tibetan-vocab-rank-source "Steinert/02-RangjungYeshe")))
+    (should (= 7  (tibetan-vocab-rank-source "Rangjung Yeshe")))
+    (should (= 8  (tibetan-vocab-rank-source "Steinert/08-IvesWaldo")))
+    (should (= 9  (tibetan-vocab-rank-source "Bundled")))
+    (should (= 10 (tibetan-vocab-rank-source "DharmaMitra")))
+    (should (= 99 (tibetan-vocab-rank-source "SomethingUnknown")))
+    (should (= 99 (tibetan-vocab-rank-source nil)))))
+
+(ert-deftest tibetan-vocab-rank-source-promotes-corpus-to-rank-3 ()
+  "When `tibetan-vocab--corpus' matches an entry in
+`tibetan-vocab--corpus-source-map', the corresponding Steinert
+sub-dictionary is promoted to rank 3 (between user-curated and
+Hopkins2015)."
+  (skip-unless (fboundp 'tibetan-vocab-rank-source))
+  (let ((tibetan-vocab--corpus "Yogacarabhumi"))
+    (should (= 3 (tibetan-vocab-rank-source
+                  "Steinert/22-Yoghacharabhumi-glossary")))
+    ;; Without corpus matching, same source falls back to "other Steinert"
+    (should (= 4 (tibetan-vocab-rank-source "Steinert/01-Hopkins2015"))))
+  (let ((tibetan-vocab--corpus nil))
+    (should (= 8 (tibetan-vocab-rank-source
+                  "Steinert/22-Yoghacharabhumi-glossary"))))
+  ;; Unknown corpus identifier does not crash, just no promotion
+  (let ((tibetan-vocab--corpus "NotAKnownCorpus"))
+    (should (= 8 (tibetan-vocab-rank-source
+                  "Steinert/22-Yoghacharabhumi-glossary")))))
+
+(ert-deftest tibetan-vocab-sort-entries-by-rank-is-stable ()
+  "The sorter returns entries in rank order and preserves original order
+for ties."
+  (skip-unless (fboundp 'tibetan-vocab--sort-entries-by-rank))
+  (let* ((entries
+          (list (list :source "DharmaMitra" :tibetan "a")
+                (list :source "Steinert/01-Hopkins2015" :tibetan "b")
+                (list :source "Bundled" :tibetan "c")
+                (list :source "Resources/x" :tibetan "d")
+                (list :source "Steinert/02-RangjungYeshe" :tibetan "e")))
+         (sorted (tibetan-vocab--sort-entries-by-rank entries)))
+    (should (equal (mapcar (lambda (e) (plist-get e :tibetan)) sorted)
+                   '("d" "b" "e" "c" "a")))))
+
+(ert-deftest tibetan-vocab-find-sanskrit-rejects-wylie-crossrefs ()
+  "`tibetan-vocab-find-sanskrit' walks entries and returns the first
+Sanskrit that passes the diacritic filter; plain Wylie-looking strings
+are rejected."
+  (skip-unless (and (fboundp 'tibetan-vocab-find-sanskrit)
+                    (fboundp 'tibetan-vocab--looks-like-sanskrit-p)))
+  ;; Wylie cross-ref masquerading as Sanskrit is skipped in favour of
+  ;; the real IAST entry below it.
+  (should (equal "ātman"
+                 (tibetan-vocab-find-sanskrit
+                  '((:source "Bundled"  :sanskrit "bdag nyid")
+                    (:source "Steinert/01-Hopkins2015"
+                     :sanskrit "ātman")))))
+  ;; Nothing plausible → nil.
+  (should (null (tibetan-vocab-find-sanskrit
+                 '((:source "Bundled" :sanskrit "")
+                   (:source "Bundled" :sanskrit nil)))))
+  ;; Devanāgarī is accepted.
+  (should (equal "बुद्ध"
+                 (tibetan-vocab-find-sanskrit
+                  '((:source "Bundled" :sanskrit "बुद्ध"))))))
+
+(ert-deftest tibetan-vocab-best-entry-returns-top-rank ()
+  "`tibetan-vocab-best-entry' is shorthand for (car sort)."
+  (skip-unless (fboundp 'tibetan-vocab-best-entry))
+  (let* ((entries (list (list :source "Bundled"    :tibetan "a")
+                        (list :source "Resources/x":tibetan "b")
+                        (list :source "DharmaMitra":tibetan "c")))
+         (best (tibetan-vocab-best-entry entries)))
+    (should (equal "b" (plist-get best :tibetan)))))
+
+(ert-deftest tibetan-vocab-term-anchor-slugs ()
+  "Term-anchor slug helper produces stable `term-xxx' ids for org-mode
+radio-target jumping."
+  (skip-unless (fboundp 'tibetan-vocab-term-anchor))
+  (should (equal "term-bdag-la"   (tibetan-vocab-term-anchor "bdag la")))
+  (should (equal "term-rnal-byor" (tibetan-vocab-term-anchor "rnal 'byor")))
+  (should (equal "term-byang-chub-sems-dpa"
+                 (tibetan-vocab-term-anchor "byang chub sems dpa'")))
+  ;; Mixed case is lowercased
+  (should (equal "term-bdag" (tibetan-vocab-term-anchor "Bdag")))
+  ;; Empty / nil / whitespace-only inputs return nil.
+  (should (null (tibetan-vocab-term-anchor "")))
+  (should (null (tibetan-vocab-term-anchor nil)))
+  (should (null (tibetan-vocab-term-anchor "   "))))
+
 (provide 'tibetan-vocab-multisource-test)
 ;;; tibetan-vocab-multisource-test.el ends here

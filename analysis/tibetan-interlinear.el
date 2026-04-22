@@ -318,13 +318,17 @@ layer.  Called for its value; does not mutate input."
       (setq out (replace-regexp-in-string "\\]" ")" out))
       out)))
 
-(defun tibetan-interlinear--format-gloss-entry (wylie-stem steinert-link
+(defun tibetan-interlinear--format-gloss-entry (wylie-stem term-anchor
                                                  short-meaning
                                                  particle-wylie particle-label
                                                  &optional curated-p)
   "Format one interlinear entry.
 WYLIE-STEM is the Wylie of the lexical part.
-STEINERT-LINK is an org link string or nil.
+TERM-ANCHOR is the internal org-link target slug (e.g. `term-bdag-la')
+  matching a `<<term-bdag-la>>' target in the Detailed Dictionary
+  section — click the Wylie to jump to the full entry below.  Pass
+  nil to render plain Wylie without a link (useful for pure function
+  words that have no Detailed Dictionary entry).
 SHORT-MEANING is the English gloss or nil.
 PARTICLE-WYLIE is the Wylie of the particle part or nil.
 PARTICLE-LABEL is the short Bialek label (\"GEN\", \"CONC\", etc.) or nil.
@@ -340,18 +344,18 @@ rewritten to parens so the enclosing `[...]' wrapper never produces
 a second `[' / `]' pair that org-mode would parse as a link.
 Returns something like:
 
-  [[steinert-url][stem]] ★ [gloss] [[particle-overview][particle]] [LABEL]"
+  [[term-anchor][stem]] ★ [gloss] particle [LABEL]"
   (let ((parts '())
         (gloss-budget (if curated-p 60 30)))
     ;; Lexical stem part — link wraps ONLY the Wylie; English gloss
     ;; follows outside the link.  Curated-P entries get a leading ★
-    ;; marker inserted between the link and the gloss.
+    ;; marker inserted between the link and the gloss.  The link
+    ;; target is an internal anchor (`term-xxx') — the Detailed
+    ;; Dictionary section below emits matching `<<term-xxx>>' radio
+    ;; targets.  Pass TERM-ANCHOR=nil to render plain Wylie text.
     (let ((linked-stem
-           (if steinert-link
-               (if (string-match "\\[\\[\\([^]]+\\)\\]\\[" steinert-link)
-                   (format "[[%s][%s]]"
-                           (match-string 1 steinert-link) wylie-stem)
-                 wylie-stem)
+           (if (and term-anchor (stringp term-anchor))
+               (format "[[%s][%s]]" term-anchor wylie-stem)
              wylie-stem)))
       (push (if (and short-meaning (not (string-empty-p short-meaning)))
                 (format "%s %s[%s]" linked-stem
@@ -474,16 +478,23 @@ Returns a string ready to insert after the `** Interlinear Gloss' heading."
                                   (car particle-info)))))
                   (error nil))))
              (particle-label (when particle-info (cdr particle-info)))
-             ;; Steinert link for the STEM (not the whole word with particle)
-             (steinert-link
+             ;; Internal org link target for the STEM — the Detailed
+             ;; Dictionary section below emits `<<term-xxxx>>' anchors
+             ;; matching these, so the student can click the Wylie in
+             ;; the Interlinear and jump straight to the full entry.
+             ;; The external Steinert URL lives only on the Detailed
+             ;; Dictionary head line — a two-level navigation
+             ;; (shallow: same file; deep: external) that keeps the
+             ;; Interlinear uncluttered.
+             (term-anchor
               (when (and stem-wylie
-                        (fboundp 'tibetan-steinert-url-org)
-                        ;; Skip Steinert for pure function words
-                        (not (member bialek-tag
-                                     '("TOPIC (TOP)"))))
-                (condition-case nil
-                    (tibetan-steinert-url-org stem-wylie)
-                  (error nil))))
+                         (fboundp 'tibetan-vocab-term-anchor)
+                         ;; Skip link for pure function words — they
+                         ;; won't have a Detailed Dictionary entry to
+                         ;; jump to.
+                         (not (member bialek-tag
+                                      '("TOPIC (TOP)"))))
+                (tibetan-vocab-term-anchor stem-wylie)))
              ;; Curated-entry flag: set only when the caller provided
              ;; a hash AND the hash knows about this token.  Passed on
              ;; to the formatter so it can prepend ★ and use a longer
@@ -493,7 +504,7 @@ Returns a string ready to insert after the `** Interlinear Gloss' heading."
 
         (push (tibetan-interlinear--format-gloss-entry
                (or stem-wylie "?")
-               steinert-link
+               term-anchor
                short-meaning
                particle-wylie
                particle-label

@@ -187,9 +187,14 @@ Keys:
   :sources         :SOURCES from the first :PROPERTIES: drawer
   :claude-context  list of all `#+TIBETAN_CLAUDE_CONTEXT:' values in order
   :vocab-file      value of `#+TIBETAN_VOCAB_FILE:' (relative to SOURCE-FILE)
+  :corpus          value of `#+TIBETAN_CORPUS:' — the corpus identifier
+                   used by the dictionary ranker to promote a
+                   corpus-specific Steinert sub-dictionary (e.g.
+                   `Yogacarabhumi' → `22-Yoghacharabhumi-glossary').
+                   See `tibetan-vocab--corpus-source-map'.
 
 Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
-  (let (title work author sources ctx vocab)
+  (let (title work author sources ctx vocab corpus)
     (when (and source-file (file-exists-p source-file))
       (condition-case nil
           (with-temp-buffer
@@ -200,6 +205,11 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
             (goto-char (point-min))
             (when (re-search-forward "^#\\+TIBETAN_VOCAB_FILE:[ \t]*\\(.*\\)$" nil t)
               (setq vocab (string-trim (match-string 1))))
+            (goto-char (point-min))
+            (when (re-search-forward "^#\\+TIBETAN_CORPUS:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (unless (string-empty-p val)
+                  (setq corpus val))))
             (goto-char (point-min))
             (while (re-search-forward
                     "^#\\+TIBETAN_CLAUDE_CONTEXT:[ \t]*\\(.*\\)$" nil t)
@@ -233,7 +243,8 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
           :author author
           :sources sources
           :claude-context ctx
-          :vocab-file vocab)))
+          :vocab-file vocab
+          :corpus corpus)))
 
 
 (defun tibetan-analysis--source-file-from-analysis (analysis-file)

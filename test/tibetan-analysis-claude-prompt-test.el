@@ -73,6 +73,24 @@
                        "Target language: English."
                        "For PNs see Sörensen & Hazod 2007."))))))
 
+(ert-deftest tibetan-claude-prompt-reads-corpus-header ()
+  "`#+TIBETAN_CORPUS:' header is captured under the `:corpus' key so the
+dictionary ranker can promote the corresponding Steinert sub-dictionary."
+  (tibetan-test--with-source
+      "#+TITLE: YBh Gotrapatala\n#+TIBETAN_CORPUS: Yogacarabhumi\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :corpus) "Yogacarabhumi"))))
+  ;; Missing header → nil
+  (tibetan-test--with-source
+      "#+TITLE: No corpus header\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (null (plist-get meta :corpus)))))
+  ;; Blank value after the header key is treated as unset
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_CORPUS:   \n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (null (plist-get meta :corpus))))))
+
 (ert-deftest tibetan-claude-prompt-missing-file-safe ()
   "Non-existent / nil source file returns an empty metadata plist."
   (let ((meta (tibetan-analysis--read-source-metadata nil)))

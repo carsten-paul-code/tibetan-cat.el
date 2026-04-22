@@ -209,24 +209,37 @@
 ;; ============================================================================
 
 (ert-deftest tibetan-interlinear-format-entry-lexical ()
-  "Lexical word with Steinert link and gloss.
-The link must wrap ONLY the Wylie; the English gloss sits outside
-the link as readable plain text."
+  "Lexical word with internal term-anchor link and gloss.
+Pass 5a (2026-04-22) swapped the external Steinert URL for an
+internal `[[term-xxx][wylie]]' org link targeting the `<<term-xxx>>'
+radio anchor emitted by the Detailed Dictionary section below.  The
+link must wrap ONLY the Wylie; the English gloss sits outside the
+link as readable plain text."
   (let ((result (tibetan-interlinear--format-gloss-entry
                  "'khor ba"
-                 "[[https://steinert.example.com][Steinert]]"
+                 "term-khor-ba"
                  "cyclic existence"
                  nil nil)))
-    ;; Link wraps the wylie alone.
-    (should (string-match-p
-             "\\[\\[https://steinert\\.example\\.com\\]\\['khor ba\\]\\]"
-             result))
+    ;; Internal link wraps the wylie alone.
+    (should (string-match-p "\\[\\[term-khor-ba\\]\\['khor ba\\]\\]"
+                            result))
     ;; Gloss sits outside the link (space then bracketed gloss).
     (should (string-match-p "\\]\\] \\[cyclic existence\\]" result))
     ;; And specifically NOT the old nested form `wylie[gloss]` inside
     ;; the link body.
     (should-not (string-match-p "'khor ba\\[cyclic existence\\]\\]\\]"
                                 result))))
+
+(ert-deftest tibetan-interlinear-format-entry-nil-anchor-plain-wylie ()
+  "With TERM-ANCHOR=nil, the stem is rendered as plain Wylie (no link).
+Used by callers that skip pure function words with no Detailed
+Dictionary entry to jump to."
+  (let ((result (tibetan-interlinear--format-gloss-entry
+                 "'khor ba" nil "cyclic existence" nil nil)))
+    ;; No `[[...][...]]` link around the Wylie.
+    (should-not (string-match-p "\\[\\[.*\\]\\['khor ba\\]\\]" result))
+    ;; The Wylie and gloss still appear.
+    (should (string-match-p "'khor ba \\[cyclic existence\\]" result))))
 
 (ert-deftest tibetan-interlinear-format-entry-with-particle ()
   "Entry with both lexical stem and particle.

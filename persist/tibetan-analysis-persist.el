@@ -36,6 +36,13 @@
 ;; gptel for Claude translation (soft load - optional)
 (require 'gptel nil t)
 
+;; Forward declaration: `tibetan-vocab--corpus' is defined as a
+;; `defvar-local' in `core/tibetan-vocabulary-detailed.el'.  Declared
+;; here so the byte-compiler treats it as a special (dynamic) variable
+;; when `tibetan-analysis-generate-content' let-binds it to thread the
+;; `#+TIBETAN_CORPUS:' header through the dictionary ranker.
+(defvar tibetan-vocab--corpus)
+
 
 (defconst tibetan-analysis-version "1.0"
   "Version of the analysis file format.")
@@ -1463,11 +1470,13 @@ keeps German // English pairs side by side."
           (dolist (entry vocab-list)
             (let* ((tibetan (plist-get entry :tibetan))
                    (wylie (plist-get entry :wylie))
-                   ;; Multi-source lookup: provided list first, then
-                   ;; Steinert block, then Rangjung Yeshe, others only
-                   ;; when they add a genuinely different gloss.
-                   ;; Sanskrit is emitted only when carried natively
-                   ;; by the source entry.
+                   ;; Multi-source lookup: already ranked (Thesaurus →
+                   ;; Resources/Custom → corpus-specific → Hopkins2015
+                   ;; → 84000Dict → RangjungYeshe → others → Bundled/
+                   ;; DharmaMitra) and capped so the head of the list
+                   ;; is the best-quality entry.  Sanskrit is emitted
+                   ;; only when the source entry carries it natively
+                   ;; AND it passes the real-Sanskrit filter.
                    (sources
                     (condition-case nil
                         (when (fboundp 'tibetan-vocab-multisource-entries)
@@ -1481,8 +1490,34 @@ keeps German // English pairs side by side."
                                (let ((src (plist-get s :source)))
                                  (and src
                                       (string-prefix-p "Resources" src))))
-                             sources)))
-              ;; Dictionary-style head line: ◆ word [wylie] ★
+                             sources))
+                   ;; Genuine Sanskrit (if any source carries it) —
+                   ;; displayed on the head line for instant visibility.
+                   (sanskrit-on-head
+                    (and (fboundp 'tibetan-vocab-find-sanskrit)
+                         (tibetan-vocab-find-sanskrit sources)))
+                   ;; Internal link target (matches the Interlinear
+                   ;; Gloss's `[[term-xxx][wylie]]' link above).
+                   (anchor
+                    (and wylie (fboundp 'tibetan-vocab-term-anchor)
+                         (tibetan-vocab-term-anchor wylie)))
+                   ;; External Steinert URL — moved here from the
+                   ;; Interlinear Gloss so the two-tier navigation is
+                   ;; clear: Interlinear → Detailed Dictionary (shallow,
+                   ;; same file); Detailed Dictionary → Steinert web
+                   ;; (deep, external).
+                   (steinert-url
+                    (and wylie (fboundp 'tibetan-steinert-url-org)
+                         (condition-case nil
+                             (tibetan-steinert-url-org wylie)
+                           (error nil)))))
+              ;; Anchor target — invisible radio anchor that the
+              ;; Interlinear link jumps to.  Kept on its own line so
+              ;; it doesn't interfere with the visible head line.
+              (when anchor
+                (insert (format "<<%s>>\n" anchor)))
+              ;; Dictionary-style head line:
+              ;;   ◆ Tibetan [wylie] · Sanskrit ★ (Steinert ↗)
               (insert (format "◆ %s"
                               (if (and wylie (stringp wylie)
                                        (not (string-empty-p wylie))
@@ -1490,7 +1525,16 @@ keeps German // English pairs side by side."
                                   (format "%s [%s]" tibetan wylie)
                                 (tibetan-analysis--format-word-with-wylie
                                  tibetan))))
+              (when sanskrit-on-head
+                (insert (format " · %s" sanskrit-on-head)))
               (when has-resources (insert " ★"))
+              ;; External Steinert link as a small ↗ marker.  Clickable
+              ;; org link syntax, kept short so the head line stays
+              ;; scannable.
+              (when steinert-url
+                (if (string-match "\\[\\[\\([^]]+\\)\\]\\[" steinert-url)
+                    (insert (format " ([[%s][Steinert ↗]])"
+                                    (match-string 1 steinert-url)))))
               (if (tibetan-analysis--detailed-dict-is-particle-p tibetan)
                   ;; Particle: short compact entry, skip the multi-source dump.
                   ;; See `** Particle Overview' earlier in the file for
@@ -1667,7 +1711,7 @@ class level-2 section."
              (append priority-pairs remaining)
              ""))))
 
-(defun tibetan-analysis-generate-content (tibetan-text &optional seg-id source-text)
+(defun tibetan-analysis-generate-content (tibetan-text &optional seg-id source-text source-file)
   "Generate auto-analysis content for TIBETAN-TEXT.
 Returns the analysis as a string (org-mode formatted).
 
@@ -1680,7 +1724,33 @@ inside SOURCE-TEXT is surfaced as an additional reference
 translation.  This is how inline class-taught translations reach the
 analysis buffer.  Batch callers that do not have the source buffer
 handy may omit this argument; only the inline-trans surfacing is
-affected, not the rest of the analysis."
+affected, not the rest of the analysis.
+
+SOURCE-FILE, if provided, is the absolute path to the source
+document.  Its `#+TIBETAN_CORPUS:' header (if any) is read and
+`tibetan-vocab--corpus' is dynamically bound for the duration of
+analysis so the dictionary ranker promotes the matching Steinert
+sub-dictionary into rank-3.  When omitted, the function falls back
+to `buffer-file-name' (useful when called from inside a source-doc
+buffer); when that too is nil, corpus-specific ranking simply
+doesn't apply and the default ranking is used."
+  (let* ((resolved-src (or source-file
+                           (and (boundp 'tibetan-current-source-file)
+                                tibetan-current-source-file)
+                           (buffer-file-name)))
+         (corpus-val (and resolved-src
+                          (fboundp 'tibetan-analysis--read-source-metadata)
+                          (condition-case nil
+                              (plist-get
+                               (tibetan-analysis--read-source-metadata
+                                resolved-src)
+                               :corpus)
+                            (error nil))))
+         (tibetan-vocab--corpus
+          (if (and corpus-val (stringp corpus-val)
+                   (not (string-empty-p corpus-val)))
+              corpus-val
+            tibetan-vocab--corpus)))
   (condition-case err
       (progn
         ;; Drop non-Tibetan lines (English descriptions, # comments,
@@ -2305,7 +2375,7 @@ affected, not the rest of the analysis."
                "** Claude Translation\n[Requesting translation...]\n\n"
                "** Claude Grammar\n\n\n"
                (format "** [Analysis error — partial file only]\nParser failure for this segment: %s\n\nThe structural analysis sections (Particle Map, Interlinear Gloss, Word/Particle List, Verb Classification, Grammatical Markers, Sentence Structure, Clause Structure, Detailed Dictionary) could not be generated.  The Tibetan Text and Claude sections above should still be usable.\n\nTo retry: `C-c u R' on this segment, or check the source segment's Tibetan for an unusual construction.\n"
-                       (error-message-string err)))))))
+                       (error-message-string err))))))))
 
 ;; ============================================================================
 ;; MAIN COMMANDS

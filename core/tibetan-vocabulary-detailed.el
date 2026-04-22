@@ -651,6 +651,117 @@ text — never synthesised from elsewhere."
               :sanskrit skt
               :wylie wylie)))))
 
+(defvar-local tibetan-vocab--corpus nil
+  "Per-buffer corpus-specific Steinert sub-dictionary promoted by the
+ranker to rank-2 slot (below Thesaurus / Resources / Custom).  Set
+by the reader from the source file's `#+TIBETAN_CORPUS:' header —
+e.g. `Yogacarabhumi' picks `22-Yoghacharabhumi-glossary' as the
+corpus source.  Unset: the ranker still works, just without the
+corpus boost.")
+
+(defconst tibetan-vocab--corpus-source-map
+  '(("Yogacarabhumi" . "22-Yoghacharabhumi-glossary")
+    ("YBh"           . "22-Yoghacharabhumi-glossary")
+    ("Mahavyutpatti" . "21-Mahavyutpatti-Skt")
+    ("84000"         . "43-84000Dict"))
+  "Map of `#+TIBETAN_CORPUS:' values to Steinert source names.
+The ranker promotes the matching source to rank 2 (just below the
+user-curated sources).  Add entries here when you want a new corpus
+identifier to be recognised.")
+
+(defun tibetan-vocab-rank-source (source)
+  "Return an integer rank for SOURCE (a :source plist value).  Lower
+is better.  Used by `tibetan-vocab--sort-entries-by-rank' to pick the
+best dictionary entry per term — the one whose gloss is surfaced by
+the Interlinear Gloss and appears first in the Detailed Dictionary.
+
+Rank layers (2026-04-22):
+
+  1 — Thesaurus (user-curated via zettelkasten — reserved for Pass 5b).
+  2 — Resources / Custom (per-document vocabulary list).
+  3 — Corpus-specific (e.g. `22-Yoghacharabhumi-glossary' when
+      reading a YBh text — set via `tibetan-vocab--corpus').
+  4 — `Steinert/01-Hopkins2015' (modern scholarly Buddhist).
+  5 — `Steinert/43-84000Dict' (84000 canonical translations).
+  6 — `Steinert/02-RangjungYeshe' (Buddhist practice vocabulary).
+  7 — `Rangjung Yeshe' (standalone, separate integration).
+  8 — `Steinert/08-IvesWaldo', `Steinert/07-JimValby',
+      `Steinert/09-DanMartin', `Steinert/10-RichardBarron' etc.
+  9 — `Bundled' (synthetic local glossary).
+ 10 — `DharmaMitra' (last-resort API fallback).
+ 99 — any unrecognised source."
+  (cond
+   ((null source) 99)
+   ((string-prefix-p "Thesaurus" source) 1)
+   ((or (string-prefix-p "Resources" source)
+        (string-prefix-p "Custom" source))
+    2)
+   ((and tibetan-vocab--corpus
+         (let ((corpus-src (cdr (assoc tibetan-vocab--corpus
+                                        tibetan-vocab--corpus-source-map))))
+           (and corpus-src
+                (string= source (format "Steinert/%s" corpus-src)))))
+    3)
+   ((string= source "Steinert/01-Hopkins2015") 4)
+   ((string= source "Steinert/43-84000Dict") 5)
+   ((string= source "Steinert/02-RangjungYeshe") 6)
+   ((string= source "Rangjung Yeshe") 7)
+   ((string-prefix-p "Steinert/" source) 8)
+   ((string= source "Bundled") 9)
+   ((string= source "DharmaMitra") 10)
+   (t 99)))
+
+(defun tibetan-vocab--sort-entries-by-rank (entries)
+  "Return ENTRIES sorted by source rank, preserving original order
+within ties.  Emacs' `sort' is stable, so two entries with the same
+rank stay in insertion order."
+  (sort (copy-sequence entries)
+        (lambda (a b)
+          (< (tibetan-vocab-rank-source (plist-get a :source))
+             (tibetan-vocab-rank-source (plist-get b :source))))))
+
+(defun tibetan-vocab-find-sanskrit (entries)
+  "Return the first genuine Sanskrit gloss found in ENTRIES, or nil.
+Walks the ranked list (or any list) and returns the first `:sanskrit'
+field that passes `tibetan-vocab--looks-like-sanskrit-p' — filtering
+out Wylie cross-references that masquerade in the Sanskrit slot."
+  (catch 'found
+    (dolist (e entries)
+      (let ((s (plist-get e :sanskrit)))
+        (when (and s (stringp s) (not (string-empty-p (string-trim s)))
+                   (tibetan-vocab--looks-like-sanskrit-p s))
+          (throw 'found (string-trim s)))))
+    nil))
+
+(defun tibetan-vocab-best-entry (entries)
+  "Return the top-ranked entry from ENTRIES (or nil).  Shortcut for
+`(car (tibetan-vocab--sort-entries-by-rank ENTRIES))'."
+  (car (tibetan-vocab--sort-entries-by-rank entries)))
+
+(defun tibetan-vocab-term-anchor (wylie)
+  "Return a stable org-mode anchor slug for WYLIE.
+Used by the Interlinear Gloss renderer as the target of its internal
+link (`[[term-bdag-la][bdag la]]') pointing at the matching
+`<<term-bdag-la>>' target in the Detailed Dictionary section below.
+
+The slug is lowercased, spaces and apostrophes become dashes, and
+anything outside `[-a-z0-9]' is dropped.  Prefixed with `term-' so
+the namespace doesn't collide with user-defined org targets.
+
+Examples:
+  (tibetan-vocab-term-anchor \"bdag la\")     \\=> \"term-bdag-la\"
+  (tibetan-vocab-term-anchor \"rnal \\='byor\")  \\=> \"term-rnal-byor\"
+  (tibetan-vocab-term-anchor \"byang chub sems dpa\\='\") \\=>
+    \"term-byang-chub-sems-dpa\""
+  (when (and wylie (stringp wylie))
+    (let* ((s (downcase (string-trim wylie)))
+           (s (replace-regexp-in-string "[ '’]" "-" s))
+           (s (replace-regexp-in-string "[^-a-z0-9]" "" s))
+           (s (replace-regexp-in-string "-+" "-" s))
+           (s (replace-regexp-in-string "\\`-\\|-\\'" "" s)))
+      (if (string-empty-p s) nil
+        (concat "term-" s)))))
+
 (defcustom tibetan-vocab-detailed-max-sources 3
   "Maximum number of source entries emitted per term in the Detailed
 Dictionary.  Resources and Custom entries are ALWAYS preserved — the
@@ -767,13 +878,14 @@ when the source entry carries it natively."
                         (tibetan-lookup-word-in-dharmamitra (or tibetan word))
                       (error nil))))
             (when dm (add "DharmaMitra" dm)))))
-      ;; Apply the source cap on output: Resources / Custom always kept
-      ;; (user-curated — never trimmed), automatic-dictionary hits
-      ;; (Steinert / RY / Bundled / DharmaMitra) limited to
-      ;; `tibetan-vocab-detailed-max-sources' (default 3) so content
-      ;; words don't produce a wall of near-duplicate glosses in the
-      ;; Detailed Dictionary section.
-      (tibetan-vocab-detailed-cap-entries (nreverse results)))))
+      ;; 1. Rank the full list (Thesaurus → Resources → Corpus-specific
+      ;;    → Hopkins2015 → 84000 → RY → others → Bundled → DharmaMitra)
+      ;;    so callers that take `(car …)' get the quality-best entry.
+      ;; 2. Apply the cap: Resources / Custom always kept (user-curated,
+      ;;    never trimmed), automatic-dictionary hits trimmed to
+      ;;    `tibetan-vocab-detailed-max-sources' (default 3).
+      (tibetan-vocab-detailed-cap-entries
+       (tibetan-vocab--sort-entries-by-rank (nreverse results))))))
 
 ;; ============================================================================
 ;; INTEGRATION FUNCTION - For analysis generation
