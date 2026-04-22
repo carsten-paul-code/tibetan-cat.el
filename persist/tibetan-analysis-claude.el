@@ -238,9 +238,16 @@ Keys:
                    corpus-specific Steinert sub-dictionary (e.g.
                    `Yogacarabhumi' → `22-Yoghacharabhumi-glossary').
                    See `tibetan-vocab--corpus-source-map'.
+  :target-lang     value of `#+TIBETAN_TARGET_LANG:' — the primary
+                   visible translation language for this document
+                   (`de' or `en', lowercased; nil when unset).
+                   Drives `--prefer-target-lang' in the Interlinear
+                   Gloss, the CAT Gloss, and the Claude Translation
+                   prompt.  The Detailed Dictionary always keeps
+                   the bilingual `DE // EN' form for reference.
 
 Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
-  (let (title work author sources ctx vocab corpus)
+  (let (title work author sources ctx vocab corpus target-lang)
     (when (and source-file (file-exists-p source-file))
       (condition-case nil
           (with-temp-buffer
@@ -256,6 +263,11 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
               (let ((val (string-trim (match-string 1))))
                 (unless (string-empty-p val)
                   (setq corpus val))))
+            (goto-char (point-min))
+            (when (re-search-forward "^#\\+TIBETAN_TARGET_LANG:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (unless (string-empty-p val)
+                  (setq target-lang (downcase val)))))
             (goto-char (point-min))
             (while (re-search-forward
                     "^#\\+TIBETAN_CLAUDE_CONTEXT:[ \t]*\\(.*\\)$" nil t)
@@ -290,7 +302,8 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
           :sources sources
           :claude-context ctx
           :vocab-file vocab
-          :corpus corpus)))
+          :corpus corpus
+          :target-lang target-lang)))
 
 
 (defun tibetan-analysis--source-file-from-analysis (analysis-file)
@@ -584,9 +597,30 @@ forms of grounding:
          (portfolio-block
           (and portfolio-ref (not (string-empty-p portfolio-ref))
                (concat "\n\n" portfolio-ref)))
+         ;; Pass 5c (2026-04-22): target-language directive.  When the
+         ;; document's `#+TIBETAN_TARGET_LANG:' header is `de', we
+         ;; override the static English default in the system prompt
+         ;; with an explicit German instruction for the `## Translation'
+         ;; section.  `en' / nil / missing → no directive (static
+         ;; English instruction stays authoritative).  The Vocabulary /
+         ;; Grammar / Particles sections remain in English regardless
+         ;; — only the Translation section language flips.
+         (target-lang-val (plist-get meta :target-lang))
+         (target-lang-block
+          (cond
+           ((and target-lang-val (stringp target-lang-val)
+                 (equal (downcase target-lang-val) "de"))
+            (concat "\n\nTarget language for this document: GERMAN.\n"
+                    "The `## Translation' section MUST be written in "
+                    "German (not English), following the same guidelines "
+                    "otherwise — fluent, idiomatic, Buddhist terminology "
+                    "preserved, etc.  Vocabulary, Grammar, and Particles "
+                    "sections stay in English (metalanguage)."))
+           (t nil)))
          (system (concat tibetan-analysis--claude-system-prompt
                          (or src-block "")
-                         (or portfolio-block "")))
+                         (or portfolio-block "")
+                         (or target-lang-block "")))
          (glossary-block
           (when glossary
             (concat

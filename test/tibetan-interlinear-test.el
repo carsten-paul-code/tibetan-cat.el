@@ -376,6 +376,64 @@ cut off mid-phrase in the interlinear."
 ;; PASS 6c: Portfolio sub-function snippet lookup
 ;; ============================================================================
 
+;; ============================================================================
+;; PASS 5c: prefer-target-lang (generalization of prefer-english)
+;; ============================================================================
+
+(ert-deftest tibetan-interlinear-prefer-target-lang-defaults-english ()
+  "With no target language set (or `\"en\"'), the helper keeps the
+English half of a `DE // EN' bilingual gloss — identical behaviour
+to the legacy `--prefer-english' it replaces.  Backwards compatible."
+  (skip-unless (fboundp 'tibetan-interlinear--prefer-target-lang))
+  (let ((tibetan-analysis--target-lang nil))
+    (should (equal "homeland"
+                   (tibetan-interlinear--prefer-target-lang
+                    "Heimat // homeland"))))
+  (let ((tibetan-analysis--target-lang "en"))
+    (should (equal "homeland"
+                   (tibetan-interlinear--prefer-target-lang
+                    "Heimat // homeland")))))
+
+(ert-deftest tibetan-interlinear-prefer-target-lang-german ()
+  "With `\"de\"' as the target, the German half is kept — the
+Interlinear Gloss and CAT Gloss then render German when the
+document's `#+TIBETAN_TARGET_LANG: de' header is active."
+  (skip-unless (fboundp 'tibetan-interlinear--prefer-target-lang))
+  (let ((tibetan-analysis--target-lang "de"))
+    (should (equal "Heimat"
+                   (tibetan-interlinear--prefer-target-lang
+                    "Heimat // homeland"))))
+  ;; Multi-sense German side preserved as-is.
+  (let ((tibetan-analysis--target-lang "de"))
+    (should (equal "(schwarze) Magie"
+                   (tibetan-interlinear--prefer-target-lang
+                    "(schwarze) Magie // (black) magic")))))
+
+(ert-deftest tibetan-interlinear-prefer-target-lang-monolingual-passthrough ()
+  "A non-bilingual gloss (no ` // ' separator) passes through
+unchanged regardless of target language.  The helper only flips
+the visible half when there IS a bilingual to split."
+  (skip-unless (fboundp 'tibetan-interlinear--prefer-target-lang))
+  (dolist (lang '(nil "en" "de"))
+    (let ((tibetan-analysis--target-lang lang))
+      (should (equal "mind; consciousness"
+                     (tibetan-interlinear--prefer-target-lang
+                      "mind; consciousness"))))))
+
+(ert-deftest tibetan-interlinear-prefer-english-alias ()
+  "The legacy `tibetan-interlinear--prefer-english' function is
+retained as an alias (back-compat for external callers), but
+internally it now delegates to `--prefer-target-lang'.  Calling
+it directly still returns the English half regardless of the
+target-lang binding, matching its original contract."
+  (skip-unless (fboundp 'tibetan-interlinear--prefer-english))
+  (let ((tibetan-analysis--target-lang "de"))
+    ;; Even though target-lang is `de', `--prefer-english' still
+    ;; returns the English half — it's an explicit English picker.
+    (should (equal "homeland"
+                   (tibetan-interlinear--prefer-english
+                    "Heimat // homeland")))))
+
 (ert-deftest tibetan-interlinear-portfolio-snippet-lookup ()
   "`tibetan-interlinear-portfolio-function-snippet' walks the parsed
 Portfolio cache keyed by PORTFOLIO-KEY (e.g. \"terminative\") and

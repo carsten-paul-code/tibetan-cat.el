@@ -43,6 +43,21 @@
 ;; `#+TIBETAN_CORPUS:' header through the dictionary ranker.
 (defvar tibetan-vocab--corpus)
 
+(defvar tibetan-analysis--target-lang nil
+  "Primary-visible translation language for the current analysis.
+Two canonical values:
+  `\"de\"' — prefer German half of bilingual `DE // EN' glosses,
+            produce German Claude translation.
+  `\"en\"' — prefer English (same as nil — backward compat).
+nil   — unset, defaults to English-preferred behaviour throughout.
+
+Dynamically bound by `tibetan-analysis-generate-content' based on
+the source document's `#+TIBETAN_TARGET_LANG:' header, so every
+downstream renderer (Interlinear Gloss, CAT Gloss, Claude prompt
+builder) can consult a single value without receiving an explicit
+argument.  Set per-buffer via `setq-local' to override the header
+for ad-hoc analyses.")
+
 
 (defconst tibetan-analysis-version "1.0"
   "Version of the analysis file format.")
@@ -1178,7 +1193,14 @@ only if at least one plain content token remains."
         gloss))))
 
 (defun tibetan-analysis--cat-english-gloss (meaning)
-  "Extract a short English gloss from MEANING for the CAT Gloss line.
+  "Extract a short gloss from MEANING for the CAT Gloss line.
+
+Name is historical — the helper originally ONLY produced English,
+but Pass 5c (2026-04-22) made it target-language-aware via the
+`tibetan-analysis--target-lang' dynamic variable.  When the
+document's `#+TIBETAN_TARGET_LANG: de' header is active, the
+German side of a bilingual `DE // EN' gloss wins; with `en' (or
+nil — backward-compat default), English wins.
 
 MEANING is the enriched short-meaning produced by the Word/Particle
 List renderer.  Handled shapes:
@@ -1186,7 +1208,7 @@ List renderer.  Handled shapes:
   1. Hill-morphology two-line form:  stem-ref + newline + gloss.
      Returns just the gloss.
   2. Curated bilingual entry with a DE // EN split on `//\\='.
-     Returns the English side.
+     Returns the target-language side.
   3. Stem-reference only (German abbreviation, no English).
      Returns the stripped stem-ref phrase.
   4. Plain English gloss with sense separators.  Returns the first
@@ -1200,10 +1222,15 @@ Returns nil if MEANING is nil, empty, or a placeholder."
              (not (string= meaning "[look up]"))
              (not (string= meaning "[not found]")))
     (let ((m (string-trim meaning)))
-      ;; If the gloss has a "German//English" split, prefer the English side.
+      ;; Bilingual `DE // EN' split: pick the target-language side.
       (when (string-match-p "//" m)
-        (setq m (string-trim
-                 (car (last (split-string m "//" t))))))
+        (let ((parts (split-string m "//" t)))
+          (setq m (string-trim
+                   (cond
+                    ((and (boundp 'tibetan-analysis--target-lang)
+                          (equal tibetan-analysis--target-lang "de"))
+                     (car parts))               ;; German = first half
+                    (t (car (last parts))))))))  ;; English = last half
       ;; If the result begins with a stem reference followed by ";\n..."
       ;; (Hill morphology two-line form), drop the stem ref and keep
       ;; just the lemma meaning.
@@ -2243,19 +2270,30 @@ it with `let' around the call when Claude data is available."
                            (and (boundp 'tibetan-current-source-file)
                                 tibetan-current-source-file)
                            (buffer-file-name)))
-         (corpus-val (and resolved-src
-                          (fboundp 'tibetan-analysis--read-source-metadata)
-                          (condition-case nil
-                              (plist-get
-                               (tibetan-analysis--read-source-metadata
-                                resolved-src)
-                               :corpus)
-                            (error nil))))
+         (meta (and resolved-src
+                    (fboundp 'tibetan-analysis--read-source-metadata)
+                    (condition-case nil
+                        (tibetan-analysis--read-source-metadata resolved-src)
+                      (error nil))))
+         (corpus-val     (plist-get meta :corpus))
+         (target-lang-val (plist-get meta :target-lang))
          (tibetan-vocab--corpus
           (if (and corpus-val (stringp corpus-val)
                    (not (string-empty-p corpus-val)))
               corpus-val
-            tibetan-vocab--corpus)))
+            tibetan-vocab--corpus))
+         ;; Pass 5c (2026-04-22): per-document target language for the
+         ;; visible translation output.  `de' / `en' are the canonical
+         ;; values; nil means unset → callers default to English for
+         ;; backward compatibility.  Dynamically bound for the
+         ;; duration of analysis so Interlinear / CAT Gloss / Claude
+         ;; prompt helpers can prefer the right half of bilingual
+         ;; `DE // EN' glosses without threading explicit args.
+         (tibetan-analysis--target-lang
+          (if (and target-lang-val (stringp target-lang-val)
+                   (not (string-empty-p target-lang-val)))
+              target-lang-val
+            tibetan-analysis--target-lang)))
   (condition-case err
       (progn
         ;; Drop non-Tibetan lines (English descriptions, # comments,

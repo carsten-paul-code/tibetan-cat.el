@@ -73,6 +73,112 @@
                        "Target language: English."
                        "For PNs see Sörensen & Hazod 2007."))))))
 
+(ert-deftest tibetan-analysis-target-lang-dynamic-binding-from-header ()
+  "When `tibetan-analysis-generate-content' is called with a SOURCE-FILE
+carrying a `#+TIBETAN_TARGET_LANG: de' header, the dynamic var
+`tibetan-analysis--target-lang' is bound to `\"de\"' for the
+duration of the call.  Callers that don't pass SOURCE-FILE leave
+the dynamic var at its outer value (nil by default, meaning
+English-preferred)."
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_TARGET_LANG: de\n"
+    (let ((captured-lang nil))
+      (cl-letf (((symbol-function 'tibetan-analysis--filter-to-tibetan-lines)
+                 (lambda (text)
+                   (setq captured-lang tibetan-analysis--target-lang)
+                   text)))
+        ;; Nil initial value; generate-content must rebind to "de"
+        ;; for the body of the call.
+        (let ((tibetan-analysis--target-lang nil))
+          (ignore-errors
+            (tibetan-analysis-generate-content
+             "བདག་" nil nil source-file))
+          (should (equal captured-lang "de")))))))
+
+(ert-deftest tibetan-analysis-cat-english-gloss-respects-target-lang ()
+  "`--cat-english-gloss' (the CAT Gloss helper that extracts a
+short gloss from a bilingual entry) must pick the GERMAN half
+when `tibetan-analysis--target-lang' is `\"de\"', so the CAT
+line reads in German for a document whose header selects German.
+Default (nil / `en') keeps the English-preferred legacy behavior."
+  (let ((gloss "Heimat // homeland"))
+    (let ((tibetan-analysis--target-lang nil))
+      (should (equal "homeland"
+                     (tibetan-analysis--cat-english-gloss gloss))))
+    (let ((tibetan-analysis--target-lang "en"))
+      (should (equal "homeland"
+                     (tibetan-analysis--cat-english-gloss gloss))))
+    (let ((tibetan-analysis--target-lang "de"))
+      (should (equal "Heimat"
+                     (tibetan-analysis--cat-english-gloss gloss))))))
+
+(ert-deftest tibetan-analysis-target-lang-no-header-leaves-nil ()
+  "When the source file has no `#+TIBETAN_TARGET_LANG:' header, the
+dynamic var stays at its outer value — downstream helpers treat
+nil as \"prefer English\" for backward compatibility."
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (let ((captured-lang :untouched))
+      (cl-letf (((symbol-function 'tibetan-analysis--filter-to-tibetan-lines)
+                 (lambda (text)
+                   (setq captured-lang tibetan-analysis--target-lang)
+                   text)))
+        (let ((tibetan-analysis--target-lang nil))
+          (ignore-errors
+            (tibetan-analysis-generate-content
+             "བདག་" nil nil source-file))
+          (should (null captured-lang)))))))
+
+(ert-deftest tibetan-claude-prompt-injects-german-target-directive ()
+  "When the source carries `#+TIBETAN_TARGET_LANG: de', the built
+system prompt includes a clear instruction for Claude to produce
+the `## Translation' section in German.  Without the header (or
+with `en'), the prompt stays English-directed for backward
+compatibility — no German instruction injected."
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_TARGET_LANG: de\n"
+    (let* ((prompts (tibetan-analysis--build-claude-prompts
+                     "བདག་" source-file))
+           (system (car prompts)))
+      ;; Some kind of German-instruction phrase present.
+      (should (string-match-p "German\\|auf Deutsch\\|deutsch"
+                              system))))
+  ;; No header → no German directive.
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (let* ((prompts (tibetan-analysis--build-claude-prompts
+                     "བདག་" source-file))
+           (system (car prompts)))
+      (should-not (string-match-p "produce.*German\\|in German"
+                                  system)))))
+
+(ert-deftest tibetan-claude-prompt-reads-target-lang-header ()
+  "`#+TIBETAN_TARGET_LANG:' header is captured under the
+`:target-lang' key so the renderer and Claude prompt can pick
+German or English as the primary visible translation for this
+specific document.  Values are lowercased; `en' / `de' are the
+canonical forms.  Blank value → nil (treat as unset); missing
+header → nil."
+  (tibetan-test--with-source
+      "#+TITLE: Milarepa IV\n#+TIBETAN_TARGET_LANG: de\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :target-lang) "de"))))
+  ;; Uppercase normalised to lowercase for predictable downstream matching.
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_TARGET_LANG: EN\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :target-lang) "en"))))
+  ;; Missing header → nil (implicit default English handled by callers).
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (null (plist-get meta :target-lang)))))
+  ;; Blank value treated as unset.
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_TARGET_LANG:   \n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (null (plist-get meta :target-lang))))))
+
 (ert-deftest tibetan-claude-prompt-reads-corpus-header ()
   "`#+TIBETAN_CORPUS:' header is captured under the `:corpus' key so the
 dictionary ranker can promote the corresponding Steinert sub-dictionary."

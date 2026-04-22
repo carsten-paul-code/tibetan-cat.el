@@ -423,6 +423,33 @@ Returns something like:
 
     (mapconcat #'identity (nreverse parts) " ")))
 
+(defun tibetan-interlinear--prefer-target-lang (meaning)
+  "Pass 5c (2026-04-22): return MEANING with the target-language half
+of a bilingual `DE // EN' gloss selected.
+
+Target language is driven by the dynamic variable
+`tibetan-analysis--target-lang' (set from the source document's
+`#+TIBETAN_TARGET_LANG:' header — `\"de\"' or `\"en\"'; nil
+defaults to English-preferred for backward compatibility).
+
+Non-bilingual glosses (no ` // ' separator) pass through verbatim.
+
+Convention: bilingual glosses in this codebase are stored as
+`GERMAN // ENGLISH' — the German half appears first because
+most user-curated Resources entries were written German-primary.
+With two + halves (multi-sense on each side using `;' / `,'),
+the split just picks the first / last chunk by position: German
+is first, English is last."
+  (if (and meaning (string-match-p " // " meaning))
+      (let ((parts (split-string meaning " // " t))
+            (lang (if (boundp 'tibetan-analysis--target-lang)
+                      tibetan-analysis--target-lang
+                    nil)))
+        (cond
+         ((equal lang "de") (car parts))        ;; German = first half
+         (t                 (car (last parts)))));; English = last half (default)
+    meaning))
+
 (defun tibetan-interlinear--prefer-english (meaning)
   "If MEANING is a bilingual `DE // EN' gloss, return just the English half.
 Otherwise return MEANING unchanged.
@@ -436,7 +463,14 @@ the reader with a stub like `Personenname; der', which is
 semantically worthless at a glance.  We strip everything up to
 and including the first ` // ' and keep what follows, recursively
 in case the entry packs multiple `//' separators (take the last
-segment, which in practice is always English)."
+segment, which in practice is always English).
+
+This is an EXPLICIT English picker — it ignores
+`tibetan-analysis--target-lang' and always returns the English
+half.  Callers that want to honour the document's target-lang
+should use `tibetan-interlinear--prefer-target-lang' instead.
+Kept as a back-compat entry point; the Interlinear / CAT-Gloss
+pipeline now routes through `--prefer-target-lang'."
   (if (and meaning (string-match-p " // " meaning))
       (car (last (split-string meaning " // " t)))
     meaning))
@@ -444,9 +478,11 @@ segment, which in practice is always English)."
 (defun tibetan-interlinear--truncate-gloss (meaning max-len)
   "Truncate MEANING to MAX-LEN characters for interlinear display.
 Tries to cut at a word boundary.  Bilingual `DE // EN' glosses are
-reduced to their English half first so the truncation never
-strands the reader on half a German phrase."
-  (let ((m (tibetan-interlinear--prefer-english meaning)))
+reduced to the target-language half first (per
+`tibetan-analysis--target-lang', default English) so the
+truncation never strands the reader on half a phrase in the
+other language."
+  (let ((m (tibetan-interlinear--prefer-target-lang meaning)))
     (if (<= (length m) max-len)
         m
       (let* ((cut (substring m 0 max-len))
