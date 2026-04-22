@@ -92,9 +92,9 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-04-15): **~1002 tests, 0 unexpected failures, 3
-intentional skips (text-scale / compound-analysis-callable).** Carsten
-runs this after every change and expects it to stay green.
+Current state (2026-04-21): **1337 tests, 1334 expected, 0 unexpected
+failures, 3 intentional skips (text-scale / compound-analysis-callable).**
+Carsten runs this after every change and expects it to stay green.
 
 When adding a test, always wire it into `test/run-all-tests.el` via
 `condition-case`. Otherwise the suite silently doesn't pick it up and
@@ -214,6 +214,146 @@ Two cross-cutting cleanups:
 - MWU spans truncate at verb positions (Resources-supplied MWU like
   `ཡུལ་འཐོན' no longer absorbs the verb into the NP head).
 
+### 5.9 Tokenization, section reorder, robust fallback (done, tested, 2026-04-21)
+
+Three related fixes in response to user review of a live Milarepa
+segment (seg-026 `བདག་ལ་སྟོད་ནས་འོངས།`) and a Yogācārabhūmi
+class-prep QA sweep:
+
+1. **Particle-tail / particle-head MWU rejection** (`core/tibetan-vocabulary.el`
+   + `core/tibetan-vocabulary-detailed.el`, commit `29da547`):
+   The two greedy 4/3/2-syllable compound loops that feed the
+   Word/Particle List, Interlinear Gloss, and Detailed Dictionary
+   were picking up real dictionary idioms like `བདག་ལ` (Skt. `naḥ`
+   "to me") and `སྟོད་ནས` (Skt. `uparimāt` "from above") as single
+   lexical units, hiding the grammatical `stem + PARTICLE` split
+   that Particle Map / Clause Structure / Grammatical Markers
+   otherwise render correctly.
+
+   Fix: reject any compound whose head OR tail syllable is in
+   `tibetan-extract-vocab--particle-tails` (the same list the MWU
+   parser already used via `tibetan-enhanced-parser--case-particle-
+   tail-p`).  Nominaliser tails (`པ` / `བ` / `མ`) are explicitly
+   EXCLUDED so `བསྐལ་པ` (kalpa) etc. remain intact.  +3 ERT tests.
+
+2. **Section reorder: Claude Translation + Grammar before Verb
+   Classification** (`persist/tibetan-analysis-persist.el`, commit
+   `ad7dd6c`).  New priority order in
+   `tibetan-analysis--priority-section-order`:
+
+       ** Wylie Transliteration       — sounded reading
+       ** Particle Map
+       ** Interlinear Gloss           — word-for-word trot
+       ** Claude Translation          ← was position 5, now 4
+       ** Claude Grammar              ← was position 6, now 5
+       ** Verb Classification (Hill 2010)  ← was 4, now 6
+       (… Word/Particle List, Clause Structure, Detailed Dictionary …)
+
+   Reader flow: sound → particle-annotated skeleton → word-for-word
+   trot → fluent translation + grammar explanation → parser-side
+   reference tables.  Applies uniformly to seg- and sent-*.org via
+   the shared renderer + reorder post-pass.  +1 ERT test on the
+   Claude<VerbClass ordering invariant; existing priority-order
+   test updated.
+
+3. **Richer error fallback** (`persist/tibetan-analysis-persist.el`,
+   commit `aa60337`).  When `tibetan-analysis-generate-content`'s
+   outer condition-case fires, the fallback template used to emit
+   only three `[Error]` stubs, wiping a file that had working
+   Wylie + Claude content.  New fallback still emits:
+     - `** Wylie Transliteration` with real Wylie (safe path)
+     - `** Claude Translation [Requesting translation...]` placeholder
+     - `** Claude Grammar` empty but present
+     - `** [Analysis error — partial file only]` with diagnostic
+   So a parser failure on ONE section no longer destroys the whole
+   file — student sees Tibetan + Wylie + full Claude content with
+   a visible marker flagging the degraded parser output.
+
+   Used to recover YBh seg-030..034 on 2026-04-21: a parser corner-
+   case on `gyur pa'o` (nominaliser + declarative particle) made
+   `cl-remove-if-not` receive word-strings where verb-alists were
+   expected.  Underlying bug not yet root-caused — see §6 P5.
+
+Full suite at end of 2026-04-21: **1337 / 1334 expected / 0
+unexpected / 3 intentional skips.**
+
+### 5.8 Claude integration hardening + Anthropic prompt caching (done, 2026-04-20)
+
+Five cumulative improvements to the Claude request path, all
+motivated by running real batch fills against the 97-segment YBh
+corpus and the 85-sentence Milarepa corpus:
+
+1. **Batch-create fires Claude automatically** (commits `bac120b`
+   + `bd3ef40`).  `tibetan-auto-analyze-document' (C-c u B) and
+   `tibetan-sentence-create-all' (C-c s N) previously left every
+   newly-created file with a `[Requesting translation...]'
+   placeholder, requiring a separate
+   `tibetan-auto-request-claude-translations' pass to fill them —
+   parity broken with the single-file `C-c u A' / `C-c s A' path
+   that always fired Claude on create.  Both batch commands now
+   queue staggered async Claude requests for every newly-created
+   file.  Gated by `tibetan-auto-fire-claude-on-create' (default
+   `t`).  +6 ERT tests.  The placeholder-detector regex was also
+   relaxed from `^\\*\\*\\* Claude\\$' (three stars, no suffix) to
+   `^\\*+ Claude\\(?: Translation\\)?[ \\t]*\\$' so both the Auto-
+   Analysis two-star and Provided-Translations three-star layouts
+   register as "needs Claude".  +4 ERT tests.
+
+2. **Drawer-aware segment-text extractor** (commit `ebac416`).
+   `tibetan-org-get-segment-text' used to return everything between
+   the `*** Segment' heading line and the subtree end — which on YBh
+   segments carrying a `:FOLIO: Dxxxx' property drawer meant the
+   drawer body (`:PROPERTIES: :FOLIO: D3a3 :END:') was concatenated
+   into the "Tibetan text" handed to the structural analyser,
+   sometimes tripping `(wrong-type-argument stringp nil)` downstream.
+   Fixed to skip a leading `:PROPERTIES: … :END:' drawer and stop
+   at the first child heading (any depth) so `**** Working
+   Translation' siblings also don't leak.  +2 ERT tests.
+
+   Known regression: the drawer-skip fix meant newly-created
+   analysis files no longer carry the `:FOLIO:' property on their
+   own `* Tibetan Text' heading (the drawer is stripped during
+   read).  Low priority — the folio is still visible in the source
+   seg's drawer.  See §6 P6.
+
+3. **Skip-check path matches create-file's write path** (commit
+   `28deda7`).  `tibetan-auto-analyze-document's skip-check called
+   `(tibetan-analysis-get-filepath seg-num source-file)' which
+   returns a SUFFIXED path like `seg-NNN-<shortname>.org', but
+   `tibetan-analysis-create-file' internally re-computes the path
+   WITHOUT source-file and writes to the UNSUFFIXED `seg-NNN.org'.
+   The mismatch meant every existing seg-NNN.org was silently
+   OVERWRITTEN on every re-run of `C-c u B' — wiping Claude
+   translations.  Fix: drop the source-file arg from the skip-check
+   so both sides use the unsuffixed path.  Lost ~3 hours of API
+   spend rediscovering this; regression test in place (`auto-analyze-
+   skip-check-matches-create-path').
+
+4. **Anthropic prompt caching** (commit `cc582ff`).
+   Every Claude request from the tool uses the SAME system prompt
+   across all segments of a given document (it's `tibetan-analysis--
+   claude-system-prompt' + the source file's `#+TIBETAN_CLAUDE_CONTEXT'
+   block).  Wrapping each `gptel-request' call in
+   `(let ((gptel-cache '(system))) ...)' tells gptel to attach
+   `cache_control: {"type": "ephemeral"}' to the system prompt —
+   Anthropic then serves it from cache at 10% of normal input cost
+   on requests 2..N within the 5-min TTL.  Verified working via
+   direct API probe (`cache_read_input_tokens' jumps to non-zero
+   after first request).  Net savings: ~50% of input cost on warm
+   cache.
+
+5. **Operational outcomes** delivered 2026-04-20:
+   - **Milarepa Tibetisch IV**: 85/85 `sent-*.org' filled via
+     headless batch (12-min wallclock), preserved across
+     re-segmentation disaster.
+   - **Yogācārabhūmi Gotrapaṭala**: 97/97 `seg-*.org' filled via
+     three-pass headless batch (first pass 39/92 ok, OTPM
+     rate-limited; second pass with concurrency=1 delay=15s got
+     the rest after user bought Anthropic API credits).
+   - **Credit-balance vs Max-plan-subscription** distinction
+     documented — the tool uses a separate `~/.authinfo' API key,
+     NOT the Claude Code Max subscription.
+
 ### 5.7 Sentence re-segmentation workflow + bare-seg migrator (done, tested, 2026-04-20)
 
 Two related workflows added/fixed for the Milarepa re-segmentation
@@ -298,6 +438,37 @@ Only start when Carsten says so. When that time comes:
 ### P4 — Workshop presentation (explicitly deferred)
 A `.pptx` / walkthrough for the workshop. Don't start without
 explicit instruction.
+
+### P5 — Root-cause the `gyur pa'o' parser crash (flagged 2026-04-21)
+Five YBh segments (Gotrapaṭala seg-030..034) trip
+`(wrong-type-argument listp "གྱུར")` from `cl-remove(nil
+("གྱུར" "པའོ") :if-not ...)` inside `tibetan-analysis-generate-
+content`.  Minimal reproducer is just the text `གྱུར་པའོ་༎`.
+The immediate symptom is dodged by §5.9.3's richer fallback —
+affected files render with Tibetan + Wylie + Claude but no
+parser-side sections — but the underlying path where a verbs-list
+gets replaced by a words-list needs a focused bisect.  Advice-based
+tracing didn't find it (outer condition-case absorbs before any
+wrapper fires); will need to temporarily disable the outer
+condition-case or instrument each inner `cl-remove-if-not` call
+site explicitly.
+
+Repro:
+```elisp
+(tibetan-analysis-generate-content "གྱུར་པའོ་༎")
+;; Returns the fallback template (starts "** Wylie Transliteration\ngyur pa'o //").
+```
+
+### P6 — Preserve `:FOLIO:' drawer on analysis-file `* Tibetan Text' (low priority, 2026-04-21)
+The drawer-aware extractor (§5.8.2) correctly strips the
+`:PROPERTIES: :FOLIO: Dxxxx :END:' drawer from the source
+segment's body before feeding the analyser — but a side-effect is
+that newly-created analysis files no longer carry `:FOLIO:' on
+their own `* Tibetan Text' heading.  Fix: have
+`tibetan-analysis-create-file' accept an optional folio argument
+and write the drawer explicitly, AND have
+`tibetan-org-get-segment-text' (or a companion helper) return the
+folio alongside the text so the caller can thread it through.
 
 ## 7. Pitfalls / things that have bitten us
 
