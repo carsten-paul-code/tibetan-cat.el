@@ -33,11 +33,42 @@ These are hard preferences. Treat them as rules, not suggestions.
    pause the feature, fix the bug (tests + commit), then resume.
    Only defer when (a) the bug is clearly out of scope for this
    session AND (b) you explicitly ask Carsten and he says OK.
-2. **Test first.** For any non-trivial change, write or extend an ERT
-   test before (or alongside) the implementation. The repo has a deep
-   ERT suite — respect it, keep it green. Stub external dependencies
-   (SQLite, network, glossary files) so tests don't require the full
-   environment.
+2. **Test first — always.** The workflow has three flavours, and
+   tests come BEFORE the code in each:
+
+   - **BDD for specifications.** When Carsten asks for a new
+     behaviour, write a failing ERT test that encodes the acceptance
+     criteria (inputs → expected output / state change) BEFORE any
+     implementation.  The test is the spec; the code is what makes
+     the spec pass.  Prefer one test per observable behaviour, named
+     after the behaviour not the function.
+
+   - **TDD for functions.** New helper / new branch / new edge case
+     → failing test first, minimal implementation to pass, refactor
+     with tests green.
+
+   - **Regression-test-first for bugs.** When a bug surfaces:
+     1. Reproduce it — isolate the minimum input that triggers it.
+     2. Write a failing test (or several) that nails it down: the
+        exact misbehaviour, plus adjacent cases the fix must not
+        break.  Check the tests fail on the current code for the
+        reason you expect — if they pass or fail in a different way,
+        your understanding of the bug is wrong and you need to go
+        back to step 1.
+     3. Fix the code.  All your new tests go green; the suite stays
+        green.
+     4. Only now do manual verification.  The tests guarantee the
+        specific bug class can't come back silently — manual testing
+        just confirms UX polish.
+
+     Do NOT fix a bug by writing the patch first and a test
+     "afterwards to lock it in"; that path produces tests that pass
+     by construction and don't actually guard against the bug
+     re-appearing via a different code path.
+
+   Stub external dependencies (SQLite, network, glossary files) so
+   tests run in batch without side effects.  Keep the suite green
+   after every commit — `make test` is the baseline gate.
 3. **Aim close to perfect.** He is not looking for "ship it" output;
    he wants careful, correct code. If a solution is 80% there, say so
    and propose the remaining work rather than declaring it done.
