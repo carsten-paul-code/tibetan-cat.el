@@ -586,18 +586,23 @@ and any NPs found inside the clause, each routed through the
   (should (get 'tibetan-analysis-show-clause-structure 'custom-type)))
 
 ;; ============================================================================
-;; Word / Particle List gloss-lookup goes through the multisource pipeline
+;; Interlinear Gloss gloss-lookup goes through the multisource pipeline
 ;; ============================================================================
-;; Regression guard for the DRY consolidation: the Word / Particle List
-;; gloss must be picked from the SAME multi-source priority chain that
-;; the Detailed Dictionary uses, so the two sections never contradict
-;; each other (e.g. WPL showing Steinert's "native" while DD shows the
-;; curated Resources entry).  Exercised end-to-end via
-;; `tibetan-analysis-generate-content'.
+;; Regression guard for the DRY consolidation: the Interlinear Gloss
+;; (and the Detailed Dictionary) must pick glosses from the SAME
+;; multi-source priority chain, so the Resources / Custom entry wins
+;; over Steinert / Rangjung Yeshe.  A Resources-sourced entry also
+;; gets a ★ marker inline.
+;;
+;; Previously this test exercised the Word / Particle List section;
+;; that section was removed 2026-04-22 (its content was redundant
+;; with the Interlinear Gloss) and the ★ marker moved up to the
+;; Interlinear.  The multisource lookup path is unchanged; only the
+;; display surface shifted.
 
-(ert-deftest tibetan-analysis-wpl-uses-multisource-resources-first ()
+(ert-deftest tibetan-analysis-interlinear-uses-multisource-resources-first ()
   "When the multisource lookup returns a Resources entry first, the
-Word/Particle List must surface that gloss (with the ★ marker), not
+Interlinear Gloss must surface that gloss (with the ★ marker), not
 fall back to a Steinert/RY single-source pick."
   (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
              (lambda (word)
@@ -613,16 +618,32 @@ fall back to a Steinert/RY single-source pick."
     (let* ((out (condition-case nil
                     (tibetan-analysis-generate-content "ཡུལ")
                   (error nil)))
-           (wpl (and out
-                     (when (string-match
-                            "\\*\\* Word / Particle List\\(.\\|\n\\)*?\\*\\* "
-                            out)
-                       (match-string 0 out)))))
-      (when wpl
-        (should (string-match-p "Heimat" wpl))
-        (should (string-match-p "★" wpl))
+           (il (and out
+                    (when (string-match
+                           "\\*\\* Interlinear Gloss\\(.\\|\n\\)*?\\*\\* "
+                           out)
+                      (match-string 0 out)))))
+      (when il
+        ;; The Resources bilingual "Heimat // homeland" gets its English
+        ;; half surfaced by `tibetan-interlinear--prefer-english'.
+        (should (string-match-p "homeland" il))
+        (should (string-match-p "★" il))
         ;; Must NOT have surfaced the Steinert gloss.
-        (should-not (string-match-p "object; place" wpl))))))
+        (should-not (string-match-p "object; place" il))))))
+
+(ert-deftest tibetan-analysis-word-particle-list-section-is-removed ()
+  "The Word / Particle List section must NOT be present in the
+generated analysis content.  Regression guard for 2026-04-22 — the
+section was removed in favour of relying on the Interlinear Gloss
+above, which carries the same information more compactly."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_word) nil)))
+    (let ((out (condition-case nil
+                   (tibetan-analysis-generate-content "སངས་རྒྱས།")
+                 (error nil))))
+      (when out
+        (should-not (string-match-p "^\\*\\* Word / Particle List"
+                                    out))))))
 
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

@@ -320,13 +320,18 @@ layer.  Called for its value; does not mutate input."
 
 (defun tibetan-interlinear--format-gloss-entry (wylie-stem steinert-link
                                                  short-meaning
-                                                 particle-wylie particle-label)
+                                                 particle-wylie particle-label
+                                                 &optional curated-p)
   "Format one interlinear entry.
 WYLIE-STEM is the Wylie of the lexical part.
 STEINERT-LINK is an org link string or nil.
 SHORT-MEANING is the English gloss or nil.
 PARTICLE-WYLIE is the Wylie of the particle part or nil.
 PARTICLE-LABEL is the short Bialek label (\"GEN\", \"CONC\", etc.) or nil.
+Optional CURATED-P, when non-nil, marks the entry as coming from
+the per-document Resources / Custom vocabulary list.  The entry
+gets a leading `★' and is given a longer truncation budget (60
+vs 30 chars) so hand-curated glosses aren't cut mid-phrase.
 
 The English gloss (or Bialek label) is rendered OUTSIDE the org link
 so the clickable area covers only the Wylie, keeping the readable
@@ -335,10 +340,12 @@ rewritten to parens so the enclosing `[...]' wrapper never produces
 a second `[' / `]' pair that org-mode would parse as a link.
 Returns something like:
 
-  [[steinert-url][stem]] [gloss] [[particle-overview][particle]] [LABEL]"
-  (let ((parts '()))
+  [[steinert-url][stem]] ★ [gloss] [[particle-overview][particle]] [LABEL]"
+  (let ((parts '())
+        (gloss-budget (if curated-p 60 30)))
     ;; Lexical stem part — link wraps ONLY the Wylie; English gloss
-    ;; follows outside the link.
+    ;; follows outside the link.  Curated-P entries get a leading ★
+    ;; marker inserted between the link and the gloss.
     (let ((linked-stem
            (if steinert-link
                (if (string-match "\\[\\[\\([^]]+\\)\\]\\[" steinert-link)
@@ -347,11 +354,14 @@ Returns something like:
                  wylie-stem)
              wylie-stem)))
       (push (if (and short-meaning (not (string-empty-p short-meaning)))
-                (format "%s [%s]" linked-stem
+                (format "%s %s[%s]" linked-stem
+                        (if curated-p "★ " "")
                         (tibetan-interlinear--sanitize-gloss
                          (tibetan-interlinear--truncate-gloss
-                          short-meaning 30)))
-              linked-stem)
+                          short-meaning gloss-budget)))
+              (if curated-p
+                  (format "%s ★" linked-stem)
+                linked-stem))
             parts))
 
     ;; Particle part — rendered as plain text `wylie [LABEL]'.
@@ -405,16 +415,22 @@ strands the reader on half a German phrase."
           (concat (substring m 0 (- max-len 1)) "…"))))))
 
 (defun tibetan-interlinear-generate-gloss (_vocab-pairs enriched-vocab-pairs
-                                            bialek-analysis _tibetan-text)
+                                            bialek-analysis _tibetan-text
+                                            &optional curated-words-hash)
   "Generate the Interlinear Gloss section content.
 _VOCAB-PAIRS is the raw (tibetan . meaning) alist from segmentation
  (accepted for caller symmetry but currently unused — enriched pairs
  carry the short meanings the renderer needs).
 ENRICHED-VOCAB-PAIRS is ((tibetan-clean . short-meaning) ...) from the
-Word/Particle List loop.
+vocabulary loop in `tibetan-analysis-generate-content'.
 BIALEK-ANALYSIS is the result of `tibetan-analyze-grammar-bialek'.
 _TIBETAN-TEXT is the original Tibetan string (for verse structure —
 reserved for shad/verse-break reinsertion; currently unused).
+Optional CURATED-WORDS-HASH is a hash (word → t) of tokens whose
+primary dictionary hit came from per-document Resources / Custom.
+When non-nil, those entries get a leading `★' and a longer
+truncation (60 chars vs 30) so the hand-curated gloss isn't cut
+off mid-phrase.
 Returns a string ready to insert after the `** Interlinear Gloss' heading."
   (let* (;; Build a lookup: tibetan-clean → (tag . short-meaning)
          ;; from the enriched vocab pairs and bialek analysis
@@ -467,14 +483,21 @@ Returns a string ready to insert after the `** Interlinear Gloss' heading."
                                      '("TOPIC (TOP)"))))
                 (condition-case nil
                     (tibetan-steinert-url-org stem-wylie)
-                  (error nil)))))
+                  (error nil))))
+             ;; Curated-entry flag: set only when the caller provided
+             ;; a hash AND the hash knows about this token.  Passed on
+             ;; to the formatter so it can prepend ★ and use a longer
+             ;; truncation for hand-curated Resources glosses.
+             (curated-p (and curated-words-hash
+                             (gethash tibetan-clean curated-words-hash))))
 
         (push (tibetan-interlinear--format-gloss-entry
                (or stem-wylie "?")
                steinert-link
                short-meaning
                particle-wylie
-               particle-label)
+               particle-label
+               curated-p)
               result-parts)))
 
     ;; Join entries, inserting verse breaks where the original text has shad
@@ -595,16 +618,24 @@ Returns a string ready to insert after the `** Particle Overview' heading."
 (defun tibetan-interlinear-insert-sections (enriched-vocab-pairs
                                              bialek-analysis
                                              tibetan-text
-                                             &optional vocab-pairs)
+                                             &optional vocab-pairs
+                                             curated-words-hash)
   "Insert Interlinear Gloss and Particle Overview sections at point.
 This is the main entry point called from the analysis generation pipeline.
 ENRICHED-VOCAB-PAIRS, BIALEK-ANALYSIS, TIBETAN-TEXT as for the
-individual generators.  Optional VOCAB-PAIRS for future use."
+individual generators.  Optional VOCAB-PAIRS for future use.
+
+Optional CURATED-WORDS-HASH is a hash (word → t) of tokens whose
+primary dictionary hit came from the per-document Resources /
+Custom vocabulary list.  When passed, the Interlinear generator
+prepends `★' to those entries so students see at a glance which
+glosses are authoritative, hand-curated for this document."
   ;; Interlinear Gloss
   (insert "** Interlinear Gloss\n")
   (insert (tibetan-interlinear-generate-gloss
            vocab-pairs enriched-vocab-pairs
-           bialek-analysis tibetan-text))
+           bialek-analysis tibetan-text
+           curated-words-hash))
   (insert "\n")
 
   ;; Particle Overview

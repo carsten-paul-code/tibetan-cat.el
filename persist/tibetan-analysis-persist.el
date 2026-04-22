@@ -1718,6 +1718,13 @@ affected, not the rest of the analysis."
                ;; section so the CAT line benefits from the enrichment
                ;; instead of pulling raw RY glosses.
                (enriched-vocab-pairs nil)
+               ;; `word-clean' → t for every token whose primary
+               ;; dictionary hit was Resources or Custom (the hand-
+               ;; curated per-document vocabulary list).  Consumed
+               ;; by the Interlinear renderer to prepend ★ to
+               ;; authoritative entries, matching the marker the
+               ;; legacy Word/Particle List used to show.
+               (curated-words-hash (make-hash-table :test 'equal))
                (interlinear-marker nil))
 
           ;; Build verb lookup for quick access
@@ -1762,10 +1769,26 @@ affected, not the rest of the analysis."
             ;; below.  Falls back to vocab-pairs meaning if lookup misses.
             ;; Tag is shown only when informative (particle category, verb).
             ;; ============================================================
-            (insert "** Word / Particle List\n")
-            (if vocab-pairs
-                (let ((idx 1))
-                  (dolist (pair vocab-pairs)
+            ;; ============================================================
+            ;; SECTION 2 (computation-only): build `enriched-vocab-pairs'
+            ;; and `curated-words-hash' from the vocabulary layer.
+            ;; ============================================================
+            ;; Previously this loop also emitted a `** Word / Particle List'
+            ;; section.  Removed 2026-04-21 per user feedback — the
+            ;; Interlinear Gloss above carries the same information in a
+            ;; denser, more readable form, and repeating it here just
+            ;; duplicated the word-by-word listing.  We keep the ENTIRE
+            ;; computation because:
+            ;;   1. `enriched-vocab-pairs' is consumed by the CAT Gloss
+            ;;      renderer (section 8b below) and by the Interlinear
+            ;;      generator itself.
+            ;;   2. `curated-words-hash' (new) is consumed by the Interlinear
+            ;;      renderer to prepend ★ to Resources / Custom entries so
+            ;;      students can spot authoritative, hand-curated glosses
+            ;;      at a glance.
+            (when vocab-pairs
+              (let ((idx 1))
+                (dolist (pair vocab-pairs)
                     (let* ((word (car pair))
                            (fallback-meaning (cdr pair))
                            ;; Strip shad/punctuation before lookup so ལ། → ལ,
@@ -1777,11 +1800,17 @@ affected, not the rest of the analysis."
                            (root-form (tibetan-strip-particles word-clean))
                            (gram-role (tibetan-analysis--get-grammatical-role
                                        word-clean root-form verb-table))
-                           (tag (cond
-                                 ((null gram-role) nil)
-                                 ((member gram-role
-                                          '("Noun" "?" "Unknown" "N")) nil)
-                                 (t gram-role)))
+                           ;; Formerly shown as `[TAG]' in the Word / Particle
+                           ;; List heading (removed 2026-04-21).  Kept in the
+                           ;; binding chain because `root-form' and
+                           ;; `gram-role' remain useful further down for the
+                           ;; `curated-source-p' / `verb-gloss' enrichment.
+                           ;; Underscore prefix silences the byte-compiler.
+                           (_tag (cond
+                                  ((null gram-role) nil)
+                                  ((member gram-role
+                                           '("Noun" "?" "Unknown" "N")) nil)
+                                  (t gram-role)))
                            ;; Primary lookup: route through the SAME multi-source
                            ;; pipeline that the Detailed Dictionary section uses,
                            ;; taking the first entry.  This is the Resources-first
@@ -1947,75 +1976,23 @@ affected, not the rest of the analysis."
                              ;; (typically RY's "verb: do"/"a loss") with
                              ;; the Hill-based morphology gloss.
                              (t verb-gloss))))
-                      ;; Display the punctuation-stripped form so ལ། renders
-                      ;; as ལ [la], not as ལ། [la/].  `word-clean' already has
-                      ;; trailing shad / punctuation removed higher up.
-                      ;;
-                      ;; DharmaMitra-style format:
-                      ;;   N. Tibetan [wylie] ([[steinert-url][Steinert]])  [tag]
-                      ;;      ★/◇ gloss
-                      ;; The Steinert URL links to the web dictionary for the
-                      ;; stripped root form (particles don't have useful entries).
-                      (let* ((wylie-key
-                              (condition-case nil
-                                  (when (fboundp 'tibetan-to-wylie-fixed)
-                                    (downcase
-                                     (string-trim
-                                      (tibetan-to-wylie-fixed word-clean))))
-                                (error nil)))
-                             (steinert-link
-                              (when (and wylie-key
-                                         (fboundp 'tibetan-steinert-url-org)
-                                         ;; Skip Steinert links for pure
-                                         ;; particles / grammatical affixes.
-                                         (not (member tag
-                                                      '("GENITIVE (GEN)"
-                                                        "CONVERBIAL: ABLATIVE CONVERB"
-                                                        "CONVERBIAL: SIMULTANEOUS CONVERB"
-                                                        "CONVERBIAL: CONCESSIVE CONVERB"
-                                                        "CONVERBIAL: CONDITIONAL CONVERB"))))
-                                (tibetan-steinert-url-org wylie-key))))
-                        (insert (format "%2d. %s" idx
-                                        (tibetan-analysis--format-word-with-wylie
-                                         word-clean)))
-                        (when steinert-link
-                          (insert (format " (%s)" steinert-link)))
-                        (when tag
-                          (insert (format "  [%s]" tag)))
-                        (when (and short-meaning (not (string-empty-p short-meaning)))
-                          ;; Put translation(s) on an indented continuation line
-                          ;; for every entry so they're visually easy to spot.
-                          ;; Stem-reference entries ("Pf. von X; DE // EN") keep
-                          ;; the stem ref on line 1 after " — " and move the
-                          ;; bilingual translation to an indented line 2.
-                          (let ((display-meaning
-                                 (tibetan-analysis--format-bilingual-gloss
-                                  short-meaning)))
-                            (if (string-match-p "\n" display-meaning)
-                                ;; Multi-line (stem-ref split): first chunk on
-                                ;; same line after " — ", rest indented.
-                                (let* ((lines (split-string display-meaning "\n"))
-                                       (first (car lines))
-                                       (rest (cdr lines)))
-                                  (insert (format "  — %s" first))
-                                  (dolist (ln rest)
-                                    (insert (format "\n    %s" ln))))
-                              ;; Single-line gloss: move to its own indented
-                              ;; line for consistency with stem-ref entries.
-                              (insert (format "\n    — %s" display-meaning)))))
-                        (when (and source (string-prefix-p "Resources" source))
-                          (insert " ★"))
-                        (insert "\n"))
+                      ;; Mark Resources / Custom entries in the curated hash
+                      ;; so the Interlinear renderer can prepend ★.  The
+                      ;; `source' variable is set earlier in this let* from
+                      ;; `detailed-entry's :source plist field.
+                      (when (and source
+                                 (or (string-prefix-p "Resources" source)
+                                     (string-prefix-p "Custom" source)))
+                        (puthash word-clean t curated-words-hash))
                       ;; Record the enriched gloss for reuse by the CAT Gloss
-                      ;; section.  We store the ORIGINAL surface word (with
-                      ;; particles still attached) so the CAT renderer can
-                      ;; pattern-match on converb/case endings.
+                      ;; section and the Interlinear generator.  We store the
+                      ;; ORIGINAL surface word (with particles still attached)
+                      ;; so the CAT renderer can pattern-match on converb/case
+                      ;; endings.
                       (push (cons word-clean short-meaning)
                             enriched-vocab-pairs)
-                      (setq idx (1+ idx)))))
-              (insert "[Word list extraction not available]\n"))
+                      (setq idx (1+ idx))))))
             (setq enriched-vocab-pairs (nreverse enriched-vocab-pairs))
-            (insert "\n")
 
             ;; ============================================================
             ;; SECTION 1a (deferred): Interlinear Gloss + Particle Overview
@@ -2035,7 +2012,8 @@ affected, not the rest of the analysis."
                    enriched-vocab-pairs
                    bialek-data
                    tibetan-text
-                   vocab-pairs))))
+                   vocab-pairs
+                   curated-words-hash))))
             (when interlinear-marker
               (set-marker interlinear-marker nil))
 

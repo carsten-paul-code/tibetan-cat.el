@@ -298,5 +298,37 @@ sequence either."
     ;; Core content still readable.
     (should (string-match-p "accusative" result))))
 
+(ert-deftest tibetan-interlinear-format-gloss-curated-gets-star ()
+  "When CURATED-P is non-nil, the formatter prepends `★' before the
+gloss so students can spot authoritative Resources / Custom entries
+at a glance.  Regression guard for the 2026-04-22 Word/Particle List
+removal — the ★ marker that the removed section provided must now
+live in the Interlinear output instead."
+  (let ((non-curated (tibetan-interlinear--format-gloss-entry
+                      "mid la ras pa" nil "name of a person"
+                      nil nil nil))
+        (curated (tibetan-interlinear--format-gloss-entry
+                  "mid la ras pa" nil "name of a person"
+                  nil nil t)))
+    (should-not (string-match-p "★" non-curated))
+    (should (string-match-p "★" curated))
+    ;; Both contain the gloss body.
+    (should (string-match-p "name of a person" non-curated))
+    (should (string-match-p "name of a person" curated))))
+
+(ert-deftest tibetan-interlinear-format-gloss-curated-uses-longer-budget ()
+  "Curated entries get 60 chars of truncation budget (vs 30 for
+non-curated) so hand-written bilingual Resources glosses don't get
+cut off mid-phrase in the interlinear."
+  (let* ((long-gloss "name of a person; the cotton-clad yogin from the Mid la family")
+         (short (tibetan-interlinear--format-gloss-entry
+                 "mid la ras pa" nil long-gloss nil nil nil))
+         (long  (tibetan-interlinear--format-gloss-entry
+                 "mid la ras pa" nil long-gloss nil nil t)))
+    ;; Non-curated truncates before \"cotton-clad\".
+    (should-not (string-match-p "cotton" short))
+    ;; Curated keeps enough room to include it.
+    (should (string-match-p "cotton" long))))
+
 (provide 'tibetan-interlinear-test)
 ;;; tibetan-interlinear-test.el ends here
