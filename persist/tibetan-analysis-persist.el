@@ -109,29 +109,57 @@ markers.  Customise to taste."
 (defvar-local tibetan-analysis--faces-setup nil
   "Non-nil if faces have already been set up for this buffer.")
 
+(defconst tibetan-analysis--particle-map-font-lock-keywords
+  '(("\\(=[^=\n]+=\\)" 1 'tibetan-analysis-case-particle-face prepend)
+    ("\\(~[^~\n]+~\\)" 1 'tibetan-analysis-converb-particle-face prepend))
+  "Font-lock keywords for Particle Map markers in analysis buffers.
+
+`=X=' → magenta (`tibetan-analysis-case-particle-face')
+`~X~' → orange  (`tibetan-analysis-converb-particle-face')
+
+Why font-lock rather than relying on `org-mode's emphasis parser:
+org's emphasis regexp requires a word-boundary PRE character before
+the opening marker.  The Particle Map renders compact Wylie
+compounds like `mthu='i='' and `bslabs ~nas~' where the leading `='
+or `~' is embedded in the token — preceded by a letter, not
+whitespace.  Org silently skips emphasis parsing there; students
+see plain-color markers instead of the intended magenta / orange.
+
+Font-lock bypasses the PRE requirement entirely, applying the
+face wherever the regex matches.  The `prepend' face-combining
+puts our explicit face ahead of any org-verbatim / org-code the
+emphasis parser DID add for clean word-boundary tokens, so
+rendering stays uniform across both forms.")
+
 (defun tibetan-analysis-setup-faces ()
   "Setup faces for analysis buffers.
 Ensures Tibetan text remains readable at all heading levels and in
 verbatim/code blocks which otherwise might use smaller fonts.
 Also differentiates case particles (magenta) from converbs (orange)
-in the Particle Map by remapping `org-verbatim' and `org-code'
-respectively.  Only applies once per buffer to prevent accumulation."
+in the Particle Map via font-lock — bypassing org's emphasis
+parser which doesn't fire for compound-embedded markers like
+`mthu='i='.  Only applies once per buffer to prevent accumulation."
   (unless tibetan-analysis--faces-setup
     ;; Ensure headings don't get too small (level 3+ used for dictionary entries)
     (face-remap-add-relative 'org-level-1 :height 1.1)
     (face-remap-add-relative 'org-level-2 :height 1.05)
     (face-remap-add-relative 'org-level-3 :height 1.0)  ; Keep readable for Tibetan headings
 
-    ;; Particle-map highlighting: `=CASE=' (verbatim) → magenta,
-    ;; `~CONVERB~' (code) → orange.  The height :1.0 remap is merged
-    ;; into the same face-remap so existing users get both effects
-    ;; (readable size + color) in one setup call.
-    (face-remap-add-relative 'org-verbatim
-                             :height 1.0
-                             :inherit 'tibetan-analysis-case-particle-face)
-    (face-remap-add-relative 'org-code
-                             :height 1.0
-                             :inherit 'tibetan-analysis-converb-particle-face)
+    ;; Height-only remap on org emphasis faces so verbatim / code text
+    ;; stays readable regardless of theme; color is applied below via
+    ;; font-lock so it works even for compound-embedded markers that
+    ;; org's emphasis parser would skip.
+    (face-remap-add-relative 'org-verbatim :height 1.0)
+    (face-remap-add-relative 'org-code :height 1.0)
+
+    ;; Install buffer-local font-lock rules for the Particle Map markers.
+    ;; Done buffer-locally via `font-lock-add-keywords' with `nil' mode
+    ;; so only this buffer picks them up.  Re-run `font-lock-flush'
+    ;; immediately so existing content gets the face on first render.
+    (font-lock-add-keywords
+     nil tibetan-analysis--particle-map-font-lock-keywords 'append)
+    (when (fboundp 'font-lock-flush)
+      (font-lock-flush))
 
     (setq tibetan-analysis--faces-setup t)))
 

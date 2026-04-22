@@ -953,5 +953,113 @@ Reads cleaner than upcased `='I='; magenta/orange face remap in
     ;; Clean converb, not `~=nas=~' double-wrap.
     (should-not (string-match-p "~=nas=~" map))))
 
+;; ----------------------------------------------------------------------------
+;; Regression — Particle-map markers render colored even when embedded in
+;; compound Wylie tokens where org's emphasis parser won't fire.
+;; ----------------------------------------------------------------------------
+;;
+;; Reproduced 2026-04-22 on Milarepa seg-30: the `='i=' inside `mthu='i='
+;; rendered with no face at all (not magenta).  Diagnosis: org-mode's
+;; emphasis regexp requires a word-boundary PRE character before the
+;; opening `='.  The Particle Map's compact compound
+;;   `der mthu='i= man ngag bslabs ~nas~'
+;; has `=' directly after the letter `u' — no PRE match, no verbatim
+;; parsing, no face.  Similarly for `~nas~' embedded in compounds on
+;; other segments.
+;;
+;; Fix: install buffer-local font-lock keywords in
+;; `tibetan-analysis-setup-faces' that match `=X=' / `~X~' regardless
+;; of org's word-boundary rules and apply the magenta / orange face
+;; directly.  Tested by running font-lock-ensure on a buffer with the
+;; compact particle-map text and checking the face on each marker's
+;; character.
+
+(defun tibetan-particle-map-faces-test--face-at (buffer pos)
+  "Return the face (or list of faces) at POS in BUFFER."
+  (with-current-buffer buffer
+    (get-text-property pos 'face)))
+
+(defun tibetan-particle-map-faces-test--any-face-eq (face-value target)
+  "Return non-nil if FACE-VALUE is TARGET or contains TARGET in its list."
+  (cond
+   ((eq face-value target) t)
+   ((and (listp face-value) (memq target face-value)) t)
+   (t nil)))
+
+(ert-deftest tibetan-analysis-particle-map-case-marker-colored-in-compound ()
+  "After `tibetan-analysis-setup-faces' runs, a case-particle marker
+embedded INSIDE a compound Wylie token (no word boundary before the
+opening `=') must carry `tibetan-analysis-case-particle-face' — so
+`'i' in `mthu='i=' renders magenta.  Regression guard for the
+org-emphasis-parser-doesn't-fire bug spotted on seg-30."
+  (require 'org)
+  (with-temp-buffer
+    (insert "der mthu='i= man ngag bslabs ~nas~ song /\n")
+    (org-mode)
+    (tibetan-analysis-setup-faces)
+    (font-lock-ensure (point-min) (point-max))
+    ;; Locate the opening `=' of `='i='.
+    (goto-char (point-min))
+    (let ((case-pos (save-excursion
+                      (goto-char (point-min))
+                      (and (re-search-forward "='i=" nil t)
+                           (match-beginning 0)))))
+      (should case-pos)
+      (let ((f (tibetan-particle-map-faces-test--face-at
+                (current-buffer) case-pos)))
+        (should (tibetan-particle-map-faces-test--any-face-eq
+                 f 'tibetan-analysis-case-particle-face))))
+    ;; And the same for the middle of the marker (`'i').
+    (let ((mid-pos (save-excursion
+                     (goto-char (point-min))
+                     (and (re-search-forward "='i=" nil t)
+                          (1+ (match-beginning 0))))))
+      (when mid-pos
+        (let ((f (tibetan-particle-map-faces-test--face-at
+                  (current-buffer) mid-pos)))
+          (should (tibetan-particle-map-faces-test--any-face-eq
+                   f 'tibetan-analysis-case-particle-face)))))))
+
+(ert-deftest tibetan-analysis-particle-map-converb-marker-colored-in-compound ()
+  "Same contract for converb markers `~X~' — the `nas' in
+`bslabs ~nas~' (with `~' NOT at a strict word boundary relative to
+the preceding word) must render with
+`tibetan-analysis-converb-particle-face' (orange)."
+  (require 'org)
+  (with-temp-buffer
+    (insert "bslabs ~nas~ grogs po\n")
+    (org-mode)
+    (tibetan-analysis-setup-faces)
+    (font-lock-ensure (point-min) (point-max))
+    (let ((conv-pos (save-excursion
+                      (goto-char (point-min))
+                      (and (re-search-forward "~nas~" nil t)
+                           (match-beginning 0)))))
+      (should conv-pos)
+      (let ((f (tibetan-particle-map-faces-test--face-at
+                (current-buffer) conv-pos)))
+        (should (tibetan-particle-map-faces-test--any-face-eq
+                 f 'tibetan-analysis-converb-particle-face))))))
+
+(ert-deftest tibetan-analysis-particle-map-face-setup-is-idempotent ()
+  "Running `tibetan-analysis-setup-faces' twice in the same buffer
+must not double-install the font-lock keywords (no duplicated rules,
+no accumulated face lookups)."
+  (require 'org)
+  (with-temp-buffer
+    (insert "mthu='i= bslabs ~nas~\n")
+    (org-mode)
+    (tibetan-analysis-setup-faces)
+    (tibetan-analysis-setup-faces)    ;; 2nd call must be a no-op
+    (font-lock-ensure (point-min) (point-max))
+    ;; Still colored — face application still correct.
+    (let ((pos (save-excursion
+                 (goto-char (point-min))
+                 (and (re-search-forward "='i=" nil t)
+                      (match-beginning 0)))))
+      (should (tibetan-particle-map-faces-test--any-face-eq
+               (tibetan-particle-map-faces-test--face-at (current-buffer) pos)
+               'tibetan-analysis-case-particle-face)))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
