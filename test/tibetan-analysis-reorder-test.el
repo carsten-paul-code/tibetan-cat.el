@@ -81,35 +81,35 @@ body must be removed from the Provided Translations body."
 ;; ----------------------------------------------------------------------------
 
 (ert-deftest tibetan-analysis-reorder-priority-order-applied ()
-  "The six priority sections must appear in the configured order
-first, before any other sections."
+  "The priority sections must appear in the configured order
+first, before any other sections.  Pass 6b (2026-04-22) replaced
+`** Particle Map' / `** Grammatical Markers' with a single
+`** Grammar' section; the priority order is now
+Wylie → Interlinear → Claude Translation → Grammar → Claude Grammar
+→ Sentence Structure → Verb Classification."
   (let* ((content (concat
                    "** Word / Particle List\nwpl\n\n"
                    "** Verb Classification (Hill 2010)\nverbs\n\n"
-                   "** Particle Map\npmap\n\n"
+                   "** Grammar\ngrammar\n\n"
                    "** Wylie Transliteration\nwylie\n\n"
                    "** Sentence Structure\nsent\n\n"
                    "** Claude Translation\nct\n\n"
                    "** Interlinear Gloss\nig\n\n"
-                   "** Grammatical Markers\ngm\n\n"
+                   "** Claude Grammar\ncg\n\n"
                    "** Detailed Dictionary\ndd\n\n"))
          (reordered (tibetan-analysis--reorder-auto-content content))
          (headings (tibetan-analysis-reorder-test--headings reordered))
-         ;; Priority order 2026-04-21: Claude Translation + Grammar now
-         ;; come BEFORE Verb Classification so readers see the fluent
-         ;; translation + grammar explanation first, and the parser-side
-         ;; Hill verb classification after.
          (expected-prefix '("** Wylie Transliteration"
-                            "** Particle Map"
                             "** Interlinear Gloss"
                             "** Claude Translation"
+                            "** Grammar"
+                            "** Claude Grammar"
+                            "** Sentence Structure"
                             "** Verb Classification (Hill 2010)")))
     (should (equal (cl-subseq headings 0 (length expected-prefix))
                    expected-prefix))
     ;; Every unlisted section still appears somewhere in the output.
     (dolist (keep '("** Word / Particle List"
-                    "** Sentence Structure"
-                    "** Grammatical Markers"
                     "** Detailed Dictionary"))
       (should (member keep headings)))))
 
@@ -120,14 +120,14 @@ order after reorder."
                    "** Zeta\n1\n\n"
                    "** Wylie Transliteration\nw\n\n"
                    "** Alpha\n2\n\n"
-                   "** Particle Map\np\n\n"
+                   "** Grammar\ng\n\n"
                    "** Beta\n3\n\n"))
          (reordered (tibetan-analysis--reorder-auto-content content))
          (headings (tibetan-analysis-reorder-test--headings reordered))
          (tail (cl-subseq headings 2)))
-    ;; Priority first: Wylie, then Particle Map.
+    ;; Priority first: Wylie, then Grammar.
     (should (equal (cl-subseq headings 0 2)
-                   '("** Wylie Transliteration" "** Particle Map")))
+                   '("** Wylie Transliteration" "** Grammar")))
     ;; Non-priority preserve their original order (Zeta before Alpha
     ;; before Beta).
     (should (equal tail '("** Zeta" "** Alpha" "** Beta")))))

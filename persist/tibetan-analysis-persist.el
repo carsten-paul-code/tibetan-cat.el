@@ -1643,7 +1643,7 @@ keeps German // English pairs side by side."
                   ;; Particle: short compact entry, skip the multi-source dump.
                   ;; See `** Particle Overview' earlier in the file for
                   ;; the grammatical function.
-                  (insert " — particle (see Particle Overview above)\n")
+                  (insert " — particle (see ** Grammar above)\n")
                 (insert "\n")
                 (if sources
                   (dolist (src sources)
@@ -1701,25 +1701,106 @@ keeps German // English pairs side by side."
             (insert "\n"))
         (insert "[No dictionary entries available]\n\n")))))
 
+(defun tibetan-analysis--render-grammar-section (tibetan-text particles verbs
+                                                              bialek-analysis)
+  "Render the merged `** Grammar' section body to the current buffer.
+
+Pass 6b replaces three redundant sections (`** Particle Map',
+`** Particle Overview', `** Grammatical Markers') with a single
+`** Grammar' containing three sub-sections:
+
+  *** Particle Map — the Wylie transliteration with particle markers
+      (=CASE= for case particles, ~CONVERB~ for converbs, Ø for
+      zero-marked arguments) — a quick visual scan of the grammar.
+
+  *** Particles in This Segment — compact one-line-per-particle
+      reference: each particle's type (ABLATIVE CONVERB, GENITIVE,
+      ...), its short label (ABL/CONV:nas, GEN, ...), the word it
+      attaches to, and a Portfolio section reference (§2.11, §1.5,
+      ...).  Pass 6c will extend this with per-particle function
+      sub-ID + self-contained Portfolio snippet.
+
+TIBETAN-TEXT feeds the Particle Map's annotated Wylie.  PARTICLES
+and VERBS come from the Bialek / verb-extraction pipeline.
+BIALEK-ANALYSIS is the result of `tibetan-analyze-grammar-bialek'
+— used by the compact particles list."
+  (insert "** Grammar\n")
+  (insert "Three angles on the grammar of this segment: a visual\n")
+  (insert "particle map, a compact reference of each particle\n")
+  (insert "with its Portfolio section, and — in `** Claude Grammar'\n")
+  (insert "below — a prose summary of the clause-chain.\n\n")
+  ;; ------------------------------------------------------------------
+  ;; Sub-section 1: Particle Map (annotated Wylie)
+  ;; ------------------------------------------------------------------
+  (insert "*** Particle Map\n")
+  (insert "=CASE=: case marker · ~CONVERB~: converbial · Ø: zero-marked argument\n\n")
+  (let ((annotated-wylie (tibetan-analysis--generate-particle-map
+                          tibetan-text particles verbs)))
+    (insert annotated-wylie)
+    (insert "\n\n"))
+  ;; ------------------------------------------------------------------
+  ;; Sub-section 2: Particles in This Segment (compact merged list)
+  ;; ------------------------------------------------------------------
+  ;; Collapses the old `** Particle Overview' (per-particle Portfolio
+  ;; reference) and `** Grammatical Markers' (compact per-occurrence
+  ;; list with Portfolio ref and translation hint) into one table-like
+  ;; block — one line per Bialek particle detection.  The full
+  ;; Portfolio snippet per specific sub-function lands in Pass 6c.
+  (insert "*** Particles in This Segment\n")
+  (if bialek-analysis
+      (dolist (a bialek-analysis)
+        (let ((particle (nth 0 a))
+              (word (nth 1 a))
+              (type (nth 2 a))
+              (trans-guide (nth 4 a))
+              (function-desc (nth 3 a))
+              (portfolio (nth 6 a)))
+          (insert (format "- %s in «%s» — %s"
+                          (tibetan-analysis--format-word-with-wylie particle)
+                          (tibetan-analysis--format-word-with-wylie word)
+                          type))
+          (when portfolio
+            (insert (format "  [%s]" portfolio)))
+          (insert "\n")
+          (let ((hint (or trans-guide function-desc)))
+            (when (and hint (not (string-empty-p hint)))
+              (insert (format "  → %s\n" hint))))))
+    (insert "[No grammatical markers detected]\n"))
+  (insert "\n"))
+
 (defconst tibetan-analysis--priority-section-order
   '("** Wylie Transliteration"
-    "** Particle Map"
     "** Interlinear Gloss"
     "** Claude Translation"
+    "** Grammar"
     "** Claude Grammar"
+    "** Sentence Structure"
     "** Verb Classification (Hill 2010)")
   "Section headings (at org level-2) that should appear first in the
 `* Auto-Analysis' output, in this exact order.  Any level-2 section
 NOT listed here is kept and emitted afterwards in the order it was
-generated.  `** Claude Grammar' is promoted from its legacy
-level-3 home inside `** Provided Translations' before the reorder.
+generated.
 
-Reader flow: after the Wylie reading and the particle-annotated map,
-the Interlinear Gloss gives the word-for-word trot.  Claude's fluent
-Translation and Grammar analysis follow immediately — the sequence a
-student would want to *read first* (sense → explanation) — before
-the parser-side Verb Classification, Word/Particle List, and clause
-structure surfaces below for deep reference.")
+Pass 6b (2026-04-22) redesign: the four redundant particle sections
+— Particle Map, Particle Overview, Grammatical Markers, and the
+segment-specific content of Claude Grammar — collapsed into a single
+`** Grammar' section with three sub-headings (Particle Map, Particles
+in This Segment, [future] Portfolio snippets).  Sentence Structure
+and Clause Structure likewise merge into one `** Sentence Structure'
+carrying per-clause verb + NP + role info.
+
+`** Claude Grammar' remains a separate level-2 section placed
+immediately after `** Grammar' in the read order — visually it
+follows Grammar so the parser-side particle reference and Claude's
+prose reading sit side by side without tangling the Claude write-
+path.  A future pass can nest Claude Grammar into ** Grammar as a
+sub-heading if desired; that requires rewiring the Claude scaffold
+and is out of scope here.
+
+Reader flow: Wylie → Interlinear Gloss (word-for-word) → Claude
+Translation (fluent) → Grammar (particles + references) → Claude
+Grammar (prose summary) → Sentence Structure (clause + arguments)
+→ Verb Classification → Detailed Dictionary (deep reference).")
 
 (defun tibetan-analysis--split-level2-sections (content)
   "Split CONTENT into an ordered list of level-2 section cons cells.
@@ -2211,120 +2292,42 @@ doesn't apply and the default ranking is used."
               (set-marker interlinear-marker nil))
 
             ;; ============================================================
-            ;; SECTION 3b: Particle Map - visual particle identification
+            ;; SECTION 3b: Grammar (merged Particle Map + Particle
+            ;; Overview + Grammatical Markers — Pass 6b, 2026-04-22).
+            ;; The old `** Particle Overview' emission from
+            ;; `tibetan-interlinear-insert-sections' is also suppressed
+            ;; when `tibetan-analysis-merged-grammar' is non-nil (the
+            ;; default) so the per-particle Portfolio reference lives
+            ;; only in `*** Particles in This Segment' below.
             ;; ============================================================
-            (insert "** Particle Map\n")
-            (insert "Wylie with particles marked: =CASE= for case markers, ~CONVERB~ for converbs, Ø for zero-marked agents/patients\n\n")
-            ;; Generate annotated Wylie showing particles
-            (let ((annotated-wylie (tibetan-analysis--generate-particle-map tibetan-text particles verbs)))
-              (insert annotated-wylie)
-              (insert "\n\n"))
-
-            ;; ============================================================
-            ;; SECTION 4: Grammatical Analysis (Bialek) - compact format
-            ;; ============================================================
-            (insert "** Grammatical Markers\n")
             (let ((bialek-analysis (condition-case nil
                                        (when (fboundp 'tibetan-analyze-grammar-bialek)
                                          (tibetan-analyze-grammar-bialek tibetan-text))
                                      (error nil))))
-              (if bialek-analysis
-                  (dolist (a bialek-analysis)
-                    (let ((particle (nth 0 a))
-                          (word (nth 1 a))
-                          (type (nth 2 a))
-                          (function (nth 3 a))
-                          (trans-guide (nth 4 a))
-                          (portfolio (nth 6 a)))
-                      ;; Format: particle [wylie] in «word [wylie]» → TYPE: translation.
-                      ;; Don't use =...= for Tibetan as it forces monospace font.
-                      (insert (format "- %s in «%s» → %s: %s"
-                                      (tibetan-analysis--format-word-with-wylie
-                                       particle)
-                                      (tibetan-analysis--format-word-with-wylie
-                                       word)
-                                      type
-                                      (or trans-guide function)))
-                      (when portfolio
-                        (insert (format " [%s]" portfolio)))
-                      (insert "\n")))
-                (insert "[No grammatical markers detected]\n")))
-            (insert "\n")
+              (tibetan-analysis--render-grammar-section
+               tibetan-text particles verbs bialek-analysis))
 
             ;; ============================================================
-            ;; SECTION 4: Sentence Structure — per-clause verb lines
+            ;; SECTION 4: Sentence Structure (merged — Pass 6b, 2026-04-22)
             ;; ============================================================
-            ;; Round 1 annotations from the extractor are used here:
-            ;;   • Modal / reporting verbs are hidden from the main list
-            ;;     and shown as annotations on the content verb they chain to.
-            ;;   • Negation (ma-/mi-) is displayed as `NEG` on the verb.
-            ;;   • Suffix type (converb / nominalizer / ...) is shown alongside
-            ;;     the lemma so the clause role is obvious.
-            ;;   • Arguments are sorted by source-pos and only include units
-            ;;     that sit inside this verb's clause (see `analyze-arguments').
-            ;;
-            (insert "** Sentence Structure\n")
-            (if (and verbs (fboundp 'tibetan-analyze-arguments))
-                (let* ((content-verbs
-                        (cl-remove-if (lambda (v)
-                                        (or (alist-get 'is-modal v)
-                                            (alist-get 'is-reporter v)))
-                                      verbs))
-                       (any-structure nil))
-                  (dolist (verb content-verbs)
-                    (when (and verb (listp verb) (consp (car verb)))
-                      (let* ((lemma (alist-get 'lemma verb))
-                             (meaning (alist-get 'meaning verb))
-                             (suffix (alist-get 'suffix-type verb))
-                             (negated (alist-get 'negated verb))
-                             (modal-of (alist-get 'modal-of verb))
-                             (reports-p (alist-get 'reports-p verb))
-                             (arg-analysis (tibetan-analyze-arguments
-                                            verb multiword-units words verbs)))
-                        (when (or arg-analysis lemma)
-                          (setq any-structure t)
-                          (insert "- ")
-                          (when negated (insert "NEG "))
-                          (insert (tibetan-analysis--format-word-with-wylie lemma))
-                          (when (and meaning (not (string-empty-p meaning)))
-                            (insert (format " '%s'"
-                                            (car (split-string meaning "," t)))))
-                          (when suffix
-                            ;; suffix already starts with ", "; skip its leading comma
-                            (let ((s (if (string-prefix-p ", " suffix)
-                                         (substring suffix 2)
-                                       suffix)))
-                              (insert (format " [%s]" s))))
-                          (when modal-of
-                            (insert (format " +MODAL:%s" modal-of)))
-                          (when reports-p
-                            (insert (format " +SAYS:%s" reports-p)))
-                          (insert ":")
-                          (dolist (arg arg-analysis)
-                            (let ((marker (alist-get 'marker arg))
-                                  (form (alist-get 'form arg))
-                                  (is-topic (alist-get 'is-topic arg)))
-                              (unless is-topic
-                                (insert (format " %s(%s)" form (or marker "Ø"))))))
-                          (insert "\n")))))
-                  (unless any-structure
-                    (insert "[No argument structure detected]\n")))
-              (insert "[No verbs detected]\n"))
-            (insert "\n")
-
-            ;; ============================================================
-            ;; SECTION 4b: Clause Structure (Round-2) — optional
-            ;; ============================================================
-            ;; Gate on `tibetan-analysis-show-clause-structure' so users who
-            ;; prefer the compact legacy view can opt out without losing
-            ;; the Sentence Structure section above.
+            ;; Pass 6b merged the old skinny `** Sentence Structure'
+            ;; (verb-then-arguments one-liner) into the Round-2 clause
+            ;; structure — the Round-2 output ALREADY carries per-
+            ;; clause verb + NPs + roles + converb dependency, which is
+            ;; a strict superset of the old skinny line.  We rename
+            ;; the merged view to `** Sentence Structure' because
+            ;; that's the conceptual label students expect at this
+            ;; level of analysis; `** Clause Structure' as a label is
+            ;; retired.  The gate `tibetan-analysis-show-clause-
+            ;; structure' still controls whether the section appears
+            ;; at all (default t).
             (when tibetan-analysis-show-clause-structure
-              (insert "** Clause Structure\n")
+              (insert "** Sentence Structure\n")
               (let ((rendered (tibetan-analysis--render-clause-structure
                                words verbs multiword-units)))
                 (if (and rendered (not (string-empty-p rendered)))
                     (insert rendered)
-                  (insert "[Round-2 clause structure unavailable]\n")))
+                  (insert "[Round-2 sentence structure unavailable]\n")))
               (insert "\n"))
 
             ;; ============================================================

@@ -39,6 +39,15 @@
 When nil, the Particle Overview section will still be generated
 using the inline Bialek analysis data, but without Portfolio excerpts.")
 
+(defvar tibetan-interlinear-emit-particle-overview nil
+  "When non-nil, `tibetan-interlinear-insert-sections' emits the legacy
+`** Particle Overview' level-2 section.  Default nil (Pass 6b,
+2026-04-22): the per-particle Portfolio reference has moved into
+`** Grammar / *** Particles in This Segment' rendered by
+`tibetan-analysis--render-grammar-section'.  Kept as an escape
+hatch for tests and callers that still want the old standalone
+section.")
+
 ;; ============================================================================
 ;; PORTFOLIO PARSER
 ;; ============================================================================
@@ -691,8 +700,16 @@ glosses are authoritative, hand-curated for this document."
            curated-words-hash))
   (insert "\n")
 
-  ;; Particle Overview
-  (when bialek-analysis
+  ;; Particle Overview emission is GATED by
+  ;; `tibetan-interlinear-emit-particle-overview' (default nil as of
+  ;; Pass 6b, 2026-04-22).  The per-particle Portfolio reference and
+  ;; per-occurrence segment translation hint now live under
+  ;; `** Grammar / *** Particles in This Segment' rendered by the
+  ;; persist module.  Tests and legacy callers that want the old
+  ;; standalone `** Particle Overview' section can set the variable
+  ;; to non-nil to re-enable.
+  (when (and bialek-analysis
+             (bound-and-true-p tibetan-interlinear-emit-particle-overview))
     (insert "** Particle Overview\n")
     (insert (tibetan-interlinear-generate-particle-overview
              bialek-analysis enriched-vocab-pairs))

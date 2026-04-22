@@ -645,5 +645,44 @@ above, which carries the same information more compactly."
         (should-not (string-match-p "^\\*\\* Word / Particle List"
                                     out))))))
 
+;; ----------------------------------------------------------------------------
+;; Pass 6b: merged `** Grammar' section + retired subheadings
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-analysis-grammar-section-renders-merged ()
+  "Pass 6b (2026-04-22) merges Particle Map + Particle Overview +
+Grammatical Markers into a single `** Grammar' section with two
+sub-headings: `*** Particle Map' and `*** Particles in This Segment'.
+The old standalone sections must NOT appear."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_word) nil)))
+    (let ((out (condition-case nil
+                   (tibetan-analysis-generate-content "བདག་གིས་ལས་བྱས་ནས་སོང་།")
+                 (error nil))))
+      (when out
+        ;; Merged section exists at level 2
+        (should (string-match-p "^\\*\\* Grammar$" out))
+        ;; With expected sub-headings
+        (should (string-match-p "^\\*\\*\\* Particle Map$" out))
+        (should (string-match-p "^\\*\\*\\* Particles in This Segment$" out))
+        ;; Old standalone sections are retired
+        (should-not (string-match-p "^\\*\\* Particle Map$" out))
+        (should-not (string-match-p "^\\*\\* Particle Overview$" out))
+        (should-not (string-match-p "^\\*\\* Grammatical Markers$" out))))))
+
+(ert-deftest tibetan-analysis-sentence-structure-replaces-clause-structure ()
+  "Pass 6b merges the old skinny `** Sentence Structure' (verb → args)
+into the Round-2 clause output and renames the section.  `** Clause
+Structure' must be retired; `** Sentence Structure' carries the
+per-clause NPs + roles."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_word) nil)))
+    (let ((out (condition-case nil
+                   (tibetan-analysis-generate-content "བདག་གིས་ལས་བྱས།")
+                 (error nil))))
+      (when out
+        (should (string-match-p "^\\*\\* Sentence Structure$" out))
+        (should-not (string-match-p "^\\*\\* Clause Structure$" out))))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

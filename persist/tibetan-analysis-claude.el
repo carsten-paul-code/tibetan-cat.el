@@ -145,22 +145,26 @@ Example:
   mgon po, noun, \"protector\"
 
 ## Grammar
-Explain the grammatical structure pedagogically for readers learning \
-Classical Tibetan. Name the metalanguage explicitly (Ergativ, Ablativ, \
-Dativ, Terminativ, Instrumental, Komitativ, Genitiv; converb type \
-— ablative / causal / simultaneous / conditional / concessive / \
-coordinative; nominalizer; finite verb; honorific stem). Reference the \
-actual Tibetan forms in parentheses. If the passage is verse \
-(consistent pāda-length lines bounded by shad), note the line structure \
-and any recurring rhetorical formula spanning the stanza; if prose, \
-focus on the clause chain and converb function within the narrative \
-sequence. You will be given the parser's own analysis in the user \
-prompt — treat it as ground truth for case and verb tagging; your \
-job is to narrate it pedagogically, not to contradict it. If you \
-disagree with a tag, flag the disagreement rather than silently \
-overruling it.
+ONE short paragraph (4–6 sentences, roughly 100–150 words) \
+summarising the grammatical backbone of the passage — not a clause-by-\
+clause walkthrough. Identify (a) the main finite verb(s) and any \
+governing converb(s); (b) the chain structure if there is one \
+(V-nas / V-te / V-cing sequencing); (c) one or two noteworthy \
+constructions worth flagging (an idiom, a reported-speech setup, a \
+hedged or approximative expression). Name the metalanguage explicitly \
+when useful (Ergative, Ablative, Dative, Terminative, Instrumental, \
+Comitative, Genitive; converb type; nominalizer; finite verb; \
+honorific stem) and reference actual Tibetan forms in parentheses. \
+You will be given the parser's own analysis in the user prompt — treat \
+it as ground truth for case and verb tagging; if you disagree, flag \
+the disagreement in one sentence rather than silently overruling.
 
-Use only these three headings. No preamble, no closing remarks.
+Per-particle functional detail (which §1.5.x applies to THIS ར, \
+which §2.11.x applies to THIS ནས, etc.) belongs in the later \
+`## Particles' section — NOT here.  Keep this paragraph at the \
+passage level.
+
+Use only these headings. No preamble, no closing remarks.
 
 Genre, period and context hints (if any) are supplied below by the \
 source file via `#+TIBETAN_CLAUDE_CONTEXT:' headers. Do NOT assume a \
