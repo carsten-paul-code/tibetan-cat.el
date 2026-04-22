@@ -130,7 +130,24 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript]
         ("གྲ" . "gr") ("ཀྲ" . "kr") ("ཏྲ" . "tr") ("ཐྲ" . "thr") ("བྲ" . "br")
         ("རྒྱ" . "rgy") ("རྐྱ" . "rky") ("རྨྱ" . "rmy")
         ("སྒྱ" . "sgy") ("སྐྱ" . "sky") ("སྤྱ" . "spy") ("སྦྱ" . "sby")
-        ("གྲྭ" . "grw") ("ཀྲུ" . "kru") ("དྲུ" . "dru")
+        ("གྲྭ" . "grw")
+        ;; NOTE: `("ཀྲུ" . "kru")' and `("དྲུ" . "dru")' were removed
+        ;; 2026-04-22.  They baked the `u' vowel into the stack's wylie
+        ;; output, but the implicit-`a'-adding logic downstream can't
+        ;; tell the difference between a vowel-embedded wylie and a
+        ;; consonant-only wylie.  Result: `དྲུག' (stack + vowel +
+        ;; suffix) was being matched as `དྲུ' (len=3 stack → "dru")
+        ;; + `ག' (suffix).  No vowel-after followed the 3-stack (the
+        ;; next Tibetan char was the suffix `ག'), so the is-root
+        ;; branch added an implicit `a' → "dru" + "a" + "g" = "druag".
+        ;;
+        ;; Letting `དྲུག' decompose naturally as `དྲ' (2-char stack,
+        ;; wylie "dr") + `ུ' (vowel, wylie "u") + `ག' (suffix,
+        ;; wylie "g") gives "drug" correctly without any special-
+        ;; casing.  `གྲྭ' stays — its `ྭ' is a subjoined consonant
+        ;; (wa-zur), not a vowel sign, so the implicit-`a' logic
+        ;; handles it correctly (`གྲྭ' alone → `grwa', with vowel
+        ;; sign after → `grwu' etc.)
         ;; Consonant + subscript ལ (la-btags) - missing stacks
         ("གླ" . "gl") ("བླ" . "bl") ("ཟླ" . "zl") ("སླ" . "sl")
         ("དབླ" . "dbl") ("ཀླ" . "kl")
@@ -247,13 +264,22 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript]
                     (let ((next-char (tibetan-safe-substring syllable next-pos (1+ next-pos)))
                           (consonant-count 0)
                           (has-vowel-after-second nil))
-                      ;; Count total consonants in syllable
+                      ;; Count total consonants in syllable.
+                      ;; Include BOTH the main consonant block (U+0F40-U+0F6C)
+                      ;; AND the subjoined-consonant block (U+0F90-U+0FBC).
+                      ;; Without the subjoined range, syllables like `འདྲ'
+                      ;; (U+0F60 U+0F51 U+0FB2) count as only 2 consonants
+                      ;; even though `ྲ' (U+0FB2) is a genuine consonant —
+                      ;; making the prefix detector fail the `>= 3 consonants'
+                      ;; threshold and mis-identify `འ' as a root rather
+                      ;; than a prefix.  Result was `'adra' instead of `'dra'.
                       (let ((temp-pos 0)
                             (seen-consonants 0))
                         (while (< temp-pos (length syllable))
                           (let ((temp-char (tibetan-safe-substring syllable temp-pos (1+ temp-pos))))
-                            (when (and (>= (string-to-char temp-char) #x0F40)
-                                      (<= (string-to-char temp-char) #x0F6C))
+                            (when (let ((cp (string-to-char temp-char)))
+                                    (or (and (>= cp #x0F40) (<= cp #x0F6C))
+                                        (and (>= cp #x0F90) (<= cp #x0FBC))))
                               (setq consonant-count (1+ consonant-count))
                               (setq seen-consonants (1+ seen-consonants)))
                             ;; Check for vowel mark after second consonant

@@ -259,5 +259,67 @@ Regression: ཨོམ was producing \"aom\" instead of \"om\"."
   ;; Multi-syllable: OM SWA STI mantra
   (should (equal (tibetan-to-wylie-fixed "ཨོམ་སྭ་སྟི") "om swa sti")))
 
+;; ============================================================================
+;; Regression — apostrophe-prefix (a-chung) + subjoined-consonant clusters
+;; ============================================================================
+;;
+;; Reproduced 2026-04-22 on Milarepa seg-30: the Wylie line rendered
+;;   ... yin yin 'adra ba bslabs nas ...
+;; instead of the expected
+;;   ... yin yin 'dra ba bslabs nas ...
+;;
+;; Two distinct bugs surfaced:
+;;
+;;   Bug A (primary): `འདྲ' → `'adra' instead of `'dra'.
+;;     The prefix-detection loop counts only chars in U+0F40..U+0F6C
+;;     (main consonant block) and ignores the subjoined range
+;;     U+0F90..U+0FBC.  For `འདྲ' (3 chars: `འ' main + `ད' main +
+;;     `ྲ' subjoined) the count is 2, no vowel-after-second, so
+;;     `འ' fails the is-prefix check and gets treated as a root —
+;;     which means it receives an implicit `a' suffix.
+;;
+;;   Bug B (adjacent): `དྲུག' → `druag' instead of `drug'.
+;;     The consonant-stacks table has a vowel-EMBEDDED entry
+;;     `("དྲུ" . "dru")' (the wylie already carries the `u').
+;;     When this stack matches, the implicit-a logic still runs
+;;     because the next Tibetan char after the 3-stack is `ག'
+;;     (a suffix, not a vowel sign) — so `is-root + not has-vowel-
+;;     after' evaluates true and adds `a', producing `drua' + `g'.
+;;
+;; Fix targets:
+;;   · Extend the prefix detector to count subjoined consonants.
+;;   · Remove the vowel-embedded stacks `དྲུ'/`ཀྲུ' so `དྲུག'
+;;     naturally decomposes as `དྲ' (stack) + `ུ' (vowel) + `ག'
+;;     (suffix) via the normal three-step path.
+
+(ert-deftest tibetan-wylie-a-prefix-with-subjoined-cluster ()
+  "`འ' prefix followed by a consonant + subjoined-consonant cluster
+must render as `'Cr' / `'Cl' / ..., not `'aCr'."
+  (should (equal (tibetan-to-wylie-fixed "འདྲ")    "'dra"))
+  (should (equal (tibetan-to-wylie-fixed "འདྲ་བ") "'dra ba"))
+  ;; Adjacent cases that already worked — must keep working.
+  (should (equal (tibetan-to-wylie-fixed "འགྲོ")   "'gro"))
+  (should (equal (tibetan-to-wylie-fixed "འདི")    "'di"))
+  (should (equal (tibetan-to-wylie-fixed "འོངས")   "'ongs")))
+
+(ert-deftest tibetan-wylie-stack-plus-u-plus-suffix ()
+  "`ད' + subjoined `ྲ' + vowel `ུ' + suffix `ག' = `drug', not
+`druag'.  The stack-with-embedded-vowel regression."
+  (should (equal (tibetan-to-wylie-fixed "དྲུག") "drug"))
+  (should (equal (tibetan-to-wylie-fixed "ཀྲུ")  "kru"))
+  ;; Adjacent — `དྲ' without vowel carries implicit `a' → `dra'.
+  (should (equal (tibetan-to-wylie-fixed "དྲ")   "dra"))
+  ;; Other roots with ra-subscript stay correct.
+  (should (equal (tibetan-to-wylie-fixed "བྲུག") "brug"))
+  (should (equal (tibetan-to-wylie-fixed "ཁྲུས") "khrus")))
+
+(ert-deftest tibetan-wylie-a-prefix-full-sentence ()
+  "Full-sentence regression from Milarepa seg-30 — `'adra ba' was
+the rendering; expected `'dra ba'."
+  (should
+   (equal
+    (tibetan-to-wylie-fixed "འདྲ་བ་བསླབས་")
+    "'dra ba bslabs ")))
+
 (provide 'tibetan-wylie-test)
 ;;; tibetan-wylie-test.el ends here
