@@ -84,6 +84,35 @@
     (should (equal (cadr result) "སུ"))
     (should (equal (cddr result) "TERM"))))
 
+(ert-deftest tibetan-interlinear-split-pure-standalone-particle ()
+  "A word that IS a known particle (e.g. `ནས' standing alone as
+ablative converb, not bolted onto a verb stem) returns a split with
+nil stem and (WORD . LABEL) particle info.  This makes the
+renderer emit a compact `nas [ABL/CONV:nas]' — no jump link, no
+dictionary gloss — instead of treating the bare particle as a
+content word."
+  (let ((result (tibetan-interlinear--split-word-particle
+                 "ནས" "CONVERBIAL: ABLATIVE CONVERB")))
+    (should (null (car result)))                         ; no stem
+    (should (equal (cadr result) "ནས"))                 ; whole word is particle
+    (should (equal (cddr result) "ABL/CONV:nas")))      ; compact label
+  ;; Same for bare `ལ' (dative)
+  (let ((result (tibetan-interlinear--split-word-particle "ལ" "DATIVE (DAT)")))
+    (should (null (car result)))
+    (should (equal (cadr result) "ལ"))
+    (should (equal (cddr result) "DAT"))))
+
+(ert-deftest tibetan-interlinear-split-bslabs-not-causal-converb ()
+  "The past stem `བསླབས' (of སློབ) must NOT be split into
+`བསླ' + `བས' as a V+bas causal converb — it's a single verb form.
+This depends on the Hill verb DB guard in
+`tibetan-analyze-converbs-bialek'; here we verify that when no
+bialek tag is supplied the Interlinear splitter treats the word as
+lexical (no split)."
+  (let ((result (tibetan-interlinear--split-word-particle "བསླབས" nil)))
+    (should (equal (car result) "བསླབས"))
+    (should (null (cdr result)))))
+
 ;; ============================================================================
 ;; PORTFOLIO PARSER
 ;; ============================================================================

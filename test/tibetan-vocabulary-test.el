@@ -95,6 +95,22 @@ Trailing tsheg is trimmed so the stripped form matches the canonical
   (should (string= (tibetan-strip-particles "ཡིན་ནོ") "ཡིན"))
   (should (string= (tibetan-strip-particles "ཡོད་དོ") "ཡོད")))
 
+(ert-deftest tibetan-strip-particles-preserves-verb-past-stems ()
+  "Known Hill-DB past/imperative stems that happen to end in a
+particle-shaped suffix (`བས' for causal converb) are returned
+UNCHANGED.  Without this guard `བསླབས' (past of སློབ) would get
+stripped to the nonsense root `བསླ' — breaking every dictionary
+lookup downstream and producing garbled Wylie like `basla' in the
+Interlinear + Detailed Dictionary output."
+  (skip-unless (fboundp 'tibetan-verb-lookup))
+  ;; བསླབས (past of སློབ "to train") — must stay intact
+  (should (string= (tibetan-strip-particles "བསླབས") "བསླབས"))
+  ;; སླེབས (past of སླེབ "to arrive")
+  (should (string= (tibetan-strip-particles "སླེབས") "སླེབས"))
+  ;; Control: a bare noun + causal converb DOES still strip (the
+  ;; guard is specific to verb-stem overlap, not a blanket disable).
+  (should (string= (tibetan-strip-particles "རྒྱལ་པོ་བས") "རྒྱལ་པོ")))
+
 (ert-deftest tibetan-strip-particles-punctuation ()
   "Test stripping Tibetan punctuation."
   (should (string= (tibetan-strip-particles "བདག།") "བདག"))

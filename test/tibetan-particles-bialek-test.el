@@ -112,6 +112,30 @@
     (let ((particles (mapcar (lambda (item) (car item)) result)))
       (should (member "ཞིང" particles)))))
 
+(ert-deftest tibetan-analyze-converbs-bialek-skips-verb-past-stems ()
+  "Past/imperative stems ending in `བས' (`བསླབས', `སླེབས', `སློབས')
+are NOT `V+bas' causal converbs — they are single inflected verb
+forms.  The Hill DB guard must prevent the analyser from reporting
+them as CONVERBIAL: CAUSAL CONVERB.  Without this guard, Milarepa
+seg-30 `བསླབས' (past of སློབ) triggered a false `V+bas' split, and
+the Interlinear picked up the bogus tag and rendered `[[term-basla]
+[basla]]' as the stem — nonsense Wylie + broken dictionary jump."
+  ;; བསླབས (past of སློབ "to train")
+  (let ((result (tibetan-analyze-converbs-bialek "བསླབས")))
+    (should-not (cl-some (lambda (item)
+                           (string-match-p "CAUSAL CONVERB" (nth 2 item)))
+                         result)))
+  ;; སློབས (imperative of སློབ)
+  (let ((result (tibetan-analyze-converbs-bialek "སློབས")))
+    (should-not (cl-some (lambda (item)
+                           (string-match-p "CAUSAL CONVERB" (nth 2 item)))
+                         result)))
+  ;; སླེབས (past of སླེབ "to arrive")
+  (let ((result (tibetan-analyze-converbs-bialek "སླེབས")))
+    (should-not (cl-some (lambda (item)
+                           (string-match-p "CAUSAL CONVERB" (nth 2 item)))
+                         result))))
+
 (ert-deftest tibetan-analyze-converbs-bialek-returns-analysis ()
   "Test that analyze-converbs-bialek returns properly formatted analysis lists."
   (let ((result (tibetan-analyze-converbs-bialek "གསེགས་པ་ནས་དེ་ནས")))

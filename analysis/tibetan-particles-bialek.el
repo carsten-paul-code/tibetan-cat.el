@@ -388,10 +388,26 @@ Returns list of (particle word type function translation-guide bialek-ref)."
                   analysis))))
 
        ;; ========== CAUSAL CONVERB: པས/བས (cause, reason) ==========
+       ;; Guarded against verb-stem collisions: past/imperative stems
+       ;; like `བསླབས' (past of སློབ "to train"), `སླེབས' (past of
+       ;; སླེབ "to arrive"), `སློབས' (imperative of སློབ), `ཐོབས'
+       ;; (imperative of ཐོབ) all end in `བས' but are NOT `V+bas'
+       ;; causal converbs — they are single inflected verb forms.
+       ;; Without this guard the Interlinear mis-splits `བསླབས' into
+       ;; a non-word `བསླ' stem plus a fake `བས' converb, producing
+       ;; broken Wylie `basla' and a garbled dictionary entry.
+       ;; The Hill 2010 verb database (`tibetan-verb-lookup') is the
+       ;; authoritative source for which forms are verb stems.
        ((or (string-suffix-p "པས" word) (string-suffix-p "བས" word))
         (let* ((particle (if (string-suffix-p "པས" word) "པས" "བས"))
-               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
-          (when (> (length root) 0)
+               (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle))))
+               ;; Skip the causal-converb split when WORD is itself
+               ;; a known verb stem (past/imperative/etc.).
+               (is-verb-form (and (fboundp 'tibetan-verb-lookup)
+                                  (ignore-errors
+                                    (tibetan-verb-lookup word)))))
+          (when (and (> (length root) 0)
+                     (not is-verb-form))
             (push (list particle word "CONVERBIAL: CAUSAL CONVERB"
                        (format "Causal converb: '%s' is the REASON for main verb" root)
                        (format "Translation: 'because %s' or 'since %s'" root root)

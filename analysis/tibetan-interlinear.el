@@ -270,14 +270,25 @@ Ordered longest-first within each group to avoid partial matches.")
   "Split TIBETAN-WORD into (STEM . PARTICLE-INFO) using BIALEK-TAG.
 BIALEK-TAG is the grammatical role string from the Word/Particle List,
 e.g. \"GENITIVE (GEN)\" or \"CONCESSIVE PARTICLE\" or nil.
-Returns (STEM . (PARTICLE-TIBETAN . SHORT-LABEL)) if a particle is found,
-or (WORD . nil) if no particle detected."
+
+Returns one of:
+  (STEM . (PARTICLE-TIBETAN . SHORT-LABEL))  — stem + clitic particle
+  (nil  . (WORD . SHORT-LABEL))              — pure standalone particle
+  (WORD . nil)                                — no particle detected
+
+The pure-standalone-particle case fires when the whole word IS a
+known particle (e.g. `ནས' on its own, not bolted onto a verb) AND
+the bialek analysis tags it as such.  The Interlinear renderer
+emits these as a compact `nas [ABL]' — no dictionary gloss, no
+jump link — matching how stem-final particles are rendered."
   (if (or (null bialek-tag)
           (member bialek-tag '("Noun" "?" "Unknown" "N" "Verb"
                                "Transitive verb" "Intransitive verb")))
       ;; No particle — whole word is lexical
       (cons tibetan-word nil)
-    ;; Try to match a particle suffix
+    ;; 1) First try matching a true suffix (strict: word longer than
+    ;;    the suffix, so `bslabs + nas' splits but `nas' alone does
+    ;;    not match as a suffix of itself).
     (let ((result nil))
       (cl-dolist (pattern tibetan-interlinear--particle-patterns)
         (let ((suffix (car pattern))
@@ -288,14 +299,24 @@ or (WORD . nil) if no particle detected."
             (let ((stem (substring tibetan-word 0
                                    (- (length tibetan-word)
                                       (length suffix)))))
-              ;; Strip trailing tsheg from stem
               (setq stem (replace-regexp-in-string "[་ \t]+$" "" stem))
               (setq result (cons stem (cons suffix label)))))))
-      (if result
-          result
-        ;; Tag says it's a particle but we couldn't strip it —
-        ;; treat the whole word as lexical with the tag shown
-        (cons tibetan-word nil)))))
+      (cond
+       (result result)
+       ;; 2) Pure standalone particle: the word IS one of the known
+       ;;    particle forms and the bialek tag confirms it.  Render
+       ;;    compactly via the particle-only branch in the format
+       ;;    helper (stem = nil).
+       ((cl-some (lambda (pattern) (string= (car pattern) tibetan-word))
+                 tibetan-interlinear--particle-patterns)
+        (let* ((entry (cl-find-if (lambda (pattern)
+                                    (string= (car pattern) tibetan-word))
+                                  tibetan-interlinear--particle-patterns))
+               (label (cdr entry)))
+          (cons nil (cons tibetan-word label))))
+       ;; 3) Bialek says particle but we can't identify it — fall
+       ;;    back to lexical rendering rather than mis-labelling.
+       (t (cons tibetan-word nil))))))
 
 ;; ============================================================================
 ;; INTERLINEAR GLOSS GENERATOR
@@ -353,20 +374,27 @@ Returns something like:
     ;; target is an internal anchor (`term-xxx') — the Detailed
     ;; Dictionary section below emits matching `<<term-xxx>>' radio
     ;; targets.  Pass TERM-ANCHOR=nil to render plain Wylie text.
-    (let ((linked-stem
-           (if (and term-anchor (stringp term-anchor))
-               (format "[[%s][%s]]" term-anchor wylie-stem)
-             wylie-stem)))
-      (push (if (and short-meaning (not (string-empty-p short-meaning)))
-                (format "%s %s[%s]" linked-stem
-                        (if curated-p "★ " "")
-                        (tibetan-interlinear--sanitize-gloss
-                         (tibetan-interlinear--truncate-gloss
-                          short-meaning gloss-budget)))
-              (if curated-p
-                  (format "%s ★" linked-stem)
-                linked-stem))
-            parts))
+    ;;
+    ;; Empty / nil WYLIE-STEM signals a pure-standalone-particle
+    ;; token (e.g. a bare `ནས' functioning as ablative converb); the
+    ;; caller has already stuffed the particle data into the
+    ;; PARTICLE-WYLIE / PARTICLE-LABEL slots, so we simply skip the
+    ;; stem rendering and let the particle branch below do its job.
+    (when (and wylie-stem (not (string-empty-p wylie-stem)))
+      (let ((linked-stem
+             (if (and term-anchor (stringp term-anchor))
+                 (format "[[%s][%s]]" term-anchor wylie-stem)
+               wylie-stem)))
+        (push (if (and short-meaning (not (string-empty-p short-meaning)))
+                  (format "%s %s[%s]" linked-stem
+                          (if curated-p "★ " "")
+                          (tibetan-interlinear--sanitize-gloss
+                           (tibetan-interlinear--truncate-gloss
+                            short-meaning gloss-budget)))
+                (if curated-p
+                    (format "%s ★" linked-stem)
+                  linked-stem))
+              parts)))
 
     ;; Particle part — rendered as plain text `wylie [LABEL]'.
     ;;
@@ -457,18 +485,26 @@ Returns a string ready to insert after the `** Interlinear Gloss' heading."
       (let* ((tibetan-clean (car pair))
              (short-meaning (cdr pair))
              (bialek-tag (gethash tibetan-clean bialek-by-word))
-             ;; Split into stem + particle
+             ;; Split into stem + particle.  Three shapes:
+             ;;   (STEM . (PART-TIB . LABEL))   — clitic on stem
+             ;;   (nil  . (WORD . LABEL))       — pure standalone particle
+             ;;   (WORD . nil)                  — lexical, no particle
              (split (tibetan-interlinear--split-word-particle
                      tibetan-clean bialek-tag))
              (stem-tibetan (car split))
              (particle-info (cdr split))   ; (PARTICLE-TIB . LABEL) or nil
-             ;; Convert to Wylie
+             ;; Convert to Wylie.  When the token is a pure standalone
+             ;; particle, stem-tibetan is nil and the format helper's
+             ;; particle-only branch renders `wylie [LABEL]' without a
+             ;; stem link or dictionary gloss (matching how stem+clitic
+             ;; compounds already render the clitic half).
              (stem-wylie
-              (condition-case nil
-                  (when (fboundp 'tibetan-to-wylie-fixed)
-                    (downcase (string-trim
-                               (tibetan-to-wylie-fixed stem-tibetan))))
-                (error nil)))
+              (when stem-tibetan
+                (condition-case nil
+                    (when (fboundp 'tibetan-to-wylie-fixed)
+                      (downcase (string-trim
+                                 (tibetan-to-wylie-fixed stem-tibetan))))
+                  (error nil))))
              (particle-wylie
               (when particle-info
                 (condition-case nil
@@ -503,9 +539,15 @@ Returns a string ready to insert after the `** Interlinear Gloss' heading."
                              (gethash tibetan-clean curated-words-hash))))
 
         (push (tibetan-interlinear--format-gloss-entry
-               (or stem-wylie "?")
+               ;; Pure-particle tokens pass "" as the stem — the format
+               ;; helper's `short-meaning' path is skipped (no gloss to
+               ;; print for a bare function word) and the particle
+               ;; branch emits the compact `wylie [LABEL]'.
+               (or stem-wylie "")
                term-anchor
-               short-meaning
+               ;; Suppress the dictionary gloss for pure-particle
+               ;; tokens — the particle label IS the gloss here.
+               (and stem-wylie short-meaning)
                particle-wylie
                particle-label
                curated-p)

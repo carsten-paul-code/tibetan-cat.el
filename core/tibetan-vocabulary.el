@@ -756,29 +756,42 @@ Returns meaning if found, nil otherwise."
 Only strips unambiguous multi-character particles to avoid false positives.
 Also trims any trailing tsheg (་) or whitespace so that stripped forms
 match the canonical (tsheg-free) keys used in the Resources and other
-dictionaries."
+dictionaries.
+
+Verb-stem guard: if WORD is itself a known Hill-DB verb form (past,
+imperative, etc.), it is returned unchanged.  Without this guard
+`བསླབས' (past of སློབ) and `སླེབས' (past of སླེབ) would match the
+`བས' causal-converb pattern and get split into nonsense roots
+(`བསླ' / `སླེ') that fail every dictionary lookup downstream."
   (let ((root word))
     ;; First strip any Tibetan punctuation
     (setq root (replace-regexp-in-string "[།༎༏]" "" root))
 
-    ;; Then strip particles - ONLY multi-character ones or very clear single ones
-    ;; Avoid stripping single chars that could be part of words (like ར in ཕྱིར)
-    (let ((particle-patterns
-           '("ཀྱིས" "གྱིས" "གིས" "འིས" "ཡིས"    ; ergative (longer first)
-             "འི" "ཀྱི" "གི" "ཡི" "གྱི"           ; genitive
-             "པས" "བས"                             ; causal converb
-             "ནས" "ལས"                             ; ablative
-             "སྟེ" "ཏེ" "ཅིང" "ཞིང"              ; converbs
-             "ཀྱང" "ཡང" "འང"                     ; concessive
-             "ནི"                                   ; topic
-             "སོ" "ཏོ" "ནོ" "དོ" "རོ" "འོ" "ངོ")))  ; sentence-final
-      (dolist (particle particle-patterns)
-        (when (string-suffix-p particle root)
-          (setq root (tibetan-vocab-safe-substring root 0 (- (length root) (length particle)))))))
-    ;; Strip trailing tsheg/whitespace left behind after particle removal
-    ;; (e.g. "ཕམ་ནས" → strip "ནས" → "ཕམ་" → trim to "ཕམ" so it matches
-    ;; Resources keys).
-    (replace-regexp-in-string "[་ \t]+$" "" root)))
+    ;; Short-circuit: if the full (punctuation-stripped) word is a
+    ;; Hill-DB verb stem, it's an inflected verb form, NOT a lexical
+    ;; root + particle.  Return as-is (minus trailing whitespace).
+    (if (and (fboundp 'tibetan-verb-lookup)
+             (ignore-errors (tibetan-verb-lookup root)))
+        (replace-regexp-in-string "[་ \t]+$" "" root)
+
+      ;; Then strip particles - ONLY multi-character ones or very clear single ones
+      ;; Avoid stripping single chars that could be part of words (like ར in ཕྱིར)
+      (let ((particle-patterns
+             '("ཀྱིས" "གྱིས" "གིས" "འིས" "ཡིས"    ; ergative (longer first)
+               "འི" "ཀྱི" "གི" "ཡི" "གྱི"           ; genitive
+               "པས" "བས"                             ; causal converb
+               "ནས" "ལས"                             ; ablative
+               "སྟེ" "ཏེ" "ཅིང" "ཞིང"              ; converbs
+               "ཀྱང" "ཡང" "འང"                     ; concessive
+               "ནི"                                   ; topic
+               "སོ" "ཏོ" "ནོ" "དོ" "རོ" "འོ" "ངོ")))  ; sentence-final
+        (dolist (particle particle-patterns)
+          (when (string-suffix-p particle root)
+            (setq root (tibetan-vocab-safe-substring root 0 (- (length root) (length particle)))))))
+      ;; Strip trailing tsheg/whitespace left behind after particle removal
+      ;; (e.g. "ཕམ་ནས" → strip "ནས" → "ཕམ་" → trim to "ཕམ" so it matches
+      ;; Resources keys).
+      (replace-regexp-in-string "[་ \t]+$" "" root))))
 
 ;; ============================================================================
 ;; VOCABULARY LOOKUP
