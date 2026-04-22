@@ -685,6 +685,74 @@ per-clause NPs + roles."
         (should-not (string-match-p "^\\*\\* Clause Structure$" out))))))
 
 ;; ----------------------------------------------------------------------------
+;; Regression — Portfolio snippet multi-line bodies are fully indented
+;; ----------------------------------------------------------------------------
+;;
+;; Reproduced 2026-04-22 on Milarepa seg-30: the `des' entry's
+;; §1.3.4 Portfolio description embedded example bullets, e.g.
+;;
+;;   The ergative/instrumental may express the cause or reason …
+;;
+;;   - thos pas phyir mi 'ong gi 'bras bu thob bo --- "because..."
+;;   - dran pas rab tu dga' ba skyes te/ --- "because..."
+;;
+;; The `*** Particles in This Segment' renderer's
+;;   (insert (format "    %s\n" (truncate-para body 400)))
+;; indented only the FIRST line (the intro paragraph).  Subsequent
+;; lines — particularly example bullets that start with `- ' —
+;; landed at column 0 after the first newline, so they read as
+;; brand-new top-level particle entries rather than body of the
+;; current snippet.  Students saw two phantom `- thos pas ...'
+;; "particle" items between `des' and `der'.
+;;
+;; Fix requirement: EVERY line of the snippet body (including
+;; blank lines within) must be indented to match the first line's
+;; column.  Writing regression test first per CLAUDE.md rule 2.
+
+(ert-deftest tibetan-analysis-grammar-portfolio-snippet-multiline-indented ()
+  "Every line of a multi-line Portfolio snippet body must be
+indented so it stays nested under the particle entry — example
+bullets cannot escape to column 0.  Regression guard for the
+`des' §1.3.4 indent leak spotted on seg-30."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_w) nil))
+            ((symbol-function 'tibetan-interlinear-portfolio-function-snippet)
+             (lambda (_key sub-id)
+               (when (equal sub-id "1.3.4")
+                 (cons "Reason"
+                       (concat
+                        "The ergative may express cause or reason.\n\n"
+                        "- thos pas phyir mi 'ong --- example 1\n"
+                        "- dran pas rab tu dga' --- example 2"))))))
+    (let* ((tibetan-analysis--claude-particles-for-render
+            (list (list :word "des" :particle "s"
+                        :sub-id "1.3.4" :label "reason")))
+           (out (condition-case nil
+                    (tibetan-analysis-generate-content "དེས།")
+                  (error nil))))
+      (when out
+        ;; Locate the Grammar section's particle entries.
+        (let* ((grammar-start (string-match "\\*\\*\\* Particles in This Segment"
+                                            out))
+               (grammar-end (or (string-match "^\\*\\* " out
+                                              (and grammar-start
+                                                   (1+ grammar-start)))
+                                (length out)))
+               (grammar-body (and grammar-start
+                                  (substring out grammar-start grammar-end))))
+          (when grammar-body
+            ;; CRITICAL: no line beginning with `- thos' / `- dran' at
+            ;; column 0 (not nested under `    ' indentation).  The
+            ;; example bullets must stay indented as part of the
+            ;; snippet body.
+            (should-not (string-match-p "^- thos pas" grammar-body))
+            (should-not (string-match-p "^- dran pas" grammar-body))
+            ;; And the example lines ARE still present (we didn't
+            ;; truncate them away) — look for their text, indented.
+            (should (string-match-p "    - thos pas\\|      - thos pas"
+                                    grammar-body))))))))
+
+;; ----------------------------------------------------------------------------
 ;; Pass 6c: Claude particle-function parser + Portfolio snippet rendering
 ;; ----------------------------------------------------------------------------
 

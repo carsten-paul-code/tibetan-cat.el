@@ -2019,9 +2019,19 @@ text.  When nil, falls back to the compact parser-only list."
                                (> (length matching-tuples) 1))
                       (insert (format " (in %s)" context-word)))
                     (insert "\n")
-                    (insert (format "    %s\n"
-                                    (tibetan-interlinear--truncate-para
-                                     (cdr snippet) 400))))
+                    ;; Indent EVERY line of the snippet body (not just
+                    ;; the first) so example bullets inside the
+                    ;; Portfolio description stay nested under the
+                    ;; particle entry.  Without per-line indent, a
+                    ;; line starting `- foo' after an embedded newline
+                    ;; would render at column 0 and look like a new
+                    ;; top-level particle entry.  Regression guarded by
+                    ;; `-portfolio-snippet-multiline-indented' test.
+                    (let* ((raw (tibetan-interlinear--truncate-para
+                                 (cdr snippet) 400))
+                           (indented (replace-regexp-in-string
+                                      "\n" "\n    " raw)))
+                      (insert (format "    %s\n" indented))))
                    ;; Partial hit: sub-ID from Claude but no Portfolio
                    ;; snippet (Claude picked a broader ID than the
                    ;; parsed Portfolio covers, or Portfolio cache is
