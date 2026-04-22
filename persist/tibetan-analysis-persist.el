@@ -1757,6 +1757,44 @@ keeps German // English pairs side by side."
             (insert "\n"))
         (insert "[No dictionary entries available]\n\n")))))
 
+(defun tibetan-analysis--particle-wylie-equivalent-p (a b)
+  "Return non-nil if particle Wylie strings A and B denote the same
+particle modulo the inherent-vowel representation.
+
+Tibetan consonants carry an implicit `a' in their syllable form:
+`ར' can be Wylie'd as either `r' (consonant alone, as Claude emits
+when asked for the `particle' part of a compound like `der') or
+`ra' (consonant + inherent vowel, as `tibetan-to-wylie-fixed'
+produces when given the bare Tibetan syllable).  Without a
+normaliser, the Grammar renderer's match `equal' loop considers
+the two strings distinct and silently drops the Portfolio snippet
+for every `ར' occurrence.
+
+Normalisation: lowercase, trim, strip a trailing `a' when the
+preceding char is a consonant (so `ra' → `r', `sa' → `s', `da' →
+`d'; `la' stays `la' because `l' alone is ambiguous with the
+ablative converb `la' vs the suffix `l' case — and Claude emits
+`la' for the dative, matching bialek).  Compare the normalised
+forms for equality."
+  (when (and a b (stringp a) (stringp b))
+    (let ((na (tibetan-analysis--particle-wylie-normalise a))
+          (nb (tibetan-analysis--particle-wylie-normalise b)))
+      (equal na nb))))
+
+(defun tibetan-analysis--particle-wylie-normalise (s)
+  "Normalise particle Wylie S for equivalence matching.
+Lowercase, trim, and strip trailing `a' when preceded by a single
+consonant so `ra' and `r' both map to `r'.  Multi-char particles
+like `la', `ni', `dang' are preserved verbatim."
+  (let ((x (downcase (string-trim s))))
+    (cond
+     ;; Single-consonant + a → single consonant.  Specifically the
+     ;; mono-consonantal case particles whose inherent-a form shows
+     ;; up in `tibetan-to-wylie-fixed' output but NOT in Claude's
+     ;; per-particle field.
+     ((member x '("ra" "sa" "da" "ga")) (substring x 0 1))
+     (t x))))
+
 (defun tibetan-analysis--render-grammar-section (tibetan-text particles verbs
                                                               bialek-analysis
                                                               &optional
@@ -1822,11 +1860,15 @@ text.  When nil, falls back to the compact parser-only list."
                (trans-guide (nth 4 a))
                (function-desc (nth 3 a))
                (portfolio (nth 6 a))
-               (word-wylie (condition-case nil
-                               (downcase
-                                (string-trim
-                                 (tibetan-to-wylie-fixed word)))
-                             (error nil)))
+               ;; word-wylie retained for potential future word-level
+               ;; matching (e.g. if the Claude tuple's :word field
+               ;; starts sharing a prefix with bialek's dedup'd
+               ;; word); current match runs on particle-wylie alone.
+               (_word-wylie (condition-case nil
+                                (downcase
+                                 (string-trim
+                                  (tibetan-to-wylie-fixed word)))
+                              (error nil)))
                (particle-wylie (condition-case nil
                                    (downcase
                                     (string-trim
@@ -1835,22 +1877,34 @@ text.  When nil, falls back to the compact parser-only list."
                (portfolio-key
                 (and (fboundp 'tibetan-interlinear--portfolio-key)
                      (tibetan-interlinear--portfolio-key type)))
-               ;; Find the Claude tuple (if any) that matches this
-               ;; occurrence.  Match on WORD + PARTICLE Wylie.
-               (claude-tuple
-                (and claude-particles word-wylie particle-wylie
-                     (cl-find-if
-                      (lambda (p)
-                        (and (equal (plist-get p :word) word-wylie)
-                             (equal (plist-get p :particle)
-                                    particle-wylie)))
-                      claude-particles)))
-               (sub-id (and claude-tuple (plist-get claude-tuple :sub-id)))
-               (label  (and claude-tuple (plist-get claude-tuple :label)))
-               (snippet (and portfolio-key sub-id
-                             (fboundp 'tibetan-interlinear-portfolio-function-snippet)
-                             (tibetan-interlinear-portfolio-function-snippet
-                              portfolio-key sub-id))))
+               ;; Find ALL matching Claude tuples for this particle.
+               ;; Matching rules (loose to accommodate real data):
+               ;;   · Particle Wylie must be equivalent — with the
+               ;;     inherent-vowel-stripping normaliser so `r' and
+               ;;     `ra' both match for terminative.
+               ;;   · Word Wylie is NOT required to match, because
+               ;;     the Bialek analyser dedups per-particle (two
+               ;;     `nas' occurrences → one entry with word = nas)
+               ;;     while Claude emits one tuple per occurrence
+               ;;     (word = bslabs nas, word = tshim nas).  Showing
+               ;;     BOTH tuples under the single bialek entry is
+               ;;     the right behaviour — each carries the
+               ;;     context-specific sub-function.
+               ;; Dedup by sub-id so identical functions collapse.
+               (matching-tuples
+                (and claude-particles particle-wylie
+                     (let ((seen (make-hash-table :test 'equal))
+                           (out '()))
+                       (dolist (p claude-particles)
+                         (let ((pw (plist-get p :particle))
+                               (id (plist-get p :sub-id)))
+                           (when (and pw id
+                                      (not (gethash id seen))
+                                      (tibetan-analysis--particle-wylie-equivalent-p
+                                       pw particle-wylie))
+                             (puthash id t seen)
+                             (push p out))))
+                       (nreverse out)))))
           ;; Header line.  Two shapes:
           ;;   · standalone (word == particle):   PARTICLE · TYPE [§X.Y]
           ;;   · clitic (word contains particle): WORD · PARTICLE · TYPE [§X.Y]
@@ -1869,26 +1923,55 @@ text.  When nil, falls back to the compact parser-only list."
             (when portfolio
               (insert (format "  [%s]" portfolio)))
             (insert "\n"))
-          ;; Claude-assigned sub-function + Portfolio snippet, if any.
-          (cond
-           ;; Full hit: sub-ID + Portfolio snippet (self-contained).
-           (snippet
-            (insert (format "  § %s %s — %s\n"
-                            sub-id (car snippet)
-                            (or label "")))
-            (insert (format "    %s\n"
-                            (tibetan-interlinear--truncate-para
-                             (cdr snippet) 400))))
-           ;; Partial hit: sub-ID from Claude but no Portfolio snippet
-           ;; (Claude picked a broader ID than the parsed Portfolio
-           ;; covers, or Portfolio cache is unavailable).
-           (sub-id
-            (insert (format "  § %s — %s\n" sub-id (or label ""))))
-           ;; Fallback: translation hint from the bialek analyser.
-           (t
+          ;; Claude-assigned sub-functions + Portfolio snippets.  A
+          ;; single bialek entry may match several Claude tuples when
+          ;; the same particle has multiple functions in the segment
+          ;; (e.g. `nas' used sequentially AND causally on two
+          ;; different verbs).  Emit one `§...' block per tuple;
+          ;; fall back to the parser's generic hint when no tuple
+          ;; matched.
+          (if matching-tuples
+              (dolist (tuple matching-tuples)
+                (let* ((sub-id (plist-get tuple :sub-id))
+                       (label (plist-get tuple :label))
+                       (context-word (plist-get tuple :word))
+                       (snippet (and portfolio-key sub-id
+                                     (fboundp 'tibetan-interlinear-portfolio-function-snippet)
+                                     (tibetan-interlinear-portfolio-function-snippet
+                                      portfolio-key sub-id))))
+                  (cond
+                   ;; Full hit: sub-ID + Portfolio snippet (self-contained).
+                   (snippet
+                    (insert (format "  § %s %s — %s"
+                                    sub-id (car snippet)
+                                    (or label "")))
+                    ;; When two+ tuples matched (e.g. two `nas'
+                    ;; occurrences), annotate with the surface form
+                    ;; so the reader can tell which function applies
+                    ;; to which occurrence.
+                    (when (and context-word
+                               (> (length matching-tuples) 1))
+                      (insert (format " (in %s)" context-word)))
+                    (insert "\n")
+                    (insert (format "    %s\n"
+                                    (tibetan-interlinear--truncate-para
+                                     (cdr snippet) 400))))
+                   ;; Partial hit: sub-ID from Claude but no Portfolio
+                   ;; snippet (Claude picked a broader ID than the
+                   ;; parsed Portfolio covers, or Portfolio cache is
+                   ;; unavailable).
+                   (sub-id
+                    (insert (format "  § %s — %s"
+                                    sub-id (or label "")))
+                    (when (and context-word
+                               (> (length matching-tuples) 1))
+                      (insert (format " (in %s)" context-word)))
+                    (insert "\n")))))
+            ;; No Claude tuple matched — fall back to the bialek
+            ;; analyser's generic translation hint.
             (let ((hint (or trans-guide function-desc)))
               (when (and hint (not (string-empty-p hint)))
-                (insert (format "  → %s\n" hint))))))))
+                (insert (format "  → %s\n" hint)))))))
     (insert "[No grammatical markers detected]\n"))
   (insert "\n"))
 

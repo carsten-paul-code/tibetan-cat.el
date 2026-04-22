@@ -841,6 +841,101 @@ into a converb `~gis~' wrap."
     (should (string-match-p "=gis=" map))
     (should-not (string-match-p "~gis~" map))))
 
+(ert-deftest tibetan-analysis-particle-wylie-normalise ()
+  "`--particle-wylie-normalise' strips the trailing `a' from
+mono-consonant + inherent-vowel forms so `ra' and `r' both
+normalise to `r'.  Needed because `tibetan-to-wylie-fixed' emits
+the full-syllable `ra' for bare Tibetan `ར' while Claude's
+`## Particles' output emits just `r' for the consonant-only
+particle."
+  (skip-unless (fboundp 'tibetan-analysis--particle-wylie-normalise))
+  ;; Inherent-a forms strip to the bare consonant.
+  (should (equal "r" (tibetan-analysis--particle-wylie-normalise "ra")))
+  (should (equal "s" (tibetan-analysis--particle-wylie-normalise "sa")))
+  (should (equal "d" (tibetan-analysis--particle-wylie-normalise "da")))
+  ;; Bare consonant forms pass through unchanged.
+  (should (equal "r" (tibetan-analysis--particle-wylie-normalise "r")))
+  (should (equal "s" (tibetan-analysis--particle-wylie-normalise "s")))
+  ;; Multi-char particles left intact (`la' would be ambiguous if
+  ;; stripped; `ni', `dang', `kyi' obviously shouldn't change).
+  (should (equal "la"   (tibetan-analysis--particle-wylie-normalise "la")))
+  (should (equal "ni"   (tibetan-analysis--particle-wylie-normalise "ni")))
+  (should (equal "dang" (tibetan-analysis--particle-wylie-normalise "dang")))
+  (should (equal "kyi"  (tibetan-analysis--particle-wylie-normalise "kyi"))))
+
+(ert-deftest tibetan-analysis-particle-wylie-equivalent-p ()
+  "Equivalence predicate handles `r'/`ra', `s'/`sa' pairs correctly
+and rejects truly distinct particles."
+  (skip-unless (fboundp 'tibetan-analysis--particle-wylie-equivalent-p))
+  ;; Equivalent pairs — Claude gives `r', bialek/Wylie gives `ra'.
+  (should (tibetan-analysis--particle-wylie-equivalent-p "r" "ra"))
+  (should (tibetan-analysis--particle-wylie-equivalent-p "ra" "r"))
+  (should (tibetan-analysis--particle-wylie-equivalent-p "s" "sa"))
+  ;; Identity for multi-char particles.
+  (should (tibetan-analysis--particle-wylie-equivalent-p "nas" "nas"))
+  (should (tibetan-analysis--particle-wylie-equivalent-p "'i" "'i"))
+  ;; Truly distinct particles don't match.
+  (should-not (tibetan-analysis--particle-wylie-equivalent-p "nas" "la"))
+  (should-not (tibetan-analysis--particle-wylie-equivalent-p "gi" "gis"))
+  ;; Nil / empty → nil.
+  (should-not (tibetan-analysis--particle-wylie-equivalent-p nil "r"))
+  (should-not (tibetan-analysis--particle-wylie-equivalent-p "r" nil)))
+
+(ert-deftest tibetan-analysis-grammar-multiple-claude-tuples-per-particle ()
+  "When bialek dedups two `nas' occurrences into one entry but
+Claude emits two tuples (one per occurrence with different sub-
+functions), the Grammar renderer must surface BOTH sub-functions
+under the single bialek entry, annotated with the context word
+so the student can tell which applies to which occurrence."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_w) nil))
+            ((symbol-function 'tibetan-interlinear-portfolio-function-snippet)
+             (lambda (_key sub-id)
+               (cond
+                ((equal sub-id "2.11.1")
+                 (cons "Sequential Temporal"
+                       "V-nas marks the earlier action."))
+                ((equal sub-id "2.11.2")
+                 (cons "Causal" "V-nas in a causal reading."))))))
+    (let* ((tibetan-analysis--claude-particles-for-render
+            (list (list :word "bslabs nas" :particle "nas"
+                        :sub-id "2.11.1" :label "sequential-temporal")
+                  (list :word "tshim nas"  :particle "nas"
+                        :sub-id "2.11.2" :label "causal-sequential")))
+           (out (condition-case nil
+                    (tibetan-analysis-generate-content
+                     "བསླབས་ནས་ཚིམ་ནས་སོང་།")
+                  (error nil))))
+      (when out
+        ;; Both sub-functions appear under the single `nas' bialek entry.
+        (should (string-match-p "§ 2\\.11\\.1 Sequential Temporal" out))
+        (should (string-match-p "§ 2\\.11\\.2 Causal" out))
+        ;; Context-word annotation tells them apart.
+        (should (string-match-p "(in bslabs nas)" out))
+        (should (string-match-p "(in tshim nas)" out))))))
+
+(ert-deftest tibetan-analysis-grammar-terminative-ra-r-match ()
+  "`der' → bialek reports particle Wylie `ra' (inherent vowel);
+Claude reports particle `r' (consonant alone).  The new Wylie-
+equivalence normaliser must treat them as the same so the
+terminative-§1.5.1 snippet surfaces under the `der' bialek entry."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_w) nil))
+            ((symbol-function 'tibetan-interlinear-portfolio-function-snippet)
+             (lambda (_key sub-id)
+               (when (equal sub-id "1.5.1")
+                 (cons "Place / Location"
+                       "Destination or place reached.")))))
+    (let* ((tibetan-analysis--claude-particles-for-render
+            (list (list :word "der" :particle "r"
+                        :sub-id "1.5.1" :label "place")))
+           (out (condition-case nil
+                    (tibetan-analysis-generate-content "དེར་སོང་།")
+                  (error nil))))
+      (when out
+        (should (string-match-p "§ 1\\.5\\.1 Place / Location" out))
+        (should (string-match-p "Destination or place reached" out))))))
+
 (ert-deftest tibetan-analysis-particle-map-lowercase-particles ()
   "Particle tokens inside `=...=' / `~...~' / `*...*' wrappings
 keep their natural lowercase Wylie spelling (Pass 6d, 2026-04-22).
