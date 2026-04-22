@@ -226,6 +226,13 @@
   ;; contains.  Helps the user see the surface area of a recent
   ;; thesaurus editing session before spending Claude API credits.
 
+(define-key tibetan-thesaurus-prefix-map (kbd "L")
+  'tibetan-analysis-set-source-target-lang)
+  ;; Set `#+TIBETAN_TARGET_LANG:' (de / en) on the current source
+  ;; document.  When run from an analysis buffer, resolves the source
+  ;; via the buffer's `#+SOURCE:' header; otherwise uses the current
+  ;; buffer's file.  The change takes effect on next `C-c u R'.
+
 (define-key tibetan-thesaurus-prefix-map (kbd "R")
   'tibetan-thesaurus-rerun-affected-by-zettel)
   ;; Re-analyse every segment under an analysis folder whose Tibetan

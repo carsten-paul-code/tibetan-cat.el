@@ -306,6 +306,64 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
           :target-lang target-lang)))
 
 
+;;;###autoload
+(defun tibetan-analysis-set-source-target-lang (source-file lang)
+  "Set `#+TIBETAN_TARGET_LANG:' to LANG on SOURCE-FILE.
+
+LANG must be `\"de\"' or `\"en\"' — any other value signals a
+user-error (the picker downstream only knows those two).
+
+When the source already has a `#+TIBETAN_TARGET_LANG:' line the
+value is replaced in place; otherwise a new line is inserted
+immediately after the first `#+TITLE:' line so the metadata
+block stays contiguous at the top of the file.
+
+Re-analyses of this document will pick up the new value
+automatically via `--read-source-metadata' — no manual reload
+needed.  Interactive callers get progress + final-state messaging.
+
+Errors when SOURCE-FILE is nil, non-existent, or the file cannot
+be written to."
+  (interactive
+   (list (or (tibetan-analysis--source-file-from-analysis
+              (buffer-file-name))
+             buffer-file-name
+             (read-file-name "Source file: " nil nil t))
+         (completing-read "Target language: " '("de" "en") nil t
+                          (let ((current
+                                 (and buffer-file-name
+                                      (plist-get
+                                       (tibetan-analysis--read-source-metadata
+                                        buffer-file-name)
+                                       :target-lang))))
+                            (or current "de")))))
+  (unless (member lang '("de" "en"))
+    (user-error "Target language must be `de' or `en' (got %S)" lang))
+  (unless (and source-file (file-writable-p source-file))
+    (user-error
+     "Cannot write target-lang header — source file missing / not writable: %s"
+     source-file))
+  (with-temp-buffer
+    (insert-file-contents source-file)
+    (goto-char (point-min))
+    (cond
+     ;; Replace existing line in place.
+     ((re-search-forward "^#\\+TIBETAN_TARGET_LANG:[ \t]*.*$" nil t)
+      (replace-match (format "#+TIBETAN_TARGET_LANG: %s" lang) t t))
+     ;; Insert after #+TITLE: if present.
+     ((progn (goto-char (point-min))
+             (re-search-forward "^#\\+TITLE:.*$" nil t))
+      (end-of-line)
+      (insert (format "\n#+TIBETAN_TARGET_LANG: %s" lang)))
+     ;; Otherwise prepend to buffer.
+     (t
+      (goto-char (point-min))
+      (insert (format "#+TIBETAN_TARGET_LANG: %s\n" lang))))
+    (write-region (point-min) (point-max) source-file))
+  (when (called-interactively-p 'any)
+    (message "Target language set to `%s' on %s" lang
+             (file-name-nondirectory source-file))))
+
 (defun tibetan-analysis--source-file-from-analysis (analysis-file)
   "Return the absolute source file referenced by ANALYSIS-FILE.
 Reads the `#+SOURCE:' header (an org link of the form

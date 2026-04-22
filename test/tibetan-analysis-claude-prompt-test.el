@@ -197,6 +197,72 @@ dictionary ranker can promote the corresponding Steinert sub-dictionary."
     (let ((meta (tibetan-analysis--read-source-metadata source-file)))
       (should (null (plist-get meta :corpus))))))
 
+;; ============================================================================
+;; set-source-target-lang — configure translation language on source file
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-set-source-target-lang-adds-missing-header ()
+  "`tibetan-analysis-set-source-target-lang' adds
+`#+TIBETAN_TARGET_LANG: de' when no header exists yet, placing
+it right after `#+TITLE:' to keep metadata contiguous at the
+top of the source file."
+  (tibetan-test--with-source
+      "#+TITLE: Gotrapaṭala — Yogācārabhūmi\n#+AUTHOR: Asaṅga\n\n* Segment 1\n..."
+    (tibetan-analysis-set-source-target-lang source-file "de")
+    (with-temp-buffer
+      (insert-file-contents source-file)
+      (let ((s (buffer-string)))
+        (should (string-match-p "^#\\+TIBETAN_TARGET_LANG: de$" s))
+        ;; Header lands between #+TITLE and blank line (contiguous
+        ;; with other metadata; order matters for readability).
+        (should (string-match-p
+                 "#\\+TITLE:.*\n#\\+TIBETAN_TARGET_LANG: de"
+                 s))))
+    ;; Subsequent read via --read-source-metadata sees the value.
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :target-lang) "de")))))
+
+(ert-deftest tibetan-analysis-set-source-target-lang-updates-existing ()
+  "When the source already has a `#+TIBETAN_TARGET_LANG:' line,
+the command replaces its value in place — no duplicate header
+and no line duplication."
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_TARGET_LANG: en\n\n* Body\n"
+    (tibetan-analysis-set-source-target-lang source-file "de")
+    (with-temp-buffer
+      (insert-file-contents source-file)
+      (let ((s (buffer-string)))
+        ;; New value present.
+        (should (string-match-p "^#\\+TIBETAN_TARGET_LANG: de$" s))
+        ;; Old value gone — no stale `en' line.
+        (should-not (string-match-p "^#\\+TIBETAN_TARGET_LANG: en$" s))
+        ;; Exactly ONE target-lang line.
+        (should (= 1
+                   (cl-count-if
+                    (lambda (ln)
+                      (string-prefix-p "#+TIBETAN_TARGET_LANG:" ln))
+                    (split-string s "\n"))))))))
+
+(ert-deftest tibetan-analysis-set-source-target-lang-rejects-unknown ()
+  "Only `de' / `en' are accepted values — anything else raises a
+user-error rather than writing gibberish into the source file."
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (should-error (tibetan-analysis-set-source-target-lang source-file "fr")
+                  :type 'user-error)
+    ;; File untouched.
+    (with-temp-buffer
+      (insert-file-contents source-file)
+      (should-not (string-match-p "TIBETAN_TARGET_LANG" (buffer-string))))))
+
+(ert-deftest tibetan-analysis-set-source-target-lang-nil-source-errors ()
+  "Called with nil / non-existent source path → user-error."
+  (should-error (tibetan-analysis-set-source-target-lang nil "de")
+                :type 'user-error)
+  (should-error (tibetan-analysis-set-source-target-lang
+                 "/no/such/file.org" "de")
+                :type 'user-error))
+
 (ert-deftest tibetan-claude-prompt-missing-file-safe ()
   "Non-existent / nil source file returns an empty metadata plist."
   (let ((meta (tibetan-analysis--read-source-metadata nil)))
