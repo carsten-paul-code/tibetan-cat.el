@@ -164,6 +164,43 @@ which §2.11.x applies to THIS ནས, etc.) belongs in the later \
 `## Particles' section — NOT here.  Keep this paragraph at the \
 passage level.
 
+## Particles
+One line per particle OCCURRENCE in the passage (not per particle \
+type — if ནས appears twice in different functions, emit two lines). \
+Each line has four comma-separated fields:
+
+  word, particle, portfolio-sub-id, short-function-label
+
+Fields:
+  1. word — the Wylie word the particle attaches to, e.g. `mthu'i' \
+or `bslabs nas' or `der'.  For a standalone particle use the \
+particle's Wylie (`nas').
+  2. particle — the particle's Wylie alone: `'i', `nas', `r', `la', \
+`ni', `pas', `ste', etc.
+  3. portfolio-sub-id — the exact Bialek Portfolio sub-section ID \
+that applies to this specific occurrence.  Format: `N.N.N' for case \
+particles (1.1.1 = Genitive Attribute; 1.5.1 = Terminative Place; \
+1.5.3 = Terminative Time; 1.5.6 = Terminative Result; etc.) and \
+`N.NN.N' for converbs (2.11.1 = V+nas temporal sequential; \
+2.11.2 = V+nas causal; 2.4.1 = V+ste coordinative; etc.).  If \
+you are not sure which sub-ID applies, give the top-level ID \
+(e.g. `1.5' for any terminative) rather than guessing wrong.
+  4. short-function-label — a 1–3-word English label naming the \
+specific function: `place', `time', `attributive', `sequential', \
+`causal', `manner', `concessive', etc.  Lowercase.
+
+Use these exact particles for case: `'i', `kyi', `gyi', `gi', `yi' \
+(GEN); `gis', `gyis', `kyis', `'is', `yis' (ERG); `r', `ru', `su', \
+`tu', `du' (TERM); `la' (DAT); `las' (ABL); `na' (LOC); `ni' (TOPIC); \
+`dang' (COM).  Converbs: `nas', `te', `ste', `de', `cing', `zhing', \
+`shing', `pas', `bas', `na', `kyang', `yang', `'ang'.
+
+Example (for a seg containing `der mthu'i ... bslabs nas ... tshim nas'):
+  der, r, 1.5.1, place
+  mthu'i, 'i, 1.1.1, attributive
+  bslabs nas, nas, 2.11.1, sequential-temporal
+  tshim nas, nas, 2.11.2, causal-sequential
+
 Use only these headings. No preamble, no closing remarks.
 
 Genre, period and context hints (if any) are supplied below by the \
@@ -732,15 +769,20 @@ failures are reported via `message' and the placeholder."
           analysis-file msg))))))
 
 (defun tibetan-analysis--parse-claude-sections (response)
-  "Split RESPONSE on `## Translation/Vocabulary/Grammar/Context' markdown headings.
-Returns a plist `(:translation STR :vocabulary STR :grammar STR :context STR)'.
+  "Split RESPONSE on `## Translation/Vocabulary/Grammar/Particles/Context' markdown headings.
+Returns a plist `(:translation STR :vocabulary STR :grammar STR :particles STR :context STR)'.
 Missing sections are nil (not empty string) so the writer can leave
 the old org body in place when Claude omitted a section.  When
 RESPONSE contains no recognised heading, the whole (trimmed) string is
 returned as `:translation' — this keeps backwards compatibility with
-legacy single-translation responses."
-  (let ((result (list :translation nil :vocabulary nil :grammar nil :context nil))
-        (re "^## \\(Translation\\|Vocabulary\\|Grammar\\|Context\\)[ \t]*$"))
+legacy single-translation responses.
+
+`:particles' is a raw multi-line block of `word, particle, sub-id,
+label' lines; parsing into structured tuples is downstream's job
+(`tibetan-analysis--parse-claude-particles')."
+  (let ((result (list :translation nil :vocabulary nil :grammar nil
+                      :particles nil :context nil))
+        (re "^## \\(Translation\\|Vocabulary\\|Grammar\\|Particles\\|Context\\)[ \t]*$"))
     (when (and response (stringp response) (not (string-empty-p response)))
       (with-temp-buffer
         (insert response)
@@ -779,16 +821,22 @@ legacy single-translation responses."
 (defconst tibetan-analysis--claude-section-order
   '((:translation "Claude Translation" 2)
     (:vocabulary  "Claude Vocabulary"  3)
-    (:grammar     "Claude Grammar"     2))
+    (:grammar     "Claude Grammar"     2)
+    (:particles   "Claude Particles"   3))
   "Canonical order, heading names, and org levels for Claude sections.
 Each entry is (KEY HEADING LEVEL).  Translation and Grammar both
 sit at level 2 so they can take their workshop-agreed slots in the
 priority order (positions 6 and 7 in the per-segment auto-analysis
 view).  Vocabulary stays at level 3 inside `** Provided
 Translations' (it's a DharmaMitra-style word-by-word tier the
-reader consults alongside the provided glosses).  The writer,
-reader, scaffolding, and migration all consult this list so levels
-stay consistent everywhere.")
+reader consults alongside the provided glosses).  Particles is the
+Pass 6c addition (2026-04-22) — per-occurrence `word, particle,
+portfolio-sub-id, label' tuples that let the `*** Particles in This
+Segment' renderer attach a Portfolio snippet to each specific
+particle function.  Stored at level 3 inside Provided Translations
+alongside Vocabulary.  The writer, reader, scaffolding, and
+migration all consult this list so levels stay consistent
+everywhere.")
 
 (defun tibetan-analysis--claude-heading-re (heading level)
   "Regexp that anchors `HEADING' at org LEVEL at beginning-of-line."
@@ -1130,7 +1178,43 @@ whichever target heading is still missing.  Idempotent."
                   (goto-char (point-max)))
                 (insert "** Claude Grammar\n\n\n"))
             (goto-char (point-max))
-            (insert "\n** Claude Grammar\n\n"))))
+            (insert "\n** Claude Grammar\n\n")))
+        ;; Ensure `*** Claude Particles' exists inside Provided
+        ;; Translations (Pass 6c).  Place after `*** Claude Vocabulary'
+        ;; if present; otherwise at the end of Provided Translations.
+        (unless (save-excursion
+                  (goto-char (point-min))
+                  (re-search-forward "^\\*\\*\\* Claude Particles$" nil t))
+          (goto-char (point-min))
+          (cond
+           ((re-search-forward "^\\*\\* Provided Translations$" nil t)
+            (let* ((section-end
+                    (save-excursion
+                      (if (re-search-forward
+                           (tibetan-analysis--claude-stop-re 2) nil t)
+                          (line-beginning-position)
+                        (point-max))))
+                   (vocab-end
+                    (save-excursion
+                      (when (re-search-forward
+                             "^\\*\\*\\* Claude Vocabulary$" section-end t)
+                        (forward-line 1)
+                        (if (re-search-forward
+                             (tibetan-analysis--claude-stop-re 3)
+                             section-end t)
+                            (line-beginning-position)
+                          section-end))))
+                   (ref-pos
+                    (save-excursion
+                      (when (re-search-forward
+                             "^\\*\\*\\* Reference Translations$"
+                             section-end t)
+                        (line-beginning-position)))))
+              (goto-char (or vocab-end ref-pos section-end))
+              (insert "*** Claude Particles\n\n\n")))
+           (t
+            (goto-char (point-max))
+            (insert "\n*** Claude Particles\n\n")))))
        ;; -------------------------------------------------------------
        ;; SENTENCE LAYOUT: all four Claude headings at level 3 inside
        ;; the TOP-LEVEL `* Provided Translations' section.
@@ -1434,6 +1518,8 @@ as `:context' for round-trip safety, but it is never written back."
           ;; Legacy level-3 placement inside Provided Translations.
           (tibetan-analysis--read-claude-section-body
            filepath "Claude Grammar" 3)))
+        (particles (tibetan-analysis--read-claude-section-body
+                    filepath "Claude Particles" 3))
         ;; Preserve legacy Context body for round-trip safety; the
         ;; writer never emits a Context heading so this only surfaces
         ;; when an older analysis file still has one.
@@ -1442,7 +1528,27 @@ as `:context' for round-trip safety, but it is never written back."
     (list :translation translation
           :vocabulary  vocabulary
           :grammar     grammar
+          :particles   particles
           :context     context)))
+
+(defun tibetan-analysis--parse-claude-particles (body)
+  "Parse a `*** Claude Particles' BODY into a list of particle tuples.
+Each line is `word, particle, portfolio-sub-id, label'; returns a
+list of plists `(:word W :particle P :sub-id ID :label L)'.
+Lines that don't match the 4-field shape are silently skipped
+(Claude may emit commentary or sentinel `[none]' lines on short
+passages — those shouldn't crash the caller)."
+  (when (and body (stringp body) (not (string-empty-p body)))
+    (let (result)
+      (dolist (line (split-string body "\n" t))
+        (let ((fields (mapcar #'string-trim (split-string line "," t))))
+          (when (= (length fields) 4)
+            (push (list :word     (nth 0 fields)
+                        :particle (nth 1 fields)
+                        :sub-id   (nth 2 fields)
+                        :label    (nth 3 fields))
+                  result))))
+      (nreverse result))))
 
 ;; Backwards-compatible single-section reader — returns just the
 ;; translation body so legacy callers keep working.

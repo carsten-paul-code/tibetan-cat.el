@@ -663,6 +663,34 @@ Returns a string ready to insert after the `** Particle Overview' heading."
 
     (mapconcat #'identity (nreverse sections) "\n")))
 
+(defun tibetan-interlinear-portfolio-function-snippet (portfolio-key sub-id)
+  "Return the Portfolio snippet `(SUB-TITLE . DESCRIPTION)' for
+PORTFOLIO-KEY + SUB-ID, or nil if not found.
+PORTFOLIO-KEY is a normalised key like \"terminative\",
+\"converb-nas\" (see `tibetan-interlinear--portfolio-key').  SUB-ID
+is a section identifier string like \"1.5.1\" or \"2.11.2\".
+
+Walks the parsed Portfolio's `:functions' alist (which stores
+`((SUB-NUM . SUB-TITLE) . DESCRIPTION)' entries) and returns the
+first match.  When SUB-ID doesn't correspond to a parsed sub-section
+— Claude may have emitted a broader `1.5' when the Portfolio only
+has `1.5.1'..`1.5.9' — returns nil so the caller can fall back to
+the top-level `:intro' or omit the snippet.
+
+Used by `*** Particles in This Segment' in the Grammar renderer
+(Pass 6c) to attach Portfolio text per particle occurrence, so the
+analysis file is self-contained for readers without access to the
+user's Portfolio source."
+  (let ((portfolio (tibetan-interlinear--get-portfolio)))
+    (when (and portfolio portfolio-key sub-id)
+      (let* ((entry (cdr (assoc portfolio-key portfolio)))
+             (functions (and entry (plist-get entry :functions))))
+        (when functions
+          (cl-loop for fn in functions
+                   for key = (car fn)
+                   when (and (consp key) (equal (car key) sub-id))
+                   return (cons (cdr key) (cdr fn))))))))
+
 (defun tibetan-interlinear--truncate-para (text max-len)
   "Truncate TEXT to approximately MAX-LEN characters at a sentence boundary."
   (if (<= (length text) max-len)

@@ -372,5 +372,56 @@ cut off mid-phrase in the interlinear."
     ;; Curated keeps enough room to include it.
     (should (string-match-p "cotton" long))))
 
+;; ============================================================================
+;; PASS 6c: Portfolio sub-function snippet lookup
+;; ============================================================================
+
+(ert-deftest tibetan-interlinear-portfolio-snippet-lookup ()
+  "`tibetan-interlinear-portfolio-function-snippet' walks the parsed
+Portfolio cache keyed by PORTFOLIO-KEY (e.g. \"terminative\") and
+SUB-ID (e.g. \"1.5.1\") and returns `(SUB-TITLE . DESCRIPTION)' or
+nil.  Stubbed cache so the test doesn't depend on the user's
+actual Portfolio file loaded."
+  (cl-letf (((symbol-function 'tibetan-interlinear--get-portfolio)
+             (lambda ()
+               '(("terminative"
+                  :section "1.5"
+                  :title "Terminative"
+                  :intro "Terminative suffixes mark destination, time, etc."
+                  :functions
+                  ((("1.5.1" . "Place / Location")
+                    . "Marks a place reached or destination, e.g. Englisch `to'.")
+                   (("1.5.3" . "Time")
+                    . "Marks a point in time, e.g. `at noon'.")))
+                 ("converb-nas"
+                  :section "2.11"
+                  :title "Verb Stem + /nas/"
+                  :intro "V+nas marks temporal sequence or cause."
+                  :functions
+                  ((("2.11.1" . "Sequential Temporal")
+                    . "Earlier action in a sequence — `having done X, then Y'.")
+                   (("2.11.2" . "Causal")
+                    . "Reason for the main verb — `because X, Y happened'.")))))))
+    ;; Hit: terminative 1.5.1 → Place / Location.
+    (let ((snip (tibetan-interlinear-portfolio-function-snippet
+                 "terminative" "1.5.1")))
+      (should snip)
+      (should (equal (car snip) "Place / Location"))
+      (should (string-match-p "place reached" (cdr snip))))
+    ;; Hit: converb-nas 2.11.2 → Causal.
+    (let ((snip (tibetan-interlinear-portfolio-function-snippet
+                 "converb-nas" "2.11.2")))
+      (should snip)
+      (should (equal (car snip) "Causal")))
+    ;; Miss: broader sub-ID (`1.5' alone) returns nil, caller falls back.
+    (should (null (tibetan-interlinear-portfolio-function-snippet
+                   "terminative" "1.5")))
+    ;; Miss: unknown portfolio key returns nil.
+    (should (null (tibetan-interlinear-portfolio-function-snippet
+                   "unknown-thing" "1.1.1")))
+    ;; Nil inputs don't crash.
+    (should (null (tibetan-interlinear-portfolio-function-snippet nil "1.1.1")))
+    (should (null (tibetan-interlinear-portfolio-function-snippet "terminative" nil)))))
+
 (provide 'tibetan-interlinear-test)
 ;;; tibetan-interlinear-test.el ends here

@@ -684,5 +684,83 @@ per-clause NPs + roles."
         (should (string-match-p "^\\*\\* Sentence Structure$" out))
         (should-not (string-match-p "^\\*\\* Clause Structure$" out))))))
 
+;; ----------------------------------------------------------------------------
+;; Pass 6c: Claude particle-function parser + Portfolio snippet rendering
+;; ----------------------------------------------------------------------------
+
+(require 'tibetan-analysis-claude)
+
+(ert-deftest tibetan-analysis-parse-claude-particles-basic ()
+  "Four-field `word, particle, sub-id, label' lines parse into
+tuples; junk lines are skipped."
+  (let* ((body (concat "der, r, 1.5.1, place\n"
+                       "mthu'i, 'i, 1.1.1, attributive\n"
+                       "bslabs nas, nas, 2.11.1, sequential-temporal\n"
+                       "[none matched]\n"   ;; junk line — skipped
+                       "tshim nas, nas, 2.11.2, causal-sequential\n"))
+         (tuples (tibetan-analysis--parse-claude-particles body)))
+    (should (= 4 (length tuples)))
+    (should (equal (plist-get (nth 0 tuples) :word)     "der"))
+    (should (equal (plist-get (nth 0 tuples) :particle) "r"))
+    (should (equal (plist-get (nth 0 tuples) :sub-id)   "1.5.1"))
+    (should (equal (plist-get (nth 0 tuples) :label)    "place"))
+    (should (equal (plist-get (nth 1 tuples) :sub-id) "1.1.1"))
+    (should (equal (plist-get (nth 2 tuples) :sub-id) "2.11.1"))
+    (should (equal (plist-get (nth 3 tuples) :label) "causal-sequential"))))
+
+(ert-deftest tibetan-analysis-parse-claude-particles-empty-nil ()
+  "Empty / nil body returns nil, never a spurious tuple."
+  (should (null (tibetan-analysis--parse-claude-particles nil)))
+  (should (null (tibetan-analysis--parse-claude-particles "")))
+  (should (null (tibetan-analysis--parse-claude-particles "\n\n  \n"))))
+
+(ert-deftest tibetan-analysis-grammar-renders-portfolio-snippet-with-claude ()
+  "When the dynamic `claude-particles-for-render' var carries tagged
+particle tuples, the Grammar section includes the Portfolio sub-
+function heading + snippet per occurrence (self-contained output).
+Stubs the Portfolio snippet lookup so the test doesn't need the
+user's actual Portfolio file loaded.  Uses `mthu'i' where the
+Bialek-reported word matches Claude's `:word' field cleanly."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_word) nil))
+            ((symbol-function 'tibetan-interlinear-portfolio-function-snippet)
+             (lambda (key sub-id)
+               ;; Return a stub snippet only for the tagged occurrence
+               ;; we're testing; other lookups return nil.
+               (when (and (equal key "genitive")
+                          (equal sub-id "1.1.1"))
+                 (cons "Genitive Attribute"
+                       "Attributive genitive: X-'i Y = 'Y of X' or 'X's Y'.")))))
+    (let* ((tibetan-analysis--claude-particles-for-render
+            (list (list :word "mthu'i" :particle "'i"
+                        :sub-id "1.1.1" :label "attributive")))
+           (out (condition-case nil
+                    (tibetan-analysis-generate-content
+                     "མཐུའི་མན་ངག")
+                  (error nil))))
+      (when out
+        ;; Portfolio snippet heading and body appear under the particle.
+        (should (string-match-p "§ 1\\.1\\.1 Genitive Attribute" out))
+        (should (string-match-p
+                 "Attributive genitive:"
+                 out))))))
+
+(ert-deftest tibetan-analysis-grammar-falls-back-without-claude-particles ()
+  "Without Claude tuples, the Grammar section renders the compact
+parser-only list — no § sub-IDs, no snippet block.  Regression guard
+that Pass 6c is additive, not destructive of the Pass 6b baseline."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_word) nil)))
+    (let* ((tibetan-analysis--claude-particles-for-render nil)
+           (out (condition-case nil
+                    (tibetan-analysis-generate-content
+                     "བདག་གིས་ལས་བྱས།")
+                  (error nil))))
+      (when out
+        (should (string-match-p "^\\*\\* Grammar$" out))
+        (should (string-match-p "^\\*\\*\\* Particles in This Segment$" out))
+        ;; No Claude-driven sub-ID headers.
+        (should-not (string-match-p "^  § [0-9]" out))))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

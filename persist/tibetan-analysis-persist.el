@@ -1702,28 +1702,37 @@ keeps German // English pairs side by side."
         (insert "[No dictionary entries available]\n\n")))))
 
 (defun tibetan-analysis--render-grammar-section (tibetan-text particles verbs
-                                                              bialek-analysis)
+                                                              bialek-analysis
+                                                              &optional
+                                                              claude-particles)
   "Render the merged `** Grammar' section body to the current buffer.
 
 Pass 6b replaces three redundant sections (`** Particle Map',
 `** Particle Overview', `** Grammatical Markers') with a single
-`** Grammar' containing three sub-sections:
+`** Grammar' containing:
 
   *** Particle Map — the Wylie transliteration with particle markers
       (=CASE= for case particles, ~CONVERB~ for converbs, Ø for
       zero-marked arguments) — a quick visual scan of the grammar.
 
-  *** Particles in This Segment — compact one-line-per-particle
-      reference: each particle's type (ABLATIVE CONVERB, GENITIVE,
-      ...), its short label (ABL/CONV:nas, GEN, ...), the word it
-      attaches to, and a Portfolio section reference (§2.11, §1.5,
-      ...).  Pass 6c will extend this with per-particle function
-      sub-ID + self-contained Portfolio snippet.
+  *** Particles in This Segment — one line per Bialek particle
+      detection: type, top-level Portfolio reference, translation
+      hint.  Pass 6c augments this with per-occurrence function
+      sub-IDs tagged by Claude + the matching Portfolio snippet,
+      making the section self-contained for readers without access
+      to the user's Portfolio source file.
 
 TIBETAN-TEXT feeds the Particle Map's annotated Wylie.  PARTICLES
 and VERBS come from the Bialek / verb-extraction pipeline.
 BIALEK-ANALYSIS is the result of `tibetan-analyze-grammar-bialek'
-— used by the compact particles list."
+— drives the compact particles list.
+
+CLAUDE-PARTICLES, when non-nil, is a list of plists (parsed via
+`tibetan-analysis--parse-claude-particles') carrying
+`(:word W :particle P :sub-id ID :label L)' for each per-occurrence
+function Claude identified.  When passed, each Bialek line gains a
+specific sub-function heading and the matching Portfolio snippet
+text.  When nil, falls back to the compact parser-only list."
   (insert "** Grammar\n")
   (insert "Three angles on the grammar of this segment: a visual\n")
   (insert "particle map, a compact reference of each particle\n")
@@ -1739,22 +1748,56 @@ BIALEK-ANALYSIS is the result of `tibetan-analyze-grammar-bialek'
     (insert annotated-wylie)
     (insert "\n\n"))
   ;; ------------------------------------------------------------------
-  ;; Sub-section 2: Particles in This Segment (compact merged list)
+  ;; Sub-section 2: Particles in This Segment.
+  ;;
+  ;; Flow per bialek detection:
+  ;;   1. Compute compact header line (particle type + Portfolio ref).
+  ;;   2. Try to match against CLAUDE-PARTICLES on (word wylie, particle
+  ;;      wylie) for a per-occurrence sub-ID + short label.
+  ;;   3. On hit: look up the Portfolio snippet via
+  ;;      `tibetan-interlinear-portfolio-function-snippet', emit the
+  ;;      sub-section title + description inline.
+  ;;   4. On miss: fall back to the translation-hint line.
   ;; ------------------------------------------------------------------
-  ;; Collapses the old `** Particle Overview' (per-particle Portfolio
-  ;; reference) and `** Grammatical Markers' (compact per-occurrence
-  ;; list with Portfolio ref and translation hint) into one table-like
-  ;; block — one line per Bialek particle detection.  The full
-  ;; Portfolio snippet per specific sub-function lands in Pass 6c.
   (insert "*** Particles in This Segment\n")
   (if bialek-analysis
       (dolist (a bialek-analysis)
-        (let ((particle (nth 0 a))
-              (word (nth 1 a))
-              (type (nth 2 a))
-              (trans-guide (nth 4 a))
-              (function-desc (nth 3 a))
-              (portfolio (nth 6 a)))
+        (let* ((particle (nth 0 a))
+               (word (nth 1 a))
+               (type (nth 2 a))
+               (trans-guide (nth 4 a))
+               (function-desc (nth 3 a))
+               (portfolio (nth 6 a))
+               (word-wylie (condition-case nil
+                               (downcase
+                                (string-trim
+                                 (tibetan-to-wylie-fixed word)))
+                             (error nil)))
+               (particle-wylie (condition-case nil
+                                   (downcase
+                                    (string-trim
+                                     (tibetan-to-wylie-fixed particle)))
+                                 (error nil)))
+               (portfolio-key
+                (and (fboundp 'tibetan-interlinear--portfolio-key)
+                     (tibetan-interlinear--portfolio-key type)))
+               ;; Find the Claude tuple (if any) that matches this
+               ;; occurrence.  Match on WORD + PARTICLE Wylie.
+               (claude-tuple
+                (and claude-particles word-wylie particle-wylie
+                     (cl-find-if
+                      (lambda (p)
+                        (and (equal (plist-get p :word) word-wylie)
+                             (equal (plist-get p :particle)
+                                    particle-wylie)))
+                      claude-particles)))
+               (sub-id (and claude-tuple (plist-get claude-tuple :sub-id)))
+               (label  (and claude-tuple (plist-get claude-tuple :label)))
+               (snippet (and portfolio-key sub-id
+                             (fboundp 'tibetan-interlinear-portfolio-function-snippet)
+                             (tibetan-interlinear-portfolio-function-snippet
+                              portfolio-key sub-id))))
+          ;; Header line: particle [wylie] in «word [wylie]» — TYPE [§X.Y]
           (insert (format "- %s in «%s» — %s"
                           (tibetan-analysis--format-word-with-wylie particle)
                           (tibetan-analysis--format-word-with-wylie word)
@@ -1762,9 +1805,26 @@ BIALEK-ANALYSIS is the result of `tibetan-analyze-grammar-bialek'
           (when portfolio
             (insert (format "  [%s]" portfolio)))
           (insert "\n")
-          (let ((hint (or trans-guide function-desc)))
-            (when (and hint (not (string-empty-p hint)))
-              (insert (format "  → %s\n" hint))))))
+          ;; Claude-assigned sub-function + Portfolio snippet, if any.
+          (cond
+           ;; Full hit: sub-ID + Portfolio snippet (self-contained).
+           (snippet
+            (insert (format "  § %s %s — %s\n"
+                            sub-id (car snippet)
+                            (or label "")))
+            (insert (format "    %s\n"
+                            (tibetan-interlinear--truncate-para
+                             (cdr snippet) 400))))
+           ;; Partial hit: sub-ID from Claude but no Portfolio snippet
+           ;; (Claude picked a broader ID than the parsed Portfolio
+           ;; covers, or Portfolio cache is unavailable).
+           (sub-id
+            (insert (format "  § %s — %s\n" sub-id (or label ""))))
+           ;; Fallback: translation hint from the bialek analyser.
+           (t
+            (let ((hint (or trans-guide function-desc)))
+              (when (and hint (not (string-empty-p hint)))
+                (insert (format "  → %s\n" hint))))))))
     (insert "[No grammatical markers detected]\n"))
   (insert "\n"))
 
@@ -1896,6 +1956,16 @@ class level-2 section."
              (append priority-pairs remaining)
              ""))))
 
+(defvar tibetan-analysis--claude-particles-for-render nil
+  "Dynamic binding: parsed Claude-particles list for the in-flight render.
+Set by callers that have just read (or are about to re-insert) the
+`*** Claude Particles' body — e.g. `tibetan-analysis-reanalyze-file'
+reads the preserved Claude sections BEFORE calling
+`tibetan-analysis-generate-content', so it can thread the parsed
+particles through this var.  The Grammar renderer consults it to
+attach per-occurrence Portfolio snippets; nil → compact parser-only
+output, identical to Pass 6b behaviour.")
+
 (defun tibetan-analysis-generate-content (tibetan-text &optional seg-id source-text source-file)
   "Generate auto-analysis content for TIBETAN-TEXT.
 Returns the analysis as a string (org-mode formatted).
@@ -1918,7 +1988,11 @@ analysis so the dictionary ranker promotes the matching Steinert
 sub-dictionary into rank-3.  When omitted, the function falls back
 to `buffer-file-name' (useful when called from inside a source-doc
 buffer); when that too is nil, corpus-specific ranking simply
-doesn't apply and the default ranking is used."
+doesn't apply and the default ranking is used.
+
+Claude-tagged per-particle functions (Pass 6c) are threaded in via
+the dynamic `tibetan-analysis--claude-particles-for-render' — set
+it with `let' around the call when Claude data is available."
   (let* ((resolved-src (or source-file
                            (and (boundp 'tibetan-current-source-file)
                                 tibetan-current-source-file)
@@ -2294,18 +2368,17 @@ doesn't apply and the default ranking is used."
             ;; ============================================================
             ;; SECTION 3b: Grammar (merged Particle Map + Particle
             ;; Overview + Grammatical Markers — Pass 6b, 2026-04-22).
-            ;; The old `** Particle Overview' emission from
-            ;; `tibetan-interlinear-insert-sections' is also suppressed
-            ;; when `tibetan-analysis-merged-grammar' is non-nil (the
-            ;; default) so the per-particle Portfolio reference lives
-            ;; only in `*** Particles in This Segment' below.
+            ;; Pass 6c adds the Claude-tagged particle functions +
+            ;; Portfolio snippets when available via the dynamic var
+            ;; `tibetan-analysis--claude-particles-for-render'.
             ;; ============================================================
             (let ((bialek-analysis (condition-case nil
                                        (when (fboundp 'tibetan-analyze-grammar-bialek)
                                          (tibetan-analyze-grammar-bialek tibetan-text))
                                      (error nil))))
               (tibetan-analysis--render-grammar-section
-               tibetan-text particles verbs bialek-analysis))
+               tibetan-text particles verbs bialek-analysis
+               tibetan-analysis--claude-particles-for-render))
 
             ;; ============================================================
             ;; SECTION 4: Sentence Structure (merged — Pass 6b, 2026-04-22)
@@ -2664,6 +2737,7 @@ without touching the file.  Otherwise return a plist:
           (and existing-sections
                (or (plist-get existing-sections :translation)
                    (plist-get existing-sections :grammar)
+                   (plist-get existing-sections :particles)
                    (plist-get existing-sections :context)))))
     (cond
      ((null seg-id)
@@ -2677,8 +2751,23 @@ without touching the file.  Otherwise return a plist:
               :claude-preserved ,(and has-any-section t)))
      (t
       (condition-case err
-          (let ((auto-content (tibetan-analysis-generate-content
-                               tibetan-text seg-id source-text)))
+          ;; Pass 6c: thread the preserved Claude Particles (if any)
+          ;; through to the Grammar renderer via the dynamic var, so
+          ;; the regenerated `*** Particles in This Segment' inherits
+          ;; Claude's per-occurrence function-ID assignments and the
+          ;; matching Portfolio snippets.  When no existing Claude
+          ;; particles body is found, the dynamic binding is nil and
+          ;; the renderer falls back to its compact parser-only list.
+          (let* ((claude-particles-raw
+                  (and existing-sections
+                       (plist-get existing-sections :particles)))
+                 (tibetan-analysis--claude-particles-for-render
+                  (and claude-particles-raw
+                       (fboundp 'tibetan-analysis--parse-claude-particles)
+                       (tibetan-analysis--parse-claude-particles
+                        claude-particles-raw)))
+                 (auto-content (tibetan-analysis-generate-content
+                                tibetan-text seg-id source-text)))
             (tibetan-analysis-regenerate-auto filepath tibetan-text
                                               auto-content)
             (when has-any-section
