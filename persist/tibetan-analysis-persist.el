@@ -1357,25 +1357,38 @@ Returns an org-formatted string with particles highlighted:
 - *PARTICLE* for sentence-final particles
 - [Ø ROLE] for zero-marked arguments
 
-The particle token itself is upper-cased inside the markup so it
-stays visible even when the surrounding buffer or export target
-hasn't applied org's verbatim / code / bold faces — e.g. plain-text
-viewers or PDF exports with a default theme that under-distinguishes
-inline markup."
+The particle keeps its natural lowercase Wylie spelling inside the
+markup (`='i='`, not `='I='`) since the magenta / orange face
+remap in `tibetan-analysis-setup-faces' already makes it stand
+out visually.  Earlier versions upcased for plain-text / PDF
+fallback visibility; the face remap + customizable colours cover
+those cases, and lowercase reads cleaner for apostrophe-prefixed
+particles like `'i' / `'o'."
   (let* ((wylie (condition-case nil
                     (when (fboundp 'tibetan-to-wylie-fixed)
                       (tibetan-to-wylie-fixed tibetan-text))
                   (error tibetan-text)))
-         ;; Define particle patterns to mark
+         ;; Define particle patterns to mark.
+         ;;
+         ;; `nas' lives ONLY in converb-particles (primary use is
+         ;; V+nas — the bare ablative-case `N+nas' reading is rare
+         ;; enough that the Particle Map is content to paint all
+         ;; `nas' occurrences as converbs in orange; the per-
+         ;; particle section below gives the precise grammatical
+         ;; role anyway.  Without this, both the converb pass AND
+         ;; the case pass would match `nas' in succession,
+         ;; producing the `~=nas=~' soup students saw 2026-04-22.
+         ;; `las' stays in case-particles — it's almost always the
+         ;; ablative case marker, rarely a converb.
          (case-particles '("'i" "gi" "kyi" "gyi" "yi"      ; genitive
                           "s" "gis" "kyis" "gyis" "yis"    ; ergative
                           "la" "r" "du" "tu" "su" "ru"     ; dative/terminative
-                          "nas" "las"                       ; ablative
+                          "las"                             ; ablative
                           "dang"                            ; comitative
                           "ni"))                            ; topic marker
          (converb-particles '("cing" "zhing" "shing"       ; simultaneous
                              "ste" "te" "de"               ; sequential
-                             "nas"))                        ; after-converb
+                             "nas"))                        ; after-converb / ablative
          (final-particles '("ro" "so" "to" "no" "do" "'o" "ngo"))
          (result wylie)
          ;; Force case-sensitive matching for the particle passes.
@@ -1394,21 +1407,21 @@ inline markup."
     (dolist (p converb-particles)
       (setq result (replace-regexp-in-string
                     (format "\\b%s\\b" (regexp-quote p))
-                    (format "~%s~" (upcase p))
+                    (format "~%s~" p)
                     result)))
 
     ;; Mark case particles with `=PARTICLE='.
     (dolist (p case-particles)
       (setq result (replace-regexp-in-string
                     (format "\\b%s\\b" (regexp-quote p))
-                    (format "=%s=" (upcase p))
+                    (format "=%s=" p)
                     result)))
 
     ;; Mark sentence-final particles with *PARTICLE*
     (dolist (p final-particles)
       (setq result (replace-regexp-in-string
                     (format "\\b%s\\(/\\|$\\)" (regexp-quote p))
-                    (format "*%s*\\1" (upcase p))
+                    (format "*%s*\\1" p)
                     result)))
 
     ;; Add zero-marker annotations for verbs that expect unmarked arguments

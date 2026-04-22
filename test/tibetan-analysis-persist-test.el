@@ -814,29 +814,49 @@ via the ★ marker emitted by the Interlinear for curated entries."
 (ert-deftest tibetan-analysis-particle-map-no-double-wrap ()
   "`nas' appears in both case-particles (ablative) and
 converb-particles — the particle-map renderer must not produce
-`=~NAS~=' double-wrap.  Pass ordering (converbs first) + case-
+`=~nas~=' double-wrap.  Pass ordering (converbs first) + case-
 sensitive matching (explicit `case-fold-search nil') keep the
-passes from stepping on each other's output."
+passes from stepping on each other's output.  Particle tokens
+keep their natural lowercase Wylie now that the face remap
+handles visual emphasis."
   (let ((map (tibetan-analysis--generate-particle-map
               "བསླབས་ནས་སོང་" nil nil)))
-    ;; Converb wrapping present.
-    (should (string-match-p "~NAS~" map))
-    ;; No nested `=~NAS~=' soup.
-    (should-not (string-match-p "=~NAS~=" map))
-    (should-not (string-match-p "=\\(~\\|.\\)*NAS\\(~\\|.\\)*=" map))))
+    ;; Converb wrapping present (lowercase `nas' inside `~...~').
+    (should (string-match-p "~nas~" map))
+    ;; No nested `=~nas~=' soup.
+    (should-not (string-match-p "=~nas~=" map))
+    (should-not (string-match-p "=\\(~\\|.\\)*nas\\(~\\|.\\)*=" map))))
 
 (ert-deftest tibetan-analysis-particle-map-case-sensitive-pass-isolation ()
   "Case-particle and converb-particle passes must not cross-contaminate
 even when `case-fold-search' is non-nil in the surrounding context.
 Uses `མཐུའི' (mthu + genitive 'i in one word) where the `\\b'i\\b'
-regex can match — testing that GEN marks `=I=' and doesn't leak
-into a converb `~I~' wrap."
+regex can match — testing that GEN marks `=gis=' and doesn't leak
+into a converb `~gis~' wrap."
   (let* ((case-fold-search t)    ;; hostile default
          (map (tibetan-analysis--generate-particle-map
                "མཐུའི་གིས་" nil nil)))
-    ;; Check the ERG mark `=GIS=' renders clean, not as `~GIS~'
-    (should (string-match-p "=GIS=" map))
-    (should-not (string-match-p "~GIS~" map))))
+    ;; ERG particle `gis' renders as `=gis=' (lowercase, magenta
+    ;; via face remap) and never as `~gis~' (converb orange).
+    (should (string-match-p "=gis=" map))
+    (should-not (string-match-p "~gis~" map))))
+
+(ert-deftest tibetan-analysis-particle-map-lowercase-particles ()
+  "Particle tokens inside `=...=' / `~...~' / `*...*' wrappings
+keep their natural lowercase Wylie spelling (Pass 6d, 2026-04-22).
+Reads cleaner than upcased `='I='; magenta/orange face remap in
+`tibetan-analysis-setup-faces' carries the visual emphasis."
+  (let ((case-fold-search nil)   ;; be strict about case in this test
+        (map (tibetan-analysis--generate-particle-map
+              "མཐུའི་བསླབས་ནས་སོང་" nil nil)))
+    ;; Genitive `'i' stays lowercase (apostrophe + i), not upcased.
+    (should (string-match-p "='i=" map))
+    (should-not (string-match-p "='I=" map))
+    ;; Converb `nas' likewise.
+    (should (string-match-p "~nas~" map))
+    (should-not (string-match-p "~NAS~" map))
+    ;; Clean converb, not `~=nas=~' double-wrap.
+    (should-not (string-match-p "~=nas=~" map))))
 
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
