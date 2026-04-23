@@ -2942,9 +2942,28 @@ it with `let' around the call when Claude data is available."
 
 ;;;###autoload
 (defun tibetan-open-segment-analysis ()
-  "Open or create analysis for current segment in side window.
-If analysis exists, check if source has changed and warn."
+  "Open or create analysis for the current segment or paragraph.
+Dispatches by cursor context:
+- In a `** §N' paragraph subtree → `tibetan-open-paragraph-analysis'
+  (creates `par-NNN.org' from the `*** Tibetisch' child).
+- In a `*** Segment N' / legacy 〔seg:…〕 segment → the classical
+  segment-level analysis below (creates `seg-NNN.org').
+
+Paragraph takes precedence because `** §N' subtrees in the
+Rgyan-comparative.org layout only contain descriptive subsections
+(Tibetisch / Wylie / Lopez 2006 / Wangjié / Übersetzung / Apparat)
+— no `*** Segment N', so dispatching to the segment branch from
+inside a §-subtree would always fail.  Users type one command and
+the tool picks the right granularity."
   (interactive)
+  (if (and (derived-mode-p 'org-mode)
+           (fboundp 'tibetan-org-at-paragraph-p)
+           (tibetan-org-at-paragraph-p))
+      (tibetan-open-paragraph-analysis)
+    (tibetan--open-segment-analysis-impl)))
+
+(defun tibetan--open-segment-analysis-impl ()
+  "Segment-level implementation; see `tibetan-open-segment-analysis'."
   (let* ((seg-data (tibetan-get-current-segment-any-format))
          (seg-id (car seg-data))
          (tibetan-text (cdr seg-data))
@@ -2955,7 +2974,7 @@ If analysis exists, check if source has changed and warn."
                        (point-min) (point-max))))
 
     (unless seg-data
-      (error "Not in a segment"))
+      (error "Not in a segment or paragraph"))
 
     (let* ((filepath (tibetan-analysis-get-filepath seg-id))
            (source-file (buffer-file-name))
@@ -2997,9 +3016,18 @@ If analysis exists, check if source has changed and warn."
 
 ;;;###autoload
 (defun tibetan-reanalyze-segment ()
-  "Re-analyze current segment, preserving user notes.
-Regenerates the Auto-Analysis section only."
+  "Re-analyze current segment or paragraph, preserving user notes.
+Dispatches by context exactly like `tibetan-open-segment-analysis':
+paragraph if point is in `** §N', otherwise segment."
   (interactive)
+  (if (and (derived-mode-p 'org-mode)
+           (fboundp 'tibetan-org-at-paragraph-p)
+           (tibetan-org-at-paragraph-p))
+      (tibetan-reanalyze-paragraph)
+    (tibetan--reanalyze-segment-impl)))
+
+(defun tibetan--reanalyze-segment-impl ()
+  "Segment-level implementation; see `tibetan-reanalyze-segment'."
   (let* ((seg-data (tibetan-get-current-segment-any-format))
          (seg-id (car seg-data))
          (tibetan-text (cdr seg-data))
@@ -3009,7 +3037,7 @@ Regenerates the Auto-Analysis section only."
                        (point-min) (point-max))))
 
     (unless seg-data
-      (error "Not in a segment"))
+      (error "Not in a segment or paragraph"))
 
     (let ((filepath (tibetan-analysis-get-filepath seg-id)))
       (unless (file-exists-p filepath)

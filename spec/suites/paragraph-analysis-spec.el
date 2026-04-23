@@ -265,5 +265,87 @@
     :example "End-to-end: C-c p A on `** §7'"
     :tags (:paragraph :entry-point :integration :critical)))
 
+;; ============================================================================
+;; CONTEXT-DISPATCH SUITE
+;; ============================================================================
+;;
+;; Because `C-c p' collides with Projectile's prefix map, paragraph
+;; analysis is dispatched via the existing `C-c u A' / `C-c u R'
+;; bindings based on cursor context: paragraph (`** §N') takes
+;; precedence, falling through to segment (`*** Segment N' / legacy
+;; 〔seg:…〕) when not in a paragraph.  Users type one command and
+;; it does the right thing.
+
+(define-bdd-suite paragraph-dispatch
+    "C-c u A dispatches paragraph vs segment by cursor context"
+
+  (spec "On `** §N' heading, C-c u A creates par-NNN.org"
+    :given (let* ((tmpdir (make-temp-file "tibetan-dispatch-par" t))
+                  (source (expand-file-name "Rgyan-comparative.org" tmpdir))
+                  (analysis-dir (expand-file-name "analysis" tmpdir)))
+             (make-directory analysis-dir)
+             (with-temp-file source
+               (insert "#+TITLE: Test\n\n* Text\n\n** §131\n\n*** Tibetisch (B2)\nབདུད་རྩི།\n"))
+             (cl-letf (((symbol-function 'tibetan-analysis-get-folder)
+                        (lambda () analysis-dir))
+                       ((symbol-function 'display-buffer-in-side-window)
+                        (lambda (buf _) buf))
+                       ((symbol-function 'tibetan-analysis-setup-faces)
+                        (lambda () nil))
+                       ((symbol-function 'tibetan-analysis-generate-content)
+                        (lambda (&rest _) "** Wylie\nstub\n"))
+                       ((symbol-function 'tibetan-analysis--request-claude-translation)
+                        (lambda (&rest _) nil)))
+               (let ((buf (find-file-noselect source)))
+                 (with-current-buffer buf
+                   (org-mode)
+                   (goto-char (point-min))
+                   (search-forward "** §131")
+                   (tibetan-open-segment-analysis))
+                 (kill-buffer buf)))
+             (setq result
+                   (list
+                    :par (file-exists-p (expand-file-name "par-131.org" analysis-dir))
+                    :seg (file-exists-p (expand-file-name "seg-131.org" analysis-dir)))))
+    :when result
+    :then ((should (plist-get result :par))
+           (should-not (plist-get result :seg)))
+    :example "C-c u A on `** §131' → par-131.org, not seg-131.org"
+    :tags (:paragraph :dispatch :critical))
+
+  (spec "On `*** Segment N' heading, C-c u A still creates seg-NNN.org"
+    :given (let* ((tmpdir (make-temp-file "tibetan-dispatch-seg" t))
+                  (source (expand-file-name "classroom.org" tmpdir))
+                  (analysis-dir (expand-file-name "analysis" tmpdir)))
+             (make-directory analysis-dir)
+             (with-temp-file source
+               (insert "#+TITLE: Test\n\n* Tibetan Text\n\n** Sentence 1\n\n*** Segment 1\nབདུད་རྩི།\n"))
+             (cl-letf (((symbol-function 'tibetan-analysis-get-folder)
+                        (lambda () analysis-dir))
+                       ((symbol-function 'display-buffer-in-side-window)
+                        (lambda (buf _) buf))
+                       ((symbol-function 'tibetan-analysis-setup-faces)
+                        (lambda () nil))
+                       ((symbol-function 'tibetan-analysis-generate-content)
+                        (lambda (&rest _) "** Wylie\nstub\n"))
+                       ((symbol-function 'tibetan-analysis--request-claude-translation)
+                        (lambda (&rest _) nil)))
+               (let ((buf (find-file-noselect source)))
+                 (with-current-buffer buf
+                   (org-mode)
+                   (goto-char (point-min))
+                   (search-forward "*** Segment 1")
+                   (tibetan-open-segment-analysis))
+                 (kill-buffer buf)))
+             (setq result
+                   (list
+                    :seg (file-exists-p (expand-file-name "seg-001.org" analysis-dir))
+                    :par (file-exists-p (expand-file-name "par-001.org" analysis-dir)))))
+    :when result
+    :then ((should (plist-get result :seg))
+           (should-not (plist-get result :par)))
+    :example "Existing segment flow preserved"
+    :tags (:paragraph :dispatch :regression :critical)))
+
 (provide 'paragraph-analysis-spec)
 ;;; paragraph-analysis-spec.el ends here

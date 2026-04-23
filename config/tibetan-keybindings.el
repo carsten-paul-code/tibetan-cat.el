@@ -110,28 +110,11 @@
   ;;   to re-request, which will fan out N async Claude calls)
   ;; - Reports progress and summary when done
 
-;; ============================================================================
-;; PERSISTENT PARAGRAPH ANALYSIS - C-c p A / C-c p R
-;; ============================================================================
-;;
-;; Paragraph analysis is the `** §N' analogue of segment analysis.
-;; Use C-c p A when point is inside a §-headed subtree whose Tibetan
-;; content lives in a `*** Tibetisch' (or `*** Tibetisch (B2)') child —
-;; the layout of `Rgyan-comparative.org' for Gendün Chöpel's Klu sgrub
-;; dgongs rgyan, but generic so any §-grouped document can use it.
-
-(global-set-key (kbd "C-c p A") 'tibetan-open-paragraph-analysis)
-  ;; Open or create persistent paragraph analysis for current §:
-  ;; - Extracts Tibetan from `*** Tibetisch' child heading
-  ;; - Writes `analysis/par-NNN.org' with standard scaffold
-  ;; - Opens in side window, fires Claude translation async
-  ;; - Warns if source paragraph changed since last analysis
-
-(global-set-key (kbd "C-c p R") 'tibetan-reanalyze-paragraph)
-  ;; Re-analyze current paragraph:
-  ;; - Regenerates Auto-Analysis section
-  ;; - PRESERVES My Notes, Working Translation, Footnotes
-  ;; - Re-fires Claude translation
+;; Paragraph analysis (`** §N' subtrees with `*** Tibetisch' child, the
+;; Rgyan-comparative.org layout) is dispatched automatically from C-c u A
+;; and C-c u R — they detect paragraph context and route to
+;; `tibetan-open-paragraph-analysis' / `tibetan-reanalyze-paragraph'.
+;; No separate prefix needed (C-c p collides with Projectile).
 
 ;; ============================================================================
 ;; BATCH SEGMENT ANALYSIS - C-c u B
