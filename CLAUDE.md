@@ -69,29 +69,74 @@ These are hard preferences. Treat them as rules, not suggestions.
    Stub external dependencies (SQLite, network, glossary files) so
    tests run in batch without side effects.  Keep the suite green
    after every commit — `make test` is the baseline gate.
-3. **Aim close to perfect.** He is not looking for "ship it" output;
-   he wants careful, correct code. If a solution is 80% there, say so
-   and propose the remaining work rather than declaring it done.
-4. **Preserve user content.** Any operation that regenerates analysis
+3. **Verify failure mode before implementing.** After writing a
+   regression test (rule 2), RUN it and confirm it fails for the
+   reason you expect — the specific bug you're targeting, not a
+   typo, missing import, wrong assertion, or unrelated environment
+   issue.  If the test passes or fails in an unexpected way, your
+   understanding of the bug is wrong; go back to reproduce.
+
+   Before moving to the fix, include the failing test output in
+   your report to Carsten.  He reads it to confirm you're fixing
+   the right thing.  This is the discipline that turns "tests that
+   pass by construction" into "tests that cannot pass without the
+   bug being gone".
+4. **One logical change per commit.** Each commit is the minimum
+   reviewable unit.  If a session adds a feature AND fixes an
+   adjacent bug AND refactors unrelated code, that is three
+   commits, not one.  Default to splitting; only combine if
+   Carsten explicitly asks.  The rationale is both `git bisect`
+   hygiene (a future bisect lands on a single change) and review
+   cost (a reviewer can accept/reject one piece without rejecting
+   the whole).
+
+   Corollary: never squash a green interim commit into a
+   follow-up refinement after the fact — the interim state is
+   itself a useful reference point.
+5. **Commit messages document the WHY with concrete examples.**
+   Subject line: imperative mood, ~60 chars, names the change
+   (`thesaurus: add gap report for German prep`).  Body structure:
+
+   - Problem / observation — what went wrong or what user need
+     surfaced; include the concrete reproducer or a quote from
+     a live review when available.
+   - Root cause — the INSIGHT, not just the symptom.  Why did
+     this bug exist / this feature matter?
+   - Fix — what the code now does differently, at the level of
+     mechanism (not just "added function X").
+   - Tests — names of new / modified tests and what they guard
+     against.  Report the suite totals after the change.
+
+   Reference earlier commits by short hash when relevant (e.g.
+   "extends commit 259d00b's Hill-DB guard pattern").  A future
+   session reading `git log` should understand not only WHAT
+   changed but the REASONING — the project has several polish
+   bugs whose fix is one line but whose explanation is three
+   paragraphs.  Preserve the explanation.
+6. **Preserve user content.** Any operation that regenerates analysis
    files must preserve `* My Notes`, `* Working Translation`,
    `* Footnotes`, and an existing `*** Claude` translation. If you
    touch the regenerate / batch-reanalyze path, add a test that
    asserts preservation.
-5. **Persistent analysis is the canonical workflow.** He uses `C-c u A`
+7. **Persistent analysis is the canonical workflow.** He uses `C-c u A`
    (persistent analysis file per segment) — not `C-c u i` (classroom /
    scratch view). Design features around the persistent-file flow
    first; the classroom view is secondary.
-6. **Don't silently change behaviour.** If a fix alters what users see
+8. **Don't silently change behaviour.** If a fix alters what users see
    in their analysis files, say so and ask before rewriting files he
    has invested hours annotating.
-7. **German and English side by side.** Many glosses are bilingual
+9. **German and English side by side.** Many glosses are bilingual
    (`DE // EN`). Don't collapse this — the `tibetan-analysis--format-bilingual-gloss`
    helper exists for a reason. Resources/Custom entries are hand-written
-   and must never be truncated or rewritten.
-8. **Small, focused edits.** He prefers one logical change per pass
-   with tests, rather than sweeping rewrites.
-9. **Explain what you're about to do before doing it** for anything
-   that touches more than one module, then run the tests after.
+   and must never be truncated or rewritten.  Pass 5c adds a per-
+   document `#+TIBETAN_TARGET_LANG:` header that determines which
+   half the Interlinear / CAT Gloss / Claude Translation show;
+   the bilingual pair stays in the Detailed Dictionary regardless.
+10. **Aim close to perfect.** He is not looking for "ship it" output;
+    he wants careful, correct code. If a solution is 80% there, say so
+    and propose the remaining work rather than declaring it done.
+11. **Explain what you're about to do before doing it** for anything
+    that touches more than one module, then run the tests after.
 
 ## 3. Repository shape
 
