@@ -2942,25 +2942,43 @@ it with `let' around the call when Claude data is available."
 
 ;;;###autoload
 (defun tibetan-open-segment-analysis ()
-  "Open or create analysis for the current segment or paragraph.
-Dispatches by cursor context:
-- In a `** §N' paragraph subtree → `tibetan-open-paragraph-analysis'
-  (creates `par-NNN.org' from the `*** Tibetisch' child).
-- In a `*** Segment N' / legacy 〔seg:…〕 segment → the classical
-  segment-level analysis below (creates `seg-NNN.org').
+  "Open or create analysis, dispatched by cursor context (all 3 levels).
+Priority is most-specific-wins, respecting nested org layouts:
 
-Paragraph takes precedence because `** §N' subtrees in the
-Rgyan-comparative.org layout only contain descriptive subsections
-(Tibetisch / Wylie / Lopez 2006 / Wangjié / Übersetzung / Apparat)
-— no `*** Segment N', so dispatching to the segment branch from
-inside a §-subtree would always fail.  Users type one command and
-the tool picks the right granularity."
+  1. `*** Segment N' / `**** Segment N' heading (or its body)
+     → classical segment-level analysis (seg-NNN.org)
+  2. `*** Sentence N' heading (or its body between segments)
+     → `tibetan-sentence-open-analysis' (sent-NNN.org)
+  3. `** §N' paragraph heading (or any descendant when the subtree
+     has no sentence/segment children)
+     → `tibetan-open-paragraph-analysis' (par-NNN.org)
+  4. Legacy 〔seg:…〕 or plain-text line
+     → classical segment impl via `-any-format' detection.
+
+Segment/sentence detectors only look at the nearest heading, so
+they remain mutually exclusive.  The paragraph detector walks up
+the outline (it's true anywhere inside a §-subtree), so checking
+it last prevents paragraph from swallowing a nested segment or
+sentence."
   (interactive)
-  (if (and (derived-mode-p 'org-mode)
-           (fboundp 'tibetan-org-at-paragraph-p)
-           (tibetan-org-at-paragraph-p))
-      (tibetan-open-paragraph-analysis)
-    (tibetan--open-segment-analysis-impl)))
+  (cond
+   ((and (derived-mode-p 'org-mode)
+         (fboundp 'tibetan-org-at-segment-p)
+         (tibetan-org-at-segment-p))
+    (tibetan--open-segment-analysis-impl))
+   ((and (derived-mode-p 'org-mode)
+         (fboundp 'tibetan-org-at-sentence-p)
+         (tibetan-org-at-sentence-p)
+         (fboundp 'tibetan-sentence-open-analysis))
+    (tibetan-sentence-open-analysis))
+   ((and (derived-mode-p 'org-mode)
+         (fboundp 'tibetan-org-at-paragraph-p)
+         (tibetan-org-at-paragraph-p))
+    (tibetan-open-paragraph-analysis))
+   (t
+    ;; Not inside a recognised heading — let the classical
+    ;; implementation try legacy 〔seg:…〕 and plain-text fallbacks.
+    (tibetan--open-segment-analysis-impl))))
 
 (defun tibetan--open-segment-analysis-impl ()
   "Segment-level implementation; see `tibetan-open-segment-analysis'."
@@ -3016,15 +3034,26 @@ the tool picks the right granularity."
 
 ;;;###autoload
 (defun tibetan-reanalyze-segment ()
-  "Re-analyze current segment or paragraph, preserving user notes.
+  "Re-analyze current segment / sentence / paragraph, preserving user notes.
 Dispatches by context exactly like `tibetan-open-segment-analysis':
-paragraph if point is in `** §N', otherwise segment."
+segment > sentence > paragraph > legacy, most-specific-wins."
   (interactive)
-  (if (and (derived-mode-p 'org-mode)
-           (fboundp 'tibetan-org-at-paragraph-p)
-           (tibetan-org-at-paragraph-p))
-      (tibetan-reanalyze-paragraph)
-    (tibetan--reanalyze-segment-impl)))
+  (cond
+   ((and (derived-mode-p 'org-mode)
+         (fboundp 'tibetan-org-at-segment-p)
+         (tibetan-org-at-segment-p))
+    (tibetan--reanalyze-segment-impl))
+   ((and (derived-mode-p 'org-mode)
+         (fboundp 'tibetan-org-at-sentence-p)
+         (tibetan-org-at-sentence-p)
+         (fboundp 'tibetan-sentence-reanalyze))
+    (tibetan-sentence-reanalyze))
+   ((and (derived-mode-p 'org-mode)
+         (fboundp 'tibetan-org-at-paragraph-p)
+         (tibetan-org-at-paragraph-p))
+    (tibetan-reanalyze-paragraph))
+   (t
+    (tibetan--reanalyze-segment-impl))))
 
 (defun tibetan--reanalyze-segment-impl ()
   "Segment-level implementation; see `tibetan-reanalyze-segment'."

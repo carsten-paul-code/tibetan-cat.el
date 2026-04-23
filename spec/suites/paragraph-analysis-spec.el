@@ -313,6 +313,84 @@
     :example "C-c u A on `** §131' → par-131.org, not seg-131.org"
     :tags (:paragraph :dispatch :critical))
 
+  (spec "On `*** Sentence N', C-c u A creates sent-NNN.org"
+    :given (let* ((tmpdir (make-temp-file "tibetan-dispatch-sent" t))
+                  (source (expand-file-name "classroom.org" tmpdir))
+                  (analysis-dir (expand-file-name "analysis" tmpdir)))
+             (make-directory analysis-dir)
+             (with-temp-file source
+               (insert "#+TITLE: Test\n\n* Tibetan Text\n\n** Section 1\n\n*** Sentence 1\n\n**** Segment 1\nབདུད་རྩི།\n"))
+             (cl-letf (((symbol-function 'tibetan-analysis-get-folder)
+                        (lambda () analysis-dir))
+                       ((symbol-function 'display-buffer-in-side-window)
+                        (lambda (buf _) buf))
+                       ((symbol-function 'tibetan-analysis-setup-faces)
+                        (lambda () nil))
+                       ((symbol-function 'tibetan-sentence-persist--generate-content)
+                        (lambda (&rest _) "** Wylie\nstub\n"))
+                       ((symbol-function 'tibetan-analysis-generate-content)
+                        (lambda (&rest _) "** Wylie\nstub\n"))
+                       ((symbol-function 'tibetan-analysis--request-claude-translation)
+                        (lambda (&rest _) nil))
+                       ((symbol-function 'tibetan-sentence-persist--request-claude-translation)
+                        (lambda (&rest _) nil)))
+               (let ((buf (find-file-noselect source)))
+                 (with-current-buffer buf
+                   (org-mode)
+                   (goto-char (point-min))
+                   (search-forward "*** Sentence 1")
+                   (tibetan-open-segment-analysis))
+                 (kill-buffer buf)))
+             (setq result
+                   (list
+                    :sent (not (null
+                                (directory-files analysis-dir nil "^sent-.*\\.org$")))
+                    :seg (not (null
+                               (directory-files analysis-dir nil "^seg-.*\\.org$")))
+                    :par (not (null
+                               (directory-files analysis-dir nil "^par-.*\\.org$"))))))
+    :when result
+    :then ((should (plist-get result :sent))
+           (should-not (plist-get result :seg))
+           (should-not (plist-get result :par)))
+    :example "C-c u A on `*** Sentence 1' → sent-*.org"
+    :tags (:sentence :dispatch :critical))
+
+  (spec "Segment wins over sentence (nested `**** Segment' under `*** Sentence')"
+    :given (let* ((tmpdir (make-temp-file "tibetan-dispatch-nested" t))
+                  (source (expand-file-name "classroom.org" tmpdir))
+                  (analysis-dir (expand-file-name "analysis" tmpdir)))
+             (make-directory analysis-dir)
+             (with-temp-file source
+               (insert "#+TITLE: Test\n\n* Tibetan Text\n\n** Section 1\n\n*** Sentence 1\n\n**** Segment 1\nབདུད་རྩི།\n"))
+             (cl-letf (((symbol-function 'tibetan-analysis-get-folder)
+                        (lambda () analysis-dir))
+                       ((symbol-function 'display-buffer-in-side-window)
+                        (lambda (buf _) buf))
+                       ((symbol-function 'tibetan-analysis-setup-faces)
+                        (lambda () nil))
+                       ((symbol-function 'tibetan-analysis-generate-content)
+                        (lambda (&rest _) "** Wylie\nstub\n"))
+                       ((symbol-function 'tibetan-analysis--request-claude-translation)
+                        (lambda (&rest _) nil)))
+               (let ((buf (find-file-noselect source)))
+                 (with-current-buffer buf
+                   (org-mode)
+                   (goto-char (point-min))
+                   (search-forward "**** Segment 1")
+                   (tibetan-open-segment-analysis))
+                 (kill-buffer buf)))
+             (setq result
+                   (list
+                    :seg (file-exists-p (expand-file-name "seg-001.org" analysis-dir))
+                    :sent (not (null
+                                (directory-files analysis-dir nil "^sent-.*\\.org$"))))))
+    :when result
+    :then ((should (plist-get result :seg))
+           (should-not (plist-get result :sent)))
+    :example "Most-specific-wins in nested Sentence→Segment layout"
+    :tags (:segment :dispatch :priority :critical))
+
   (spec "On `*** Segment N' heading, C-c u A still creates seg-NNN.org"
     :given (let* ((tmpdir (make-temp-file "tibetan-dispatch-seg" t))
                   (source (expand-file-name "classroom.org" tmpdir))
