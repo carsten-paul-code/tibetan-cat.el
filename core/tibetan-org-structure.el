@@ -157,6 +157,113 @@ segment's own body text is returned."
         (when (string-match "Segment \\([0-9]+\\)" heading)
           (string-to-number (match-string 1 heading)))))))
 
+;;; Paragraph Functions
+;;
+;; A paragraph is a `** §N'-headed org subtree — the layout used by
+;; `Rgyan-comparative.org' for Gendün Chöpel's Klu sgrub dgongs rgyan,
+;; but kept generic so any document grouping segments under `** §N'
+;; can drive paragraph-level analysis (C-c p A).
+;;
+;; The paragraph's Tibetan content lives in a `*** Tibetisch' or
+;; `*** Tibetisch (B2)' child heading — other subheadings (Wylie,
+;; Lopez, Wangjié, Übersetzung, Apparat) are skipped.
+
+(defconst tibetan-org--paragraph-heading-regex
+  "§\\([0-9]+\\)"
+  "Regex capturing the paragraph number from a `** §N' heading.")
+
+(defun tibetan-org-at-paragraph-p ()
+  "Return t if point is in or under a `** §N' paragraph heading.
+Walks up the outline via `org-up-heading-safe' so cursor position
+inside any child (Tibetisch, Wylie, Übersetzung, …) still counts."
+  (save-excursion
+    (condition-case nil
+        (let ((found nil))
+          (unless (org-at-heading-p)
+            (org-back-to-heading t))
+          ;; Walk up until we find a §-heading or hit the document root.
+          (catch 'done
+            (while t
+              (let ((heading (org-get-heading t t t t)))
+                (when (and heading
+                           (string-match-p tibetan-org--paragraph-heading-regex
+                                           heading))
+                  (setq found t)
+                  (throw 'done t))
+                (unless (org-up-heading-safe)
+                  (throw 'done nil)))))
+          found)
+      (error nil))))
+
+(defun tibetan-org-get-paragraph-id ()
+  "Return paragraph number (integer) for the current §-subtree, or nil.
+Walks up headings until it finds one matching `** §N'."
+  (save-excursion
+    (condition-case nil
+        (progn
+          (unless (org-at-heading-p)
+            (org-back-to-heading t))
+          (catch 'done
+            (while t
+              (let ((heading (org-get-heading t t t t)))
+                (when (and heading
+                           (string-match tibetan-org--paragraph-heading-regex
+                                         heading))
+                  (throw 'done (string-to-number (match-string 1 heading))))
+                (unless (org-up-heading-safe)
+                  (throw 'done nil))))))
+      (error nil))))
+
+(defun tibetan-org--goto-paragraph-heading ()
+  "Move point to the enclosing `** §N' heading line.
+Returns t on success, nil if not in a paragraph."
+  (when (tibetan-org-at-paragraph-p)
+    (unless (org-at-heading-p)
+      (org-back-to-heading t))
+    (catch 'done
+      (while t
+        (let ((heading (org-get-heading t t t t)))
+          (when (and heading
+                     (string-match-p tibetan-org--paragraph-heading-regex
+                                     heading))
+            (throw 'done t))
+          (unless (org-up-heading-safe)
+            (throw 'done nil)))))))
+
+(defun tibetan-org-get-paragraph-text ()
+  "Return concatenated Tibetan text of the current paragraph's Tibetisch child.
+Looks for a `*** Tibetisch' or `*** Tibetisch (...)' subheading and
+returns its body (whitespace-trimmed).  Returns nil if no such child
+exists, or if point is not in a paragraph."
+  (condition-case nil
+      (save-excursion
+        (when (tibetan-org--goto-paragraph-heading)
+          (save-restriction
+            (org-narrow-to-subtree)
+            (goto-char (point-min))
+            (when (re-search-forward
+                   "^\\*\\{3,\\}[ \t]+Tibetisch\\(?:[ \t]+([^)]+)\\)?[ \t]*$"
+                   nil t)
+              (let* ((body-start
+                      (save-excursion
+                        (forward-line 1)
+                        (when (looking-at-p "[ \t]*:PROPERTIES:[ \t]*$")
+                          (when (re-search-forward
+                                 "^[ \t]*:END:[ \t]*$" nil t)
+                            (forward-line 1)))
+                        (point)))
+                     (body-end
+                      (save-excursion
+                        (goto-char body-start)
+                        (if (re-search-forward "^\\*+ " nil t)
+                            (line-beginning-position)
+                          (point-max))))
+                     (text (buffer-substring-no-properties body-start body-end)))
+                (widen)
+                (when (and text (not (string-empty-p (string-trim text))))
+                  (string-trim text)))))))
+    (error nil)))
+
 ;;; Sentence Functions
 
 (defun tibetan-org-get-sentence-segments ()

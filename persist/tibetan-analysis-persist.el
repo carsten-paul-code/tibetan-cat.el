@@ -286,6 +286,24 @@ If SOURCE-FILE is provided, includes short name suffix."
                      (format "seg-%03d.org" num))))
     (expand-file-name filename folder)))
 
+(defun tibetan-analysis-paragraph-filename (par-id)
+  "Generate analysis filename for paragraph PAR-ID.
+PAR-ID can be an integer (131), a bare numeric string (\"131\"),
+or a §-prefixed string (\"§131\").  Returns `par-NNN.org' with
+three-digit zero padding."
+  (let ((num (cond
+              ((numberp par-id) par-id)
+              ((and (stringp par-id)
+                    (string-match "\\([0-9]+\\)" par-id))
+               (string-to-number (match-string 1 par-id)))
+              (t (error "Invalid paragraph id: %S" par-id)))))
+    (format "par-%03d.org" num)))
+
+(defun tibetan-analysis-get-paragraph-filepath (par-id)
+  "Return full filepath for paragraph analysis PAR-ID."
+  (expand-file-name (tibetan-analysis-paragraph-filename par-id)
+                    (tibetan-analysis-get-folder)))
+
 (defun tibetan-analysis-make-short-name (source-file)
   "Generate a short name suffix from SOURCE-FILE for analysis filenames.
 E.g., \\='Tigress-Story-BlockPrint-Class.org\\=' -> \\='tigress\\='
@@ -314,6 +332,47 @@ E.g., \\='Tigress-Story-BlockPrint-Class.org\\=' -> \\='tigress\\='
 ;; ============================================================================
 ;; FILE CREATION
 ;; ============================================================================
+
+(defun tibetan-analysis-create-paragraph-file (par-id tibetan-text source-file auto-content)
+  "Create a new paragraph analysis file for PAR-ID.
+TIBETAN-TEXT is the paragraph body.  SOURCE-FILE is the path of the
+comparative document.  AUTO-CONTENT is generated analysis content
+(string).  Returns the written filepath."
+  (let* ((num (cond ((numberp par-id) par-id)
+                    ((and (stringp par-id)
+                          (string-match "\\([0-9]+\\)" par-id))
+                     (string-to-number (match-string 1 par-id)))
+                    (t (error "Invalid paragraph id: %S" par-id))))
+         (filepath (tibetan-analysis-get-paragraph-filepath num))
+         (hash (tibetan-analysis-compute-hash tibetan-text))
+         (date (format-time-string "%Y-%m-%d"))
+         (source-name (if source-file
+                          (file-name-nondirectory source-file)
+                        "")))
+    (with-temp-file filepath
+      (insert (format "#+TITLE: Paragraph %d Analysis\n" num))
+      (insert "#+STARTUP: showall\n")
+      (when source-file
+        (insert (format "#+SOURCE: [[file:../%s::*§%d][%s / §%d]]\n"
+                        source-name num source-name num)))
+      (insert (format "#+TIBETAN_HASH: %s\n" hash))
+      (insert (format "#+ANALYSIS_VERSION: %s\n" tibetan-analysis-version))
+      (insert (format "#+CREATED: %s\n" date))
+      (insert (format "#+LAST_ANALYZED: %s\n" date))
+      (insert "\n")
+      (insert "* Tibetan Text\n")
+      (insert tibetan-text)
+      (insert "\n\n")
+      (insert "* My Notes\n\n\n")
+      (insert "* Working Translation\n\n\n")
+      (insert "* Auto-Analysis\n")
+      (insert ":PROPERTIES:\n")
+      (insert ":GENERATED: t\n")
+      (insert ":END:\n\n")
+      (insert auto-content)
+      (insert "\n\n")
+      (insert "* Footnotes\n\n"))
+    filepath))
 
 (defun tibetan-analysis-create-file (seg-id tibetan-text source-file auto-content)
   "Create a new analysis file for SEG-ID.
@@ -2969,6 +3028,106 @@ Regenerates the Auto-Analysis section only."
           (condition-case err
               (tibetan-analysis--request-claude-translation tibetan-text filepath)
             (error (message "Claude translation skipped: %s" (error-message-string err)))))))))
+
+;; ============================================================================
+;; PARAGRAPH-LEVEL COMMANDS (C-c p A / C-c p R)
+;; ============================================================================
+;;
+;; Paragraphs are `** §N'-headed subtrees whose Tibetan content lives in a
+;; `*** Tibetisch' (or `*** Tibetisch (B2)') child — the layout of
+;; `Rgyan-comparative.org' for Gendün Chöpel's Klu sgrub dgongs rgyan.
+;;
+;; Analysis files live alongside `seg-*.org' in the document's `analysis/'
+;; folder, named `par-NNN.org'.  The scaffold and auto-content generation
+;; reuse the segment pipeline (`tibetan-analysis-generate-content') so
+;; paragraph analysis is a true granularity extension of segment analysis.
+
+;;;###autoload
+(defun tibetan-open-paragraph-analysis ()
+  "Open or create analysis for the current `** §N' paragraph.
+Requires point to be anywhere inside a paragraph subtree whose
+Tibetan text is carried by a `*** Tibetisch' (or
+`*** Tibetisch (B2)') child.  If no analysis exists yet, generate
+one via `tibetan-analysis-generate-content' (same pipeline as
+`tibetan-open-segment-analysis'), write `par-NNN.org', and fire an
+async Claude translation request.  The analysis file opens in a
+right-side window."
+  (interactive)
+  (unless (tibetan-org-at-paragraph-p)
+    (error "Not inside a `** §N' paragraph"))
+  (let* ((par-id (tibetan-org-get-paragraph-id))
+         (tibetan-text (tibetan-org-get-paragraph-text))
+         (source-file (buffer-file-name))
+         (source-text (buffer-substring-no-properties
+                       (point-min) (point-max))))
+    (unless par-id
+      (error "Could not determine paragraph id"))
+    (unless (and tibetan-text (not (string-empty-p tibetan-text)))
+      (error "Paragraph §%d has no `*** Tibetisch' child with content" par-id))
+
+    (let* ((filepath (tibetan-analysis-get-paragraph-filepath par-id))
+           (exists (file-exists-p filepath)))
+
+      (if exists
+          (progn
+            (unless (tibetan-analysis-check-sync filepath tibetan-text)
+              (message "WARNING: Source paragraph has changed since last analysis!"))
+            (let ((buf (find-file-noselect filepath)))
+              (with-current-buffer buf
+                (tibetan-analysis-setup-faces)
+                (goto-char (point-min)))
+              (display-buffer-in-side-window buf
+                                             '((side . right)
+                                               (window-width . 0.5)))))
+        ;; Create new file
+        (let* ((auto-content (tibetan-analysis-generate-content
+                              tibetan-text (format "§%d" par-id) source-text))
+               (new-filepath (tibetan-analysis-create-paragraph-file
+                              par-id tibetan-text source-file auto-content)))
+          (message "Created paragraph analysis file: %s" new-filepath)
+          (let ((buf (find-file-noselect new-filepath)))
+            (with-current-buffer buf
+              (tibetan-analysis-setup-faces)
+              (goto-char (point-min)))
+            (display-buffer-in-side-window buf
+                                           '((side . right)
+                                             (window-width . 0.5))))
+          (condition-case err
+              (tibetan-analysis--request-claude-translation tibetan-text new-filepath)
+            (error (message "Claude translation skipped: %s"
+                            (error-message-string err)))))))))
+
+;;;###autoload
+(defun tibetan-reanalyze-paragraph ()
+  "Re-analyze the current paragraph, preserving user sections.
+Regenerates only `* Auto-Analysis'; `* My Notes',
+`* Working Translation', and `* Footnotes' stay intact, matching
+the segment-level `tibetan-reanalyze-segment' contract."
+  (interactive)
+  (unless (tibetan-org-at-paragraph-p)
+    (error "Not inside a `** §N' paragraph"))
+  (let* ((par-id (tibetan-org-get-paragraph-id))
+         (tibetan-text (tibetan-org-get-paragraph-text))
+         (source-text (buffer-substring-no-properties
+                       (point-min) (point-max))))
+    (unless (and tibetan-text (not (string-empty-p tibetan-text)))
+      (error "Paragraph §%d has no `*** Tibetisch' child with content" par-id))
+    (let ((filepath (tibetan-analysis-get-paragraph-filepath par-id)))
+      (unless (file-exists-p filepath)
+        (error "No paragraph analysis file exists.  Use C-c p A first"))
+      (when (yes-or-no-p
+             "Re-analyze paragraph? (Auto section regenerated, notes preserved) ")
+        (let ((auto-content (tibetan-analysis-generate-content
+                             tibetan-text (format "§%d" par-id) source-text)))
+          (tibetan-analysis-regenerate-auto filepath tibetan-text auto-content)
+          (let ((buf (get-file-buffer filepath)))
+            (when buf
+              (with-current-buffer buf
+                (revert-buffer t t))))
+          (condition-case err
+              (tibetan-analysis--request-claude-translation tibetan-text filepath)
+            (error (message "Claude translation skipped: %s"
+                            (error-message-string err)))))))))
 
 ;; ============================================================================
 ;; BATCH RE-ANALYSIS
