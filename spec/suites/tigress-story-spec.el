@@ -293,8 +293,10 @@
     :given (setq test-text "བཅོམ་ལྡན་འདས་ཀྱིས་བཀའ་སྩལ་པ།")
     :when (when (fboundp 'tibetan-analysis-generate-content)
             (tibetan-analysis-generate-content test-text))
-    :then ((tibetan-bdd-assert-contains result "** Grammatical Markers"
-            "Should have Grammatical Markers section")
+    :then ((tibetan-bdd-assert-contains result "** Grammar"
+            "Should have merged ** Grammar section (Pass 6b rename)")
+           (tibetan-bdd-assert-contains result "*** Particles in This Segment"
+            "Should have particles sub-section (was ** Grammatical Markers pre-6b)")
            (tibetan-bdd-assert-matches "→\\|ERG\\|case" result
             "Should show particle annotations with types and functions"))
     :example "Tigress: analysis output format"

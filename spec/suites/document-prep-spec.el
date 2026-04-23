@@ -90,8 +90,8 @@ Line two།also shad།")
     :when result
     :then ((tibetan-bdd-assert-contains result "#+TITLE: My Document"
             "Should have title header")
-           (tibetan-bdd-assert-contains result "#+STARTUP: fold"
-            "Should have startup header")
+           (tibetan-bdd-assert-contains result "#+STARTUP: showall"
+            "Should have startup header (convention across analysis writers)")
            (tibetan-bdd-assert-contains result "#+DATE:"
             "Should have date header"))
     :example "Document with custom title"
