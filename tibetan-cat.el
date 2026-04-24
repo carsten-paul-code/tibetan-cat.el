@@ -180,7 +180,12 @@
 (when (boundp 'tibetan-thesaurus-kramer-source-directory)
   (setq tibetan-thesaurus-kramer-source-directory
         (expand-file-name
-         "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/zettelkasten/")))
+         ;; Moved 2026-04-24 under `knowledge/' as part of the buddhist-
+         ;; studies tree reorganisation that pulls notes out from the
+         ;; root.  Old path `.../buddhist-studies/zettelkasten/' — the
+         ;; directory itself was `git mv'd, IDs/Denote filenames
+         ;; unchanged, so existing thesaurus zettels keep working.
+         "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/knowledge/zettelkasten/")))
 
 ;; Thesaurus init is more specific than `*.org' in the Kramer source
 ;; directory (the zettelkasten holds many non-Kramer files too).  The
