@@ -83,6 +83,141 @@ link label as `/byang chub ...'."
   (replace-regexp-in-string "[།༎༏༐༑༔/]" "" (string-trim (or word ""))))
 
 ;; ============================================================================
+;; CLAUDE-BASED SENSE OVERRIDE FOR INTERLINEAR — B1 + B2 (2026-04-24)
+;; ============================================================================
+;;
+;; Problem (live review of seg-16 of gal-chen-nyi-shu.org, 2026-04-24):
+;;
+;;   B1: `blo sbyangs' (verb phrase, "having trained the mind") was
+;;       glossed `<person> Cīrṇabuddhi, Trained Mind'.  Steinert's
+;;       84000Dict only knows this two-syllable phrase as the name of
+;;       the 547th buddha; there is no lexical verb-phrase entry to
+;;       fall back to.  Claude correctly analyses the phrase as a verb
+;;       in the clause `blo sbyangs na' ("if one trains the mind").
+;;
+;;   B2: standalone `na' (wylie) was glossed `(1) to' (the locative
+;;       reading).  Claude Particles correctly tagged it as a
+;;       conditional converb (Portfolio §2.8).  Bialek's standalone-`ན'
+;;       rule ordering gives LOCATIVE before CONDITIONAL, so even when
+;;       tokenised as a single particle the wrong label wins.
+;;
+;; Both bugs share a root cause: the Interlinear renderer only
+;; consulted the dictionary stack, never Claude's own per-word output,
+;; even when Claude had already delivered the correct disambiguation.
+;; These helpers let the builder loop pull Claude's verdict in as a
+;; final sense-picking step.  The dynamic variables
+;; `tibetan-analysis--claude-vocabulary-for-render' and
+;; `tibetan-analysis--claude-particles-for-render' are bound by
+;; `tibetan-analysis-reanalyze-file' from the preserved on-disk Claude
+;; sections; first-time generation runs with both nil and the helpers
+;; degrade to no-ops.
+
+(defun tibetan-analysis--token-wylie (word)
+  "Return lowercase, trimmed Wylie for a single Tibetan WORD token.
+Returns nil when `tibetan-to-wylie-fixed' is unavailable or the
+conversion raises; the caller should fall back to dictionary-only
+behaviour in that case.  Used by the Claude-override helpers that
+need a canonical comparison key against Claude's Wylie-keyed data."
+  (when (and word (stringp word) (not (string-empty-p word))
+             (fboundp 'tibetan-to-wylie-fixed))
+    (condition-case nil
+        (let ((w (downcase (string-trim (tibetan-to-wylie-fixed word)))))
+          (and (not (string-empty-p w)) w))
+      (error nil))))
+
+(defun tibetan-analysis--claude-particle-label-for-token (word particles)
+  "Return a short Claude-derived particle label for WORD, or nil.
+WORD is a Tibetan token (shad-stripped).  PARTICLES is the parsed
+Claude Particles list returned by
+`tibetan-analysis--parse-claude-particles' — each entry is a plist
+`(:word W :particle P :sub-id ID :label L)'.
+
+Matches the token's Wylie exactly against the `:particle' field
+(verse particles are always single-word).  When found, returns a
+formatted string `LABEL (§SUB-ID)' suitable for use as the
+Interlinear's `short-meaning'.  When not found, or when PARTICLES
+is nil / empty, returns nil — the caller keeps its current gloss."
+  (when (and particles (listp particles))
+    (let ((wylie (tibetan-analysis--token-wylie word)))
+      (when wylie
+        (let ((hit (cl-find-if
+                    (lambda (entry)
+                      (let ((p (plist-get entry :particle)))
+                        (and p (string= (downcase (string-trim p)) wylie))))
+                    particles)))
+          (when hit
+            (let ((label (plist-get hit :label))
+                  (sub-id (plist-get hit :sub-id)))
+              (cond
+               ((and label sub-id) (format "%s (§%s)" label sub-id))
+               (label label)
+               (t nil)))))))))
+
+(defun tibetan-analysis--claude-vocab-gloss-for-token (word vocab-alist)
+  "Return the Claude-provided gloss for WORD from VOCAB-ALIST, or nil.
+WORD is a Tibetan token.  VOCAB-ALIST is the parsed Claude
+Vocabulary alist returned by `tibetan-analysis--parse-claude-vocabulary'
+— each element is (WYLIE-KEY . FULL-LINE).  The line format produced
+by Claude's system prompt is
+
+    wylie-key, part-of-speech, \"gloss\", commentary
+
+so the helper extracts the first double-quoted substring as the
+short gloss.  Matches the token's Wylie as either equal to the
+key or a space-bounded prefix of the key (so a stem-only token
+matches a stem+particle MWU entry — `blo sbyangs' matches
+`blo sbyangs na').  Returns nil when no match or no quoted gloss
+field present."
+  (when (and vocab-alist (listp vocab-alist))
+    (let ((wylie (tibetan-analysis--token-wylie word)))
+      (when wylie
+        (let ((hit (cl-find-if
+                    (lambda (pair)
+                      (let ((key (car pair)))
+                        (or (string= key wylie)
+                            (string-prefix-p (concat wylie " ") key))))
+                    vocab-alist)))
+          (when hit
+            (let ((line (cdr hit)))
+              (when (string-match "\"\\([^\"]+\\)\"" line)
+                (match-string 1 line)))))))))
+
+(defun tibetan-analysis--apply-claude-vocab-override (word dict-gloss vocab-alist)
+  "Override a proper-noun-tagged DICT-GLOSS with Claude's reading.
+When DICT-GLOSS begins with `<person>' or `<place>' — the
+Steinert 84000Dict proper-noun tag markers — AND Claude
+Vocabulary has a gloss for WORD, prefer Claude.  Otherwise return
+DICT-GLOSS unchanged.
+
+Rationale: the 84000 data includes buddha-names and place-names
+indexed under short Tibetan phrases that double as common words
+(`blo sbyangs' = \"trained mind\" but also the 547th buddha).
+When the whole DD for a token is proper-noun entries, no amount
+of dict-layer refinement recovers the lexical reading; Claude,
+which sees full-clause context, can and does.  The `<term>' tag
+(84000's canonical-term marker) is left intact — it IS the right
+gloss when present."
+  (if (and dict-gloss
+           (stringp dict-gloss)
+           (or (string-prefix-p "<person>" (string-trim dict-gloss))
+               (string-prefix-p "<place>" (string-trim dict-gloss))))
+      (or (tibetan-analysis--claude-vocab-gloss-for-token word vocab-alist)
+          dict-gloss)
+    dict-gloss))
+
+(defvar tibetan-analysis--claude-vocabulary-for-render nil
+  "Dynamic binding: parsed Claude-vocabulary alist for the in-flight render.
+Parallel to `tibetan-analysis--claude-particles-for-render'.  Set by
+callers that have just read the preserved `*** Claude Vocabulary'
+body — `tibetan-analysis-reanalyze-file' does so before calling
+`tibetan-analysis-generate-content'.  Consumed by the
+enriched-vocab-pairs loop via
+`tibetan-analysis--apply-claude-vocab-override' to rescue
+polysemous tokens whose dictionary stack only offers proper-noun
+glosses.  Nil → override is a no-op (first-time generate before
+Claude has responded).")
+
+;; ============================================================================
 ;; DISPLAY SETTINGS - Smaller roman text
 ;; ============================================================================
 
@@ -2719,7 +2854,30 @@ it with `let' around the call when Claude data is available."
                              ;; Otherwise, replace the non-curated gloss
                              ;; (typically RY's "verb: do"/"a loss") with
                              ;; the Hill-based morphology gloss.
-                             (t verb-gloss))))
+                             (t verb-gloss)))
+                           ;; Claude-based sense override (B1, B2, 2026-04-24).
+                           ;; After ALL dictionary-derived refinements, let
+                           ;; Claude's own per-word output have the final word.
+                           ;;   B1: dict gloss starts with `<person>'/`<place>'
+                           ;;       tag (Steinert 84000Dict proper-noun marker)
+                           ;;       AND Claude Vocabulary has a verb / lexical
+                           ;;       reading → use Claude's quoted gloss.
+                           ;;   B2: Claude Particles tagged this token with a
+                           ;;       specific function (conditional, terminative,
+                           ;;       etc.) → use `LABEL (§SUB-ID)' as the gloss
+                           ;;       so the Interlinear reflects the grammar.
+                           ;; First-time generation runs with both dynamic vars
+                           ;; nil — overrides degrade to no-ops.  The regen
+                           ;; path (C-c u R / C-c u r / auto-regen on Claude
+                           ;; arrival) sees them bound.
+                           (short-meaning
+                            (or (tibetan-analysis--claude-particle-label-for-token
+                                 word-clean
+                                 tibetan-analysis--claude-particles-for-render)
+                                (tibetan-analysis--apply-claude-vocab-override
+                                 word-clean
+                                 short-meaning
+                                 tibetan-analysis--claude-vocabulary-for-render))))
                       ;; Mark Resources / Custom entries in the curated hash
                       ;; so the Interlinear renderer can prepend ★.  The
                       ;; `source' variable is set earlier in this let* from
@@ -3311,14 +3469,28 @@ without touching the file.  Otherwise return a plist:
           ;; matching Portfolio snippets.  When no existing Claude
           ;; particles body is found, the dynamic binding is nil and
           ;; the renderer falls back to its compact parser-only list.
+          ;;
+          ;; B1+B2 (2026-04-24): also thread Claude Vocabulary via
+          ;; `--claude-vocabulary-for-render' so the enriched-vocab-pairs
+          ;; builder can override polysemous-token glosses where the
+          ;; dictionary stack alone gives a wrong reading (e.g.
+          ;; `<person>'-tagged proper-noun entries for `blo sbyangs').
           (let* ((claude-particles-raw
                   (and existing-sections
                        (plist-get existing-sections :particles)))
+                 (claude-vocabulary-raw
+                  (and existing-sections
+                       (plist-get existing-sections :vocabulary)))
                  (tibetan-analysis--claude-particles-for-render
                   (and claude-particles-raw
                        (fboundp 'tibetan-analysis--parse-claude-particles)
                        (tibetan-analysis--parse-claude-particles
                         claude-particles-raw)))
+                 (tibetan-analysis--claude-vocabulary-for-render
+                  (and claude-vocabulary-raw
+                       (fboundp 'tibetan-analysis--parse-claude-vocabulary)
+                       (tibetan-analysis--parse-claude-vocabulary
+                        claude-vocabulary-raw)))
                  (auto-content (tibetan-analysis-generate-content
                                 tibetan-text seg-id source-text)))
             (tibetan-analysis-regenerate-auto filepath tibetan-text

@@ -1258,5 +1258,101 @@ cleanup sites in the same module."
   (should (string= (tibetan-analysis--clean-word-token "") ""))
   (should (string= (tibetan-analysis--clean-word-token "  ") "")))
 
+;; ============================================================================
+;; CLAUDE VOCAB / PARTICLE OVERRIDE — B1+B2 regression (live review
+;; 2026-04-24, seg-16 of gal-chen-nyi-shu.org).
+;;
+;; B1: `blo sbyangs' was glossed as `<person> Cīrṇabuddhi, Trained Mind'
+;; because Steinert's 84000Dict knows *blo sbyangs* only as the 547th
+;; buddha's name.  Claude Vocabulary correctly analyses it as a verb
+;; phrase in context ("if one trains the mind").  The Interlinear had
+;; no way to consult Claude's per-word output.
+;;
+;; B2: standalone `na' (wylie) was glossed as `(1) to' — the locative
+;; sense from the dictionary — but Claude Particles correctly tagged
+;; it `2.8, conditional' (conditional converb after verb stem).
+;;
+;; Both are `Interlinear uses dict-only disambiguation when Claude has
+;; already answered the question correctly'.  Fix: two helpers that
+;; consult the parsed Claude sections (already threaded through via
+;; dynamic binding for the Grammar renderer); override applies at the
+;; END of the short-meaning chain so dictionary remains the default
+;; for tokens Claude didn't specifically address.
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-claude-particle-label-for-token-match ()
+  "B2 regression: standalone `ན' (wylie `na') matches a Claude Particles
+entry with label `conditional' at sub-id `2.8' — helper returns the
+formatted short label `conditional (§2.8)'."
+  (let ((particles '((:word "tshad med bzhi po 'di blo sbyangs na"
+                      :particle "na"
+                      :sub-id "2.8"
+                      :label "conditional"))))
+    (should (string= (tibetan-analysis--claude-particle-label-for-token
+                      "ན" particles)
+                     "conditional (§2.8)"))))
+
+(ert-deftest tibetan-analysis-claude-particle-label-for-token-no-match ()
+  "Token Wylie doesn't match any :particle — helper returns nil so the
+dictionary gloss survives."
+  (let ((particles '((:word "tshad med bzhi po 'di blo sbyangs na"
+                      :particle "na"
+                      :sub-id "2.8"
+                      :label "conditional"))))
+    (should-not (tibetan-analysis--claude-particle-label-for-token
+                 "བློ" particles))))
+
+(ert-deftest tibetan-analysis-claude-particle-label-for-token-nil-particles ()
+  "Nil / empty particle list — helper returns nil without error.
+This is the first-time-generate path: Claude hasn't responded yet,
+no particles threaded in, override must be a no-op."
+  (should-not (tibetan-analysis--claude-particle-label-for-token "ན" nil))
+  (should-not (tibetan-analysis--claude-particle-label-for-token "ན" '())))
+
+(ert-deftest tibetan-analysis-claude-vocab-gloss-for-token-extracts-quoted-gloss ()
+  "B1 regression: Claude Vocabulary line
+`blo sbyangs na, verb + locative converb, \"if one trains the mind\", ...'
+— helper extracts the 3rd (quoted) field as the short gloss."
+  (let ((vocab '(("blo sbyangs na" . "blo sbyangs na, verb + locative converb, \"if one trains the mind\", conditional construction"))))
+    (should (string= (tibetan-analysis--claude-vocab-gloss-for-token
+                      "བློ་སྦྱངས" vocab)
+                     "if one trains the mind"))))
+
+(ert-deftest tibetan-analysis-claude-vocab-gloss-for-token-no-match ()
+  "Token's Wylie is not a prefix of any key — helper returns nil."
+  (let ((vocab '(("'di" . "'di, adjective, \"this\", demonstrative"))))
+    (should-not (tibetan-analysis--claude-vocab-gloss-for-token
+                 "བྱང" vocab))))
+
+(ert-deftest tibetan-analysis-claude-vocab-gloss-for-token-nil-vocab ()
+  "Nil vocab alist — helper returns nil without error.
+First-time-generate path: no Claude response yet."
+  (should-not (tibetan-analysis--claude-vocab-gloss-for-token "བློ" nil)))
+
+(ert-deftest tibetan-analysis-claude-vocab-gloss-only-overrides-tagged-glosses ()
+  "The dictionary-facing override logic: dict gloss that starts with
+`<person>' or `<place>' tag should be replaced by Claude's gloss.
+A dict gloss WITHOUT a tag prefix (i.e. a legitimate lexical
+reading) is left alone.  This is the integration-level test on
+`tibetan-analysis--apply-claude-vocab-override'."
+  (let ((vocab '(("blo sbyangs na" . "blo sbyangs na, verb, \"if one trains the mind\", ..."))))
+    ;; <person>-tagged dict gloss → override with Claude
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "བློ་སྦྱངས" "<person> Cīrṇabuddhi, Trained Mind" vocab)
+                     "if one trains the mind"))
+    ;; <place>-tagged → override
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "བློ་སྦྱངས" "<place> Somewhere" vocab)
+                     "if one trains the mind"))
+    ;; Plain lexical gloss → keep dict's reading (Claude doesn't win
+    ;; here, the tag check gates the override).
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "བློ་སྦྱངས" "cultivated, trained" vocab)
+                     "cultivated, trained"))
+    ;; <term> tag IS legitimate (84000 canonical term marker) — keep.
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "ཚད་མེད་བཞི་པོ" "<term> four immeasurables" vocab)
+                     "<term> four immeasurables"))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
