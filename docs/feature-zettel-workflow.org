@@ -1,7 +1,7 @@
 #+TITLE: Zettel in Translation Workflow — Feature Design
 #+DATE: 2026-04-24
 #+AUTHOR: Carsten Paul + Claude
-#+STATUS: v1 approved — Phases 1 + 2 shipped, Phase 3 next
+#+STATUS: v1 approved — Phases 1 + 2 + 3 shipped, Phase 4 next
 
 * Intent
 
@@ -392,7 +392,7 @@ stale links on demand.
 |-------+-----------------------------------------------------+------------------------------------------------------+-----------|
 | 1     | Zettel index + reader (new schema + back-compat)    | =core/tibetan-zettel.el= NEW                         | *shipped 07ce8a5* |
 | 2     | Interlinear + DD integration (rank 2, ♦ mark)       | =analysis/tibetan-interlinear.el=, =vocabulary-detailed.el= | *shipped fdbb321* |
-| 3     | Auto-creation for ~<term>~-tagged missing tokens    | =core/tibetan-zettel.el=, =persist/tibetan-analysis-persist.el= | pending |
+| 3     | Auto-creation for ~<term>~-tagged missing tokens    | =core/tibetan-zettel.el=, =config/tibetan-keybindings.el=, =config/tibetan-menu.el= | *shipped 087b08b* |
 | 4     | Claude-cache write path                              | =persist/tibetan-analysis-claude.el=                 | pending   |
 | 5     | Buddhist Terms reads from zettel cache               | =persist/tibetan-analysis-persist.el=                | pending   |
 | 6     | Unify Pass-5b Thesaurus → v2 schema + migration cmd | =core/tibetan-thesaurus.el=                          | pending   |
@@ -521,6 +521,9 @@ fixed spec.
 | 2026-04-24  | Claude   | Phase 2 shipped (=fdbb321=): rank-2 injection    |
 |             |          | + Interlinear ♦ + id-link; +10 tests; suite      |
 |             |          | 1517 / 1516 / 0 / 1                              |
+| 2026-04-24  | Claude   | Phase 3 shipped (=087b08b=): auto-create         |
+|             |          | primitives + `C-c u z B' command + menu entry;   |
+|             |          | +14 tests; suite 1531 / 1530 / 0 / 1             |
 
 * Success criteria
 
