@@ -276,6 +276,22 @@ causal, concessive converbs) are visually distinct from case
 markers.  Customise to taste."
   :group 'tibetan-cat)
 
+(defface tibetan-analysis-interlinear-gloss-face
+  '((((class color) (background light)) :foreground "DarkCyan")
+    (((class color) (background dark))  :foreground "PaleTurquoise2")
+    (t :inherit font-lock-doc-face))
+  "Face for the gloss content following each Wylie link in the
+Interlinear Gloss section (U5, 2026-04-24).
+
+The Interlinear renders `[[term-xxx][wylie]] [gloss]' per token;
+the second bracket-pair carries the English / German translation
+the reader is scanning for.  Without colour, students' eyes had
+to parse identical-looking bracket structures (link text vs.
+gloss) to find the translation.  A distinct cyan / turquoise
+foreground makes the gloss pop without shouting — complements
+the magenta / orange of the Particle Map faces above."
+  :group 'tibetan-cat)
+
 (defvar-local tibetan-analysis--faces-setup nil
   "Non-nil if faces have already been set up for this buffer.")
 
@@ -332,6 +348,27 @@ org-verbatim / org-code the emphasis parser DID add for clean
 word-boundary tokens, so rendering stays uniform across both
 forms.")
 
+(defconst tibetan-analysis--interlinear-gloss-font-lock-keywords
+  ;; Match the gloss that follows each Wylie link in the Interlinear.
+  ;; Pattern produced by `tibetan-interlinear--format-gloss-entry':
+  ;;     [[term-xxx][wylie]] [gloss]
+  ;;     [[term-xxx][wylie]] ★ [gloss]     ← curated Resources entry
+  ;; The opening `]]' (close of the org link) followed by optional
+  ;; `★ ' and then `[gloss]' is unique to the Interlinear — the
+  ;; Detailed Dictionary uses bracketed source tags like
+  ;; `[Steinert/43-84000Dict]' but never preceded by `]]', so the
+  ;; face won't leak across sections.
+  ;;
+  ;; Single capture group: the gloss content.  The enclosing `[' `]'
+  ;; stay plain so the reader still sees the bracket structure.
+  '(("\\]\\] \\(?:★ \\)?\\[\\([^]\n]+\\)\\]"
+     (1 'tibetan-analysis-interlinear-gloss-face prepend)))
+  "Font-lock keywords for the Interlinear Gloss translation tier
+\(U5, 2026-04-24).  Applies `tibetan-analysis-interlinear-gloss-face'
+to the content inside the second bracket-pair following each Wylie
+link — i.e. the English / German / target-language gloss — so it
+visually pops from the surrounding Wylie and punctuation.")
+
 (defun tibetan-analysis-setup-faces ()
   "Setup faces for analysis buffers.
 Ensures Tibetan text remains readable at all heading levels and in
@@ -360,12 +397,15 @@ parser which doesn't fire for compound-embedded markers like
     ;; folded headings, link targets) are unaffected.
     (add-to-invisibility-spec 'tibetan-analysis-particle-marker)
 
-    ;; Install buffer-local font-lock rules for the Particle Map markers.
-    ;; Done buffer-locally via `font-lock-add-keywords' with `nil' mode
-    ;; so only this buffer picks them up.  Re-run `font-lock-flush'
-    ;; immediately so existing content gets the face on first render.
+    ;; Install buffer-local font-lock rules for the Particle Map markers
+    ;; AND the Interlinear gloss colour (U5).  Done buffer-locally via
+    ;; `font-lock-add-keywords' with `nil' mode so only this buffer
+    ;; picks them up.  Re-run `font-lock-flush' immediately so existing
+    ;; content gets the face on first render.
     (font-lock-add-keywords
      nil tibetan-analysis--particle-map-font-lock-keywords 'append)
+    (font-lock-add-keywords
+     nil tibetan-analysis--interlinear-gloss-font-lock-keywords 'append)
     (when (fboundp 'font-lock-flush)
       (font-lock-flush))
 

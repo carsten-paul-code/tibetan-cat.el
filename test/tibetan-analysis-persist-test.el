@@ -1437,5 +1437,77 @@ priority section (rare fallback)."
                             (buffer-substring-no-properties
                              (point-min) (point-max))))))
 
+;; ============================================================================
+;; U5 — Interlinear gloss colour (2026-04-24)
+;;
+;; The gloss content inside `]] [gloss]' in the Interlinear Gloss
+;; section gets `tibetan-analysis-interlinear-gloss-face' so the
+;; English / German translation is visually distinct from the Wylie
+;; link text preceding it.  The face is applied via buffer-local
+;; font-lock rules installed by `tibetan-analysis-setup-faces'.
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-interlinear-gloss-face-on-gloss-content ()
+  "Gloss text inside `]] [gloss]' picks up
+`tibetan-analysis-interlinear-gloss-face' after `setup-faces' runs."
+  (with-temp-buffer
+    (org-mode)
+    (insert "** Interlinear Gloss\n"
+            "[[term-bdag][bdag]] [I, self] "
+            "[[term-khor-ba]['khor ba]] [cyclic existence]\n")
+    (setq tibetan-analysis--faces-setup nil)
+    (tibetan-analysis-setup-faces)
+    (font-lock-ensure (point-min) (point-max))
+    ;; Inspect the face at the position of the first letter in the
+    ;; gloss content (`I' in `[I, self]').
+    (goto-char (point-min))
+    (re-search-forward "\\[I, self\\]")
+    (let* ((gloss-pos (1+ (match-beginning 0))) ; inside bracket
+           (face (get-text-property gloss-pos 'face)))
+      (should (or (eq face 'tibetan-analysis-interlinear-gloss-face)
+                  (and (listp face)
+                       (memq 'tibetan-analysis-interlinear-gloss-face
+                             face)))))))
+
+(ert-deftest tibetan-analysis-interlinear-gloss-face-with-curated-star ()
+  "Curated `★ ' before the gloss bracket does NOT defeat the match;
+the face still lands on the gloss content."
+  (with-temp-buffer
+    (org-mode)
+    (insert "** Interlinear Gloss\n"
+            "[[term-rmang-rdo][rmang rdo]] ★ [foundation stone]\n")
+    (setq tibetan-analysis--faces-setup nil)
+    (tibetan-analysis-setup-faces)
+    (font-lock-ensure (point-min) (point-max))
+    (goto-char (point-min))
+    (re-search-forward "\\[foundation stone\\]")
+    (let* ((gloss-pos (1+ (match-beginning 0)))
+           (face (get-text-property gloss-pos 'face)))
+      (should (or (eq face 'tibetan-analysis-interlinear-gloss-face)
+                  (and (listp face)
+                       (memq 'tibetan-analysis-interlinear-gloss-face
+                             face)))))))
+
+(ert-deftest tibetan-analysis-interlinear-gloss-face-does-not-leak ()
+  "The Interlinear gloss face must NOT apply to bracketed content in
+other contexts — specifically, the `[Steinert/...]' source tags in
+the Detailed Dictionary are bracketed but not preceded by `]]'."
+  (with-temp-buffer
+    (org-mode)
+    (insert "** Detailed Dictionary\n"
+            "  [Steinert/43-84000Dict]\n"
+            "    <term> four immeasurables\n")
+    (setq tibetan-analysis--faces-setup nil)
+    (tibetan-analysis-setup-faces)
+    (font-lock-ensure (point-min) (point-max))
+    (goto-char (point-min))
+    (re-search-forward "\\[Steinert/43-84000Dict\\]")
+    (let* ((tag-pos (1+ (match-beginning 0)))
+           (face (get-text-property tag-pos 'face)))
+      (should-not
+       (or (eq face 'tibetan-analysis-interlinear-gloss-face)
+           (and (listp face)
+                (memq 'tibetan-analysis-interlinear-gloss-face face)))))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
