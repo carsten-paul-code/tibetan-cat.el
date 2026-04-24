@@ -485,5 +485,52 @@ well-formed prompt."
         ;; name of the block as a forward-reference; that's allowed.
         (should-not (string-match-p "^  §[0-9]" system))))))
 
+;; ============================================================================
+;; U1+U2 — tighter translation + translation-justifying grammar (2026-04-24)
+;;
+;; System-prompt invariants that previous versions violated:
+;;   U1: Translation should stay close to Tibetan grammar (conditional
+;;       converb → if/when, ablative cause → arises from, nominalised
+;;       verb + copula structure preserved).  The old prompt said
+;;       "render particles idiomatically, not literally" — exactly the
+;;       opposite of what Carsten wants.
+;;   U2: Grammar should justify specific translation choices where the
+;;       Translation's wording depended on disambiguating a polysemous
+;;       word, a converb function, or a case-particle reading.
+;;
+;; These tests assert the directive keywords are in the system prompt
+;; so a future refactor doesn't silently revert them.
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-claude-prompt-translation-tight-to-grammar ()
+  "U1: the Translation section directive must steer Claude toward
+faithfulness, not idiomatic paraphrase.  The old prompt said
+`render particles and syntactic structures idiomatically'; the new
+version says `stays CLOSE TO THE GRAMMAR'."
+  (let ((p tibetan-analysis--claude-system-prompt))
+    (should (string-match-p "CLOSE TO THE GRAMMAR" p))
+    (should (string-match-p "conditional converb" p))
+    (should (string-match-p "ablative" p))
+    (should (string-match-p "case-marking pattern" p))
+    ;; The old anti-directive must be gone.
+    (should-not (string-match-p
+                 "idiomatically, not literally" p))))
+
+(ert-deftest tibetan-analysis-claude-prompt-grammar-justifies-translation ()
+  "U2: the Grammar section directive must ask Claude to JUSTIFY
+specific translation choices, not just summarise the backbone."
+  (let ((p tibetan-analysis--claude-system-prompt))
+    (should (string-match-p "JUSTIFIES" p))
+    (should (string-match-p "translation choice" p))
+    (should (string-match-p "disambiguat" p))))
+
+(ert-deftest tibetan-analysis-claude-prompt-fixed-buddhist-terms-inline ()
+  "U3 (inline): the Translation directive asks for a short
+parenthetical explanation on first mention of fixed Buddhist terms
+(Four Immeasurables, Bodhicitta, Three Jewels, etc.)."
+  (let ((p tibetan-analysis--claude-system-prompt))
+    (should (string-match-p "Four Immeasurables" p))
+    (should (string-match-p "parenthetical explanation" p))))
+
 (provide 'tibetan-analysis-claude-prompt-test)
 ;;; tibetan-analysis-claude-prompt-test.el ends here

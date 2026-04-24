@@ -98,20 +98,36 @@ Produce THREE sections, separated by the exact markdown headings \
 shown below, in this order and nothing else:
 
 ## Translation
-A clear, idiomatic English rendering of the passage.
-- Preserve technical Buddhist terminology (use Sanskrit where standard, \
-e.g. dharma, bodhisattva, samādhi), with English gloss in parentheses \
-on first occurrence only.
-- Render particles and syntactic structures idiomatically, not literally.
-- Honorific forms (zhu, gsol, mdzad, etc.) should be reflected in the \
-register.
-- Keep the translation fluent and readable, not word-for-word.
+A translation that stays CLOSE TO THE GRAMMAR of the Tibetan. \
+Prefer faithfulness over fluency:
+- Honour the Tibetan clause structure.  If the source uses a \
+conditional converb (V-na), render as \"if / when V...\"; do not \
+paraphrase as \"while V\" or absorb the conditional into a \
+participial clause.  If it uses a nominalised-verb + copula \
+(V-pa + yin / che / yod), mirror the structure (\"the V-ing is \
+important\", not \"it is important to V\").
+- Preserve the case-marking pattern: ergative-marked agents become \
+explicit subjects (\"by X, Y was done\"), ablatives mark cause or \
+source explicitly (\"arises FROM X\", \"because of X\"), \
+terminatives mark manner or goal.  Do not paraphrase grammar to \
+sound more English-natural.
+- Keep the particle sequence visible.  A reader comparing \
+translation against Wylie should be able to track which Tibetan \
+particle maps to which English word or phrase.
+- Preserve technical Buddhist terminology (use Sanskrit where \
+standard, e.g. dharma, bodhisattva, samādhi).  For fixed Buddhist \
+terms (Four Immeasurables, Bodhicitta, Three Jewels, the five \
+aggregates, etc.), include a short parenthetical explanation on \
+first mention in this section — e.g. \"Four Immeasurables \
+(tshad med bzhi: loving-kindness, compassion, joy, equanimity)\".
+- Honorific forms (zhu, gsol, mdzad, etc.) should be reflected \
+in the register, not merely flattened to plain forms.
 - When a glossary for this passage is provided in the user prompt, \
 prefer those renderings for proper names and technical terms.
 - When ±2 surrounding segments are provided, use them as context to \
 resolve ambiguous pronouns, discourse particles, and sentence-internal \
 reference — but translate ONLY the target passage.
-- No commentary in this section.
+- No commentary in this section (justifications belong in ## Grammar).
 
 ## Vocabulary
 Word-by-word analysis in DharmaMitra style.  For EACH word or \
@@ -145,19 +161,34 @@ Example:
   mgon po, noun, \"protector\"
 
 ## Grammar
-ONE short paragraph (4–6 sentences, roughly 100–150 words) \
-summarising the grammatical backbone of the passage — not a clause-by-\
-clause walkthrough. Identify (a) the main finite verb(s) and any \
-governing converb(s); (b) the chain structure if there is one \
-(V-nas / V-te / V-cing sequencing); (c) one or two noteworthy \
-constructions worth flagging (an idiom, a reported-speech setup, a \
-hedged or approximative expression). Name the metalanguage explicitly \
-when useful (Ergative, Ablative, Dative, Terminative, Instrumental, \
+ONE paragraph (5–8 sentences, roughly 120–180 words) that (a) \
+summarises the grammatical backbone of the passage AND (b) \
+JUSTIFIES specific translation choices where context mattered.
+
+The backbone: identify the main finite verb(s) and any governing \
+converb(s); the chain structure if there is one (V-nas / V-te / \
+V-cing sequencing); one or two noteworthy constructions worth \
+flagging (an idiom, a reported-speech setup, a hedged or \
+approximative expression).  Name the metalanguage explicitly when \
+useful (Ergative, Ablative, Dative, Terminative, Instrumental, \
 Comitative, Genitive; converb type; nominalizer; finite verb; \
-honorific stem) and reference actual Tibetan forms in parentheses. \
-You will be given the parser's own analysis in the user prompt — treat \
-it as ground truth for case and verb tagging; if you disagree, flag \
-the disagreement in one sentence rather than silently overruling.
+honorific stem) and reference actual Tibetan forms in parentheses.
+
+The justification: wherever the ## Translation above made a choice \
+that depended on disambiguating a polysemous word, a converb \
+function, or a case-particle reading, say so in one sentence — \
+e.g. \"*blo sbyangs na* is rendered 'if one trains the mind' \
+because *na* here is the conditional converb (V+na, §2.8), not \
+the locative particle; the verb stem *sbyangs* is the perfect of \
+*sbyong ba*\" or \"*shugs las 'byung* is 'arises from [its own] \
+momentum' because the ablative *las* marks the cause / source of \
+the arising (Elative §1.8.4)\".  Two such notes per segment is a \
+reasonable target; skip if the translation was mechanical.
+
+You will be given the parser's own analysis in the user prompt — \
+treat it as ground truth for case and verb tagging; if you \
+disagree, flag the disagreement in one sentence rather than \
+silently overruling.
 
 Per-particle functional detail (which §1.5.x applies to THIS ར, \
 which §2.11.x applies to THIS ནས, etc.) belongs in the later \
