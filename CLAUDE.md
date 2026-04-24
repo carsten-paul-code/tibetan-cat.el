@@ -3,8 +3,17 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-04-15 (post P0/P1/P2 + display-consistency
-+ Round-2 polish round).
+editing. Last updated 2026-04-24 (added §5.10–§5.13: dictionary polish,
+grammar unification, thesaurus + target-language pipeline, three-level
+dispatch).
+
+Companion files worth reading alongside this one:
+- `~/.claude/projects/-Users-cp/memory/working_discipline.md` — the
+  project-agnostic baseline extract of §2.1–§2.5 (applies to every
+  Carsten repo).  This file refines but does not override them.
+- `~/.claude/projects/-Users-cp/memory/project_tibetan_cat.md` — the
+  one-page pointer from auto-memory; older / less detailed than this
+  doc.  If the two disagree, believe this one.
 
 ---
 
@@ -137,6 +146,39 @@ These are hard preferences. Treat them as rules, not suggestions.
     and propose the remaining work rather than declaring it done.
 11. **Explain what you're about to do before doing it** for anything
     that touches more than one module, then run the tests after.
+12. **New reading source files follow the Section → Sentence → Segment
+    layout.** Every new `.org` source document for the CAT pipeline
+    (MA Readings Tibetan, Tibetisch IV, any future reading corpus)
+    uses this nested structure:
+
+    ```
+    * Tibetan Text
+    ** Section N. <label>        ← optional; only for editorial
+                                    divisions (e.g. the three-persons
+                                    [I]/[II]/[III] in a lam-rim;
+                                    stanza groups; opening/body/colophon)
+    *** Sentence N               ← one per prose paragraph or verse
+                                    stanza; global numbering from 1
+    **** Segment M               ← shad-bounded clause; global
+                                    numbering from 1
+    :PROPERTIES:
+    :FOLIO:    <ref>             ← only when folio refs matter
+    :END:
+
+    <Tibetan Unicode>
+
+    **** Working Translation     ← sibling of Segment; empty
+                                    placeholder at creation time
+    ```
+
+    Reference implementation:
+    `/Users/cp/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/SS26/Tibetisch IV/work in progress/Milarepa-prepared.org`.
+    The sentence-aware commands (`C-c u B` auto-analyze-document,
+    `C-c s N` sentence-create-all, `C-c s Z` resegment) expect this
+    hierarchy — flat `** Section → *** Segment` layouts (older Gal
+    chen nyi shu style) miss the Sentence level and don't feed
+    `sent-*.org` creation cleanly.  Do NOT regenerate older flat
+    files unless Carsten explicitly asks.
 
 ## 3. Repository shape
 
@@ -176,7 +218,7 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-04-21): **1337 tests, 1334 expected, 0 unexpected
+Current state (2026-04-24): **1452 tests, 1449 expected, 0 unexpected
 failures, 3 intentional skips (text-scale / compound-analysis-callable).**
 Carsten runs this after every change and expects it to stay green.
 
@@ -360,6 +402,179 @@ class-prep QA sweep:
 
 Full suite at end of 2026-04-21: **1337 / 1334 expected / 0
 unexpected / 3 intentional skips.**
+
+### 5.10 Condensed Detailed Dictionary + ★-Resources marker (done, 2026-04-21/22)
+
+Four commits refining the Detailed Dictionary block that ships under
+every STEM in the analysis file.  Motivation: the multi-source block
+from §5.3 was correct but visually dense, and it was hard to tell at
+a glance which entries came from Carsten's hand-curated Resources
+list versus auto-sourced dictionaries.
+
+1. **Slimmer Detailed Dictionary — Pass B** (`e56dd7d`).  Added a
+   per-source cap, a Sanskrit filter (synthesised Skt from reverse-
+   indexed tables no longer surfaces when the source entry doesn't
+   carry it), and a particle exemption so case-particle entries
+   don't get truncated like content words.
+2. **Condensed dictionary foundation — Pass 5a** (`8f3d40b`).
+   New ranker with anchored source ordering (Resources-first,
+   Steinert, then the long tail) + first-sense bracket-aware
+   extraction that keeps `(1) [accusative, …]` intact instead of
+   chopping at the first comma.
+3. **Detailed Dictionary renders under the STEM — Pass 5a.1**
+   (`1a4e48e`).  The DD block now appears nested under the
+   Word/Particle List STEM heading instead of as a sibling —
+   reader's eye stays on the stem while scanning senses.
+4. **★ marks Resources / Custom / Thesaurus entries in Interlinear**
+   (`4d2792d`).  Curated sources get a ★ prefix in the word-for-word
+   gloss so at a glance Carsten can see "this is my own gloss, not
+   an auto-lookup".  Same commit removed the now-redundant
+   `** Word/Particle List` top-level section (the info lives inside
+   Interlinear and Detailed Dictionary).
+
+### 5.11 Grammar section unification (done, 2026-04-22)
+
+The analysis file used to carry four overlapping grammar-ish
+sections: `** Particle Map`, `** Claude Grammar`, `** Particle
+Overview`, `** Grammatical Markers`.  Carsten called this "a lot of
+redundancy" on live review.  Result is a single `** Grammar`
+section with a Particle Map subsection and per-particle Portfolio-
+cross-referenced entries.
+
+1. **Pass 6b — merge into `** Grammar`** (`0de3e31`).  Single
+   top-level section replaces the four.  Particle Map is now a
+   nested `*** Particle Map` rendering the stem+particle skeleton;
+   the bialek/Claude per-particle analysis follows as numbered
+   entries.
+2. **Pass 6c — per-particle function IDs + self-contained Portfolio
+   snippets** (`8b30377`).  Each particle entry carries an id like
+   `[[id:XYZ][Portfolio §1.6 ↗]]` linking into Carsten's Bialek
+   Portfolio zettel, AND inlines the relevant Portfolio paragraph
+   in the analysis file so a reader without access to the Portfolio
+   can still follow the grammar.  Snippet body indented via
+   `(replace-regexp-in-string "\n" "\n    " raw)` so the multi-line
+   body doesn't leak as a sibling bullet.
+3. **Dynamic Portfolio section-number injection into Claude prompt**
+   (`0636665`).  Claude's `*** Claude Particles` output references
+   Portfolio section numbers (`§1.6 Terminative`).  Previously
+   Claude used its own guessed numbering (e.g. §1.5), which drifted
+   from Carsten's actual Portfolio (§1.6).  Fix: the system prompt
+   now includes `tibetan-interlinear-portfolio-reference-block` —
+   a dynamic list of the real section numbers parsed from the
+   Portfolio zettel.
+4. **Particle-map presentation polish** (four commits):
+   - Apply face via font-lock bypassing org emphasis word-boundary
+     rule (`fa671e2`) — `'i` now renders magenta even when flanked
+     by `=` delimiters where org won't parse emphasis.
+   - Hide `=` / `~` delimiters, keep only the particle visible
+     (`743535a`) — invisible text property + namespaced
+     `tibetan-analysis-particle-marker` in buffer-invisibility-spec.
+   - Lowercase particle tokens inside markup (`94652dc`).
+   - Multi-tuple matching — one bialek entry, multiple Claude tuples
+     per occurrence, dedup by sub-id, annotate with context word
+     (`4b122ba`).  `r` ↔ `ra` Wylie normalisation via
+     `--particle-wylie-normalise` so bare `ར` matches Claude's `r`.
+5. **Auto-regen Grammar when Claude Particles arrives** (`ca2e6c5`).
+   `insert-claude-sections` now calls `reanalyze-file` with
+   `:re-request-claude nil` when Particles are present, so the
+   Grammar section rebuilds with Claude data without re-firing
+   the Claude translation request.
+
+### 5.12 Thesaurus + target-language pipeline (done, 2026-04-22)
+
+User-editable multilingual glossary layered on top of the dictionary
+stack, plus per-document target-language selection and a gap-report
+designed to prep a source file for translation (currently the German
+Milarepa workflow).  This is the biggest single feature since the
+Round-2 clause segmenter.
+
+**New module** `core/tibetan-thesaurus.el`:
+
+- File-per-term org zettels in `~/Documents/tibetan-thesaurus/` with
+  `:ID:` property + `:wylie:` + `:script:` + bilingual
+  `:primary:` / `:detailed:` fields.  Each zettel carries back-links
+  to the analysis segments that use the term.
+- Rank-1 injection into `tibetan-vocab-multisource-entries` (above
+  Resources).  Overrides `:primary`/`:detailed` with the full
+  bilingual `DE // EN` string so the parser's first-sense extraction
+  doesn't truncate at the bilingual separator.
+- Sliding-window tokenised Wylie matching via
+  `tibetan-thesaurus--tokenise-wylie-text` +
+  `tibetan-thesaurus--count-mentions` (replaced a regex-with-
+  boundary-consumption approach that miscounted consecutive
+  occurrences — `bdag bdag bdag` scored 2 instead of 3).
+
+**Commands** under `C-c u z` prefix:
+
+| binding    | command                                   |
+|------------|-------------------------------------------|
+| `C-c u z e`| `tibetan-thesaurus-edit-at-point`         |
+| `C-c u z n`| `tibetan-thesaurus-new-entry-interactively` |
+| `C-c u z r`| `tibetan-thesaurus-reload`                |
+| `C-c u z i`| `tibetan-thesaurus-initialize-from-kramer`|
+| `C-c u z a`| `tibetan-thesaurus-audit-folder-display`  |
+| `C-c u z R`| `tibetan-thesaurus-rerun-affected-by-zettel` |
+| `C-c u z L`| `tibetan-analysis-set-source-target-lang` |
+| `C-c u z g`| `tibetan-thesaurus-translation-gaps-display` |
+
+**Pass 5b** (`7dc80d6`) — user-editable glossary at rank 1; new zettels
+take precedence over all dictionary sources in the renderer.
+
+**Pass 5b.2** (`f6ddf48`) — create/edit entries from analysis buffer.
+`--wylie-at-point` recognises the word under cursor in `** Detailed
+Dictionary`; the new-entry command pre-fills script + wylie from the
+analysis context.  `case-fold-search` must be `nil` inside the wylie
+detector — default case-insensitive matching caused `[A-Z]+` to
+match lowercase Wylie and filter real words out.
+
+**Pass 5c** (`ec5b1a9`) — per-document DE/EN target-language picker.
+`#+TIBETAN_TARGET_LANG:` header added to source files via
+`tibetan-analysis-set-source-target-lang` (`C-c u z L`).  Value is
+threaded through `tibetan-analysis--target-lang` dynamic var into
+`generate-content`, `--cat-english-gloss`, and the Claude system
+prompt (`target-lang-block` conditional — adds a German directive
+when de-selected).  The bilingual DE // EN pair always remains in
+the Detailed Dictionary; only Interlinear / CAT Gloss / Claude
+Translation narrow to the selected half.
+
+**Pass 5d** (`8476eef`) — cross-document consistency audit +
+targeted rerun.  `audit-folder` walks all seg-*.org in a folder and
+flags segments whose Interlinear gloss for a given term doesn't
+match the thesaurus.  `rerun-affected-by-zettel` re-analyses only
+the segments touched by a specific zettel, avoiding a full
+`batch-reanalyze` when one gloss changes.
+
+**Translation-gap report** (`6e78c22`) — `C-c u z g` lists every
+segment where the thesaurus zettel has `[to be researched]` or an
+empty target-lang side, so Carsten can walk the list and fill
+entries before translating.  Designed for the German Milarepa prep
+workflow: `C-c u z i` → `C-c u z L de` → `C-c u B` → `C-c u z g` →
+walk the list.
+
+**Tests**: `test/tibetan-thesaurus-test.el` (37 tests),
+`test/tibetan-analysis-claude-prompt-test.el` (target-lang +
+set-source tests), `tibetan-wylie-test.el` (`'adra`/`'dra`
+regression from `d0e9f8a`), `tibetan-particles-bialek-test.el`
+(single-`s` ergative tests from `259d00b`).
+
+### 5.13 Three-level analysis dispatch (done, 2026-04-23)
+
+`C-c u A` and `C-c u R` used to always target the segment the cursor
+was on.  New behaviour: **detect context and route** — segment if
+cursor is under a `**** Segment`, sentence if under `*** Sentence`,
+paragraph if under `** §N` or similar.  Added via three commits:
+
+1. **Generic §-level paragraph analysis** (`19b19ff`) — new
+   `tibetan-paragraph-*` machinery for `** §N` (paragraph) context,
+   bound to `C-c p A` / `C-c p R` as dedicated paragraph commands.
+2. **Paragraph dispatch from `C-c u A` / `C-c u R`** (`03ff719`) —
+   cursor-context detection hook added.
+3. **Three-level unification** (`2b82b5f`) — dispatcher routes
+   between segment/sentence/paragraph handlers based on the
+   nearest enclosing heading.
+
+Also in this window: `19a95f6` (specs/tigress + document-prep
+updated to the current reading-file layout from §2.12).
 
 ### 5.8 Claude integration hardening + Anthropic prompt caching (done, 2026-04-20)
 
@@ -593,13 +808,43 @@ folio alongside the text so the caller can thread it through.
 
 ## 9. First thing to do in a new session
 
-1. `make test` (or the batch command in §4). Confirm baseline green.
-2. Skim `MEMORY.md` (auto-memory, if you have access to it) and the
-   last paragraph of `CHANGELOG.md` for anything new.
-3. Ask Carsten which P-level from §6 he wants to tackle — don't guess.
-4. Write tests before code. Run tests after each edit.
-5. Report back with: what changed, which files, which tests now
+1. `make test` (or the batch command in §4). Confirm baseline green
+   (expect 1452 / 1449 expected / 0 unexpected / 3 skipped at 2026-04-24).
+2. Skim `MEMORY.md` (auto-memory) — `working_discipline.md` is the
+   baseline rule set; this file refines it for tibetan-cat.el.
+3. Skim `git log --oneline -20` for anything newer than §5.13 (this
+   file may be stale; the log is authoritative).
+4. Ask Carsten which P-level from §6 he wants to tackle — don't guess.
+5. Write tests before code. Run tests after each edit.
+6. Report back with: what changed, which files, which tests now
    cover it, and the updated test count.
+
+### Active workflow: preparing a new document for German translation
+
+Carsten's current priority is preparing new reading sources for
+translation into German.  The end-to-end pipeline for a fresh
+source file:
+
+1. Create the source file in the §2.12 reading-file layout
+   (Section → Sentence → Segment, with `**** Working Translation`
+   siblings).
+2. `C-c u z i` — initialise thesaurus from Kramer glossary (one-
+   time; skip if already done).
+3. `C-c u z L de` — set this source's target language to German.
+   Writes `#+TIBETAN_TARGET_LANG: de` into the source header.
+4. `C-c u B` — auto-analyse the whole document, creating all
+   `seg-NNN*.org` analysis files with the German-side gloss in
+   Interlinear + CAT Gloss + Claude Translation; bilingual DE // EN
+   stays in Detailed Dictionary.
+5. `C-c u z g` — run the translation-gap report.  It lists every
+   segment whose thesaurus zettel has `[to be researched]` or an
+   empty DE side.  Walk the list with `C-c u z e` (edit-at-point)
+   to fill entries.
+6. `C-c u z R <zettel>` — after editing a zettel, re-run just the
+   affected segments instead of a full `C-c u r` batch.
+
+This workflow is the reason §5.12 exists; when in doubt treat it
+as the driving use case for that subsystem.
 
 ---
 
