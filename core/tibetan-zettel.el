@@ -325,5 +325,307 @@ the module commentary."
           (index (tibetan-zettel--ensure-index)))
       (gethash key index))))
 
+;; ============================================================================
+;; Phase 3 — Auto-creation for <term>-tagged missing tokens (2026-04-24)
+;; ============================================================================
+;;
+;; When U3's Buddhist Terms detector surfaces a token tagged `<term>' by
+;; Steinert's 84000 tables AND no zettel yet exists for that token's
+;; wylie, offer to create one.  The scaffold seeds the zettel with the
+;; 84000 Definitions body (for the `* 84000 Definitions' cache section)
+;; and a best-effort auto-populated `:preferred-en:' from the short
+;; gloss — `:preferred-de:' stays empty (marked `[to be researched]')
+;; per design decision #6 (user-curated German).
+;;
+;; Gated by `tibetan-zettel-auto-create-on-buddhist-term':
+;;   `always' — create silently.
+;;   `ask'    — prompt `y-or-n-p', naming the term + short gloss.  (default)
+;;   nil      — never create, surface term in Buddhist Terms block only.
+
+(defcustom tibetan-zettel-auto-create-on-buddhist-term 'ask
+  "Behaviour when a `<term>'-tagged token has no zettel yet.
+See module commentary for semantics.  Default `ask' surfaces every
+opportunity as a y-or-n-p prompt; switch to `always' once the
+<term>-tag heuristic has proven itself on your corpus (i.e. no
+more rejections)."
+  :type '(choice (const :tag "Always create silently" always)
+                 (const :tag "Ask per term (y-or-n-p)" ask)
+                 (const :tag "Never auto-create" nil))
+  :group 'tibetan-zettel)
+
+(defun tibetan-zettel--slug-from-wylie (wylie)
+  "Return a Denote filename slug from WYLIE.
+Rules: lowercase, apostrophes dropped, non-alphanumeric → dashes,
+consecutive dashes collapsed, leading/trailing dashes trimmed.
+
+Examples:
+  `bdag'                 → `bdag'
+  `tshad med bzhi po'    → `tshad-med-bzhi-po'
+  `'khor ba'             → `khor-ba'
+  `Byang Chub Kyi Sems'  → `byang-chub-kyi-sems'"
+  (when (and wylie (stringp wylie))
+    (let* ((s (downcase (string-trim wylie)))
+           (s (replace-regexp-in-string "['’]" "" s))
+           (s (replace-regexp-in-string "[^a-z0-9]+" "-" s))
+           (s (replace-regexp-in-string "-+" "-" s))
+           (s (replace-regexp-in-string "\\`-\\|-\\'" "" s)))
+      s)))
+
+(defun tibetan-zettel--denote-timestamp ()
+  "Return the current time as a Denote-style `YYYYMMDDTHHMMSS' string."
+  (format-time-string "%Y%m%dT%H%M%S"))
+
+(defun tibetan-zettel--denote-filename (timestamp slug)
+  "Assemble the canonical auto-created zettel filename.
+`<TIMESTAMP>--<SLUG>__glossar__buddhist-term.org'
+
+Matches the Denote convention so the file participates in
+whatever Denote wiring the zettelkasten already has (search,
+renaming, backlinks); carries both the `__glossar' translation-
+relevant tag AND a `__buddhist-term' tag distinguishing auto-
+created entries from hand-written ones."
+  (format "%s--%s__glossar__buddhist-term.org" timestamp slug))
+
+(defun tibetan-zettel--extract-term-gloss (body)
+  "From an 84000Definitions body string BODY, pull the short gloss
+immediately after the `<term>' tag.  Returns the trimmed gloss or
+nil.
+
+The 84000 body format is:
+
+  <term> SHORT-GLOSS (Skt: ...): LONG-EXPLANATION...
+
+We take everything between `<term> ' and the first `(' or `:' or
+newline, trimmed — this is the short reference-translation that
+the auto-created `:preferred-en:' field is seeded with."
+  (when (and body (stringp body))
+    (when (string-match "<term>[ \t]+\\([^(:\n]+?\\)[ \t]*\\(?:(\\|:\\|$\\)"
+                        body)
+      (string-trim (match-string 1 body)))))
+
+(cl-defun tibetan-zettel--create-for-term
+    (&key wylie script sanskrit 84000-body preferred-en
+          preferred-de source-analysis-file)
+  "Create a new Denote-format zettel for the Buddhist term with WYLIE.
+Returns the created file's absolute path, or nil on failure (bad
+args, unwritable directory).
+
+Required:
+  :WYLIE — the term's Wylie, used for both the PROPERTIES drawer
+           and the filename slug.
+
+Optional (any may be nil):
+  :SCRIPT             — Tibetan script for the drawer.
+  :SANSKRIT           — Skt lemma (e.g. `caturapramāṇa').
+  :84000-BODY         — Steinert's 84000Definitions paragraph.
+                        Written into the `* 84000 Definitions'
+                        cache section; auto-derives a short gloss
+                        for :preferred-en if PREFERRED-EN is nil.
+  :PREFERRED-EN       — explicit English preferred translation.
+                        Falls back to extracting the short gloss
+                        from 84000-BODY; falls back further to
+                        `[to be researched]'.
+  :PREFERRED-DE       — explicit German (default `[to be researched]').
+                        Per design decision #6, the German stays
+                        empty for user curation — auto-populating
+                        would defeat the translation-gaps report.
+  :SOURCE-ANALYSIS-FILE — path of the segment whose analysis
+                        triggered creation.  When given, a back-
+                        link is written into the `* Back-links'
+                        section pointing at that file.
+
+On success, reloads the index so `tibetan-zettel-lookup' sees the
+new entry immediately."
+  (when (and wylie (stringp wylie) (not (string-empty-p wylie)))
+    (let* ((dir (expand-file-name tibetan-zettel-directory))
+           (slug (tibetan-zettel--slug-from-wylie wylie))
+           (timestamp (tibetan-zettel--denote-timestamp))
+           (filename (tibetan-zettel--denote-filename timestamp slug))
+           (path (expand-file-name filename dir))
+           (pref-en-final (or (and preferred-en
+                                   (not (string-empty-p preferred-en))
+                                   preferred-en)
+                              (tibetan-zettel--extract-term-gloss 84000-body)
+                              "[to be researched]"))
+           (pref-de-final (or (and preferred-de
+                                   (not (string-empty-p preferred-de))
+                                   preferred-de)
+                              "[to be researched]"))
+           (title (if script
+                      (format "%s — %s" wylie pref-en-final)
+                    wylie)))
+      (unless (file-directory-p dir)
+        (make-directory dir t))
+      (with-temp-file path
+        (insert (format "#+TITLE: %s\n" title))
+        (insert ":PROPERTIES:\n")
+        (insert (format ":ID:             %s\n" timestamp))
+        (insert (format ":wylie:          %s\n" wylie))
+        (when script   (insert (format ":script:         %s\n" script)))
+        (when sanskrit (insert (format ":sanskrit:       %s\n" sanskrit)))
+        (insert (format ":preferred-de:   %s\n" pref-de-final))
+        (insert (format ":preferred-en:   %s\n" pref-en-final))
+        (when 84000-body
+          (insert ":steinert-84000: yes\n"))
+        (insert ":END:\n\n")
+        (insert "* Notes\n\n\n")
+        (when 84000-body
+          (insert "* 84000 Definitions\n")
+          (insert ":PROPERTIES:\n:TERM_CACHE: t\n:END:\n\n")
+          (insert 84000-body)
+          (insert "\n\n"))
+        (insert "* Claude Explanation\n")
+        (insert ":PROPERTIES:\n:TERM_CACHE: t\n:END:\n\n")
+        (insert "[awaiting first analysis]\n\n")
+        (insert "* Back-links\n")
+        (insert ":PROPERTIES:\n:TERM_CACHE: t\n:END:\n\n")
+        (when (and source-analysis-file
+                   (stringp source-analysis-file)
+                   (file-readable-p source-analysis-file))
+          (let* ((source-id (tibetan-zettel--read-source-id
+                             source-analysis-file))
+                 (label (file-name-base source-analysis-file))
+                 (link (if source-id
+                           (format "[[id:%s][%s]]" source-id label)
+                         (format "[[file:%s][%s]]"
+                                 source-analysis-file label))))
+            (insert (format "- %s\n" link)))))
+      ;; Reload the index so the new zettel is immediately findable.
+      (tibetan-zettel-reload)
+      path)))
+
+(defun tibetan-zettel--read-source-id (analysis-file)
+  "Return the top-level `:ID:' property of ANALYSIS-FILE, or nil.
+Used to build back-links from auto-created zettels to the segment
+analysis file that triggered their creation."
+  (when (and analysis-file (file-readable-p analysis-file))
+    (with-temp-buffer
+      (insert-file-contents analysis-file nil 0 4096)
+      (when (re-search-forward "^:ID:[ \t]+\\(\\S-.*?\\)[ \t]*$" nil t)
+        (match-string 1)))))
+
+(cl-defun tibetan-zettel-maybe-create-for-buddhist-term
+    (&key wylie script sanskrit 84000-body preferred-en
+          preferred-de source-analysis-file)
+  "If a zettel doesn't exist for WYLIE, create one per user prefs.
+Behaviour dispatches on `tibetan-zettel-auto-create-on-buddhist-term':
+
+  - nil      → return nil without prompting or writing.
+  - `always' → create immediately.
+  - `ask'    → prompt `y-or-n-p' showing WYLIE + the derived
+               short gloss; create on y, skip on n.
+
+Returns the created zettel's path, or nil when nothing was written.
+Idempotent: if a zettel already exists for WYLIE (hit in the
+current index), returns nil immediately without prompting.
+
+See `tibetan-zettel--create-for-term' for the full argument list."
+  (when (and wylie
+             tibetan-zettel-auto-create-on-buddhist-term
+             (not (tibetan-zettel-lookup wylie)))
+    (let* ((short-gloss (or preferred-en
+                            (tibetan-zettel--extract-term-gloss 84000-body)
+                            "this term"))
+           (proceed-p
+            (cl-case tibetan-zettel-auto-create-on-buddhist-term
+              (always t)
+              (ask (y-or-n-p
+                    (format "Create zettel for `%s' (%s)? "
+                            wylie short-gloss)))
+              (t nil))))
+      (when proceed-p
+        (tibetan-zettel--create-for-term
+         :wylie wylie
+         :script script
+         :sanskrit sanskrit
+         :84000-body 84000-body
+         :preferred-en preferred-en
+         :preferred-de preferred-de
+         :source-analysis-file source-analysis-file)))))
+
+;; ============================================================================
+;; Phase 3 — Interactive walker over the current analysis buffer's
+;; `*** Buddhist Terms' subsection.  This is the user-facing hook: after
+;; opening or regenerating a segment analysis file, run this to offer
+;; zettel creation for every term under the Buddhist Terms section.
+;; ============================================================================
+
+(defconst tibetan-zettel--buddhist-terms-heading-re
+  "^\\*\\*\\* Buddhist Terms[ \t]*$"
+  "Regex for the U3-emitted Buddhist Terms subsection heading.")
+
+(defconst tibetan-zettel--buddhist-term-line-re
+  "^- \\(.+?\\) \\[\\(.+?\\)\\][ \t]*$"
+  "Regex for a `- SCRIPT [wylie]' entry inside Buddhist Terms.
+Capture 1: Tibetan script.  Capture 2: Wylie.  The body line(s)
+follow on subsequent lines indented by at least two spaces; see
+`tibetan-zettel--parse-buddhist-term-body' for extraction.")
+
+(defun tibetan-zettel--parse-buddhist-term-body (line-end section-end)
+  "Return the body excerpt following a `- SCRIPT [wylie]' line.
+Starts at LINE-END (end of the header line) and reads following
+indented lines until the next `- ' bullet or SECTION-END, joining
+them with spaces.  Trimmed."
+  (save-excursion
+    (goto-char line-end)
+    (forward-line 1)
+    (let ((start (point))
+          (end section-end))
+      (while (and (< (point) section-end)
+                  (looking-at "^[ \t]+[^-]"))
+        (forward-line 1))
+      (when (< (point) section-end)
+        (setq end (point)))
+      (string-trim (buffer-substring-no-properties start end)))))
+
+;;;###autoload
+(defun tibetan-zettel-auto-create-from-current-analysis ()
+  "Walk the current analysis buffer's `*** Buddhist Terms' section and
+offer to create a zettel for every term that doesn't already have
+one.  Gated by `tibetan-zettel-auto-create-on-buddhist-term' — see
+that defcustom for per-term prompt behaviour.
+
+Signals a `user-error' when the current buffer has no
+`*** Buddhist Terms' heading (either the analysis hasn't been
+generated yet or the segment has no <term>-tagged tokens).
+
+Back-links on created zettels point at the current analysis
+file's `:ID:' (if present) or path."
+  (interactive)
+  (save-excursion
+    (goto-char (point-min))
+    (unless (re-search-forward tibetan-zettel--buddhist-terms-heading-re
+                               nil t)
+      (user-error "No `*** Buddhist Terms' section in this buffer — \
+run `C-c u R' to regenerate, or there are no <term>-tagged tokens"))
+    (let* ((section-end
+            (save-excursion
+              (if (re-search-forward "^\\*\\*\\* \\|^\\*\\* " nil t)
+                  (line-beginning-position)
+                (point-max))))
+           (analysis-file (buffer-file-name))
+           (created 0)
+           (skipped 0)
+           (declined 0))
+      (while (re-search-forward tibetan-zettel--buddhist-term-line-re
+                                section-end t)
+        (let* ((script (match-string 1))
+               (wylie (match-string 2))
+               (body (tibetan-zettel--parse-buddhist-term-body
+                      (match-end 0) section-end)))
+          (cond
+           ((tibetan-zettel-lookup wylie)
+            (cl-incf skipped))
+           ((tibetan-zettel-maybe-create-for-buddhist-term
+             :wylie wylie
+             :script script
+             :84000-body body
+             :source-analysis-file analysis-file)
+            (cl-incf created))
+           (t
+            (cl-incf declined)))))
+      (message "tibetan-zettel: %d created, %d already existed, %d declined"
+               created skipped declined))))
+
 (provide 'tibetan-zettel)
 ;;; tibetan-zettel.el ends here

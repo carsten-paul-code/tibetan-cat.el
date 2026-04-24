@@ -133,6 +133,11 @@
       :help "Set the current source file's `#+TIBETAN_TARGET_LANG:' header (de / en) — drives which half of bilingual glosses surfaces"
       :active (fboundp 'tibetan-analysis-set-source-target-lang)]
      "---"
+     ["Auto-Create Zettels for Buddhist Terms (C-c u z B)"
+      tibetan-zettel-auto-create-from-current-analysis
+      :help "Phase 3: walk the current analysis buffer's `*** Buddhist Terms' subsection; for every <term>-tagged token without a zettel, offer to create one seeded with the 84000 Definitions body"
+      :active (fboundp 'tibetan-zettel-auto-create-from-current-analysis)]
+     "---"
      ["Open Zettelkasten Folder" (lambda () (interactive)
                                    (dired "~/buddhist-studies/knowledge/zettelkasten/"))
       :help "Jump into the zettelkasten directory (Denote-managed)"])

@@ -488,5 +488,277 @@ so the ranked output lists them in that order."
       (should (< resources-pos custom-pos))
       (should (< custom-pos zettel-pos)))))
 
+;; ============================================================================
+;; Phase 3 — Auto-creation for <term>-tagged missing tokens
+;;
+;; When U3's Buddhist Terms detection fires and no zettel yet exists for
+;; a <term>-tagged token, a zettel scaffold is auto-created (gated by the
+;; `tibetan-zettel-auto-create-on-buddhist-term' defcustom).  The scaffold
+;; includes:
+;;   · properties drawer with :wylie: / :script: / :sanskrit:, empty
+;;     :preferred-de: ([to be researched]), auto :preferred-en: from the
+;;     84000 short gloss, :steinert-84000: yes.
+;;   · `* 84000 Definitions' body section, protected by :TERM_CACHE: t.
+;;   · `* Notes', `* Claude Explanation', `* Back-links' scaffolds.
+;;   · Initial back-link to the triggering segment's analysis file.
+;; ============================================================================
+
+;; -------- Slug + filename ---------------------------------------------------
+
+(ert-deftest tibetan-zettel-slug-from-wylie-basic ()
+  "Wylie → Denote filename slug: downcase, spaces → dashes, apostrophes → dashes."
+  (should (equal "bdag" (tibetan-zettel--slug-from-wylie "bdag")))
+  (should (equal "tshad-med-bzhi-po"
+                 (tibetan-zettel--slug-from-wylie "tshad med bzhi po")))
+  (should (equal "khor-ba"
+                 (tibetan-zettel--slug-from-wylie "'khor ba")))
+  (should (equal "byang-chub-kyi-sems"
+                 (tibetan-zettel--slug-from-wylie "Byang Chub Kyi Sems"))))
+
+(ert-deftest tibetan-zettel-denote-timestamp-format ()
+  "Denote timestamps match the canonical `YYYYMMDDTHHMMSS' shape."
+  (let ((ts (tibetan-zettel--denote-timestamp)))
+    (should (stringp ts))
+    (should (= 15 (length ts)))
+    (should (string-match-p "\\`[0-9]\\{8\\}T[0-9]\\{6\\}\\'" ts))))
+
+(ert-deftest tibetan-zettel-denote-filename-assembly ()
+  "Filename assembly: `<TIMESTAMP>--<slug>__glossar__buddhist-term.org'."
+  (let ((name (tibetan-zettel--denote-filename
+               "20260424T150000" "tshad-med-bzhi-po")))
+    (should (equal name
+                   "20260424T150000--tshad-med-bzhi-po__glossar__buddhist-term.org"))))
+
+;; -------- Creator ------------------------------------------------------------
+
+(ert-deftest tibetan-zettel-create-for-term-basic ()
+  "Creator writes a zettel at the right path with the required fields."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (path (tibetan-zettel--create-for-term
+                  :wylie "tshad med bzhi po"
+                  :script "ཚད་མེད་བཞི་པོ"
+                  :sanskrit "caturapramāṇa"
+                  :84000-body "<term> four immeasurables (Skt: caturapramāṇa): the meditations on love, compassion, joy, equanimity."
+                  :preferred-en "four immeasurables")))
+      (should path)
+      (should (file-exists-p path))
+      ;; Filename contains the expected tags.
+      (should (string-match-p "__glossar__buddhist-term\\.org\\'" path))
+      ;; Content: properties drawer fields.
+      (let ((content (with-temp-buffer
+                       (insert-file-contents path)
+                       (buffer-string))))
+        (should (string-match-p "^:wylie:[ \t]+tshad med bzhi po$" content))
+        (should (string-match-p "^:script:[ \t]+ཚད་མེད་བཞི་པོ$" content))
+        (should (string-match-p "^:sanskrit:[ \t]+caturapramāṇa$" content))
+        (should (string-match-p "^:preferred-en:[ \t]+four immeasurables$" content))
+        (should (string-match-p "^:preferred-de:[ \t]+\\[to be researched\\]$"
+                                content))
+        (should (string-match-p "^:steinert-84000:[ \t]+yes$" content))
+        ;; 84000 Definitions body present.
+        (should (string-match-p "^\\* 84000 Definitions$" content))
+        (should (string-match-p ":TERM_CACHE:[ \t]+t" content))
+        (should (string-match-p "meditations on love" content))
+        ;; Scaffold sections.
+        (should (string-match-p "^\\* Notes$" content))
+        (should (string-match-p "^\\* Claude Explanation$" content))
+        (should (string-match-p "^\\* Back-links$" content))
+        ;; A valid :ID: property.
+        (should (string-match-p "^:ID:[ \t]+[0-9]\\{8\\}T[0-9]\\{6\\}$"
+                                content))))))
+
+(ert-deftest tibetan-zettel-create-for-term-with-back-link ()
+  "When SOURCE-ANALYSIS-FILE is given, a back-link is written into the
+`* Back-links' section pointing at that file's id (or path when no
+id available)."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (source-path (tibetan-zettel-test--write
+                         "seg-016.org"
+                         ":PROPERTIES:\n:ID: seg-016-id\n:END:\n"))
+           (zettel-path (tibetan-zettel--create-for-term
+                         :wylie "bdag"
+                         :script "བདག"
+                         :source-analysis-file source-path)))
+      (let ((content (with-temp-buffer
+                       (insert-file-contents zettel-path)
+                       (buffer-string))))
+        ;; Back-links section has a link pointing at the source seg.
+        (should (string-match-p "\\* Back-links" content))
+        (should (or (string-match-p "\\[\\[id:seg-016-id\\]" content)
+                    (string-match-p "seg-016\\.org" content)))))))
+
+(ert-deftest tibetan-zettel-create-for-term-idempotent-lookup ()
+  "After creation, `tibetan-zettel-lookup' resolves the new wylie.
+This confirms the index rebuild happens automatically on
+creation, so a second attempt to auto-create the same term sees
+the zettel and does nothing."
+  (tibetan-zettel-test--with-fixture-dir
+    (let ((tibetan-zettel-directory tibetan-zettel-test--tempdir))
+      (should-not (tibetan-zettel-lookup "bdag"))
+      (tibetan-zettel--create-for-term
+       :wylie "bdag" :script "བདག" :preferred-en "I, self")
+      (should (tibetan-zettel-lookup "bdag")))))
+
+;; -------- defcustom gating --------------------------------------------------
+
+(ert-deftest tibetan-zettel-auto-create-custom-nil ()
+  "When `tibetan-zettel-auto-create-on-buddhist-term' is nil, the
+maybe-create wrapper returns nil without writing anything."
+  (tibetan-zettel-test--with-fixture-dir
+    (let ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+          (tibetan-zettel-auto-create-on-buddhist-term nil))
+      (should-not (tibetan-zettel-maybe-create-for-buddhist-term
+                   :wylie "bdag" :script "བདག"))
+      (should (null (directory-files tibetan-zettel-directory nil "\\.org\\'"))))))
+
+(ert-deftest tibetan-zettel-auto-create-custom-always ()
+  "When the defcustom is `always', the wrapper creates without
+prompting."
+  (tibetan-zettel-test--with-fixture-dir
+    (let ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+          (tibetan-zettel-auto-create-on-buddhist-term 'always))
+      (let ((path (tibetan-zettel-maybe-create-for-buddhist-term
+                   :wylie "bdag" :script "བདག")))
+        (should path)
+        (should (file-exists-p path))))))
+
+(ert-deftest tibetan-zettel-auto-create-custom-ask-yes ()
+  "When the defcustom is `ask' and the prompt returns y, a zettel is
+created.  We stub `y-or-n-p' to return t."
+  (tibetan-zettel-test--with-fixture-dir
+    (let ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+          (tibetan-zettel-auto-create-on-buddhist-term 'ask))
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
+        (let ((path (tibetan-zettel-maybe-create-for-buddhist-term
+                     :wylie "bdag" :script "བདག")))
+          (should path)
+          (should (file-exists-p path)))))))
+
+(ert-deftest tibetan-zettel-auto-create-custom-ask-no ()
+  "When the defcustom is `ask' and the prompt returns n, NO zettel is
+created (stub y-or-n-p to return nil)."
+  (tibetan-zettel-test--with-fixture-dir
+    (let ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+          (tibetan-zettel-auto-create-on-buddhist-term 'ask))
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) nil)))
+        (should-not (tibetan-zettel-maybe-create-for-buddhist-term
+                     :wylie "bdag" :script "བདག"))
+        (should (null (directory-files tibetan-zettel-directory nil
+                                       "\\.org\\'")))))))
+
+(ert-deftest tibetan-zettel-auto-create-skips-when-zettel-exists ()
+  "Before prompting or creating, the wrapper checks lookup-hit.
+When a zettel for the wylie already exists, it returns nil
+without prompting — the `y-or-n-p' stub must NOT be called."
+  (tibetan-zettel-test--with-fixture-dir
+    (let ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+          (tibetan-zettel-auto-create-on-buddhist-term 'ask)
+          (prompt-called nil))
+      (tibetan-zettel-test--write
+       "20260424T090000--bdag__glossar.org"
+       (tibetan-zettel-test--v2-fixture :wylie "bdag" :preferred-en "I, self"))
+      (tibetan-zettel-reload)
+      (cl-letf (((symbol-function 'y-or-n-p)
+                 (lambda (&rest _) (setq prompt-called t) t)))
+        (should-not (tibetan-zettel-maybe-create-for-buddhist-term
+                     :wylie "bdag" :script "བདག")))
+      (should-not prompt-called))))
+
+;; -------- Phase 3 — interactive walker over analysis buffer ---------------
+
+(defun tibetan-zettel-test--analysis-fixture (&rest buddhist-terms)
+  "Write a minimal analysis-buffer body string containing a
+`*** Buddhist Terms' subsection populated with BUDDHIST-TERMS.
+Each argument is a (SCRIPT WYLIE BODY) triple."
+  (concat
+   ":PROPERTIES:\n:ID: test-seg-id\n:END:\n"
+   "#+TITLE: Segment 1 Analysis\n\n"
+   "* Tibetan Text\nསངས་རྒྱས།\n\n"
+   "* Auto-Analysis\n"
+   "** Grammar\n"
+   "*** Particle Map\n=CASE=\n\n"
+   "*** Buddhist Terms\n"
+   (mapconcat
+    (lambda (term)
+      (let ((script (nth 0 term)) (wylie (nth 1 term)) (body (nth 2 term)))
+        (format "- %s [%s]\n  %s\n" script wylie body)))
+    buddhist-terms "")
+   "\n*** Particles in This Segment\n[none]\n"))
+
+(ert-deftest tibetan-zettel-auto-create-command-walks-buddhist-terms ()
+  "The interactive command walks every `- SCRIPT [wylie]' line under
+`*** Buddhist Terms' and offers each to the user.  Terms already
+in the zettelkasten are silently skipped; terms absent are
+prompted per the defcustom."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (tibetan-zettel-auto-create-on-buddhist-term 'always)
+           (analysis-path
+            (tibetan-zettel-test--write
+             "seg-001.org"
+             (tibetan-zettel-test--analysis-fixture
+              '("ཚད་མེད་བཞི་པོ" "tshad med bzhi po"
+                "four immeasurables: the meditations …")
+              '("བྱང་ཆུབ་ཀྱི་སེམས" "byang chub kyi sems"
+                "bodhicitta: the mind of awakening …")))))
+      (with-current-buffer (find-file-noselect analysis-path)
+        (unwind-protect
+            (progn
+              (tibetan-zettel-reload)
+              (should-not (tibetan-zettel-lookup "tshad med bzhi po"))
+              (should-not (tibetan-zettel-lookup "byang chub kyi sems"))
+              (tibetan-zettel-auto-create-from-current-analysis)
+              ;; Both zettels got created.
+              (should (tibetan-zettel-lookup "tshad med bzhi po"))
+              (should (tibetan-zettel-lookup "byang chub kyi sems")))
+          (kill-buffer))))))
+
+(ert-deftest tibetan-zettel-auto-create-command-skips-existing ()
+  "Terms that already have a zettel in the zettelkasten are left
+alone — no prompt, no duplicate file."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (tibetan-zettel-auto-create-on-buddhist-term 'ask)
+           (prompt-called nil))
+      ;; Pre-create one of the two zettels.
+      (tibetan-zettel-test--write
+       "20260101T000000--tshad-med-bzhi-po__glossar.org"
+       (tibetan-zettel-test--v2-fixture
+        :wylie "tshad med bzhi po" :preferred-en "four immeasurables"))
+      (tibetan-zettel-reload)
+      (let ((analysis-path
+             (tibetan-zettel-test--write
+              "seg-001.org"
+              (tibetan-zettel-test--analysis-fixture
+               '("ཚད་མེད་བཞི་པོ" "tshad med bzhi po"
+                 "four immeasurables: …")))))
+        (with-current-buffer (find-file-noselect analysis-path)
+          (unwind-protect
+              (cl-letf (((symbol-function 'y-or-n-p)
+                         (lambda (&rest _) (setq prompt-called t) t)))
+                (tibetan-zettel-auto-create-from-current-analysis)
+                ;; Prompt must NOT have been called — the zettel existed.
+                (should-not prompt-called))
+            (kill-buffer)))))))
+
+(ert-deftest tibetan-zettel-auto-create-command-no-section ()
+  "When the buffer has no `*** Buddhist Terms' section (either the
+analysis hasn't run yet, or the segment has no <term>-tagged
+tokens), the command signals a clear user-error."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (analysis-path
+            (tibetan-zettel-test--write
+             "seg-001.org"
+             "#+TITLE: Segment 1 Analysis\n* Tibetan Text\nསངས་རྒྱས།\n")))
+      (with-current-buffer (find-file-noselect analysis-path)
+        (unwind-protect
+            (should-error
+             (tibetan-zettel-auto-create-from-current-analysis)
+             :type 'user-error)
+          (kill-buffer))))))
+
 (provide 'tibetan-zettel-test)
 ;;; tibetan-zettel-test.el ends here

@@ -280,6 +280,15 @@
   ;; refreshed).  Prompts for both the zettel path and the analysis
   ;; folder.
 
+(define-key tibetan-thesaurus-prefix-map (kbd "B")
+  'tibetan-zettel-auto-create-from-current-analysis)
+  ;; Phase 3 of zettel-in-translation-workflow (2026-04-24): walk the
+  ;; current analysis buffer's `*** Buddhist Terms' subsection and
+  ;; offer to create a zettel for each term that doesn't already have
+  ;; one.  `B' for Buddhist-term auto-create.  Gated by
+  ;; `tibetan-zettel-auto-create-on-buddhist-term' (default `ask' —
+  ;; per-term y-or-n-p prompt; set to `always' for silent creation).
+
 (global-set-key (kbd "C-c u z") tibetan-thesaurus-prefix-map)
 
 ;; ============================================================================
