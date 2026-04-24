@@ -3436,7 +3436,23 @@ sentence."
                 (goto-char (point-min)))
               (display-buffer-in-side-window buf
                                              '((side . right)
-                                               (window-width . 0.5)))))
+                                               (window-width . 0.5))))
+            ;; 2026-04-24: if the file's Claude Translation is still a
+            ;; placeholder (original Claude fire never completed, or
+            ;; OTPM'd out), auto-fire a fresh request on open.  Covers
+            ;; the common case where seg-NNN.org was created weeks ago
+            ;; but Claude never filled it in — previously you had to
+            ;; notice this and explicitly run `C-c u F' or `C-c u R'.
+            (when (and (fboundp 'tibetan-auto--claude-needs-request-p)
+                       (tibetan-auto--claude-needs-request-p filepath))
+              (message "Claude placeholder detected — firing translation request for seg-%s"
+                       seg-id)
+              (condition-case err
+                  (tibetan-analysis--request-claude-translation
+                   tibetan-text filepath source-file)
+                (error
+                 (message "Claude auto-fire skipped for seg-%s: %s"
+                          seg-id (error-message-string err))))))
         ;; Create new file
         (let* ((auto-content (tibetan-analysis-generate-content
                               tibetan-text seg-id source-text))
@@ -3494,7 +3510,12 @@ segment > sentence > paragraph > legacy, most-specific-wins."
       (unless (file-exists-p filepath)
         (error "No analysis file exists. Use C-c u A to create one first"))
 
-      (when (yes-or-no-p "Re-analyze segment? (Auto section will be regenerated, notes preserved) ")
+      ;; 2026-04-24: switched from `yes-or-no-p' (typed full "yes") to
+      ;; `y-or-n-p' (single key) — the old prompt caused accidental
+      ;; declines when user hit RET without typing.  Regen is still
+      ;; gated because it wipes the auto-analysis section, but the
+      ;; friction is now one keystroke.
+      (when (y-or-n-p "Re-analyze segment? (regen auto section + re-fire Claude; notes preserved) ")
         (let ((auto-content (tibetan-analysis-generate-content
                              tibetan-text seg-id source-text)))
           (tibetan-analysis-regenerate-auto filepath tibetan-text auto-content)

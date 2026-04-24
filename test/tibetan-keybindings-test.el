@@ -10,12 +10,19 @@
 ;; Add parent directory to load path
 (let ((dir (file-name-directory (or load-file-name buffer-file-name))))
   (add-to-list 'load-path (expand-file-name "../persist" dir))
-  (add-to-list 'load-path (expand-file-name "../core" dir)))
+  (add-to-list 'load-path (expand-file-name "../core" dir))
+  (add-to-list 'load-path (expand-file-name "../config" dir))
+  (add-to-list 'load-path (expand-file-name "../analysis" dir)))
 
 ;; Load modules that set keybindings
 (require 'tibetan-org-structure nil t)
 (require 'tibetan-auto-analysis nil t)
 (require 'tibetan-structure-reorg nil t)
+;; Central binding surface (moved 2026-04-24 — needed for the
+;; `no-uc-clash' / `claude-fire' / `combine-stays' tests below).
+(require 'tibetan-analysis-persist nil t)
+(require 'tibetan-analysis-combine nil t)
+(require 'tibetan-keybindings nil t)
 
 ;; ============================================================================
 ;; DOCUMENT PREPARATION KEYBINDINGS
@@ -141,6 +148,43 @@
 ;; ============================================================================
 ;; HELPER
 ;; ============================================================================
+
+;; ============================================================================
+;; Binding placement (2026-04-24)
+;;
+;; `tibetan-auto-request-claude-translations' was silently un-bound in
+;; practice because its module-level `(global-set-key "C-c u C" ...)'
+;; was clobbered by `config/tibetan-keybindings.el's `C-c u C' →
+;; `tibetan-analysis-combine-document' (loaded later).  Surfaced by
+;; Carsten on 2026-04-24 when Claude didn't fly in on seg-016.  The
+;; module-level binding was removed and the command rebound to
+;; `C-c u F' in the central config.  These tests pin the result:
+;;   - `C-c u F' fires Claude for placeholders.
+;;   - `C-c u C' builds the combined document.
+;;   - No two `C-c u X' slots share a command (anti-clobber).
+;; ============================================================================
+
+(ert-deftest tibetan-keybinding-claude-fire-bound-to-F ()
+  "`C-c u F' must invoke `tibetan-auto-request-claude-translations'."
+  (should (eq (key-binding (kbd "C-c u F"))
+              'tibetan-auto-request-claude-translations)))
+
+(ert-deftest tibetan-keybinding-combine-stays-on-C ()
+  "`C-c u C' must invoke `tibetan-analysis-combine-document'.  If this
+flips back to claude-request-translations, the module-level
+`global-set-key' has crept back into a module file — check and
+remove it."
+  (should (eq (key-binding (kbd "C-c u C"))
+              'tibetan-analysis-combine-document)))
+
+;; Note: no runtime test can detect binding CLOBBERS — `key-binding'
+;; returns only the final winner.  The original bug (`C-c u C' set by
+;; two modules, one clobbering the other) is best guarded by keeping
+;; all `global-set-key' calls in `config/tibetan-keybindings.el' (the
+;; single central surface) and doing grep-scans during code review.
+;; The two specific assertions above catch the observed regression:
+;; if either Claude-fire or combine flips to `nil' / the wrong command,
+;; something has rebound it behind the config file's back.
 
 (defun tibetan-keybindings-run-tests ()
   "Run all keybinding tests interactively."

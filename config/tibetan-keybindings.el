@@ -145,6 +145,30 @@
   ;; - C-u prefix prompts for a different analysis folder.
 
 ;; ============================================================================
+;; FIRE CLAUDE ON ALL PENDING PLACEHOLDERS - C-c u F
+;; ============================================================================
+;;
+;; Moved 2026-04-24 (bug report: "Claude doesn't fly in").  Previously the
+;; command `tibetan-auto-request-claude-translations' was bound to `C-c u C'
+;; in `persist/tibetan-auto-analysis.el' (line 570), but this file's
+;; `C-c u C' → combine-document binding loads later and silently clobbers
+;; it.  The module-level binding is now removed and the command rebound
+;; here with a distinct key.
+;;
+;; `F' for "Fire Claude" — scans the analysis folder for every file whose
+;; `** Claude Translation' body is a `[Requesting translation...]' /
+;; `[Claude unavailable...]' / `[Claude request failed...]' placeholder
+;; (or empty) and queues a fresh Claude request for each.  Use after a
+;; batch that partially OTPM'd out, or when you want to rescue segments
+;; whose Claude never completed.
+
+(global-set-key (kbd "C-c u F") 'tibetan-auto-request-claude-translations)
+  ;; - No prefix: scans the analysis/ folder of the current source file.
+  ;; - C-u prefix: force re-fire even for segments that already have a
+  ;;   non-placeholder Claude Translation.
+  ;; - Requests go through `tibetan-claude-queue' (rate-limit + retry).
+
+;; ============================================================================
 ;; PERSISTENT COMPOUND ANALYSIS - C-c v A / C-c v R
 ;; ============================================================================
 

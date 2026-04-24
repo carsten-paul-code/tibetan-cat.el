@@ -562,12 +562,14 @@ this after you've changed the system prompt or switched model."
 ;; KEYBINDINGS
 ;; ============================================================================
 
-(global-set-key (kbd "C-c u B") 'tibetan-auto-analyze-document)
-;; Batch-fill Claude translations for segments that still show the
-;; `[Requesting translation...]' placeholder.  Mnemonic: "u C" for
-;; "Claude".  Prefix argument (C-u C-c u C) force-re-requests every
-;; segment.
-(global-set-key (kbd "C-c u C") 'tibetan-auto-request-claude-translations)
+;; Key bindings for this module live in `config/tibetan-keybindings.el',
+;; which is the canonical binding surface.  Removed 2026-04-24:
+;;   - `C-c u B' → `tibetan-auto-analyze-document' (now in keybindings.el)
+;;   - `C-c u C' → `tibetan-auto-request-claude-translations' (bug: this
+;;     clobbered `config/tibetan-keybindings.el's `C-c u C' → combine-
+;;     document when loaded in the wrong order, silently preventing
+;;     Claude fires).  Now bound to `C-c u F' in the central config.
+;; Modules should not `global-set-key' — that's how the conflict happened.
 
 (provide 'tibetan-auto-analysis)
 ;;; tibetan-auto-analysis.el ends here
