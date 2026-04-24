@@ -90,6 +90,53 @@
      ["Analyze Current Verse (C-c v v)" tibetan-analyze-current-verse-interactive
       :help "Analyze verse block with meter validation"])
     "---"
+    ;; ========================================================================
+    ;; Thesaurus / Zettelkasten — user-editable multilingual term glossary
+    ;; (Pass 5b, 2026-04-22).  The Zettelkasten lives at
+    ;; `~/buddhist-studies/knowledge/zettelkasten/' (moved there 2026-04-24
+    ;; as part of the buddhist-studies reorg).  Each zettel is a Denote-
+    ;; managed .org file with `:wylie:', `:script:', bilingual DE // EN
+    ;; gloss, and — once the zettel-in-translation-workflow feature
+    ;; ships (see docs/feature-zettel-workflow.org) — Claude-cached
+    ;; explanations and 84000 Definitions excerpts.
+    ;;
+    ;; These entries mirror the `C-c u z' prefix map in
+    ;; `config/tibetan-keybindings.el'; whichever affordance the user
+    ;; reaches for first, the same command fires.
+    ;; ========================================================================
+    ("Zettelkasten / Thesaurus"
+     ["Edit Zettel at Point (C-c u z e)" tibetan-thesaurus-edit-at-point
+      :help "Open the zettel for the term under cursor — works in the Interlinear Gloss or Detailed Dictionary section of an analysis file"
+      :active (fboundp 'tibetan-thesaurus-edit-at-point)]
+     ["New Zettel from Point (C-c u z n)" tibetan-thesaurus-new-entry-interactively
+      :help "Create a new zettel, pre-filling wylie + script from the term under cursor"
+      :active (fboundp 'tibetan-thesaurus-new-entry-interactively)]
+     "---"
+     ["Reload Zettel Index (C-c u z r)" tibetan-thesaurus-reload
+      :help "Force rebuild of the zettel lookup table (automatic after any edit; use when edits happened outside Emacs)"
+      :active (fboundp 'tibetan-thesaurus-reload)]
+     ["Initialize from Kramer Glossary (C-c u z i)" tibetan-thesaurus-initialize-from-kramer
+      :help "One-time: import Kramer's printed glossary (*kramer-glossary*.org) into the zettelkasten as seed entries"
+      :active (fboundp 'tibetan-thesaurus-initialize-from-kramer)]
+     "---"
+     ["Audit Folder Consistency (C-c u z a)" tibetan-thesaurus-audit-folder-display
+      :help "Walk every seg-*.org in a folder; flag segments whose Interlinear gloss for a term doesn't match the zettel"
+      :active (fboundp 'tibetan-thesaurus-audit-folder-display)]
+     ["Rerun Segments Affected by Zettel (C-c u z R)" tibetan-thesaurus-rerun-affected-by-zettel
+      :help "After editing a zettel, re-analyse only the segments that reference it — avoids a full `C-c u r' batch"
+      :active (fboundp 'tibetan-thesaurus-rerun-affected-by-zettel)]
+     ["Translation-Gaps Report (C-c u z g)" tibetan-thesaurus-translation-gaps-display
+      :help "List every segment whose referenced zettel has `[to be researched]' or an empty target-lang gloss"
+      :active (fboundp 'tibetan-thesaurus-translation-gaps-display)]
+     "---"
+     ["Set Source Target Language (C-c u z L)" tibetan-analysis-set-source-target-lang
+      :help "Set the current source file's `#+TIBETAN_TARGET_LANG:' header (de / en) — drives which half of bilingual glosses surfaces"
+      :active (fboundp 'tibetan-analysis-set-source-target-lang)]
+     "---"
+     ["Open Zettelkasten Folder" (lambda () (interactive)
+                                   (dired "~/buddhist-studies/knowledge/zettelkasten/"))
+      :help "Jump into the zettelkasten directory (Denote-managed)"])
+    "---"
     ("Translation"
      ["CAT Translation (C-c u t)" tibetan-cat-insert-translation
       :help "Generate CAT-suggested translation for current segment"]
