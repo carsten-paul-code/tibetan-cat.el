@@ -3293,15 +3293,19 @@ it with `let' around the call when Claude data is available."
             ;; Populated asynchronously by `tibetan-analysis--insert-claude-sections'.
             (insert "*** Claude Vocabulary\n")
             (insert "\n")
-            ;; 8d: Claude Grammar section.  Translation is placed at the top
-            ;; of the file (level 2, right after Wylie) so it's the first
-            ;; thing students read; Grammar stays here at level 3 as a
-            ;; sibling of DharmaMitra / CAT Gloss so the pedagogical block
-            ;; is one cohesive unit.  Populated by
-            ;; `tibetan-analysis--insert-claude-sections' from the same
-            ;; Claude response that fills `** Claude Translation'.
-            (insert "*** Claude Grammar\n")
-            (insert "\n")
+            ;; U4 (2026-04-24): removed the legacy `*** Claude Grammar'
+            ;; emission that used to live here inside Provided
+            ;; Translations.  The reorder step's `--extract-claude-
+            ;; grammar' helper would then promote it to a level-2
+            ;; `** Claude Grammar' sibling section (Pass 6b layout).
+            ;; Post-U4 Claude Grammar lives at level 3 nested under
+            ;; `** Grammar' between Particle Map and Particles in This
+            ;; Segment; the scaffold is emitted by
+            ;; `--render-grammar-section'.  Keeping this emission here
+            ;; AND the render-grammar-section one produced a duplicate
+            ;; — orphan `** Claude Grammar' at level 2 stuck at end
+            ;; of Auto-Analysis (bug surfaced 2026-04-24 seg-16 regen).
+            ;;
             ;; 8d: Reference translations from external sources
             (insert "*** Reference Translations\n")
             (let* ((seg-num (and seg-id
@@ -3333,7 +3337,8 @@ it with `let' around the call when Claude data is available."
      ;;   - Wylie Transliteration (computed independently, usually works)
      ;;   - Claude Translation placeholder (so `tibetan-auto-request-
      ;;     claude-translations' can still fire and fill it in)
-     ;;   - Claude Grammar placeholder (likewise)
+     ;;   - Grammar scaffold with nested Claude Grammar placeholder
+     ;;     (U4 layout, 2026-04-24)
      ;; Followed by a visible `[ANALYSIS ERROR]' marker so the user can
      ;; spot the file and investigate.  Previously this emitted only
      ;; three stub sections (Wylie/Provided/Vocabulary) with `[Error]'
@@ -3349,7 +3354,7 @@ it with `let' around the call when Claude data is available."
                (or wylie "[Wylie conversion unavailable]")
                "\n\n"
                "** Claude Translation\n[Requesting translation...]\n\n"
-               "** Claude Grammar\n\n\n"
+               "** Grammar\n*** Claude Grammar\n\n\n"
                (format "** [Analysis error — partial file only]\nParser failure for this segment: %s\n\nThe structural analysis sections (Particle Map, Interlinear Gloss, Word/Particle List, Verb Classification, Grammatical Markers, Sentence Structure, Clause Structure, Detailed Dictionary) could not be generated.  The Tibetan Text and Claude sections above should still be usable.\n\nTo retry: `C-c u R' on this segment, or check the source segment's Tibetan for an unusual construction.\n"
                        (error-message-string err))))))))
 

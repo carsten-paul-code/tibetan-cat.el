@@ -1701,5 +1701,41 @@ the encyclopedic paragraph, not just the dictionary gloss."
               ("བྱང་ཆུབ་ཀྱི་སེམས" . "mind of awakening")))))
       (should (= (length collected) 1)))))
 
+;; ============================================================================
+;; U4 follow-up: no orphan level-2 Claude Grammar after regen (2026-04-24)
+;;
+;; The initial U4 ship left a legacy emission in `generate-content' that
+;; inserted `*** Claude Grammar' inside `** Provided Translations'; the
+;; reorder step's `--extract-claude-grammar' helper then promoted it to
+;; `** Claude Grammar' at level 2.  Combined with the U4 scaffold's
+;; `*** Claude Grammar' under `** Grammar', the result was TWO Claude
+;; Grammar headings — one in the correct U4 position, one orphan at
+;; level 2 stuck at the end of `* Auto-Analysis'.
+;;
+;; Surfaced by Carsten on live `C-c u R' of seg-16 of gal-chen-nyi-shu.org
+;; on 2026-04-24.  The fix removes the legacy emission; this test
+;; guards against it coming back.
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-generate-content-no-level2-claude-grammar ()
+  "U4 regression: `generate-content' must NOT emit `** Claude Grammar'
+at level 2 anywhere in its output.  The canonical Claude Grammar slot
+is `*** Claude Grammar' nested under `** Grammar', emitted by
+`--render-grammar-section'.  Any level-2 `** Claude Grammar'
+would indicate the legacy Provided-Translations emission has come
+back (or the `--extract-claude-grammar' reorder helper has
+mis-promoted it)."
+  (let ((out (tibetan-analysis-generate-content "བདག་གིས།" 1 nil nil)))
+    (should out)
+    ;; Zero level-2 Claude Grammar — U4 nests it at level 3.
+    (should-not (string-match-p "^\\*\\* Claude Grammar$" out))
+    ;; Exactly one level-3 Claude Grammar — the U4 scaffold placeholder.
+    (let ((count 0)
+          (start 0))
+      (while (string-match "^\\*\\*\\* Claude Grammar$" out start)
+        (setq count (1+ count))
+        (setq start (match-end 0)))
+      (should (= count 1)))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
