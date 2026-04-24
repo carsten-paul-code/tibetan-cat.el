@@ -1200,5 +1200,63 @@ no accumulated face lookups)."
                (tibetan-particle-map-faces-test--face-at (current-buffer) pos)
                'tibetan-analysis-case-particle-face)))))
 
+;; ============================================================================
+;; WORD-TOKEN CLEANUP — B3 regression (live review 2026-04-24, seg-16 of
+;; gal-chen-nyi-shu.org).  Interlinear rendered
+;;   [[term-byang-chub-kyi-sems][/byang chub kyi sems]]
+;; — a leading shad leaked from the tokenizer into the link label because
+;; the word-cleanup inside the enriched-vocab-pairs loop stripped only
+;; trailing shads ("[།༎༏༐༑ ]+$").  Two sibling cleanup sites in the
+;; same module (--get-grammatical-role, --build-cat-translation) already
+;; strip all shads via "[།༎༏༐༑༔/]".  These tests pin the contract of
+;; the extracted helper `tibetan-analysis--clean-word-token'.
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-clean-word-token-strips-leading-shad ()
+  "B3 regression: leading shad `།' must not survive cleanup.
+Without the strip, the token reaches the Interlinear renderer as
+`།བྱང་ཆུབ་ཀྱི་སེམས', is Wylie-converted to `/byang chub kyi sems',
+and ends up inside the `[[term-...][...]]' link label."
+  (should (string= (tibetan-analysis--clean-word-token "།བྱང་ཆུབ་ཀྱི་སེམས")
+                   "བྱང་ཆུབ་ཀྱི་སེམས")))
+
+(ert-deftest tibetan-analysis-clean-word-token-strips-trailing-shad ()
+  "Trailing shad (the prior behaviour) must still be stripped."
+  (should (string= (tibetan-analysis--clean-word-token "བྱང་ཆུབ།")
+                   "བྱང་ཆུབ")))
+
+(ert-deftest tibetan-analysis-clean-word-token-strips-both-sides ()
+  "Shad on both sides — the case this bug surfaced in verse contexts
+like `... na/ /byang chub ...' where each line-break shad produces a
+leading shad on the next token AND a trailing on the previous one."
+  (should (string= (tibetan-analysis--clean-word-token "།བྱང་ཆུབ།")
+                   "བྱང་ཆུབ")))
+
+(ert-deftest tibetan-analysis-clean-word-token-trims-whitespace ()
+  "Whitespace on either side is stripped before shad stripping.
+Tsheg `་' is NOT stripped — it's a word-internal separator, not a
+boundary marker, and it appears inside legitimate multi-syllable
+word tokens like `byang་chub'."
+  (should (string= (tibetan-analysis--clean-word-token "  །བྱང་ཆུབ  ")
+                   "བྱང་ཆུབ")))
+
+(ert-deftest tibetan-analysis-clean-word-token-handles-all-shad-variants ()
+  "The full shad family `།༎༏༐༑༔' plus the Wylie stand-in `/' is
+stripped.  Matches the character class used by the two sibling
+cleanup sites in the same module."
+  (should (string= (tibetan-analysis--clean-word-token "༎བྱང") "བྱང"))
+  (should (string= (tibetan-analysis--clean-word-token "༔བྱང") "བྱང"))
+  (should (string= (tibetan-analysis--clean-word-token "/byang") "byang")))
+
+(ert-deftest tibetan-analysis-clean-word-token-passthrough ()
+  "Clean input must come through unchanged."
+  (should (string= (tibetan-analysis--clean-word-token "བྱང་ཆུབ")
+                   "བྱང་ཆུབ")))
+
+(ert-deftest tibetan-analysis-clean-word-token-empty-input ()
+  "Empty / whitespace-only input collapses to empty string, not nil."
+  (should (string= (tibetan-analysis--clean-word-token "") ""))
+  (should (string= (tibetan-analysis--clean-word-token "  ") "")))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

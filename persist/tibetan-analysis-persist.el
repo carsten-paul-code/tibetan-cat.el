@@ -63,6 +63,26 @@ for ad-hoc analyses.")
   "Version of the analysis file format.")
 
 ;; ============================================================================
+;; TOKEN NORMALISATION
+;; ============================================================================
+
+(defun tibetan-analysis--clean-word-token (word)
+  "Normalise a single Tibetan word token for dictionary lookup / display.
+Strips surrounding whitespace, then removes every shad glyph
+`།༎༏༐༑༔' plus its Wylie stand-in `/' (anywhere in the token —
+a shad inside a single word is always upstream-tokenizer noise).
+
+Matches the character class already used by
+`tibetan-analysis--get-grammatical-role' (≈line 1068) and
+`tibetan-analysis--build-cat-translation' (≈line 1390).  Extracted
+2026-04-24 after live review of seg-16 of gal-chen-nyi-shu.org
+showed a third sibling site (the `enriched-vocab-pairs' loop in
+`tibetan-analysis-generate-content') stripped only TRAILING shads,
+letting verse-start `།བྱང་ཆུབ་...' tokens leak into the Interlinear
+link label as `/byang chub ...'."
+  (replace-regexp-in-string "[།༎༏༐༑༔/]" "" (string-trim (or word ""))))
+
+;; ============================================================================
 ;; DISPLAY SETTINGS - Smaller roman text
 ;; ============================================================================
 
@@ -2485,9 +2505,17 @@ it with `let' around the call when Claude data is available."
                            ;; Strip shad/punctuation before lookup so ལ། → ལ,
                            ;; otherwise dictionary lookup misses and we fall
                            ;; through to noisy partial matches.
-                           (word-clean (replace-regexp-in-string
-                                        "[།༎༏༐༑ ]+$" ""
-                                        (string-trim word)))
+                           ;;
+                           ;; 2026-04-24 (B3): previously stripped only
+                           ;; TRAILING shads via `[།༎༏༐༑ ]+$'.  Leading
+                           ;; shads from verse-start tokens (e.g. the second
+                           ;; pada of `na/ /byang chub ...') survived and
+                           ;; leaked into the Interlinear link label as
+                           ;; `/byang chub ...'.  The helper mirrors the
+                           ;; two sibling cleanup sites (--get-grammatical-
+                           ;; role, --build-cat-translation) that already
+                           ;; strip all shads.
+                           (word-clean (tibetan-analysis--clean-word-token word))
                            (root-form (tibetan-strip-particles word-clean))
                            (gram-role (tibetan-analysis--get-grammatical-role
                                        word-clean root-form verb-table))
