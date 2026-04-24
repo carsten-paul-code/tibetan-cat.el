@@ -1,7 +1,7 @@
 #+TITLE: Zettel in Translation Workflow — Feature Design
 #+DATE: 2026-04-24
 #+AUTHOR: Carsten Paul + Claude
-#+STATUS: v1 approved — Phase 1 ready to build
+#+STATUS: v1 approved — Phase 1 shipped, Phase 2 next
 
 * Intent
 
@@ -388,18 +388,43 @@ stale links on demand.
 
 * Phases — implementation roadmap
 
-| Phase | Goal                                                | Files                                                | Est. effort |
-|-------+-----------------------------------------------------+------------------------------------------------------+-------------|
-| 1     | Zettel index + reader (new schema + back-compat)    | =core/tibetan-zettel.el= NEW                         | 1 session   |
-| 2     | Interlinear + DD integration (rank 2, ♦ mark)       | =analysis/tibetan-interlinear.el=, =vocabulary-detailed.el= | 1 session |
-| 3     | Auto-creation for ~<term>~-tagged missing tokens    | =core/tibetan-zettel.el=, =persist/tibetan-analysis-persist.el= | 1 session |
-| 4     | Claude-cache write path                              | =persist/tibetan-analysis-claude.el=                 | 1 session   |
-| 5     | Buddhist Terms reads from zettel cache               | =persist/tibetan-analysis-persist.el=                | ≤ ½ session |
-| 6     | Unify Pass-5b Thesaurus → v2 schema + migration cmd | =core/tibetan-thesaurus.el=                          | 1 session   |
-| 7     | Back-link maintenance + GC command                  | =core/tibetan-zettel.el=                             | ≤ ½ session |
+| Phase | Goal                                                | Files                                                | Status    |
+|-------+-----------------------------------------------------+------------------------------------------------------+-----------|
+| 1     | Zettel index + reader (new schema + back-compat)    | =core/tibetan-zettel.el= NEW                         | *shipped 07ce8a5* |
+| 2     | Interlinear + DD integration (rank 2, ♦ mark)       | =analysis/tibetan-interlinear.el=, =vocabulary-detailed.el= | next |
+| 3     | Auto-creation for ~<term>~-tagged missing tokens    | =core/tibetan-zettel.el=, =persist/tibetan-analysis-persist.el= | pending |
+| 4     | Claude-cache write path                              | =persist/tibetan-analysis-claude.el=                 | pending   |
+| 5     | Buddhist Terms reads from zettel cache               | =persist/tibetan-analysis-persist.el=                | pending   |
+| 6     | Unify Pass-5b Thesaurus → v2 schema + migration cmd | =core/tibetan-thesaurus.el=                          | pending   |
+| 7     | Back-link maintenance + GC command                  | =core/tibetan-zettel.el=                             | pending   |
 
 Total: roughly 5–6 sessions.  Phase 1 is the keystone; all others
 depend on it.
+
+** Phase 1 deliverables — shipped 2026-04-24 (=07ce8a5=)
+
+=core/tibetan-zettel.el= (237 lines) providing:
+
+- =tibetan-zettel-directory= defcustom pointing at
+  =~/buddhist-studies/knowledge/zettelkasten/=.
+- =--glossar-tagged-p= / =--has-wylie-property-p= /
+  =--translation-relevant-p= — detection (OR semantics).
+- =--parse-v2= / =--parse-v1= / =--parse-file= — schema dispatch
+  returning a uniform plist shape.
+- =--build-index= / =--ensure-index= / =tibetan-zettel-reload= —
+  lazy-built + rebuilt-on-directory-change cache.
+- =tibetan-zettel-lookup= — normalised (downcase + trim) lookup
+  over the cache.
+
+18 new regression tests in =test/tibetan-zettel-test.el=
+registered in =test/run-all-tests.el=.  Full suite post-phase-1:
+1507 / 1506 expected / 0 unexpected / 1 skipped (was 1489 / 1488
+/ 0 / 1).
+
+No integration into the analysis renderers yet — that's Phase 2.
+Until then, =M-x tibetan-zettel-lookup= can be evaluated from
+=*scratch*= for manual verification; it's not yet reached via
+any C-c keybinding or menu entry.
 
 * Key bindings (draft — finalise in Phase 1)
 
@@ -491,6 +516,8 @@ fixed spec.
 | 2026-04-24  | Claude   | Drafted v1, open questions enumerated            |
 | 2026-04-24  | Carsten  | Approved all 6 decisions per recommendations     |
 | 2026-04-24  | Claude   | Updated doc to "v1 approved"; Phase 1 cleared    |
+| 2026-04-24  | Claude   | Phase 1 shipped (=07ce8a5=): index + reader +    |
+|             |          | 18 regression tests; suite 1507 / 1506 / 0 / 1   |
 
 * Success criteria
 
