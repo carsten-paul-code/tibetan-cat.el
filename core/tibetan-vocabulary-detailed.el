@@ -29,6 +29,15 @@
 ;; thesaurus hits; the rest of the pipeline is unaffected.
 (require 'tibetan-thesaurus nil t)
 
+;; Phase 2 of zettel-in-translation-workflow (2026-04-24) — soft-require
+;; so `tibetan-zettel-lookup' is fboundp in
+;; `tibetan-vocab-multisource-entries'.  Missing module → no zettel hits;
+;; the rest of the pipeline (including the legacy Thesaurus at rank 1)
+;; is unaffected.  When Phase 6 migrates Thesaurus data into
+;; `knowledge/zettelkasten/', this zettel module subsumes the
+;; Thesaurus role and the above require can be dropped.
+(require 'tibetan-zettel nil t)
+
 ;; ============================================================================
 ;; DETAILED VOCABULARY CACHE
 ;; ============================================================================
@@ -701,6 +710,14 @@ Rank layers (2026-04-22):
    ((or (string-prefix-p "Resources" source)
         (string-prefix-p "Custom" source))
     2)
+   ;; Zettel — rank 2 (same band as Resources/Custom).  Stable sort
+   ;; preserves add-order within a band; the multisource loop adds
+   ;; Resources → Custom → Zettel, so Resources wins first, Custom
+   ;; second, Zettel third within the band.  See docs/feature-
+   ;; zettel-workflow.org decision #1 (2026-04-24).  Phase 6 will
+   ;; retire the legacy Thesaurus source at rank 1 and zettel
+   ;; becomes effectively the top of user-curated content.
+   ((string= source "Zettel") 2)
    ((and tibetan-vocab--corpus
          (let ((corpus-src (cdr (assoc tibetan-vocab--corpus
                                         tibetan-vocab--corpus-source-map))))
@@ -888,6 +905,41 @@ when the source entry carries it natively."
                            (and wylie (gethash wylie
                                                tibetan-current-custom-vocab)))))
             (when entry (add "Custom" entry))))
+        ;; 2b. Zettelkasten — user-curated preferred translation from
+        ;;     knowledge/zettelkasten/ (Phase 2 of the zettel-in-
+        ;;     translation-workflow feature, 2026-04-24).  Same rank
+        ;;     band (2) as Resources/Custom; add-order places it
+        ;;     after both so stable sort positions it third in the
+        ;;     band.  See docs/feature-zettel-workflow.org §6 Phase 2.
+        ;;
+        ;;     Gloss composition respects the design decision that
+        ;;     placeholder `[to be researched]' fields do NOT surface
+        ;;     in the displayed gloss — if both sides are placeholders,
+        ;;     no Zettel entry is added at all (the zettel is still
+        ;;     indexed for lookup purposes, just doesn't pollute the
+        ;;     Detailed Dictionary).
+        (when (fboundp 'tibetan-zettel-lookup)
+          (let ((z (ignore-errors (tibetan-zettel-lookup wylie))))
+            (when z
+              (let* ((de (plist-get z :preferred-de))
+                     (en (plist-get z :preferred-en))
+                     (de-real (and de
+                                   (not (plist-get z :preferred-de-placeholder-p))))
+                     (en-real (and en
+                                   (not (plist-get z :preferred-en-placeholder-p))))
+                     (gloss (cond
+                             ((and de-real en-real) (format "%s // %s" de en))
+                             (de-real de)
+                             (en-real en)
+                             (t nil))))
+                (when gloss
+                  (add "Zettel"
+                       gloss
+                       (plist-get z :sanskrit)
+                       :zettel-id   (plist-get z :id)
+                       :zettel-path (plist-get z :path)
+                       :primary     gloss
+                       :detailed    gloss))))))
         ;; 3. Steinert aggregated DB — top hits, deduped by fingerprint.
         ;; We pass the cap to the lookup AND trim defensively on our side,
         ;; so the bound holds even if a backend ignores the limit arg.

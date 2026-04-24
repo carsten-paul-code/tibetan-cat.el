@@ -566,5 +566,77 @@ confusing Claude about which particles are covered at all."
     (let ((block (tibetan-interlinear-portfolio-reference-block)))
       (should (string-match-p "§1\\.8 Elative" block)))))
 
+;; ============================================================================
+;; Phase 2 of zettel-in-translation-workflow (2026-04-24) —
+;; `[[id:ZETTEL-ID][wylie]]' link and ♦ marker when the token has a
+;; zettel entry.
+;;
+;; Signature extended: the existing
+;;   (tibetan-interlinear--format-gloss-entry
+;;      wylie-stem term-anchor short-meaning
+;;      particle-wylie particle-label &optional curated-p)
+;; becomes
+;;   (... &optional curated-p zettel-id)
+;; — one more optional positional arg.  When ZETTEL-ID is non-nil:
+;;   · the link wraps as `[[id:ZETTEL-ID][wylie]]' (not `[[term-xxx]]')
+;;   · a ♦ marker follows the link (distinct from the curated `★')
+;;   · both markers appear (♦ ★) when the entry is ALSO curated
+;;     (a zettel exists AND Resources/Custom has a gloss — both
+;;     signals surface independently).
+;; ============================================================================
+
+(ert-deftest tibetan-interlinear-format-entry-with-zettel-id ()
+  "When a ZETTEL-ID is provided, the link uses org's `id:' protocol
+instead of the internal `term-xxx' anchor, and a ♦ marker precedes
+the gloss bracket."
+  (let ((result (tibetan-interlinear--format-gloss-entry
+                 "bdag" "term-bdag" "I, self" nil nil nil "20260424T123456")))
+    ;; Link uses id:
+    (should (string-match-p "\\[\\[id:20260424T123456\\]\\[bdag\\]\\]"
+                            result))
+    ;; ♦ marker present.
+    (should (string-match-p "♦" result))
+    ;; Gloss still visible outside the link.
+    (should (string-match-p "\\[I, self\\]" result))
+    ;; The old term-xxx link form must NOT appear (zettel-id wins).
+    (should-not (string-match-p "\\[\\[term-bdag\\]\\[bdag\\]\\]"
+                                result))))
+
+(ert-deftest tibetan-interlinear-format-entry-with-zettel-and-curated ()
+  "Zettel + curated entries show BOTH ♦ and ★ markers — the two
+signals are independent (zettel = \"term has a dedicated zettel\";
+star = \"gloss came from Resources/Custom\")."
+  (let ((result (tibetan-interlinear--format-gloss-entry
+                 "bdag" "term-bdag" "I, self" nil nil
+                 t               ; curated-p
+                 "20260424T123456")))
+    (should (string-match-p "♦" result))
+    (should (string-match-p "★" result))
+    ;; ♦ precedes ★ in the output (zettel → curated order).
+    (should (< (string-match "♦" result)
+               (string-match "★" result)))))
+
+(ert-deftest tibetan-interlinear-format-entry-zettel-id-nil-unchanged ()
+  "Passing ZETTEL-ID=nil leaves the format identical to the
+pre-Phase-2 output — no ♦, no id-link — so existing callers that
+don't know about the new parameter are not affected."
+  (let ((result-with    (tibetan-interlinear--format-gloss-entry
+                         "bdag" "term-bdag" "I, self" nil nil nil nil))
+        (result-without (tibetan-interlinear--format-gloss-entry
+                         "bdag" "term-bdag" "I, self" nil nil)))
+    (should (equal result-with result-without))
+    (should-not (string-match-p "♦" result-with))
+    (should (string-match-p "\\[\\[term-bdag\\]\\[bdag\\]\\]" result-with))))
+
+(ert-deftest tibetan-interlinear-format-entry-zettel-no-gloss ()
+  "A zettel hit with no gloss still emits link + ♦ (showing that
+the term is indexed even when the preferred field hasn't been
+filled in yet)."
+  (let ((result (tibetan-interlinear--format-gloss-entry
+                 "bdag" nil nil nil nil nil "20260424T111111")))
+    (should (string-match-p "\\[\\[id:20260424T111111\\]\\[bdag\\]\\]"
+                            result))
+    (should (string-match-p "♦" result))))
+
 (provide 'tibetan-interlinear-test)
 ;;; tibetan-interlinear-test.el ends here

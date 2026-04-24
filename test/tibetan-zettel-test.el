@@ -358,5 +358,135 @@ rebuilds the index and the lookup hits."
       (tibetan-zettel-reload)
       (should (tibetan-zettel-lookup "chos")))))
 
+;; ============================================================================
+;; Phase 2 — Multisource ranker integration
+;;
+;; The Zettel source appears at rank 2 in `tibetan-vocab-multisource-entries'
+;; (after Resources/Custom in the rank band but before Corpus/Steinert).
+;; The returned plist carries `:zettel-id' + `:zettel-path' extras so the
+;; Interlinear renderer can build `[[id:ZETTEL-ID][wylie]]' links.
+;; ============================================================================
+
+(require 'tibetan-vocabulary-detailed nil t)
+
+(ert-deftest tibetan-zettel-rank-source-is-2 ()
+  "`Zettel' source ranks at 2 — same band as Resources/Custom, but
+stable-sort puts it after them because the add-order places
+Resources first in the loop.  Specifically NOT rank 1 (the
+existing Thesaurus slot, retained for back-compat) and NOT rank
+3+ (below corpus-specific)."
+  (should (= 2 (tibetan-vocab-rank-source "Zettel"))))
+
+(ert-deftest tibetan-zettel-multisource-injects-when-zettel-exists ()
+  "When `tibetan-zettel-lookup' returns a plist for the word's Wylie,
+`tibetan-vocab-multisource-entries' emits an entry with :source
+\"Zettel\" carrying both :zettel-id and :zettel-path extras and
+a bilingual `DE // EN' gloss."
+  (cl-letf (((symbol-function 'tibetan-zettel-lookup)
+             (lambda (wylie)
+               (and (equal wylie "bdag")
+                    (list :id "20260424T000001"
+                          :path "/tmp/fake-zettel.org"
+                          :wylie "bdag"
+                          :preferred-de "ich, Selbst"
+                          :preferred-en "I, self"
+                          :preferred-de-placeholder-p nil
+                          :preferred-en-placeholder-p nil
+                          :sanskrit "ātman"
+                          :steinert-84000 nil
+                          :claude-cached-p nil)))))
+    (let* ((entries (tibetan-vocab-multisource-entries "bdag"))
+           (zettel (cl-find-if
+                    (lambda (e) (equal (plist-get e :source) "Zettel"))
+                    entries)))
+      (should zettel)
+      (should (equal (plist-get zettel :zettel-id) "20260424T000001"))
+      (should (equal (plist-get zettel :zettel-path) "/tmp/fake-zettel.org"))
+      (should (equal (plist-get zettel :primary)  "ich, Selbst // I, self"))
+      (should (equal (plist-get zettel :detailed) "ich, Selbst // I, self")))))
+
+(ert-deftest tibetan-zettel-multisource-skip-when-no-zettel ()
+  "When `tibetan-zettel-lookup' returns nil, no Zettel entry is
+emitted in the multisource list (regression against the Zettel
+source becoming sticky)."
+  (cl-letf (((symbol-function 'tibetan-zettel-lookup)
+             (lambda (_w) nil)))
+    (let* ((entries (tibetan-vocab-multisource-entries "nonexistent-term"))
+           (zettel (cl-find-if
+                    (lambda (e) (equal (plist-get e :source) "Zettel"))
+                    entries)))
+      (should-not zettel))))
+
+(ert-deftest tibetan-zettel-multisource-placeholder-de-only-uses-en ()
+  "When `:preferred-de:' is the `[to be researched]' placeholder,
+the Zettel gloss falls back to `:preferred-en:' alone (no bilingual
+`DE // EN' string with a placeholder stub)."
+  (cl-letf (((symbol-function 'tibetan-zettel-lookup)
+             (lambda (_w)
+               (list :id "x" :path "/tmp/x.org"
+                     :wylie "foo"
+                     :preferred-de "[to be researched]"
+                     :preferred-de-placeholder-p t
+                     :preferred-en "foo-in-english"
+                     :preferred-en-placeholder-p nil))))
+    (let* ((entries (tibetan-vocab-multisource-entries "foo"))
+           (zettel (cl-find-if
+                    (lambda (e) (equal (plist-get e :source) "Zettel"))
+                    entries)))
+      (should zettel)
+      (should (equal (plist-get zettel :primary) "foo-in-english"))
+      ;; Specifically NOT the string with the placeholder in it.
+      (should-not (string-match-p "to be researched"
+                                  (plist-get zettel :primary))))))
+
+(ert-deftest tibetan-zettel-multisource-both-placeholder-skipped ()
+  "When BOTH preferred fields are placeholders (empty zettel),
+no Zettel source is emitted — nothing useful to show.  The zettel
+is still indexed (user can edit it) but doesn't pollute the DD."
+  (cl-letf (((symbol-function 'tibetan-zettel-lookup)
+             (lambda (_w)
+               (list :id "x" :path "/tmp/x.org"
+                     :wylie "foo"
+                     :preferred-de "[to be researched]"
+                     :preferred-de-placeholder-p t
+                     :preferred-en "[to be researched]"
+                     :preferred-en-placeholder-p t))))
+    (let* ((entries (tibetan-vocab-multisource-entries "foo"))
+           (zettel (cl-find-if
+                    (lambda (e) (equal (plist-get e :source) "Zettel"))
+                    entries)))
+      (should-not zettel))))
+
+(ert-deftest tibetan-zettel-multisource-ordering-after-resources ()
+  "Within rank-2 band (Resources, Custom, Zettel), stable sort preserves
+add-order.  The loop adds Resources first, Custom second, Zettel last,
+so the ranked output lists them in that order."
+  (cl-letf (((symbol-function 'tibetan-zettel-lookup)
+             (lambda (_w)
+               (list :id "x" :path "/tmp/x.org"
+                     :wylie "foo"
+                     :preferred-de "de-gloss" :preferred-de-placeholder-p nil
+                     :preferred-en "en-gloss" :preferred-en-placeholder-p nil)))
+            ;; Force Resources and Custom to also have a hit for this
+            ;; token so the band is populated.
+            (tibetan-current-resources-vocab
+             (let ((h (make-hash-table :test 'equal)))
+               (puthash "foo" "resources-gloss" h)
+               h))
+            (tibetan-current-custom-vocab
+             (let ((h (make-hash-table :test 'equal)))
+               (puthash "foo" "custom-gloss" h)
+               h)))
+    (let* ((entries (tibetan-vocab-multisource-entries "foo"))
+           (sources (mapcar (lambda (e) (plist-get e :source)) entries))
+           (resources-pos (cl-position "Resources (provided)" sources :test #'equal))
+           (custom-pos    (cl-position "Custom" sources :test #'equal))
+           (zettel-pos    (cl-position "Zettel" sources :test #'equal)))
+      (should resources-pos)
+      (should custom-pos)
+      (should zettel-pos)
+      (should (< resources-pos custom-pos))
+      (should (< custom-pos zettel-pos)))))
+
 (provide 'tibetan-zettel-test)
 ;;; tibetan-zettel-test.el ends here

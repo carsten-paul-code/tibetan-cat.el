@@ -30,6 +30,12 @@
 
 (require 'cl-lib)
 
+;; Phase 2 of zettel-in-translation-workflow (2026-04-24) — soft-require
+;; so the gloss-entry builder can consult `tibetan-zettel-lookup' for
+;; each token and thread the zettel's `:id' to the formatter.  Missing
+;; module → zettel-id stays nil; no ♦ marker, no `id:' link.
+(require 'tibetan-zettel nil t)
+
 ;; ============================================================================
 ;; CONFIGURATION
 ;; ============================================================================
@@ -351,7 +357,7 @@ layer.  Called for its value; does not mutate input."
 (defun tibetan-interlinear--format-gloss-entry (wylie-stem term-anchor
                                                  short-meaning
                                                  particle-wylie particle-label
-                                                 &optional curated-p)
+                                                 &optional curated-p zettel-id)
   "Format one interlinear entry.
 WYLIE-STEM is the Wylie of the lexical part.
 TERM-ANCHOR is the internal org-link target slug (e.g. `term-bdag-la')
@@ -366,6 +372,13 @@ Optional CURATED-P, when non-nil, marks the entry as coming from
 the per-document Resources / Custom vocabulary list.  The entry
 gets a leading `★' and is given a longer truncation budget (60
 vs 30 chars) so hand-curated glosses aren't cut mid-phrase.
+Optional ZETTEL-ID (Phase 2 of zettel-in-translation-workflow,
+2026-04-24), when non-nil, indicates a zettel exists for the
+token.  The link target switches to `id:ZETTEL-ID' (org's id
+protocol — resolves via `.org-id-locations'), and a `♦' marker
+follows the link.  ZETTEL-ID and CURATED-P are independent:
+both markers can appear (`♦ ★') when a token has both a zettel
+AND the displayed gloss came from Resources/Custom.
 
 The English gloss (or Bialek label) is rendered OUTSIDE the org link
 so the clickable area covers only the Wylie, keeping the readable
@@ -374,15 +387,27 @@ rewritten to parens so the enclosing `[...]' wrapper never produces
 a second `[' / `]' pair that org-mode would parse as a link.
 Returns something like:
 
-  [[term-anchor][stem]] ★ [gloss] particle [LABEL]"
-  (let ((parts '())
-        (gloss-budget (if curated-p 60 30)))
+  [[term-anchor][stem]] ★ [gloss] particle [LABEL]
+  [[id:ZETTEL-ID][stem]] ♦ [gloss] particle [LABEL]
+  [[id:ZETTEL-ID][stem]] ♦ ★ [gloss] particle [LABEL]"
+  (let* ((parts '())
+         (gloss-budget (if curated-p 60 30))
+         ;; Marker prefix: ♦ when zettel exists, ★ when curated,
+         ;; both when both.  Order is ♦ then ★ — zettel signal is
+         ;; the more specific "this term has a dedicated note"
+         ;; signal and is mentioned first.
+         (marker-prefix
+          (concat (when zettel-id "♦ ")
+                  (when curated-p "★ "))))
     ;; Lexical stem part — link wraps ONLY the Wylie; English gloss
     ;; follows outside the link.  Curated-P entries get a leading ★
-    ;; marker inserted between the link and the gloss.  The link
-    ;; target is an internal anchor (`term-xxx') — the Detailed
-    ;; Dictionary section below emits matching `<<term-xxx>>' radio
-    ;; targets.  Pass TERM-ANCHOR=nil to render plain Wylie text.
+    ;; marker; ZETTEL-ID ones get a ♦ marker.  The link target is:
+    ;;   · `id:ZETTEL-ID' when ZETTEL-ID is given (org id protocol,
+    ;;      resolves to the zettel file via `.org-id-locations')
+    ;;   · `term-anchor' (internal `<<term-xxx>>' target in the DD)
+    ;;      otherwise.
+    ;; Pass TERM-ANCHOR=nil AND ZETTEL-ID=nil to render plain Wylie
+    ;; text without any link.
     ;;
     ;; Empty / nil WYLIE-STEM signals a pure-standalone-particle
     ;; token (e.g. a bare `ནས' functioning as ablative converb); the
@@ -391,17 +416,24 @@ Returns something like:
     ;; stem rendering and let the particle branch below do its job.
     (when (and wylie-stem (not (string-empty-p wylie-stem)))
       (let ((linked-stem
-             (if (and term-anchor (stringp term-anchor))
-                 (format "[[%s][%s]]" term-anchor wylie-stem)
-               wylie-stem)))
+             (cond
+              ((and zettel-id (stringp zettel-id))
+               (format "[[id:%s][%s]]" zettel-id wylie-stem))
+              ((and term-anchor (stringp term-anchor))
+               (format "[[%s][%s]]" term-anchor wylie-stem))
+              (t wylie-stem))))
         (push (if (and short-meaning (not (string-empty-p short-meaning)))
                   (format "%s %s[%s]" linked-stem
-                          (if curated-p "★ " "")
+                          marker-prefix
                           (tibetan-interlinear--sanitize-gloss
                            (tibetan-interlinear--truncate-gloss
                             short-meaning gloss-budget)))
-                (if curated-p
-                    (format "%s ★" linked-stem)
+                ;; No gloss: emit link plus marker(s) if any, else
+                ;; bare link.  `string-trim' drops the trailing
+                ;; space that `marker-prefix' would leave behind.
+                (if (not (string-empty-p marker-prefix))
+                    (format "%s %s" linked-stem
+                            (string-trim marker-prefix))
                   linked-stem))
               parts)))
 
@@ -581,7 +613,21 @@ Returns a string ready to insert after the `** Interlinear Gloss' heading."
              ;; to the formatter so it can prepend ★ and use a longer
              ;; truncation for hand-curated Resources glosses.
              (curated-p (and curated-words-hash
-                             (gethash tibetan-clean curated-words-hash))))
+                             (gethash tibetan-clean curated-words-hash)))
+             ;; Zettel-entry ID (Phase 2 of zettel-in-translation-
+             ;; workflow, 2026-04-24): when the token's Wylie matches
+             ;; a zettel in `~/buddhist-studies/knowledge/zettelkasten/',
+             ;; pass the zettel's org-id to the formatter so the
+             ;; Interlinear renders `[[id:ZID][wylie]]' + ♦ marker
+             ;; instead of the `[[term-xxx][wylie]]' internal anchor.
+             ;; Lookup is buffered / cached by the zettel module; no
+             ;; per-token I/O cost beyond the first access.  Missing
+             ;; module → `fboundp' false → no zettel threading.
+             (zettel-id
+              (when (and stem-wylie (fboundp 'tibetan-zettel-lookup))
+                (let ((z (ignore-errors
+                           (tibetan-zettel-lookup stem-wylie))))
+                  (and z (plist-get z :id))))))
 
         (push (tibetan-interlinear--format-gloss-entry
                ;; Pure-particle tokens pass "" as the stem — the format
@@ -595,7 +641,8 @@ Returns a string ready to insert after the `** Interlinear Gloss' heading."
                (and stem-wylie short-meaning)
                particle-wylie
                particle-label
-               curated-p)
+               curated-p
+               zettel-id)
               result-parts)))
 
     ;; Join entries, inserting verse breaks where the original text has shad
