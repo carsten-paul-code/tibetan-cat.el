@@ -1,0 +1,527 @@
+#+TITLE: Zettel in Translation Workflow — Feature Design
+#+DATE: 2026-04-24
+#+AUTHOR: Carsten Paul + Claude
+#+STATUS: draft — awaiting approval before implementation
+
+* Intent
+
+Integrate the main zettelkasten (=~/buddhist-studies/knowledge/zettelkasten/=,
+~1010 Denote-managed org files today) into the CAT translation workflow
+as *the authoritative source* for:
+
+1. *User-preferred translations* (per term, per language), overriding
+   dictionary glosses but deferring to Resources/Custom.
+2. *Cross-document consistency* — the same term resolves to the same
+   preferred gloss everywhere in every analysis file.
+3. *A Claude response cache* — explanations Claude gave for a term
+   on one segment are written to the zettel and re-used instead of
+   re-requested on subsequent segments / documents.
+4. *84000 encyclopaedic text* — for tokens tagged ~<term>~ by
+   84000Definitions, the zettel caches the paragraph so U3's
+   =*** Buddhist Terms= subsection reads from the zettel instead of
+   re-scraping dict sources every render.
+
+Result: the zettelkasten becomes a *personal lexicon* that grows
+automatically as Carsten translates, AND each entry accumulates
+structured, reusable knowledge (Claude's reading, 84000's definition,
+user's own notes, backlinks to every segment that referenced it).
+
+* Why this feature *after* the reorg
+
+The 2026-04-24 buddhist-studies reorg moved the zettelkasten from
+the top-level =~/buddhist-studies/zettelkasten/= to
+=~/buddhist-studies/knowledge/zettelkasten/=.  Without that move:
+
+- =org-agenda-files= scanned 1800+ files every startup, hanging Emacs
+  (the immediate pain that triggered the reorg).
+- The zettelkasten's role was ambiguous — zettels, concepts, and
+  per-course notes mingled at the root.
+
+Post-reorg, =knowledge/zettelkasten/= is a clean canonical home for
+the feature's writes, and the CAT tool's existing
+=tibetan-thesaurus-kramer-source-directory= already points at it.
+
+* User-visible behaviour
+
+** In the Interlinear Gloss
+
+Current (before feature):
+
+#+begin_example
+  [[term-bdag][bdag]] [I, self]
+#+end_example
+
+With feature, when a zettel exists for ~bdag~:
+
+#+begin_example
+  [[id:20260224T120000][bdag]] ♦ [ich / selbst]
+#+end_example
+
+Changes:
+
+- The link target is now the zettel's ~:ID:~, not a local
+  =term-bdag= radio-target.  Click jumps to the zettel file.
+- ♦ marker (distinct from the existing ★ used for
+  Resources/Custom) indicates "this token has a zettel".
+- The gloss text shown is ~:preferred-de:~ (target language is
+  ~de~) and falls back to ~:preferred-en:~ if German is empty.
+  The bilingual DE // EN pair still lives in the Detailed
+  Dictionary entry below for reference.
+
+** In the Detailed Dictionary
+
+Zettel entries get a new source block at rank 2 (after Resources,
+before Steinert):
+
+#+begin_example
+  ◆ བདག [bdag] ([[id:20260224T120000][Zettel ↗]])
+    [Zettel: preferred]
+      ich / selbst
+    [Zettel: notes excerpt]
+      <first-paragraph teaser of user's ** Notes>
+    [Resources (provided)]
+      ich, selbst // I, self
+    [Steinert/01-Hopkins2015]
+      I (first person pronoun); oneself
+    ...
+#+end_example
+
+** In the Grammar section's Buddhist Terms subsection
+
+Current U3 behaviour reads 84000Definitions fresh every render.
+With the feature, when a zettel exists for the term:
+
+#+begin_example
+  *** Buddhist Terms
+  - ཚད་མེད་བཞི་པོ [tshad med bzhi po] ♦ [[id:ZETTEL-ID][Zettel ↗]]
+    four immeasurables (Skt: caturapramāṇa): the meditations on love,
+    compassion, joy, equanimity; also called the four abodes of Brahmā …
+    — [84000 Definitions via zettel cache]
+#+end_example
+
+If no zettel exists AND the token is ~<term>~-tagged by 84000:
+*auto-create* a zettel scaffold (see § 6 below), seed its
+~** 84000 Definitions= section with the current 84000 body, and
+link back from the segment.
+
+* Zettel schema
+
+** New properties (PROPERTIES drawer)
+
+| Property           | Meaning                                  | Example                |
+|--------------------+------------------------------------------+------------------------|
+| ~:ID:~             | Org-id, unchanged from Denote default    | 20260224T120000        |
+| ~:wylie:~          | Canonical Wylie (lowercase, trimmed)     | tshad med bzhi po      |
+| ~:script:~         | Tibetan script                           | ཚད་མེད་བཞི་པོ          |
+| ~:sanskrit:~       | Skt (when lexically one-to-one)          | caturapramāṇa          |
+| ~:preferred-de:~   | Target-lang gloss (German)               | die vier Unermesslichen |
+| ~:preferred-en:~   | Target-lang gloss (English)              | four immeasurables     |
+| ~:claude-cached:~  | Timestamp of the cached Claude body      | 2026-04-24             |
+| ~:steinert-84000:~ | "yes" when 84000 tag is present          | yes                    |
+
+** New body subsections
+
+Zettel files after the feature:
+
+#+begin_example
+  #+TITLE: tshad med bzhi po — four immeasurables
+  :PROPERTIES:
+  :ID:       20260224T120000
+  :wylie:    tshad med bzhi po
+  :script:   ཚད་མེད་བཞི་པོ
+  :preferred-de: die vier Unermesslichen
+  :preferred-en: four immeasurables
+  :sanskrit: caturapramāṇa
+  :steinert-84000: yes
+  :claude-cached: 2026-04-24
+  :END:
+
+  * Notes
+    <user's own notes — NEVER touched by the analyser>
+
+  * 84000 Definitions
+    <copied from Steinert/44-84000Definitions at creation time;
+     writer protects this section with a `:TERM_CACHE: t` drawer so
+     regen doesn't clobber user edits>
+    :PROPERTIES:
+    :TERM_CACHE: t
+    :END:
+
+  * Claude Explanation
+    <populated on first analysis that references this term;
+     subsequent segments read this instead of firing Claude>
+    :PROPERTIES:
+    :TERM_CACHE: t
+    :END:
+
+  * Back-links
+    - [[id:SEG-016-GAL-CHEN-ID][gal-chen-nyi-shu seg-16]]
+    - [[id:SEG-011-YBH-ID][yogacarabhumi seg-11]]
+    ...
+    :PROPERTIES:
+    :TERM_CACHE: t
+    :END:
+#+end_example
+
+** Backwards compatibility with Pass-5b Thesaurus zettels
+
+Existing Pass-5b thesaurus zettels use ~:primary:~ for the bilingual
+DE // EN string and have no separate ~:preferred-de:~ /
+~:preferred-en:~ fields.
+
+Migration strategy: READER accepts both formats; writer-on-create
+emits the new format; manual migration command
+(=M-x tibetan-thesaurus-migrate-to-v2=) splits ~:primary:~ strings
+into the new pair.  Timing: the migration command runs
+lazy / on-demand — no big-bang rewrite of 1010 files on upgrade.
+
+* Architecture — data flow
+
+** Zettel index
+
+A fast lookup table built on first access, cached by mtime of the
+zettelkasten directory:
+
+#+begin_src elisp
+  tibetan-zettel-index  →  hash :test 'equal
+    KEY   = downcased Wylie string
+    VALUE = plist (:id :path :wylie :script :preferred-de :preferred-en
+                   :sanskrit :steinert-84000 :claude-cached-p)
+#+end_src
+
+Rebuild triggers:
+- First lookup after Emacs start.
+- Any write via the feature's creation / edit commands.
+- Explicit =M-x tibetan-zettel-reload=.
+
+** Detection pass
+
+In =tibetan-analysis-generate-content='s enriched-vocab-pairs
+builder, right after ~word-clean~ is computed:
+
+1. Convert to Wylie (existing helper ~--token-wylie~).
+2. Look up in =tibetan-zettel-index=.
+3. If hit: store the zettel plist in a per-token metadata table.
+
+** Gloss ranking
+
+Add a new source to =tibetan-vocab-multisource-entries= at rank 2
+(after Resources at rank 1 — per Carsten's spec "level 2, after
+provided vocabulary"):
+
+#+begin_src
+  Rank 1: Resources (per-document vocabulary.org)
+  Rank 2: Zettel-preferred (NEW — this feature)
+  Rank 3: Custom
+  Rank 4: Thesaurus (Pass 5b, Kramer-seeded — to be unified with Rank 2)
+  Rank 5: Corpus-specific Steinert sub-dict
+  Rank 6: Steinert general
+  …
+#+end_src
+
+Unification: in Phase 1, Rank 2 reads Zettel AND Rank 4 still reads
+legacy Pass-5b Thesaurus files.  After migration command runs
+(Phase 6), Rank 4 drops away — a single rank covers all user
+zettels.
+
+** Marking in Interlinear
+
+Extend =tibetan-interlinear--format-gloss-entry= to accept a
+~:zettel-id~ arg.  When present:
+
+- Emit ~[[id:ZETTEL-ID][wylie]]~ instead of ~[[term-xxx][wylie]]~.
+- Insert ♦ between the link and the gloss bracket (mirrors ★ for
+  Resources).
+- New face ~tibetan-analysis-zettel-face~ applied via font-lock to
+  ♦ and optionally to the gloss text.
+
+** Detailed Dictionary head line
+
+Zettel hit prepends a new ink-spot to the DD head line before the
+Steinert URL:
+
+#+begin_example
+  ◆ ཚད་མེད་བཞི་པོ [tshad med bzhi po] ♦ [[id:ZETTEL-ID][Zettel ↗]] · [[https://dict.steinert...][Steinert ↗]]
+#+end_example
+
+* Auto-creation
+
+** Trigger
+
+During enriched-vocab-pairs building, when:
+
+1. The token has an 84000Dict / 84000Definitions entry tagged
+   ~<term>~ (the U3 detector).
+2. NO zettel currently exists (lookup miss).
+
+** What gets created
+
+Filename follows Denote convention:
+
+#+begin_example
+  <TIMESTAMP>--<wylie-slug>__glossar__buddhist-term.org
+#+end_example
+
+Example:
+
+#+begin_example
+  20260424T143022--tshad-med-bzhi-po__glossar__buddhist-term.org
+#+end_example
+
+Content:
+
+#+begin_src org
+  #+TITLE: tshad med bzhi po — four immeasurables
+  :PROPERTIES:
+  :ID:       20260424T143022
+  :wylie:    tshad med bzhi po
+  :script:   ཚད་མེད་བཞི་པོ
+  :sanskrit: caturapramāṇa
+  :preferred-de: [to be researched]
+  :preferred-en: four immeasurables
+  :steinert-84000: yes
+  :END:
+
+  * Notes
+
+  * 84000 Definitions
+  :PROPERTIES:
+  :TERM_CACHE: t
+  :END:
+
+  <term> four immeasurables (Skt: caturapramāṇa): the meditations on love
+  (maitrī), compassion (karuṇā), joy (muditā), and equanimity (upekṣā), as
+  well as the states of mind and qualities of being that result from their
+  cultivation.  They are also called the four abodes of Brahmā
+  (caturbrahmavihāra).  … [full 84000Definitions body]
+
+  (Original glossary entry: https://84000.co/glossary/entity-41080.html)
+
+  * Claude Explanation
+  :PROPERTIES:
+  :TERM_CACHE: t
+  :END:
+
+  [awaiting first analysis]
+
+  * Back-links
+  :PROPERTIES:
+  :TERM_CACHE: t
+  :END:
+  - [[id:SEG-016-GAL-CHEN-ID][gal-chen-nyi-shu seg-16]]
+#+end_src
+
+** User control
+
+Auto-creation is opt-in via a defcustom:
+
+#+begin_src elisp
+  (defcustom tibetan-zettel-auto-create-on-buddhist-term 'ask
+    "Behaviour when a <term>-tagged token has no zettel yet.
+  `always' — create silently.
+  `ask'    — prompt with y-or-n-p, naming the term.
+  nil      — never create, surface term in Buddhist Terms block only.")
+#+end_src
+
+Default ~'ask~ so Carsten sees every auto-creation opportunity and
+can decline terms that are too generic (like ~chos~ or ~sems~).
+
+* Claude-cache
+
+** Write path
+
+When a Claude response arrives (existing
+=tibetan-analysis--insert-claude-sections= path):
+
+1. Iterate the Claude Vocabulary lines (parsed per Pass 5c).
+2. For each line, look up the token's zettel.
+3. If zettel exists AND its ~* Claude Explanation~ section is empty
+   (contains only ~[awaiting first analysis]~ or is blank):
+   - Write the Claude Vocabulary line's gloss-field body to that
+     section.
+   - Update ~:claude-cached:~ property to today.
+
+** Read path
+
+U3's Buddhist Terms renderer:
+
+1. Look up each detected Buddhist term in zettel index.
+2. If zettel exists AND ~:claude-cached:~ is set AND the ~* Claude
+   Explanation~ section has content:
+   - Use the zettel's Claude explanation.
+   - Mark with ~[via zettel cache]~ suffix so it's clear no fresh
+     Claude call was made.
+3. Else: fall back to 84000Definitions body (current U3 behaviour).
+
+** Invalidation
+
+Explicit only — no automatic TTL.  User commands:
+
+- =M-x tibetan-zettel-invalidate-claude-cache= on a zettel: clears
+  ~:claude-cached:~ and the Claude Explanation body.  Next analysis
+  referencing the term will refill from a fresh Claude call.
+
+Rationale: Claude's explanations of stable Buddhist terminology
+shouldn't drift over time.  When they do (better Claude model,
+corrected user prompt), the user explicitly bumps the cache.
+
+** Cross-document consistency
+
+The same Claude explanation in every segment that references the
+term.  A user edit to the zettel's Claude-Explanation body
+propagates to every analysis on next regen.
+
+* Back-link maintenance
+
+Every analysis appends ~[[id:SEG-ID][short-label]]~ to the zettel's
+~* Back-links~ section, deduped.  A zettel thus accumulates every
+context it's been referenced in — a lightweight reverse-index.
+
+Dedup key: the seg file's ~:ID:~ property (see the existing
+~tibetan-thesaurus-segments-affected-by-zettel~ for precedent).
+
+Garbage collection: when a seg file is deleted or its term list no
+longer includes the zettel, the back-link stays (we don't know if
+it's deliberate historical context).  A separate command =M-x
+tibetan-zettel-gc-backlinks= scans all referenced segs and removes
+stale links on demand.
+
+* Phases — implementation roadmap
+
+| Phase | Goal                                                | Files                                                | Est. effort |
+|-------+-----------------------------------------------------+------------------------------------------------------+-------------|
+| 1     | Zettel index + reader (new schema + back-compat)    | =core/tibetan-zettel.el= NEW                         | 1 session   |
+| 2     | Interlinear + DD integration (rank 2, ♦ mark)       | =analysis/tibetan-interlinear.el=, =vocabulary-detailed.el= | 1 session |
+| 3     | Auto-creation for ~<term>~-tagged missing tokens    | =core/tibetan-zettel.el=, =persist/tibetan-analysis-persist.el= | 1 session |
+| 4     | Claude-cache write path                              | =persist/tibetan-analysis-claude.el=                 | 1 session   |
+| 5     | Buddhist Terms reads from zettel cache               | =persist/tibetan-analysis-persist.el=                | ≤ ½ session |
+| 6     | Unify Pass-5b Thesaurus → v2 schema + migration cmd | =core/tibetan-thesaurus.el=                          | 1 session   |
+| 7     | Back-link maintenance + GC command                  | =core/tibetan-zettel.el=                             | ≤ ½ session |
+
+Total: roughly 5–6 sessions.  Phase 1 is the keystone; all others
+depend on it.
+
+* Key bindings (draft — finalise in Phase 1)
+
+Under the existing =C-c u z= prefix (from Pass 5b Thesaurus):
+
+| Key         | Command                                           |
+|-------------+---------------------------------------------------|
+| =C-c u z z= | =tibetan-zettel-open-for-token-at-point=          |
+| =C-c u z N= | =tibetan-zettel-new-for-token-at-point=           |
+| =C-c u z M= | =tibetan-zettel-migrate-thesaurus-to-v2=          |
+| =C-c u z G= | =tibetan-zettel-gc-backlinks=                     |
+
+The existing Pass-5b bindings (=z e= edit, =z n= new, =z r= reload,
+=z i= init-kramer, =z a= audit, =z R= rerun, =z L= lang, =z g=
+gaps) stay as-is; Phase 1–7 adds the capital-letter variants.
+
+* Open design questions (for Carsten)
+
+1. *Zettel identification.*  Which signal marks a zettel as
+   "relevant for translation"?  Options:
+
+   a. Denote file-tag ~__glossar~ (existing convention in your
+      zettelkasten).
+   b. Presence of ~:wylie:~ property.
+   c. Dedicated property ~:TIBETAN_TERM: t~.
+   d. Any combination / OR.
+
+   My recommendation: *(a) OR (b)*.  (a) is your existing convention
+   and backward-compatible; (b) covers auto-created entries where
+   the tag might be missing.  Strongly NOT (c) — adds a third marker
+   that duplicates (a).
+
+2. *New-zettel location.*  Post-reorg, =knowledge/zettelkasten/= is
+   flat (all 1010 files at the same level, Denote-named).  Should
+   auto-created Tibetan-term zettels:
+
+   a. Stay flat at =knowledge/zettelkasten/= with
+      ~__glossar__buddhist-term~ tag suffix (my draft above).
+   b. Go into a subdirectory =knowledge/zettelkasten/tibetan-terms/=
+      so Denote queries can scope cheaply.
+
+   My recommendation: *(a)*.  Denote's flat-directory assumption is
+   hard to fight.  Tag-based filtering is cheap once the index is
+   built.
+
+3. *Pass-5b Thesaurus zettels.*  Currently at
+   =~/Documents/tibetan-thesaurus/= (separate directory), file-per-
+   term Kramer format.  Options:
+
+   a. Keep that directory separate; Phase 1 reader handles both.
+   b. =M-x tibetan-thesaurus-migrate-to-knowledge-zettelkasten= at
+      Phase 6 moves them all into the main zettelkasten + rewrites
+      to v2 schema.  Single source of truth after.
+
+   My recommendation: *(b)*.  Having two zettel dirs indefinitely
+   creates divergence risk; the migration is one-time, automatable.
+
+4. *Auto-creation default.*  ~'ask~ (prompt each time), ~'always~, or
+   ~nil~ (off)?
+
+   My recommendation: *'ask for the first month* (so you can reject
+   over-eager creations for common words like ~chos~), then switch
+   to ~'always~ once you've seen the heuristic is right on your
+   corpus.
+
+5. *Claude cache stamping.*  Should the Claude-Explanation section
+   embed the prompt version / Claude model used, so cache busts
+   correctly when the system prompt changes (e.g., the U1+U2
+   tightening commit)?
+
+   My recommendation: *yes*.  Store ~:claude-model:~ and
+   ~:prompt-version:~ as properties alongside ~:claude-cached:~.  A
+   simple check on read: if the CURRENT ~claude-system-prompt= hash
+   differs from the cached ~:prompt-version:~, treat the cache as
+   stale.
+
+6. *German-language default for preferred-de.*  New auto-created
+   zettels have empty ~:preferred-de:~ marked ~[to be researched]~.
+   Should the Claude response auto-populate this on first analysis,
+   or stay empty until you fill it?
+
+   My recommendation: *stay empty*.  The translation-gaps
+   report (=C-c u z g=) surfaces empty German fields as work items
+   — auto-populating defeats the gap report's purpose, and you've
+   said previously the German should be your own curation.
+
+* Success criteria
+
+The feature is done when:
+
+1. Every translation-relevant zettel in =knowledge/zettelkasten/=
+   surfaces as ♦-marked, linked, preferred-gloss in every analysis
+   that references its term.
+2. Opening seg-NNN.org for a new text in
+   =Gotrapaṭala.org= or similar shows zero /novel/ Claude calls for
+   Buddhist terms already explained in the zettelkasten (100% cache
+   hit on repeated-across-documents terms).
+3. The zettelkasten grows organically: after a semester of
+   translation work, ~50 auto-created Buddhist-term zettels exist
+   that didn't before, each with their 84000 Definitions, Claude
+   Explanation, back-links to the segments that prompted them, and
+   a user-curated Notes section.
+4. =M-x tibetan-zettel-reload= + a full folder =C-c u r= batch
+   reanalyze is idempotent — no drift between runs.
+5. Full test suite passes (≥ 1500 tests after Phase 7).
+
+* Non-goals
+
+- *Replacing Denote.*  The zettelkasten stays Denote-managed.  This
+  feature adds translation-specific reads / writes; Denote's capture,
+  naming, and search remain as-is.
+- *Replacing org-roam.*  Org-roam's DB queries are orthogonal; this
+  feature writes plain org property drawers readable without the DB.
+- *Cross-zettel graph features* (like "show all zettels tagged
+  ~dzogchen~").  Those exist via org-roam / Denote already.
+
+* Next step
+
+Review open questions § 8, edit the doc inline, or reply with
+decisions.  Once the 6 open questions are resolved I'll:
+
+1. Commit the doc as v1 (this file + any edits you make).
+2. Open Phase 1 — create =core/tibetan-zettel.el= with index +
+   reader + basic tests.
+3. Report back for Phase 2 / 3 planning.
