@@ -1,7 +1,7 @@
 #+TITLE: Zettel in Translation Workflow — Feature Design
 #+DATE: 2026-04-24
 #+AUTHOR: Carsten Paul + Claude
-#+STATUS: draft — awaiting approval before implementation
+#+STATUS: v1 approved — Phase 1 ready to build
 
 * Intent
 
@@ -416,75 +416,81 @@ The existing Pass-5b bindings (=z e= edit, =z n= new, =z r= reload,
 =z i= init-kramer, =z a= audit, =z R= rerun, =z L= lang, =z g=
 gaps) stay as-is; Phase 1–7 adds the capital-letter variants.
 
-* Open design questions (for Carsten)
+* Design decisions (approved 2026-04-24)
 
-1. *Zettel identification.*  Which signal marks a zettel as
-   "relevant for translation"?  Options:
+All six open questions resolved in favour of the recommended
+options.  Recorded here so Phase 1 implementation starts from a
+fixed spec.
 
-   a. Denote file-tag ~__glossar~ (existing convention in your
-      zettelkasten).
-   b. Presence of ~:wylie:~ property.
-   c. Dedicated property ~:TIBETAN_TERM: t~.
-   d. Any combination / OR.
+1. *Zettel identification.*  *Decided: Denote file-tag ~__glossar~
+   OR presence of ~:wylie:~ property (OR semantics).*  The index
+   builder treats either signal as sufficient; auto-created entries
+   always carry both (tag via Denote filename, property via
+   :wylie:).  Manual zettels with just the tag get picked up too.
+   Rejected: a dedicated ~:TIBETAN_TERM: t~ property — would have
+   been a third marker that duplicates the tag.
 
-   My recommendation: *(a) OR (b)*.  (a) is your existing convention
-   and backward-compatible; (b) covers auto-created entries where
-   the tag might be missing.  Strongly NOT (c) — adds a third marker
-   that duplicates (a).
+2. *New-zettel location.*  *Decided: flat in
+   =knowledge/zettelkasten/=* with the Denote tag chain
+   ~__glossar__buddhist-term~ (or similar) distinguishing
+   auto-creates from hand-written zettels.  Matches Denote's
+   assumption that a zettelkasten is a flat tag-indexed namespace;
+   tag-based filters are cheap once the index is built.  Rejected:
+   nested =tibetan-terms/= subdirectory.
 
-2. *New-zettel location.*  Post-reorg, =knowledge/zettelkasten/= is
-   flat (all 1010 files at the same level, Denote-named).  Should
-   auto-created Tibetan-term zettels:
+3. *Pass-5b Thesaurus zettels.*  *Decided: migrate into the main
+   zettelkasten.*  Phase 6 ships the migration command
+   =M-x tibetan-thesaurus-migrate-to-knowledge-zettelkasten= which
+   moves every Kramer-format file from =~/Documents/tibetan-
+   thesaurus/= into =~/buddhist-studies/knowledge/zettelkasten/=
+   and rewrites the ~:primary: DE // EN~ string into paired
+   ~:preferred-de:~ / ~:preferred-en:~ properties.  Single source
+   of truth after migration; no more dual-directory divergence
+   risk.  Phase 1's reader accepts both schemas during the
+   transition.
 
-   a. Stay flat at =knowledge/zettelkasten/= with
-      ~__glossar__buddhist-term~ tag suffix (my draft above).
-   b. Go into a subdirectory =knowledge/zettelkasten/tibetan-terms/=
-      so Denote queries can scope cheaply.
+4. *Auto-creation default.*  *Decided: ~'ask~.*  Each auto-create
+   opportunity pops a y-or-n-p naming the term and its 84000
+   gloss — you accept or reject per-term for the first stretch of
+   use.  Switch to ~'always~ later via defcustom once the
+   <term>-tag heuristic has proven itself on your corpus (i.e.
+   you've seen enough ~'ask~ prompts to trust them).
 
-   My recommendation: *(a)*.  Denote's flat-directory assumption is
-   hard to fight.  Tag-based filtering is cheap once the index is
-   built.
+5. *Claude-cache stamping.*  *Decided: yes, with prompt-version +
+   model stamped on each cache entry.*  Properties on zettels with
+   a populated ~* Claude Explanation~ section:
 
-3. *Pass-5b Thesaurus zettels.*  Currently at
-   =~/Documents/tibetan-thesaurus/= (separate directory), file-per-
-   term Kramer format.  Options:
+   - ~:claude-cached: YYYY-MM-DD~ — creation timestamp.
+   - ~:claude-model: claude-opus-4.7~ (or whatever was used).
+   - ~:prompt-version: <hash of tibetan-analysis--claude-system-prompt>~.
 
-   a. Keep that directory separate; Phase 1 reader handles both.
-   b. =M-x tibetan-thesaurus-migrate-to-knowledge-zettelkasten= at
-      Phase 6 moves them all into the main zettelkasten + rewrites
-      to v2 schema.  Single source of truth after.
+   On read, Phase 5 compares the current prompt hash against the
+   cached one.  Mismatch → treat the cache as stale, fire a fresh
+   Claude call, overwrite the cache with the new response, update
+   all three stamps.  Means that when the system prompt is tightened
+   (as it was in commit a1de885 for U1+U2), every cached entry gets
+   invalidated and refreshed on next reference, not manually.
 
-   My recommendation: *(b)*.  Having two zettel dirs indefinitely
-   creates divergence risk; the migration is one-time, automatable.
+6. *German =:preferred-de:= auto-fill policy.*  *Decided: stay
+   empty until you fill it manually.*  Auto-created zettels
+   initialize ~:preferred-de:~ with the literal string
+   ~[to be researched]~; the translation-gaps report (~C-c u z g~)
+   surfaces these as work items.  Claude responses do NOT
+   auto-populate the field — the German gloss remains your
+   curation, ensuring the translation-gap workflow stays
+   meaningful and that every German rendering across the corpus
+   reflects a deliberate choice.  The English ~:preferred-en:~
+   IS auto-populated from 84000's gloss when available (since the
+   English is canonical reference material, not personal
+   interpretation).
 
-4. *Auto-creation default.*  ~'ask~ (prompt each time), ~'always~, or
-   ~nil~ (off)?
+* Approval trail
 
-   My recommendation: *'ask for the first month* (so you can reject
-   over-eager creations for common words like ~chos~), then switch
-   to ~'always~ once you've seen the heuristic is right on your
-   corpus.
-
-5. *Claude cache stamping.*  Should the Claude-Explanation section
-   embed the prompt version / Claude model used, so cache busts
-   correctly when the system prompt changes (e.g., the U1+U2
-   tightening commit)?
-
-   My recommendation: *yes*.  Store ~:claude-model:~ and
-   ~:prompt-version:~ as properties alongside ~:claude-cached:~.  A
-   simple check on read: if the CURRENT ~claude-system-prompt= hash
-   differs from the cached ~:prompt-version:~, treat the cache as
-   stale.
-
-6. *German-language default for preferred-de.*  New auto-created
-   zettels have empty ~:preferred-de:~ marked ~[to be researched]~.
-   Should the Claude response auto-populate this on first analysis,
-   or stay empty until you fill it?
-
-   My recommendation: *stay empty*.  The translation-gaps
-   report (=C-c u z g=) surfaces empty German fields as work items
-   — auto-populating defeats the gap report's purpose, and you've
-   said previously the German should be your own curation.
+| Date        | Who      | Action                                           |
+|-------------+----------+--------------------------------------------------|
+| 2026-04-24  | Claude   | Drafted v1, open questions enumerated            |
+| 2026-04-24  | Carsten  | Approved all 6 decisions per recommendations     |
+| 2026-04-24  | Claude   | Updated doc to "v1 approved"; Phase 1 cleared    |
 
 * Success criteria
 
