@@ -942,22 +942,34 @@ label' lines; parsing into structured tuples is downstream's job
 (defconst tibetan-analysis--claude-section-order
   '((:translation "Claude Translation" 2)
     (:vocabulary  "Claude Vocabulary"  3)
-    (:grammar     "Claude Grammar"     2)
+    (:grammar     "Claude Grammar"     3)
     (:particles   "Claude Particles"   3))
   "Canonical order, heading names, and org levels for Claude sections.
-Each entry is (KEY HEADING LEVEL).  Translation and Grammar both
-sit at level 2 so they can take their workshop-agreed slots in the
-priority order (positions 6 and 7 in the per-segment auto-analysis
-view).  Vocabulary stays at level 3 inside `** Provided
-Translations' (it's a DharmaMitra-style word-by-word tier the
-reader consults alongside the provided glosses).  Particles is the
-Pass 6c addition (2026-04-22) — per-occurrence `word, particle,
-portfolio-sub-id, label' tuples that let the `*** Particles in This
-Segment' renderer attach a Portfolio snippet to each specific
-particle function.  Stored at level 3 inside Provided Translations
-alongside Vocabulary.  The writer, reader, scaffolding, and
-migration all consult this list so levels stay consistent
-everywhere.")
+Each entry is (KEY HEADING LEVEL).
+
+Translation sits at level 2 — the workshop-agreed slot, position 3
+in the priority order (right after Wylie / Interlinear).
+
+Vocabulary lives at level 3 inside `** Provided Translations' —
+a DharmaMitra-style word-by-word tier the reader consults alongside
+the provided glosses.
+
+Grammar (U4, 2026-04-24): moved from level 2 to level 3 so Claude's
+prose reading nests UNDER `** Grammar' as `*** Claude Grammar',
+placed between `*** Particle Map' and `*** Particles in This
+Segment'.  The reader's Grammar section now flows visual-map →
+prose-reading → detailed-particle-refs without a level-2 context
+switch.  Existing files with `** Claude Grammar' at level 2 are
+migrated on next regen by `--ensure-claude-headings'.
+
+Particles is the Pass 6c addition (2026-04-22) — per-occurrence
+`word, particle, portfolio-sub-id, label' tuples that let the
+`*** Particles in This Segment' renderer attach a Portfolio
+snippet to each specific particle function.  Stored at level 3
+inside Provided Translations alongside Vocabulary.
+
+The writer, reader, scaffolding, and migration all consult this
+list so levels stay consistent everywhere.")
 
 (defun tibetan-analysis--claude-heading-re (heading level)
   "Regexp that anchors `HEADING' at org LEVEL at beginning-of-line."
@@ -1154,6 +1166,172 @@ still created with two trailing newlines."
           (goto-char (point-max))
           (insert content)))))))
 
+(defun tibetan-analysis--migrate-claude-grammar-to-u4 ()
+  "Relocate legacy Claude Grammar headings to the U4 target slot.
+Three layouts exist in the wild:
+  A (oldest): `*** Claude Grammar' at level 3 inside
+      `** Provided Translations' (pre-Pass-6b).
+  B: `** Claude Grammar' at level 2 (Pass 6b, 2026-04-22).
+  C (U4 target): `*** Claude Grammar' at level 3 under
+      `** Grammar' (2026-04-24).
+
+Algorithm:
+  1. Look for Layout B first (level-2).  If found, capture its body
+     and delete the heading.
+  2. Look for Layout A (level-3 inside Provided Translations).  Only
+     treat as legacy if NO Layout-C heading is already in place under
+     `** Grammar' (otherwise the Provided-Translations occurrence
+     must already be a duplicate that `--extract-claude-grammar'
+     missed — rare).  If found, capture body and delete.
+  3. Ensure the U4 target `*** Claude Grammar' heading exists via
+     `--place-claude-grammar-heading'.
+  4. Drop the captured legacy body under the U4 heading, replacing
+     any placeholder whitespace there.
+
+Idempotent.  Operates on the CURRENT buffer — save-excursion is the
+caller's responsibility."
+  (let ((salvaged nil))
+    ;; Layout B — `** Claude Grammar' at level 2.
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward "^\\*\\* Claude Grammar$" nil t)
+        (let* ((heading-start (line-beginning-position))
+               (body-start (progn (forward-line 1) (point)))
+               (body-end
+                (save-excursion
+                  (if (re-search-forward
+                       (tibetan-analysis--claude-stop-re 2) nil t)
+                      (line-beginning-position)
+                    (point-max))))
+               (body (string-trim
+                      (buffer-substring-no-properties
+                       body-start body-end))))
+          (unless (string-empty-p body) (setq salvaged body))
+          (delete-region heading-start body-end))))
+    ;; Layout A — `*** Claude Grammar' inside `** Provided Translations'.
+    ;; Skip if we already captured from Layout B (rare double-legacy).
+    (unless salvaged
+      (save-excursion
+        (goto-char (point-min))
+        (when (re-search-forward "^\\*\\* Provided Translations$" nil t)
+          (let ((pt-end
+                 (save-excursion
+                   (if (re-search-forward
+                        (tibetan-analysis--claude-stop-re 2) nil t)
+                       (line-beginning-position)
+                     (point-max)))))
+            (when (re-search-forward
+                   "^\\*\\*\\* Claude Grammar$" pt-end t)
+              (let* ((heading-start (line-beginning-position))
+                     (body-start (progn (forward-line 1) (point)))
+                     (body-end
+                      (save-excursion
+                        (if (re-search-forward
+                             (tibetan-analysis--claude-stop-re 3)
+                             pt-end t)
+                            (line-beginning-position)
+                          pt-end)))
+                     (body (string-trim
+                            (buffer-substring-no-properties
+                             body-start body-end))))
+                (unless (string-empty-p body) (setq salvaged body))
+                (delete-region heading-start body-end)))))))
+    ;; Step 3: ensure U4 target heading exists.
+    (unless (save-excursion
+              (goto-char (point-min))
+              (re-search-forward "^\\*\\*\\* Claude Grammar$" nil t))
+      (tibetan-analysis--place-claude-grammar-heading))
+    ;; Step 4: drop salvaged body under U4 heading (replacing
+    ;; placeholder whitespace).
+    (when salvaged
+      (save-excursion
+        (goto-char (point-min))
+        (when (re-search-forward "^\\*\\*\\* Claude Grammar$" nil t)
+          (forward-line 1)
+          (let ((after-heading (point)))
+            (skip-chars-forward " \t\n")
+            (delete-region after-heading (point)))
+          (insert salvaged "\n\n"))))))
+
+(defun tibetan-analysis--place-claude-grammar-heading ()
+  "Insert `*** Claude Grammar' heading under `** Grammar' (U4, 2026-04-24).
+Preferred slot: between `*** Particle Map' and `*** Particles in
+This Segment', per the canonical U4 layout.  Fallbacks: after
+`*** Particle Map' alone, or at end of `** Grammar'.  When
+`** Grammar' itself is missing (legacy / pre-Pass-6b buffer, or
+test fixture that never ran through `render-grammar-section'), a
+minimal `** Grammar' heading is created first — Claude Grammar
+always ends up nested so the workflow invariant holds.
+
+Placement site: after `** Claude Translation' when that heading is
+present (keeps Grammar in the priority-order neighbourhood);
+otherwise after `** Wylie Transliteration'; otherwise at point-min.
+
+Idempotent: caller must check the heading isn't already present
+before invoking."
+  (goto-char (point-min))
+  ;; Step 1: ensure `** Grammar' exists.  Create if missing so the
+  ;; nested-Claude-Grammar invariant always holds.
+  (unless (save-excursion
+            (goto-char (point-min))
+            (re-search-forward "^\\*\\* Grammar$" nil t))
+    (goto-char (point-min))
+    (cond
+     ;; After Claude Translation (priority slot 4; Grammar is slot 5).
+     ((re-search-forward "^\\*\\* Claude Translation$" nil t)
+      (forward-line 1)
+      (if (re-search-forward
+           (tibetan-analysis--claude-stop-re 2) nil t)
+          (beginning-of-line)
+        (goto-char (point-max)))
+      (insert "** Grammar\n\n"))
+     ;; After Wylie (always present in segment layout).
+     ((progn
+        (goto-char (point-min))
+        (re-search-forward "^\\*\\* Wylie Transliteration$" nil t))
+      (forward-line 1)
+      (if (re-search-forward
+           (tibetan-analysis--claude-stop-re 2) nil t)
+          (beginning-of-line)
+        (goto-char (point-max)))
+      (insert "** Grammar\n\n"))
+     ;; Bare buffer — append.
+     (t
+      (goto-char (point-max))
+      (insert "\n** Grammar\n\n"))))
+  ;; Step 2: place `*** Claude Grammar' inside `** Grammar'.
+  (goto-char (point-min))
+  (re-search-forward "^\\*\\* Grammar$" nil t)
+  (let ((grammar-end
+         (save-excursion
+           (if (re-search-forward
+                (tibetan-analysis--claude-stop-re 2) nil t)
+               (line-beginning-position)
+             (point-max)))))
+    (cond
+     ;; Preferred: just before `*** Particles in This Segment'.
+     ((save-excursion
+        (re-search-forward "^\\*\\*\\* Particles in This Segment$"
+                           grammar-end t))
+      (re-search-forward "^\\*\\*\\* Particles in This Segment$"
+                         grammar-end t)
+      (beginning-of-line)
+      (insert "*** Claude Grammar\n\n\n"))
+     ;; Fallback: after Particle Map body.
+     ((save-excursion
+        (re-search-forward "^\\*\\*\\* Particle Map$" grammar-end t))
+      (re-search-forward "^\\*\\*\\* Particle Map$" grammar-end t)
+      (forward-line 1)
+      (if (re-search-forward
+           (tibetan-analysis--claude-stop-re 3) grammar-end t)
+          (beginning-of-line)
+        (goto-char grammar-end))
+      (insert "*** Claude Grammar\n\n\n"))
+     ;; Last resort: at end of Grammar body (before next level-2).
+     (t
+      (goto-char grammar-end)
+      (insert "*** Claude Grammar\n\n\n")))))
+
 (defun tibetan-analysis--ensure-claude-headings (buffer)
   "Ensure the Claude Translation / Vocabulary / Grammar headings exist in BUFFER.
 
@@ -1161,9 +1339,12 @@ Segment-layout target (detected via `** Wylie Transliteration'):
   - `** Claude Translation'   at org level 2, right after Wylie.
   - `*** Claude Vocabulary'   at org level 3, inside
     `** Provided Translations' (after `*** DharmaMitra' if present).
-  - `** Claude Grammar'       at org level 2, placed after
-    `** Claude Translation' (the workshop-agreed priority order
-    puts it at position 7 as a peer of Claude Translation).
+  - `*** Claude Grammar'      at org level 3, nested UNDER
+    `** Grammar', between `*** Particle Map' and `*** Particles in
+    This Segment' (U4, 2026-04-24).  The reader flow inside Grammar
+    is visual-map → prose-reading → per-particle Portfolio refs.
+    Legacy files carrying `** Claude Grammar' at level 2 are
+    migrated here — see the segment-layout migration block below.
 
 Sentence-layout target (no `** Wylie Transliteration'):
   - `*** Claude Translation' at org level 3 (siblings under whatever
@@ -1242,64 +1423,25 @@ whichever target heading is still missing.  Idempotent."
                   (insert "*** Claude Vocabulary\n\n\n"))
               (goto-char (point-max))
               (insert "\n*** Claude Vocabulary\n\n")))))
-        ;; Ensure `** Claude Grammar' exists at level 2.  If a legacy
-        ;; `*** Claude Grammar' is still present (file not yet
-        ;; regenerated under the new layout), migrate it: promote the
-        ;; heading to level 2 and move the body to sit right after
-        ;; `** Claude Translation'.  Idempotent: if both exist, the
-        ;; level-3 one is removed and its body folded into the level-2
-        ;; one (last-writer wins — the usual Claude-response path).
-        (save-excursion
-          (goto-char (point-min))
-          (when (re-search-forward "^\\*\\*\\* Claude Grammar$" nil t)
-            (let* ((legacy-heading-start (line-beginning-position))
-                   (legacy-body-start (progn (forward-line 1) (point)))
-                   (legacy-end
-                    (save-excursion
-                      (if (re-search-forward
-                           (tibetan-analysis--claude-stop-re 3) nil t)
-                          (line-beginning-position)
-                        (point-max))))
-                   (legacy-body
-                    (string-trim
-                     (buffer-substring-no-properties legacy-body-start
-                                                     legacy-end))))
-              (delete-region legacy-heading-start legacy-end)
-              ;; Stash body for the level-2 insertion below.
-              (unless (save-excursion
-                        (goto-char (point-min))
-                        (re-search-forward "^\\*\\* Claude Grammar$" nil t))
-                (goto-char (point-min))
-                (if (re-search-forward "^\\*\\* Claude Translation$" nil t)
-                    (progn
-                      (forward-line 1)
-                      (if (re-search-forward
-                           (tibetan-analysis--claude-stop-re 2) nil t)
-                          (beginning-of-line)
-                        (goto-char (point-max)))
-                      (insert "** Claude Grammar\n"
-                              (if (string-empty-p legacy-body) "\n\n"
-                                (concat legacy-body "\n\n"))))
-                  (goto-char (point-max))
-                  (insert "\n** Claude Grammar\n"
-                          (if (string-empty-p legacy-body) "\n\n"
-                            (concat legacy-body "\n\n"))))))))
-        (unless (save-excursion
-                  (goto-char (point-min))
-                  (re-search-forward "^\\*\\* Claude Grammar$" nil t))
-          (goto-char (point-min))
-          ;; Place after `** Claude Translation' (the priority-ordered
-          ;; position is right after it); fall back to end-of-buffer.
-          (if (re-search-forward "^\\*\\* Claude Translation$" nil t)
-              (progn
-                (forward-line 1)
-                (if (re-search-forward
-                     (tibetan-analysis--claude-stop-re 2) nil t)
-                    (beginning-of-line)
-                  (goto-char (point-max)))
-                (insert "** Claude Grammar\n\n\n"))
-            (goto-char (point-max))
-            (insert "\n** Claude Grammar\n\n")))
+        ;; U4 (2026-04-24): ensure `*** Claude Grammar' exists at level
+        ;; 3 under `** Grammar', between Particle Map (visual) and
+        ;; Particles in This Segment (detailed), following the reader
+        ;; flow map → prose → particle-refs.
+        ;;
+        ;; Migration handles two legacy layouts:
+        ;;   A (oldest, pre-Pass-6b): `*** Claude Grammar' at level 3
+        ;;     inside `** Provided Translations'.  Already promoted
+        ;;     to Layout B by `--extract-claude-grammar' during the
+        ;;     reorder step; handled here only as a defensive fallback.
+        ;;   B (Pass 6b): `** Claude Grammar' at level 2.
+        ;;   C (U4 target): `*** Claude Grammar' at level 3 under
+        ;;     `** Grammar'.
+        ;;
+        ;; Algorithm: find the one Claude Grammar heading NOT already
+        ;; in U4 position (Layout B or orphaned Layout A), lift its
+        ;; body, delete the legacy heading, ensure the U4 target
+        ;; exists, drop the body under it.
+        (tibetan-analysis--migrate-claude-grammar-to-u4)
         ;; Ensure `*** Claude Particles' exists inside Provided
         ;; Translations (Pass 6c).  Place after `*** Claude Vocabulary'
         ;; if present; otherwise at the end of Provided Translations.

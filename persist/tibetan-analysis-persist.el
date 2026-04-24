@@ -2158,10 +2158,11 @@ function Claude identified.  When passed, each Bialek line gains a
 specific sub-function heading and the matching Portfolio snippet
 text.  When nil, falls back to the compact parser-only list."
   (insert "** Grammar\n")
-  (insert "Particles in this segment.  See `** Claude Grammar' below for\n")
-  (insert "the prose reading.\n\n")
+  (insert "Visual particle map, Claude's prose reading of the grammar,\n")
+  (insert "then per-particle Portfolio references.\n\n")
   ;; ------------------------------------------------------------------
-  ;; Sub-section 1: Particle Map (annotated Wylie)
+  ;; Sub-section 1: Particle Map (annotated Wylie).
+  ;; Visual summary — =CASE= (magenta) / ~CONVERB~ (orange) overlays.
   ;; ------------------------------------------------------------------
   (insert "*** Particle Map\n")
   (insert "=CASE= (magenta) · ~CONVERB~ (orange) · Ø zero-marked\n\n")
@@ -2170,7 +2171,24 @@ text.  When nil, falls back to the compact parser-only list."
     (insert annotated-wylie)
     (insert "\n\n"))
   ;; ------------------------------------------------------------------
-  ;; Sub-section 2: Particles in This Segment.
+  ;; Sub-section 2: Claude Grammar — prose reading (U4, 2026-04-24).
+  ;; Placeholder heading at org level 3 so the Claude write-path can
+  ;; target it.  Sits BETWEEN Particle Map (visual) and Particles in
+  ;; This Segment (detailed) so the reader flow is
+  ;;   map → prose interpretation → per-particle Portfolio refs.
+  ;; The body is filled by `tibetan-analysis--ensure-claude-headings'
+  ;; + `tibetan-analysis--restore-claude-sections' after the Claude
+  ;; response arrives.  When no Claude data yet, the heading sits
+  ;; empty — fine, it's a placeholder.
+  ;;
+  ;; Legacy files carry `** Claude Grammar' at level 2 (pre-U4
+  ;; layout).  The Claude writer's migration step demotes + moves
+  ;; the body into this slot on next regeneration.
+  ;; ------------------------------------------------------------------
+  (insert "*** Claude Grammar\n")
+  (insert "\n\n")
+  ;; ------------------------------------------------------------------
+  ;; Sub-section 3: Particles in This Segment.
   ;;
   ;; Flow per bialek detection:
   ;;   1. Compute compact header line (particle type + Portfolio ref).
@@ -2320,7 +2338,6 @@ text.  When nil, falls back to the compact parser-only list."
     "** Interlinear Gloss"
     "** Claude Translation"
     "** Grammar"
-    "** Claude Grammar"
     "** Sentence Structure"
     "** Verb Classification (Hill 2010)")
   "Section headings (at org level-2) that should appear first in the
@@ -2336,18 +2353,20 @@ in This Segment, [future] Portfolio snippets).  Sentence Structure
 and Clause Structure likewise merge into one `** Sentence Structure'
 carrying per-clause verb + NP + role info.
 
-`** Claude Grammar' remains a separate level-2 section placed
-immediately after `** Grammar' in the read order — visually it
-follows Grammar so the parser-side particle reference and Claude's
-prose reading sit side by side without tangling the Claude write-
-path.  A future pass can nest Claude Grammar into ** Grammar as a
-sub-heading if desired; that requires rewiring the Claude scaffold
-and is out of scope here.
+U4 (2026-04-24): `** Claude Grammar' moved from a level-2 sibling
+section to a level-3 sub-heading `*** Claude Grammar' under
+`** Grammar', placed between `*** Particle Map' and
+`*** Particles in This Segment'.  Reader flow inside Grammar:
+map (visual) → Claude's prose reading → per-particle Portfolio
+references.  The Claude writer, reader, migration, and scaffolding
+all consult `tibetan-analysis--claude-section-order' (in
+`tibetan-analysis-claude.el') for the canonical level — that is
+where U4's change lands for the Claude side.
 
 Reader flow: Wylie → Interlinear Gloss (word-for-word) → Claude
-Translation (fluent) → Grammar (particles + references) → Claude
-Grammar (prose summary) → Sentence Structure (clause + arguments)
-→ Verb Classification → Detailed Dictionary (deep reference).")
+Translation (fluent) → Grammar (map + prose + particle refs) →
+Sentence Structure (clause + arguments) → Verb Classification →
+Detailed Dictionary (deep reference).")
 
 (defun tibetan-analysis--split-level2-sections (content)
   "Split CONTENT into an ordered list of level-2 section cons cells.

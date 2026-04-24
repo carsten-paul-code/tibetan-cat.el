@@ -82,11 +82,19 @@ body must be removed from the Provided Translations body."
 
 (ert-deftest tibetan-analysis-reorder-priority-order-applied ()
   "The priority sections must appear in the configured order
-first, before any other sections.  Pass 6b (2026-04-22) replaced
-`** Particle Map' / `** Grammatical Markers' with a single
-`** Grammar' section; the priority order is now
-Wylie → Interlinear → Claude Translation → Grammar → Claude Grammar
-→ Sentence Structure → Verb Classification."
+first, before any other sections.
+
+Pass 6b (2026-04-22) replaced `** Particle Map' / `** Grammatical
+Markers' with a single `** Grammar' section.
+
+U4 (2026-04-24) moved `** Claude Grammar' from a level-2 sibling
+to `*** Claude Grammar' nested UNDER `** Grammar' between the
+Particle Map and Particles in This Segment subsections, so the
+priority-ordered top-level list no longer carries it — the
+reader's flow inside Grammar is visual-map → Claude prose →
+per-particle Portfolio refs.  The priority order is now
+Wylie → Interlinear → Claude Translation → Grammar → Sentence
+Structure → Verb Classification."
   (let* ((content (concat
                    "** Word / Particle List\nwpl\n\n"
                    "** Verb Classification (Hill 2010)\nverbs\n\n"
@@ -95,7 +103,6 @@ Wylie → Interlinear → Claude Translation → Grammar → Claude Grammar
                    "** Sentence Structure\nsent\n\n"
                    "** Claude Translation\nct\n\n"
                    "** Interlinear Gloss\nig\n\n"
-                   "** Claude Grammar\ncg\n\n"
                    "** Detailed Dictionary\ndd\n\n"))
          (reordered (tibetan-analysis--reorder-auto-content content))
          (headings (tibetan-analysis-reorder-test--headings reordered))
@@ -103,7 +110,6 @@ Wylie → Interlinear → Claude Translation → Grammar → Claude Grammar
                             "** Interlinear Gloss"
                             "** Claude Translation"
                             "** Grammar"
-                            "** Claude Grammar"
                             "** Sentence Structure"
                             "** Verb Classification (Hill 2010)")))
     (should (equal (cl-subseq headings 0 (length expected-prefix))
@@ -133,37 +139,39 @@ order after reorder."
     (should (equal tail '("** Zeta" "** Alpha" "** Beta")))))
 
 (ert-deftest tibetan-analysis-reorder-claude-before-verb-classification ()
-  "Claude Translation AND Claude Grammar must land between the
-Interlinear Gloss and the Verb Classification.
-
-The fluent translation + its grammar commentary should be what the
-reader sees right after the word-for-word trot, before the parser's
+  "Claude Translation must land between the Interlinear Gloss and
+the Verb Classification.  The fluent translation is what the reader
+sees right after the word-for-word trot, before the parser's
 Hill-based verb table.  Regression for user-reported section order
-request 2026-04-21."
+request 2026-04-21.
+
+U4 (2026-04-24) moved `** Claude Grammar' to `*** Claude Grammar'
+nested under `** Grammar', so the Grammar-vs-Verb-Classification
+invariant is now carried by `** Grammar's position in the
+priority order (which already sits before Verb Classification)."
   (let* ((content (concat
                    "** Verb Classification (Hill 2010)\nverbs\n\n"
                    "** Interlinear Gloss\nig\n\n"
                    "** Claude Translation\nct\n\n"
-                   "** Claude Grammar\ncg\n\n"
-                   "** Wylie Transliteration\nwylie\n\n"
-                   "** Particle Map\npmap\n\n"))
+                   "** Grammar\ngrammar\n\n"
+                   "** Wylie Transliteration\nwylie\n\n"))
          (reordered (tibetan-analysis--reorder-auto-content content))
          (headings (tibetan-analysis-reorder-test--headings reordered))
          (cl-trans-pos  (cl-position "** Claude Translation" headings
                                      :test #'string=))
-         (cl-gram-pos   (cl-position "** Claude Grammar" headings
+         (gram-pos      (cl-position "** Grammar" headings
                                      :test #'string=))
          (vc-pos        (cl-position "** Verb Classification (Hill 2010)"
                                      headings :test #'string=))
          (ig-pos        (cl-position "** Interlinear Gloss" headings
                                      :test #'string=)))
     (should cl-trans-pos)
-    (should cl-gram-pos)
+    (should gram-pos)
     (should vc-pos)
     (should ig-pos)
     (should (< ig-pos cl-trans-pos))
-    (should (< cl-trans-pos cl-gram-pos))
-    (should (< cl-gram-pos vc-pos))))
+    (should (< cl-trans-pos gram-pos))
+    (should (< gram-pos vc-pos))))
 
 (ert-deftest tibetan-analysis-reorder-missing-priority-section-is-ok ()
   "The reorder must not require every priority section to be present —

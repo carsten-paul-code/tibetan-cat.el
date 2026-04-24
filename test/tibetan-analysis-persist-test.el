@@ -1354,5 +1354,88 @@ reading) is left alone.  This is the integration-level test on
                       "ཚད་མེད་བཞི་པོ" "<term> four immeasurables" vocab)
                      "<term> four immeasurables"))))
 
+;; ============================================================================
+;; U4 — Claude Grammar nested under ** Grammar (2026-04-24)
+;;
+;; Claude Grammar moved from a level-2 sibling section to
+;; `*** Claude Grammar' under `** Grammar' between `*** Particle Map'
+;; and `*** Particles in This Segment'.  Reader flow inside Grammar:
+;; map (visual) → Claude's prose reading → per-particle Portfolio refs.
+;; These tests pin the scaffold + migration placement via the helper
+;; `tibetan-analysis--place-claude-grammar-heading'.
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-place-claude-grammar-heading-preferred-slot ()
+  "Preferred slot: just before `*** Particles in This Segment'.
+The render scaffold emits Particle Map then Particles in This
+Segment; U4 inserts Claude Grammar between them so the reader
+flows visual → prose → detail."
+  (with-temp-buffer
+    (insert "** Grammar\n"
+            "preamble\n\n"
+            "*** Particle Map\n"
+            "=CASE= =GEN=\n\n"
+            "bdag kyi nor bu\n\n"
+            "*** Particles in This Segment\n"
+            "- kyi · GEN\n\n"
+            "** Sentence Structure\ns\n")
+    (tibetan-analysis--place-claude-grammar-heading)
+    (goto-char (point-min))
+    (let* ((map-pos  (re-search-forward "^\\*\\*\\* Particle Map$" nil t))
+           (cg-pos   (re-search-forward "^\\*\\*\\* Claude Grammar$" nil t))
+           (list-pos (re-search-forward "^\\*\\*\\* Particles in This Segment$"
+                                        nil t)))
+      (should map-pos)
+      (should cg-pos)
+      (should list-pos)
+      (should (< map-pos cg-pos))
+      (should (< cg-pos list-pos)))))
+
+(ert-deftest tibetan-analysis-place-claude-grammar-heading-after-map-only ()
+  "When `*** Particles in This Segment' is absent, fall back to
+placing after `*** Particle Map' (still inside Grammar)."
+  (with-temp-buffer
+    (insert "** Grammar\n"
+            "*** Particle Map\n"
+            "pm body\n\n"
+            "** Sentence Structure\ns\n")
+    (tibetan-analysis--place-claude-grammar-heading)
+    (goto-char (point-min))
+    (let ((map-pos (re-search-forward "^\\*\\*\\* Particle Map$" nil t))
+          (cg-pos  (re-search-forward "^\\*\\*\\* Claude Grammar$" nil t))
+          (ss-pos  (re-search-forward "^\\*\\* Sentence Structure$" nil t)))
+      (should (and map-pos cg-pos ss-pos))
+      ;; Claude Grammar lands INSIDE Grammar (before Sentence Structure).
+      (should (< cg-pos ss-pos))
+      (should (< map-pos cg-pos)))))
+
+(ert-deftest tibetan-analysis-place-claude-grammar-heading-empty-grammar ()
+  "When `** Grammar' exists but is empty of level-3 subsections, the
+heading still goes inside the Grammar body region (before the next
+level-2 heading), not after it."
+  (with-temp-buffer
+    (insert "** Grammar\n"
+            "\n"
+            "** Sentence Structure\ns\n")
+    (tibetan-analysis--place-claude-grammar-heading)
+    (goto-char (point-min))
+    (let ((gram-pos (re-search-forward "^\\*\\* Grammar$" nil t))
+          (cg-pos   (re-search-forward "^\\*\\*\\* Claude Grammar$" nil t))
+          (ss-pos   (re-search-forward "^\\*\\* Sentence Structure$" nil t)))
+      (should (and gram-pos cg-pos ss-pos))
+      (should (< gram-pos cg-pos))
+      (should (< cg-pos ss-pos)))))
+
+(ert-deftest tibetan-analysis-place-claude-grammar-heading-no-grammar ()
+  "Bare buffer with no `** Grammar' at all — heading appended at end
+so the restore path still has a write target, but it's outside any
+priority section (rare fallback)."
+  (with-temp-buffer
+    (insert "** Wylie Transliteration\nw\n\n")
+    (tibetan-analysis--place-claude-grammar-heading)
+    (should (string-match-p "\\*\\*\\* Claude Grammar"
+                            (buffer-substring-no-properties
+                             (point-min) (point-max))))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

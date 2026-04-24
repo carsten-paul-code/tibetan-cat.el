@@ -240,9 +240,15 @@ the gptel pipeline."
 (ert-deftest tibetan-claude-sections-ensure-from-legacy ()
   "Legacy `*** Claude' under Provided Translations is migrated to
 `** Claude Translation' at level 2 (after Wylie); `*** Claude
-Vocabulary' lands at level 3 inside Provided Translations;
-`** Claude Grammar' lands at level 2 (its priority slot).
-No Context."
+Vocabulary' lands at level 3 inside Provided Translations.
+
+U4 (2026-04-24): `*** Claude Grammar' now lands at level 3 nested
+under `** Grammar' (between Particle Map and Particles list when
+present, or at end of Grammar when the scaffold is absent).  When
+no `** Grammar' pre-exists, `--ensure-claude-headings' creates a
+minimal one so Claude Grammar is always nested.
+
+No Context in segment layout."
   (tibetan-sections-test--with-analysis
       (concat "* Tibetan Text\n"
               "བདག\n\n"
@@ -257,13 +263,15 @@ No Context."
       (insert-file-contents analysis-file)
       (tibetan-analysis--ensure-claude-headings (current-buffer))
       (let ((content (buffer-string)))
-        ;; Segment-layout target: Translation + Grammar at level 2,
-        ;; Vocabulary at level 3 (inside Provided Translations).
+        ;; Segment-layout target: Translation at level 2, Vocabulary
+        ;; at level 3 inside Provided Translations, Grammar at level 3
+        ;; inside Grammar (U4).
         (should (string-match-p "^\\*\\* Claude Translation$"    content))
         (should (string-match-p "^\\*\\*\\* Claude Vocabulary$"  content))
-        (should (string-match-p "^\\*\\* Claude Grammar$"        content))
-        ;; No stray level-3 Grammar (would indicate a pre-reorder file).
-        (should-not (string-match-p "^\\*\\*\\* Claude Grammar$" content))
+        (should (string-match-p "^\\*\\* Grammar$"               content))
+        (should (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
+        ;; No stray level-2 Claude Grammar post-U4.
+        (should-not (string-match-p "^\\*\\* Claude Grammar$"    content))
         ;; Legacy bare heading GONE, no level-3 Translation left over.
         (should-not (string-match-p "^\\*\\*\\* Claude$"             content))
         (should-not (string-match-p "^\\*\\*\\* Claude Translation$" content))
@@ -273,7 +281,9 @@ No Context."
         (should (string-match-p "Old translation body" content))))))
 
 (ert-deftest tibetan-claude-sections-ensure-idempotent ()
-  "Calling --ensure-claude-headings twice does not duplicate headings."
+  "Calling --ensure-claude-headings twice does not duplicate headings.
+U4 (2026-04-24): Claude Grammar is now at level 3 nested under
+`** Grammar'; the duplicate check moves accordingly."
   (tibetan-sections-test--with-analysis
       (tibetan-sections-test--scaffold "T body" "G body")
     (with-temp-buffer
@@ -288,9 +298,9 @@ No Context."
                              count pos)))
           (should (= 1 (count-of "^\\*\\* Claude Translation$")))
           (should (= 1 (count-of "^\\*\\*\\* Claude Vocabulary$")))
-          (should (= 1 (count-of "^\\*\\* Claude Grammar$")))
-          ;; No level-3 Grammar strays created.
-          (should (= 0 (count-of "^\\*\\*\\* Claude Grammar$")))
+          (should (= 1 (count-of "^\\*\\*\\* Claude Grammar$")))
+          ;; No level-2 Grammar duplicates (U4 layout).
+          (should (= 0 (count-of "^\\*\\* Claude Grammar$")))
           ;; Context must NOT have been spontaneously created.
           (should (= 0 (count-of "^\\*\\*\\* Claude Context$"))))))))
 
@@ -298,7 +308,10 @@ No Context."
   "After migration/insertion the headings sit where the priority
 order requires:
   - `** Claude Translation' at level 2, after `** Wylie Transliteration'.
-  - `** Claude Grammar' at level 2, after Claude Translation.
+  - `** Grammar' at level 2, after Claude Translation (U4 2026-04-24:
+    `--ensure-claude-headings' synthesises this if missing so Claude
+    Grammar always has a nested home).
+  - `*** Claude Grammar' at level 3 inside `** Grammar'.
   - `*** Claude Vocabulary' at level 3 inside `** Provided Translations',
     before `*** Reference Translations'."
   (tibetan-sections-test--with-analysis
@@ -317,17 +330,23 @@ order requires:
       (let* ((content (buffer-string))
              (wylie-pos    (string-match "^\\*\\* Wylie Transliteration$" content))
              (trans-pos    (string-match "^\\*\\* Claude Translation$"    content))
-             (grammar-pos  (string-match "^\\*\\* Claude Grammar$"        content))
+             (gram-pos     (string-match "^\\*\\* Grammar$"               content))
+             (cl-gram-pos  (string-match "^\\*\\*\\* Claude Grammar$"     content))
              (provided-pos (string-match "^\\*\\* Provided Translations$" content))
              (vocab-pos    (string-match "^\\*\\*\\* Claude Vocabulary$"  content))
              (ref-pos      (string-match "^\\*\\*\\* Reference Translations$"
                                          content)))
-        (should (and wylie-pos trans-pos grammar-pos provided-pos
-                     vocab-pos ref-pos))
-        ;; Translation sits between Wylie and Provided (level-2 placement).
+        (should (and wylie-pos trans-pos gram-pos cl-gram-pos
+                     provided-pos vocab-pos ref-pos))
+        ;; Translation, Grammar, Provided Translations all at level 2
+        ;; in that order.
         (should (< wylie-pos trans-pos))
-        (should (< trans-pos grammar-pos))
-        (should (< grammar-pos provided-pos))
+        (should (< trans-pos gram-pos))
+        (should (< gram-pos provided-pos))
+        ;; Claude Grammar (level 3) sits inside Grammar (between
+        ;; Grammar heading and the next level-2 heading).
+        (should (< gram-pos cl-gram-pos))
+        (should (< cl-gram-pos provided-pos))
         ;; Vocabulary sits inside Provided, before Reference.
         (should (< provided-pos vocab-pos))
         (should (< vocab-pos ref-pos))))))
@@ -479,8 +498,9 @@ body is left untouched."
 (ert-deftest tibetan-claude-sections-insert-migrates-legacy-heading ()
   "Inserting into a segment file that still has `*** Claude' migrates
 the heading to `** Claude Translation' (level 2), creates
-`** Claude Grammar' at level 2, and inserts `*** Claude Vocabulary'
-at level 3 inside Provided Translations."
+`*** Claude Grammar' at level 3 under `** Grammar' (U4 2026-04-24 —
+`** Grammar' is synthesised if not already present), and inserts
+`*** Claude Vocabulary' at level 3 inside Provided Translations."
   (tibetan-sections-test--with-analysis
       (concat "* Tibetan Text\n"
               "བདག\n\n"
@@ -501,8 +521,10 @@ at level 3 inside Provided Translations."
       (let ((content (buffer-string)))
         (should     (string-match-p "^\\*\\* Claude Translation$"    content))
         (should     (string-match-p "^\\*\\*\\* Claude Vocabulary$"  content))
-        (should     (string-match-p "^\\*\\* Claude Grammar$"        content))
-        (should-not (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
+        (should     (string-match-p "^\\*\\* Grammar$"               content))
+        (should     (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
+        ;; Post-U4: Claude Grammar is NOT at level 2 any more.
+        (should-not (string-match-p "^\\*\\* Claude Grammar$"        content))
         (should-not (string-match-p "^\\*\\*\\* Claude$"             content))
         (should-not (string-match-p "^\\*\\*\\* Claude Translation$" content))
         ;; No spontaneous Context in segment layout.
@@ -689,8 +711,9 @@ sections, the user prompt contains the grounding block."
 (ert-deftest tibetan-claude-sections-request-end-to-end ()
   "Stubbed Claude call: a response with Translation + Vocabulary + Grammar
 \(and a Context we expect to be dropped) lands under the segment-layout
-headings — `** Claude Translation' and `** Claude Grammar' at level 2,
-`*** Claude Vocabulary' at level 3 — on the analysis file."
+headings — `** Claude Translation' at level 2, `*** Claude Grammar' at
+level 3 under `** Grammar' (U4 2026-04-24), `*** Claude Vocabulary' at
+level 3 inside Provided Translations — on the analysis file."
   (tibetan-sections-test--with-analysis
       (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
     (setq tibetan-sections-test--captured-callback nil)
@@ -733,8 +756,10 @@ headings — `** Claude Translation' and `** Claude Grammar' at level 2,
       (let ((content (buffer-string)))
         (should     (string-match-p "^\\*\\* Claude Translation$"    content))
         (should     (string-match-p "^\\*\\*\\* Claude Vocabulary$"  content))
-        (should     (string-match-p "^\\*\\* Claude Grammar$"        content))
-        (should-not (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
+        (should     (string-match-p "^\\*\\* Grammar$"               content))
+        (should     (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
+        ;; Post-U4: Claude Grammar is NOT at level 2 any more.
+        (should-not (string-match-p "^\\*\\* Claude Grammar$"        content))
         (should-not (string-match-p "^\\*\\*\\* Claude Context$"     content))))))
 
 ;; ============================================================================
