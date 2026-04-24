@@ -94,6 +94,12 @@
 ;; Thesaurus (Pass 5b) — Kramer-seeded user-editable glossary at rank 1
 (condition-case nil (require 'tibetan-thesaurus-test) (error nil))
 
+;; Zettel-in-translation-workflow (Phase 1, 2026-04-24) — index +
+;; reader over the post-reorg knowledge/zettelkasten/.  Succeeds
+;; `tibetan-thesaurus-test'; they coexist through Phase 6's
+;; migration and then the thesaurus tests retire.
+(condition-case nil (require 'tibetan-zettel-test) (error nil))
+
 ;; Source-aware Claude prompt (reads #+TIBETAN_CLAUDE_CONTEXT: and friends)
 (condition-case nil (require 'tibetan-analysis-claude-prompt-test) (error nil))
 
