@@ -1579,5 +1579,127 @@ visible while only the radio-target marker line is hidden."
       (should-not (and (listp inv)
                        (memq 'tibetan-analysis-term-anchor inv))))))
 
+;; ============================================================================
+;; U3 — Buddhist Terms subsection under ** Grammar (2026-04-24)
+;;
+;; For tokens the Steinert 84000 tables tag `<term>' (canonical
+;; Buddhist terminology — Four Immeasurables, Bodhicitta, Skandha,
+;; etc.) the Grammar section emits a `*** Buddhist Terms' subsection
+;; between `*** Claude Grammar' and `*** Particles in This Segment'
+;; carrying the 84000Definitions paragraph.  The section is omitted
+;; when no Buddhist terms are present in the segment.
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-buddhist-term-entry-p-term-tag ()
+  "An 84000Dict / 84000Definitions entry whose body starts with the
+literal `<term>' tag is classified as a Buddhist term."
+  (should (tibetan-analysis--buddhist-term-entry-p
+           '(:source "Steinert/43-84000Dict"
+             :primary "<term> four immeasurables"
+             :detailed "<term> four immeasurables"
+             :sanskrit nil
+             :wylie "tshad med bzhi po")))
+  (should (tibetan-analysis--buddhist-term-entry-p
+           '(:source "Steinert/44-84000Definitions"
+             :primary "<term> four immeasurables"
+             :detailed "<term> four immeasurables (Skt: caturapramāṇa): \\n1) The meditations on love ..."
+             :wylie "tshad med bzhi po"))))
+
+(ert-deftest tibetan-analysis-buddhist-term-entry-p-person-is-not-term ()
+  "`<person>' and `<place>' tags are NOT Buddhist terms — those
+surface via B1's dict-vs-Claude override, not the Buddhist Terms
+subsection (which is for encyclopedic terminology not proper nouns)."
+  (should-not (tibetan-analysis--buddhist-term-entry-p
+               '(:source "Steinert/43-84000Dict"
+                 :primary "<person> Cīrṇabuddhi, Trained Mind"
+                 :detailed "<person> Cīrṇabuddhi, Trained Mind"
+                 :wylie "blo sbyangs")))
+  (should-not (tibetan-analysis--buddhist-term-entry-p
+               '(:source "Steinert/43-84000Dict"
+                 :primary "<place> Vulture Peak"
+                 :wylie "bya rgod"))))
+
+(ert-deftest tibetan-analysis-buddhist-term-entry-p-non-84000-ignored ()
+  "Entries from other dictionary sources — Rangjung Yeshe, Hopkins,
+Resources — are NOT Buddhist terms for this subsection's purposes,
+even if their gloss happens to contain `<term>'.  Only 84000 tables
+use the tag systematically, and surfacing random matches from other
+sources would produce a noisy section."
+  (should-not (tibetan-analysis--buddhist-term-entry-p
+               '(:source "Steinert/02-RangjungYeshe"
+                 :primary "<term> buddha"
+                 :wylie "sangs rgyas")))
+  (should-not (tibetan-analysis--buddhist-term-entry-p
+               '(:source "Resources (provided)"
+                 :primary "Grundstein // foundation stone"
+                 :wylie "rmang rdo"))))
+
+(ert-deftest tibetan-analysis-format-buddhist-term-body-strips-term-tag ()
+  "Leading `<term>' / `<term>:' marker gets stripped; literal `\\n'
+escape sequences become real separators; long bodies are truncated."
+  (should (string=
+           (tibetan-analysis--format-buddhist-term-body
+            "<term> four immeasurables (Skt: caturapramāṇa)")
+           "four immeasurables (Skt: caturapramāṇa)"))
+  ;; Literal backslash-n sequences (as 84000 rows store them) are
+  ;; flattened.
+  (should (string-match-p
+           "meditation.*compassion"
+           (tibetan-analysis--format-buddhist-term-body
+            "<term> four immeasurables\\n1) The meditations on love, compassion, joy, equanimity")))
+  ;; Truncation.
+  (should (<= (length (tibetan-analysis--format-buddhist-term-body
+                       (make-string 500 ?x)
+                       100))
+              100)))
+
+(ert-deftest tibetan-analysis-collect-buddhist-terms-empty ()
+  "No Buddhist terms in the passage → helper returns nil → the
+`*** Buddhist Terms' subsection is omitted from the render."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_w)
+               '((:source "Steinert/02-RangjungYeshe"
+                  :primary "I, self"
+                  :wylie "bdag")))))
+    (should-not (tibetan-analysis--collect-buddhist-terms
+                 '(("བདག" . "I, self"))))))
+
+(ert-deftest tibetan-analysis-collect-buddhist-terms-single-hit ()
+  "When a token has an 84000 `<term>' entry, collect returns one
+(SCRIPT WYLIE DEFINITION) triple.  Prefers 84000Definitions body
+over 84000Dict when both are present — the Definitions row carries
+the encyclopedic paragraph, not just the dictionary gloss."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_w)
+               '((:source "Steinert/43-84000Dict"
+                  :primary "<term> four immeasurables"
+                  :detailed "<term> four immeasurables"
+                  :wylie "tshad med bzhi po")
+                 (:source "Steinert/44-84000Definitions"
+                  :primary "<term> four immeasurables"
+                  :detailed "<term> four immeasurables: love, compassion, joy, equanimity"
+                  :wylie "tshad med bzhi po")))))
+    (let ((collected
+           (tibetan-analysis--collect-buddhist-terms
+            '(("ཚད་མེད་བཞི་པོ" . "four immeasurables")))))
+      (should (= (length collected) 1))
+      ;; The Definitions body (long) wins over Dict (short).
+      (should (string-match-p "love, compassion"
+                              (nth 2 (car collected)))))))
+
+(ert-deftest tibetan-analysis-collect-buddhist-terms-dedup-by-script ()
+  "Same Tibetan term appearing twice in the segment surfaces once."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_w)
+               '((:source "Steinert/44-84000Definitions"
+                  :primary "<term> bodhicitta"
+                  :detailed "<term> bodhicitta: mind of awakening"
+                  :wylie "byang chub kyi sems")))))
+    (let ((collected
+           (tibetan-analysis--collect-buddhist-terms
+            '(("བྱང་ཆུབ་ཀྱི་སེམས" . "mind of awakening")
+              ("བྱང་ཆུབ་ཀྱི་སེམས" . "mind of awakening")))))
+      (should (= (length collected) 1)))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

@@ -2196,10 +2196,106 @@ like `la', `ni', `dang' are preserved verbatim."
      ((member x '("ra" "sa" "da" "ga")) (substring x 0 1))
      (t x))))
 
+(defun tibetan-analysis--buddhist-term-entry-p (entry)
+  "Return non-nil when ENTRY is an 84000 `<term>'-tagged Buddhist term.
+ENTRY is a plist from `tibetan-vocab-multisource-entries'.  The
+check matches on (a) `:source' containing `84000' (either 43-84000Dict
+or 44-84000Definitions — both carry the canonical-term marker) AND
+(b) `:primary' or `:detailed' starting with the literal `<term>' tag
+that Steinert's 84000 tables emit for canonical Buddhist terminology.
+
+`<person>' and `<place>' tags are intentionally NOT treated as
+Buddhist terms here — those surface via B1's rename-override path
+(commit e82e817), and the user-facing `*** Buddhist Terms' section
+is reserved for terms the reader would look up in an encyclopaedia
+of Buddhism (Four Immeasurables, Bodhicitta, Skandha, etc.)."
+  (let ((source (plist-get entry :source))
+        (primary (or (plist-get entry :primary) ""))
+        (detailed (or (plist-get entry :detailed) "")))
+    (and (stringp source)
+         (string-match-p "84000" source)
+         (or (string-prefix-p "<term>" (string-trim primary))
+             (string-prefix-p "<term>" (string-trim detailed))))))
+
+(defun tibetan-analysis--collect-buddhist-terms (enriched-vocab-pairs)
+  "Return a list of (SCRIPT WYLIE DEFINITION) for Buddhist terms in
+ENRICHED-VOCAB-PAIRS.  ENRICHED-VOCAB-PAIRS is the
+((TIBETAN-CLEAN . SHORT-MEANING) ...) alist threaded out of the
+generate-content vocab loop.
+
+For each unique token, the helper calls
+`tibetan-vocab-multisource-entries' and inspects each entry for
+Steinert 84000 `<term>'-tagged content (see
+`--buddhist-term-entry-p').  When found, the longest available
+body (`:detailed' preferred over `:primary') is taken as the
+definition — 84000Definitions routinely carries a paragraph-length
+explanation of the term's meaning, provenance, and related
+concepts, which is exactly what a student needs on first encounter.
+
+Deduplicated by Tibetan script so a term appearing twice in the
+segment surfaces only once.  Returns nil when no Buddhist terms
+are present — the caller omits the subsection entirely in that
+case."
+  (let ((seen (make-hash-table :test 'equal))
+        (results '()))
+    (when (fboundp 'tibetan-vocab-multisource-entries)
+      (dolist (pair enriched-vocab-pairs)
+        (let* ((script (car pair))
+               (entries (and script
+                             (condition-case nil
+                                 (tibetan-vocab-multisource-entries script)
+                               (error nil)))))
+          (when (and entries (not (gethash script seen)))
+            (let* ((buddhist-entries
+                    (cl-remove-if-not
+                     #'tibetan-analysis--buddhist-term-entry-p
+                     entries))
+                   ;; Prefer 84000Definitions (rank 44) over 84000Dict
+                   ;; (rank 43) when both are present — the Definitions
+                   ;; entry carries the long explanation.
+                   (best
+                    (or (cl-find-if
+                         (lambda (e)
+                           (string-match-p
+                            "84000Definitions" (plist-get e :source)))
+                         buddhist-entries)
+                        (car buddhist-entries))))
+              (when best
+                (puthash script t seen)
+                (let* ((wylie (plist-get best :wylie))
+                       (body (or (plist-get best :detailed)
+                                 (plist-get best :primary))))
+                  (when (and body (stringp body))
+                    (push (list script wylie body) results)))))))))
+    (nreverse results)))
+
+(defun tibetan-analysis--format-buddhist-term-body (body &optional max-len)
+  "Trim BODY (the 84000Definitions `:detailed' text) for display.
+Strips the leading `<term>' tag if present, converts literal `\\n'
+escape sequences to real newlines, flattens multi-paragraph bodies
+to a single line with `/ ' separators, and truncates to MAX-LEN
+characters (default 400) with an ellipsis.  The aim: a one-line
+definition compact enough to sit under a `- SCRIPT [wylie]' entry
+in the `*** Buddhist Terms' subsection."
+  (let ((max-len (or max-len 400))
+        (s (or body "")))
+    ;; Strip leading `<term> ' / `<term>:' markers.
+    (setq s (replace-regexp-in-string "\\`\\s-*<term>\\s-*:?\\s-*" "" s))
+    ;; Convert literal `\n' sequences (as they appear in 84000 rows)
+    ;; to real newlines, then flatten to single line.
+    (setq s (replace-regexp-in-string "\\\\n" " " s))
+    (setq s (replace-regexp-in-string "[ \t]*\n[ \t]*" " / " s))
+    (setq s (replace-regexp-in-string "[ \t]+" " " s))
+    (setq s (string-trim s))
+    (if (> (length s) max-len)
+        (concat (substring s 0 (- max-len 1)) "…")
+      s)))
+
 (defun tibetan-analysis--render-grammar-section (tibetan-text particles verbs
                                                               bialek-analysis
                                                               &optional
-                                                              claude-particles)
+                                                              claude-particles
+                                                              enriched-vocab-pairs)
   "Render the merged `** Grammar' section body to the current buffer.
 
 Pass 6b replaces three redundant sections (`** Particle Map',
@@ -2209,6 +2305,17 @@ Pass 6b replaces three redundant sections (`** Particle Map',
   *** Particle Map — the Wylie transliteration with particle markers
       (=CASE= for case particles, ~CONVERB~ for converbs, Ø for
       zero-marked arguments) — a quick visual scan of the grammar.
+
+  *** Claude Grammar (U4, 2026-04-24) — Claude's prose reading of
+      the passage's syntactic structure.  Placeholder emitted here;
+      body filled in by `--ensure-claude-headings' +
+      `--restore-claude-sections' after Claude responds.
+
+  *** Buddhist Terms (U3, 2026-04-24) — 84000Definitions paragraph
+      for any fixed Buddhist term (Four Immeasurables, Bodhicitta,
+      Skandha, ...) detected in the passage via the multi-source
+      dictionary stack.  Omitted when no `<term>'-tagged entries
+      are present.
 
   *** Particles in This Segment — one line per Bialek particle
       detection: type, top-level Portfolio reference, translation
@@ -2227,7 +2334,13 @@ CLAUDE-PARTICLES, when non-nil, is a list of plists (parsed via
 `(:word W :particle P :sub-id ID :label L)' for each per-occurrence
 function Claude identified.  When passed, each Bialek line gains a
 specific sub-function heading and the matching Portfolio snippet
-text.  When nil, falls back to the compact parser-only list."
+text.  When nil, falls back to the compact parser-only list.
+
+ENRICHED-VOCAB-PAIRS, when non-nil, is the
+((TIBETAN-CLEAN . SHORT-MEANING) ...) alist built upstream by the
+vocab-pairs loop — threaded in so the `*** Buddhist Terms'
+subsection can look up per-token 84000Definitions bodies.  When
+nil, the subsection is omitted."
   (insert "** Grammar\n")
   (insert "Visual particle map, Claude's prose reading of the grammar,\n")
   (insert "then per-particle Portfolio references.\n\n")
@@ -2259,7 +2372,34 @@ text.  When nil, falls back to the compact parser-only list."
   (insert "*** Claude Grammar\n")
   (insert "\n\n")
   ;; ------------------------------------------------------------------
-  ;; Sub-section 3: Particles in This Segment.
+  ;; Sub-section 3 (optional): Buddhist Terms (U3, 2026-04-24).
+  ;; One entry per token with an 84000 `<term>'-tagged Steinert hit.
+  ;; Surfaces the 84000Definitions paragraph so students meeting
+  ;; `ཚད་མེད་བཞི་པོ' (Four Immeasurables), `བྱང་ཆུབ་ཀྱི་སེམས'
+  ;; (Bodhicitta), etc. for the first time have the encyclopedia-
+  ;; style explanation inline, not buried in the Detailed Dictionary.
+  ;; Section omitted entirely when no such terms are in the passage.
+  ;; ------------------------------------------------------------------
+  (let ((terms (and enriched-vocab-pairs
+                    (fboundp 'tibetan-analysis--collect-buddhist-terms)
+                    (tibetan-analysis--collect-buddhist-terms
+                     enriched-vocab-pairs))))
+    (when terms
+      (insert "*** Buddhist Terms\n")
+      (dolist (entry terms)
+        (let* ((script (nth 0 entry))
+               (wylie (nth 1 entry))
+               (body (nth 2 entry))
+               (head (tibetan-analysis--format-word-with-wylie
+                      script))
+               (clean (tibetan-analysis--format-buddhist-term-body
+                       body 400)))
+          (insert (format "- %s\n" head))
+          (insert (format "  %s\n" clean))
+          (ignore wylie)))
+      (insert "\n")))
+  ;; ------------------------------------------------------------------
+  ;; Sub-section 4: Particles in This Segment.
   ;;
   ;; Flow per bialek detection:
   ;;   1. Compute compact header line (particle type + Portfolio ref).
@@ -3022,7 +3162,8 @@ it with `let' around the call when Claude data is available."
                                      (error nil))))
               (tibetan-analysis--render-grammar-section
                tibetan-text particles verbs bialek-analysis
-               tibetan-analysis--claude-particles-for-render))
+               tibetan-analysis--claude-particles-for-render
+               enriched-vocab-pairs))
 
             ;; ============================================================
             ;; SECTION 4: Sentence Structure (merged — Pass 6b, 2026-04-22)
