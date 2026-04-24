@@ -369,6 +369,30 @@ to the content inside the second bracket-pair following each Wylie
 link — i.e. the English / German / target-language gloss — so it
 visually pops from the surrounding Wylie and punctuation.")
 
+(defconst tibetan-analysis--term-anchor-font-lock-keywords
+  ;; Match `<<term-foo-bar>>' radio-target markers used as anchors
+  ;; for the Detailed Dictionary entries the Interlinear links point
+  ;; to.  Makes the markers invisible (display-only; the anchor is
+  ;; still present in buffer for link resolution).
+  ;;
+  ;; Why bother hiding them: the renderer emits one `<<term-xxx>>'
+  ;; line before every Detailed Dictionary `◆' entry.  Noisy on first
+  ;; view — the reader's eye lands on `<<term-...>>' before the
+  ;; Tibetan / Wylie it's actually trying to find.  Invisible
+  ;; property drops them from display while keeping the anchor
+  ;; functional, parallel to how the Particle Map's `=' / `~'
+  ;; delimiters are hidden (U6, 2026-04-24).
+  '(("<<\\(term-[a-z0-9-]+\\)>>"
+     (0 '(face nil
+          invisible tibetan-analysis-term-anchor)
+        prepend)))
+  "Font-lock keywords hiding `<<term-xxx>>' radio-target markers in
+the Detailed Dictionary section (U6, 2026-04-24).  The markers
+remain in the buffer text so `[[term-xxx][...]]' links still
+resolve; they are simply not rendered — parallel to the
+particle-map delimiter hiding in
+`tibetan-analysis--particle-map-font-lock-keywords'.")
+
 (defun tibetan-analysis-setup-faces ()
   "Setup faces for analysis buffers.
 Ensures Tibetan text remains readable at all heading levels and in
@@ -390,22 +414,29 @@ parser which doesn't fire for compound-embedded markers like
     (face-remap-add-relative 'org-verbatim :height 1.0)
     (face-remap-add-relative 'org-code :height 1.0)
 
-    ;; Register the namespaced invisibility symbol used by the
-    ;; Particle Map font-lock rules to hide `=' / `~' delimiters.
-    ;; Using a symbol (rather than `t') means only OUR markers
-    ;; become invisible — org's own invisibility regions (drawers,
-    ;; folded headings, link targets) are unaffected.
+    ;; Register the namespaced invisibility symbols:
+    ;;   · `tibetan-analysis-particle-marker' — hides `=' / `~' in
+    ;;     Particle Map (Pass 6b polish, 2026-04-22).
+    ;;   · `tibetan-analysis-term-anchor' — hides `<<term-xxx>>'
+    ;;     radio targets in Detailed Dictionary (U6, 2026-04-24).
+    ;; Using namespaced symbols (rather than `t') means only OUR
+    ;; markers become invisible — org's own invisibility regions
+    ;; (drawers, folded headings, other link targets) are unaffected.
     (add-to-invisibility-spec 'tibetan-analysis-particle-marker)
+    (add-to-invisibility-spec 'tibetan-analysis-term-anchor)
 
-    ;; Install buffer-local font-lock rules for the Particle Map markers
-    ;; AND the Interlinear gloss colour (U5).  Done buffer-locally via
-    ;; `font-lock-add-keywords' with `nil' mode so only this buffer
-    ;; picks them up.  Re-run `font-lock-flush' immediately so existing
-    ;; content gets the face on first render.
+    ;; Install buffer-local font-lock rules for the Particle Map markers,
+    ;; the Interlinear gloss colour (U5), and the term-anchor hiding
+    ;; (U6).  Done buffer-locally via `font-lock-add-keywords' with
+    ;; `nil' mode so only this buffer picks them up.  Re-run
+    ;; `font-lock-flush' immediately so existing content gets the face
+    ;; on first render.
     (font-lock-add-keywords
      nil tibetan-analysis--particle-map-font-lock-keywords 'append)
     (font-lock-add-keywords
      nil tibetan-analysis--interlinear-gloss-font-lock-keywords 'append)
+    (font-lock-add-keywords
+     nil tibetan-analysis--term-anchor-font-lock-keywords 'append)
     (when (fboundp 'font-lock-flush)
       (font-lock-flush))
 

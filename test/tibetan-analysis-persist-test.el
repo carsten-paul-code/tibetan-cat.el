@@ -1509,5 +1509,75 @@ the Detailed Dictionary are bracketed but not preceded by `]]'."
            (and (listp face)
                 (memq 'tibetan-analysis-interlinear-gloss-face face)))))))
 
+;; ============================================================================
+;; U6 — hide <<term-xxx>> radio-target markers (2026-04-24)
+;;
+;; The Detailed Dictionary emits `<<term-foo-bar>>' org radio-target
+;; lines before every `◆' entry so `[[term-foo-bar][wylie]]' links
+;; in the Interlinear can jump to the entry.  The markers are noisy
+;; on display — the reader's eye lands on `<<term-...>>' before the
+;; Tibetan / Wylie it's looking for.  Font-lock gives them the
+;; `invisible' property tagged with the namespaced symbol
+;; `tibetan-analysis-term-anchor', which is registered in the
+;; buffer-invisibility-spec so only our markers (not other org
+;; structures) are hidden.
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-term-anchor-gets-invisible-property ()
+  "After `setup-faces' runs, a `<<term-xxx>>' marker in the buffer
+carries the `invisible' text property set to
+`tibetan-analysis-term-anchor'."
+  (with-temp-buffer
+    (org-mode)
+    (insert "** Detailed Dictionary\n"
+            "<<term-tshad-med-bzhi-po>>\n"
+            "◆ ཚད་མེད་བཞི་པོ [tshad med bzhi po]\n")
+    (setq tibetan-analysis--faces-setup nil)
+    (tibetan-analysis-setup-faces)
+    (font-lock-ensure (point-min) (point-max))
+    (goto-char (point-min))
+    (re-search-forward "<<term-tshad-med-bzhi-po>>")
+    (let* ((mid (1+ (match-beginning 0)))  ; inside the marker
+           (inv (get-text-property mid 'invisible)))
+      (should (or (eq inv 'tibetan-analysis-term-anchor)
+                  (and (listp inv)
+                       (memq 'tibetan-analysis-term-anchor inv)))))))
+
+(ert-deftest tibetan-analysis-term-anchor-in-invisibility-spec ()
+  "After `setup-faces' runs, the buffer's invisibility-spec includes
+`tibetan-analysis-term-anchor' so the invisible property actually
+takes effect visually (not just as a text attribute)."
+  (with-temp-buffer
+    (org-mode)
+    (insert "** Detailed Dictionary\n<<term-foo>>\n")
+    (setq tibetan-analysis--faces-setup nil)
+    (tibetan-analysis-setup-faces)
+    (should (or (eq buffer-invisibility-spec t)
+                (and (listp buffer-invisibility-spec)
+                     (or (memq 'tibetan-analysis-term-anchor
+                               buffer-invisibility-spec)
+                         (assq 'tibetan-analysis-term-anchor
+                               buffer-invisibility-spec)))))))
+
+(ert-deftest tibetan-analysis-term-anchor-does-not-hide-regular-link-text ()
+  "The hiding regex `<<term-...>>' must NOT match ordinary link
+text like `[[term-foo][wylie]]' — that keeps the clickable Wylie
+visible while only the radio-target marker line is hidden."
+  (with-temp-buffer
+    (org-mode)
+    (insert "** Interlinear Gloss\n"
+            "[[term-bdag][bdag]] [I, self]\n")
+    (setq tibetan-analysis--faces-setup nil)
+    (tibetan-analysis-setup-faces)
+    (font-lock-ensure (point-min) (point-max))
+    (goto-char (point-min))
+    (re-search-forward "\\[bdag\\]")
+    ;; The `bdag' link text must NOT be marked invisible.
+    (let* ((bdag-pos (1+ (match-beginning 0)))
+           (inv (get-text-property bdag-pos 'invisible)))
+      (should-not (eq inv 'tibetan-analysis-term-anchor))
+      (should-not (and (listp inv)
+                       (memq 'tibetan-analysis-term-anchor inv))))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
