@@ -1,7 +1,7 @@
 #+TITLE: Zettel in Translation Workflow — Feature Design
 #+DATE: 2026-04-24
 #+AUTHOR: Carsten Paul + Claude
-#+STATUS: v1 approved — Phase 1 shipped, Phase 2 next
+#+STATUS: v1 approved — Phases 1 + 2 shipped, Phase 3 next
 
 * Intent
 
@@ -391,7 +391,7 @@ stale links on demand.
 | Phase | Goal                                                | Files                                                | Status    |
 |-------+-----------------------------------------------------+------------------------------------------------------+-----------|
 | 1     | Zettel index + reader (new schema + back-compat)    | =core/tibetan-zettel.el= NEW                         | *shipped 07ce8a5* |
-| 2     | Interlinear + DD integration (rank 2, ♦ mark)       | =analysis/tibetan-interlinear.el=, =vocabulary-detailed.el= | next |
+| 2     | Interlinear + DD integration (rank 2, ♦ mark)       | =analysis/tibetan-interlinear.el=, =vocabulary-detailed.el= | *shipped fdbb321* |
 | 3     | Auto-creation for ~<term>~-tagged missing tokens    | =core/tibetan-zettel.el=, =persist/tibetan-analysis-persist.el= | pending |
 | 4     | Claude-cache write path                              | =persist/tibetan-analysis-claude.el=                 | pending   |
 | 5     | Buddhist Terms reads from zettel cache               | =persist/tibetan-analysis-persist.el=                | pending   |
@@ -518,6 +518,9 @@ fixed spec.
 | 2026-04-24  | Claude   | Updated doc to "v1 approved"; Phase 1 cleared    |
 | 2026-04-24  | Claude   | Phase 1 shipped (=07ce8a5=): index + reader +    |
 |             |          | 18 regression tests; suite 1507 / 1506 / 0 / 1   |
+| 2026-04-24  | Claude   | Phase 2 shipped (=fdbb321=): rank-2 injection    |
+|             |          | + Interlinear ♦ + id-link; +10 tests; suite      |
+|             |          | 1517 / 1516 / 0 / 1                              |
 
 * Success criteria
 
