@@ -239,6 +239,81 @@
     :example "Reference Translations preservation invariant"
     :tags (:paragraph :references :preservation :critical))
 
+  (spec "Scaffold creates an Apparatus section between Auto-Analysis and Footnotes"
+    :given (let* ((tmpdir (make-temp-file "tibetan-par-app" t))
+                  (source (expand-file-name "comp.org" tmpdir))
+                  (analysis-dir (expand-file-name "analysis" tmpdir)))
+             (make-directory analysis-dir)
+             (cl-letf (((symbol-function 'tibetan-analysis-get-folder)
+                        (lambda () analysis-dir)))
+               (tibetan-analysis-create-paragraph-file
+                42 "བདུད།" source "** Wylie\nbdud\n" nil)
+               (setq result (with-temp-buffer
+                              (insert-file-contents
+                               (expand-file-name "par-042.org" analysis-dir))
+                              (buffer-string)))))
+    :when result
+    :then ((tibetan-bdd-assert-contains result "* Apparatus"
+            "Apparatus section emitted")
+           ;; Position invariant: Apparatus must appear after Auto-Analysis
+           ;; and before Footnotes in the new scaffold.
+           (should (let ((auto (string-match "^\\* Auto-Analysis" result))
+                         (app (string-match "^\\* Apparatus" result))
+                         (foot (string-match "^\\* Footnotes" result)))
+                     (and auto app foot
+                          (< auto app)
+                          (< app foot)))))
+    :example "par-042.org scaffold ordering with Apparatus"
+    :tags (:paragraph :apparatus :scaffold :critical))
+
+  (spec "Apparatus preserved across reanalyze"
+    :given (let* ((tmpdir (make-temp-file "tibetan-par-app-pres" t))
+                  (source (expand-file-name "comp.org" tmpdir))
+                  (analysis-dir (expand-file-name "analysis" tmpdir))
+                  (analysis-file (expand-file-name "par-042.org" analysis-dir)))
+             (make-directory analysis-dir)
+             (cl-letf (((symbol-function 'tibetan-analysis-get-folder)
+                        (lambda () analysis-dir)))
+               (tibetan-analysis-create-paragraph-file
+                42 "བདུད།" source "** Wylie\nbdud\n" nil)
+               ;; Simulate user editing the apparatus
+               (with-temp-buffer
+                 (insert-file-contents analysis-file)
+                 (goto-char (point-min))
+                 (search-forward "* Apparatus")
+                 (forward-line 2)
+                 (insert "B2: rang lugs | H: gzhan lugs (fn. 55) — B2/G stützen rang.\n")
+                 (write-file analysis-file))
+               (tibetan-analysis-regenerate-auto
+                analysis-file "བདུད།" "** Wylie\nbdud REGEN\n")
+               (setq result (with-temp-buffer
+                              (insert-file-contents analysis-file)
+                              (buffer-string)))))
+    :when result
+    :then ((tibetan-bdd-assert-contains result "B2: rang lugs | H: gzhan lugs"
+            "User edits to apparatus survive reanalyze")
+           (tibetan-bdd-assert-contains result "bdud REGEN"
+            "Auto-Analysis IS regenerated"))
+    :example "Apparatus preservation invariant"
+    :tags (:paragraph :apparatus :preservation :critical))
+
+  (spec "Segment files (seg-NNN.org) get NO empty Apparatus on reanalyze"
+    :given (let* ((tmpdir (make-temp-file "tibetan-seg-noapp" t))
+                  (analysis-file (expand-file-name "seg-001.org" tmpdir)))
+             (with-temp-file analysis-file
+               (insert "#+TITLE: Segment 1\n#+TIBETAN_HASH: x\n\n* Tibetan Text\nFoo།\n\n* My Notes\n\n\n* Working Translation\n\n\n* Auto-Analysis\n** Wylie\nfoo /\n\n* Footnotes\n"))
+             (tibetan-analysis-regenerate-auto
+              analysis-file "Foo།" "** Wylie\nfoo REGEN\n")
+             (setq result (with-temp-buffer
+                            (insert-file-contents analysis-file)
+                            (buffer-string))))
+    :when result
+    :then ((should-not (string-match-p "^\\* Apparatus" result))
+           (tibetan-bdd-assert-contains result "foo REGEN"
+            "Segment Auto-Analysis still regenerates"))
+    :example "Seg files unaffected by Apparatus addition"
+    :tags (:segment :apparatus :backwards-compat :critical))
+
   (spec "References written into par-NNN.org scaffold"
     :given (let* ((tmpdir (make-temp-file "tibetan-par-refs" t))
                   (source (expand-file-name "Rgyan-comparative.org" tmpdir))

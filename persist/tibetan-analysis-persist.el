@@ -609,6 +609,12 @@ written filepath."
       (insert ":END:\n\n")
       (insert auto-content)
       (insert "\n\n")
+      (insert "* Apparatus\n")
+      (insert "# Variants, philological notes, cross-references to "
+              "Lopez/H/G/K/R/L footnotes.  Lives here (in the analysis "
+              "file) rather than in the comparative source so the "
+              "philological work is co-located with the translation "
+              "work; the comparative source stays read-only.\n\n\n")
       (insert "* Footnotes\n\n"))
     filepath))
 
@@ -704,6 +710,7 @@ when absent (e.g. seg-NNN.org), it's simply omitted from the alist."
         (dolist (section-name '("My Notes"
                                 "Working Translation"
                                 "Reference Translations"
+                                "Apparatus"
                                 "Footnotes"))
           (let ((bounds (tibetan-analysis-find-section-bounds (current-buffer) section-name)))
             (when bounds
@@ -743,6 +750,8 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
           (cdr (assoc "Working Translation" user-sections)))
          (reference-translations
           (cdr (assoc "Reference Translations" user-sections)))
+         (apparatus
+          (cdr (assoc "Apparatus" user-sections)))
          (footnotes
           (cdr (assoc "Footnotes" user-sections)))
          (hash (tibetan-analysis-compute-hash tibetan-text))
@@ -811,6 +820,16 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
       (insert ":END:\n\n")
       (insert auto-content)
       (insert "\n\n")
+      ;; Apparatus — paragraph-only section, preserved verbatim if
+      ;; present.  Created by `tibetan-analysis-create-paragraph-file'
+      ;; for new par-NNN.org files; absent from seg-NNN.org and from
+      ;; pre-Apparatus par-NNN.org files.  Conditional emission keeps
+      ;; segment-reanalyze backwards-compatible (no empty Apparatus
+      ;; appears in seg files).
+      (when apparatus
+        (insert apparatus)
+        (unless (string-suffix-p "\n\n" apparatus)
+          (insert "\n")))
       (insert (or footnotes "* Footnotes\n\n"))
       (save-buffer)
       (message "Re-analyzed segment. User notes preserved and reshaped."))))
