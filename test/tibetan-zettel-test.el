@@ -1106,5 +1106,195 @@ overwrites the cache."
       (should     (string-match-p "meditation on love" rendered))
       (should-not (string-match-p "via zettel cache" rendered)))))
 
+;; ============================================================================
+;; Phase 6 — Migrate Pass-5b Thesaurus zettels into the main zettelkasten
+;;
+;; The Pass-5b Thesaurus stores zettels as Kramer-format files in
+;; `~/Documents/tibetan-thesaurus/' with body fields:
+;;   #+title: <Sanskrit>
+;;   ** Tibetan
+;;   - Wylie: <wylie>
+;;   ** English / ** German
+;;   - Primary translation: <gloss>
+;;
+;; Migration walks SOURCE-DIR, parses each via the Pass-5b reader, and
+;; writes a v2-schema zettel into TARGET-DIR (default
+;; `tibetan-zettel-directory') — properties drawer with `:wylie:',
+;; `:preferred-de:', `:preferred-en:', etc., plus the Denote `__glossar'
+;; tag in the filename so Phase-1 detection picks it up.
+;;
+;; Idempotent: when a zettel for the wylie already exists in the target,
+;; the source file is left in place and skipped from the migration.
+;; ============================================================================
+
+(defun tibetan-zettel-test--write-pass5b-fixture (filename body)
+  "Write a Pass-5b Kramer-format zettel into the fixture tempdir's
+SOURCE/ subdir.  Returns absolute path."
+  (let ((source-dir (expand-file-name "source"
+                                      tibetan-zettel-test--tempdir)))
+    (make-directory source-dir t)
+    (let ((path (expand-file-name filename source-dir)))
+      (with-temp-file path (insert body))
+      path)))
+
+(ert-deftest tibetan-zettel-migrate-thesaurus-creates-v2-zettel ()
+  "A single Pass-5b file → one v2-schema zettel in TARGET-DIR with
+the right properties drawer and the `__glossar' detection tag in
+the filename."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((source-dir (file-name-as-directory
+                        (expand-file-name "source"
+                                          tibetan-zettel-test--tempdir)))
+           (target-dir (file-name-as-directory
+                        (expand-file-name "target"
+                                          tibetan-zettel-test--tempdir)))
+           (tibetan-zettel-directory target-dir))
+      (make-directory target-dir t)
+      (tibetan-zettel-test--write-pass5b-fixture
+       "kramer-bdag.org"
+       (tibetan-zettel-test--v1-fixture
+        :id "20250522T144758"
+        :wylie "bdag"
+        :sanskrit "ātman"
+        :primary-en "I, self"
+        :primary-de "ich, Selbst"))
+      (let* ((report (tibetan-zettel-migrate-thesaurus
+                      source-dir target-dir)))
+        (should (= 1 (plist-get report :migrated)))
+        (should (= 0 (plist-get report :skipped)))
+        ;; Reload index and confirm the migrated zettel is reachable.
+        (tibetan-zettel-reload)
+        (let ((entry (tibetan-zettel-lookup "bdag")))
+          (should entry)
+          (should (equal (plist-get entry :wylie) "bdag"))
+          (should (equal (plist-get entry :preferred-en) "I, self"))
+          (should (equal (plist-get entry :preferred-de) "ich, Selbst"))
+          (should (equal (plist-get entry :sanskrit) "ātman"))
+          (should (equal (plist-get entry :id) "20250522T144758"))
+          ;; Filename carries the __glossar tag.
+          (should (string-match-p "__glossar"
+                                  (plist-get entry :path))))))))
+
+(ert-deftest tibetan-zettel-migrate-thesaurus-idempotent ()
+  "Running migration twice doesn't duplicate.  The second run sees
+the wylie already in the target zettelkasten and skips."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((source-dir (file-name-as-directory
+                        (expand-file-name "source"
+                                          tibetan-zettel-test--tempdir)))
+           (target-dir (file-name-as-directory
+                        (expand-file-name "target"
+                                          tibetan-zettel-test--tempdir)))
+           (tibetan-zettel-directory target-dir))
+      (make-directory target-dir t)
+      (tibetan-zettel-test--write-pass5b-fixture
+       "kramer-bdag.org"
+       (tibetan-zettel-test--v1-fixture
+        :wylie "bdag" :primary-en "I, self"))
+      (tibetan-zettel-migrate-thesaurus source-dir target-dir)
+      ;; Run again.
+      (let ((report (tibetan-zettel-migrate-thesaurus
+                     source-dir target-dir)))
+        (should (= 0 (plist-get report :migrated)))
+        (should (= 1 (plist-get report :skipped)))
+        ;; Target dir has exactly one .org file.
+        (should (= 1 (length (directory-files target-dir nil "\\.org\\'"))))))))
+
+(ert-deftest tibetan-zettel-migrate-thesaurus-dry-run ()
+  "Dry-run mode reports what WOULD happen but writes nothing.
+Source and target dirs unchanged after the call."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((source-dir (file-name-as-directory
+                        (expand-file-name "source"
+                                          tibetan-zettel-test--tempdir)))
+           (target-dir (file-name-as-directory
+                        (expand-file-name "target"
+                                          tibetan-zettel-test--tempdir)))
+           (tibetan-zettel-directory target-dir))
+      (make-directory target-dir t)
+      (tibetan-zettel-test--write-pass5b-fixture
+       "kramer-bdag.org"
+       (tibetan-zettel-test--v1-fixture
+        :wylie "bdag" :primary-en "I, self"))
+      (let ((report (tibetan-zettel-migrate-thesaurus
+                     source-dir target-dir t)))
+        (should (= 1 (plist-get report :migrated))) ; would-have-migrated
+        (should (plist-get report :dry-run))
+        ;; Target dir is empty — nothing written.
+        (should (null (directory-files target-dir nil "\\.org\\'")))))))
+
+(ert-deftest tibetan-zettel-migrate-thesaurus-multiple-files ()
+  "Migration walks every .org in SOURCE-DIR and aggregates counts."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((source-dir (file-name-as-directory
+                        (expand-file-name "source"
+                                          tibetan-zettel-test--tempdir)))
+           (target-dir (file-name-as-directory
+                        (expand-file-name "target"
+                                          tibetan-zettel-test--tempdir)))
+           (tibetan-zettel-directory target-dir))
+      (make-directory target-dir t)
+      (tibetan-zettel-test--write-pass5b-fixture
+       "k1.org" (tibetan-zettel-test--v1-fixture
+                 :wylie "bdag" :primary-en "self"))
+      (tibetan-zettel-test--write-pass5b-fixture
+       "k2.org" (tibetan-zettel-test--v1-fixture
+                 :wylie "chos" :primary-en "dharma"))
+      (tibetan-zettel-test--write-pass5b-fixture
+       "k3.org" (tibetan-zettel-test--v1-fixture
+                 :wylie "sangs rgyas" :primary-en "buddha"))
+      ;; A non-.org file in source must be ignored.
+      (with-temp-file (expand-file-name "README.txt" source-dir)
+        (insert "not a zettel"))
+      (let ((report (tibetan-zettel-migrate-thesaurus
+                     source-dir target-dir)))
+        (should (= 3 (plist-get report :migrated)))
+        (should (= 0 (plist-get report :skipped)))
+        (tibetan-zettel-reload)
+        (should (tibetan-zettel-lookup "bdag"))
+        (should (tibetan-zettel-lookup "chos"))
+        (should (tibetan-zettel-lookup "sangs rgyas"))))))
+
+(ert-deftest tibetan-zettel-migrate-thesaurus-skips-malformed ()
+  "Malformed Pass-5b files (no `- Wylie:' field) are reported as
+errors but don't abort the migration."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((source-dir (file-name-as-directory
+                        (expand-file-name "source"
+                                          tibetan-zettel-test--tempdir)))
+           (target-dir (file-name-as-directory
+                        (expand-file-name "target"
+                                          tibetan-zettel-test--tempdir)))
+           (tibetan-zettel-directory target-dir))
+      (make-directory target-dir t)
+      (tibetan-zettel-test--write-pass5b-fixture
+       "k1.org" (tibetan-zettel-test--v1-fixture
+                 :wylie "bdag" :primary-en "self"))
+      ;; Malformed: no Wylie field at all.
+      (tibetan-zettel-test--write-pass5b-fixture
+       "broken.org" "#+title: bogus\nno wylie field here\n")
+      (let ((report (tibetan-zettel-migrate-thesaurus
+                     source-dir target-dir)))
+        (should (= 1 (plist-get report :migrated)))
+        (should (= 1 (plist-get report :errors)))))))
+
+(ert-deftest tibetan-zettel-migrate-thesaurus-empty-source ()
+  "Empty / non-existent source dir → all-zero report, no error."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((source-dir (file-name-as-directory
+                        (expand-file-name "source"
+                                          tibetan-zettel-test--tempdir)))
+           (target-dir (file-name-as-directory
+                        (expand-file-name "target"
+                                          tibetan-zettel-test--tempdir)))
+           (tibetan-zettel-directory target-dir))
+      (make-directory source-dir t)
+      (make-directory target-dir t)
+      (let ((report (tibetan-zettel-migrate-thesaurus
+                     source-dir target-dir)))
+        (should (= 0 (plist-get report :migrated)))
+        (should (= 0 (plist-get report :skipped)))
+        (should (= 0 (plist-get report :errors)))))))
+
 (provide 'tibetan-zettel-test)
 ;;; tibetan-zettel-test.el ends here

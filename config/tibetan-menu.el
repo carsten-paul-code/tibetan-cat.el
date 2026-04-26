@@ -137,6 +137,10 @@
       tibetan-zettel-auto-create-from-current-analysis
       :help "Phase 3: walk the current analysis buffer's `*** Buddhist Terms' subsection; for every <term>-tagged token without a zettel, offer to create one seeded with the 84000 Definitions body"
       :active (fboundp 'tibetan-zettel-auto-create-from-current-analysis)]
+     ["Migrate Pass-5b Thesaurus → Zettelkasten (C-c u z M)"
+      tibetan-zettel-migrate-thesaurus
+      :help "Phase 6: one-shot import of legacy Kramer-format zettels at ~/Documents/tibetan-thesaurus/ into v2 zettels under knowledge/zettelkasten/.  Idempotent — re-runs skip already-migrated terms.  C-u for dry-run."
+      :active (fboundp 'tibetan-zettel-migrate-thesaurus)]
      "---"
      ["Open Zettelkasten Folder" (lambda () (interactive)
                                    (dired "~/buddhist-studies/knowledge/zettelkasten/"))

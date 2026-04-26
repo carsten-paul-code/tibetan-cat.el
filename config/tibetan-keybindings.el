@@ -289,6 +289,15 @@
   ;; `tibetan-zettel-auto-create-on-buddhist-term' (default `ask' —
   ;; per-term y-or-n-p prompt; set to `always' for silent creation).
 
+(define-key tibetan-thesaurus-prefix-map (kbd "M")
+  'tibetan-zettel-migrate-thesaurus)
+  ;; Phase 6 of zettel-in-translation-workflow (2026-04-26): one-shot
+  ;; migration of legacy Pass-5b Kramer-format zettels at
+  ;; `~/Documents/tibetan-thesaurus/' into v2 zettels under
+  ;; `~/buddhist-studies/knowledge/zettelkasten/'.  Idempotent —
+  ;; subsequent runs skip already-migrated terms.  Pass C-u for
+  ;; dry-run (reports what would migrate without writing).
+
 (global-set-key (kbd "C-c u z") tibetan-thesaurus-prefix-map)
 
 ;; ============================================================================

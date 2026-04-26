@@ -881,5 +881,152 @@ run `C-c u R' to regenerate, or there are no <term>-tagged tokens"))
       (message "tibetan-zettel: %d created, %d already existed, %d declined"
                created skipped declined))))
 
+;; ============================================================================
+;; Phase 6 — Migrate Pass-5b Thesaurus zettels into the main zettelkasten
+;; ============================================================================
+;;
+;; The Pass-5b Thesaurus stored zettels at `~/Documents/tibetan-thesaurus/'
+;; in a Kramer body-section format (see `tibetan-thesaurus--parse-file' for
+;; the parser; the format predates the post-2026-04-24 reorg that pulls
+;; all notes under `~/buddhist-studies/knowledge/zettelkasten/').  Phase 6
+;; migrates that legacy data into the main zettelkasten with the v2
+;; schema (PROPERTIES drawer with `:wylie:' / `:preferred-de:' /
+;; `:preferred-en:' / `:sanskrit:' / `:ID:'), so the rank-1 Thesaurus
+;; source in `tibetan-vocab-multisource-entries' can eventually retire
+;; in favour of the rank-2 Zettel source covering everything.
+;;
+;; Migration is intentionally one-time + reversible-by-deletion: source
+;; files are LEFT IN PLACE (user can delete `~/Documents/tibetan-
+;; thesaurus/' manually after verifying the migration).  Idempotent:
+;; if the wylie already has a zettel in the target, the source is
+;; skipped.
+
+(defun tibetan-zettel--migrate-one-pass5b (path target-dir dry-run)
+  "Migrate a single Pass-5b file at PATH into TARGET-DIR.
+Returns a symbol describing the outcome:
+  `migrated' — wrote a new v2 zettel.
+  `skipped'  — wylie already has a zettel in TARGET-DIR.
+  `error'    — couldn't parse PATH (no `- Wylie:' field, etc.).
+
+DRY-RUN non-nil → don't actually write; just compute and return
+the symbol that WOULD have been the outcome."
+  (condition-case _err
+      (if (not (fboundp 'tibetan-thesaurus--parse-file))
+          'error
+        (let ((parsed (tibetan-thesaurus--parse-file path)))
+          (cond
+           ((null parsed) 'error)
+           ((tibetan-zettel-lookup (plist-get parsed :wylie))
+            'skipped)
+           (dry-run 'migrated)
+           (t
+            (let* ((wylie (plist-get parsed :wylie))
+                   (id (or (plist-get parsed :id)
+                           (tibetan-zettel--denote-timestamp)))
+                   (slug (tibetan-zettel--slug-from-wylie wylie))
+                   (filename (format "%s--%s__glossar.org" id slug))
+                   (out-path (expand-file-name filename target-dir))
+                   (sanskrit (plist-get parsed :sanskrit))
+                   (pref-en (or (plist-get parsed :primary-en)
+                                "[to be researched]"))
+                   (pref-de (or (plist-get parsed :primary-de)
+                                "[to be researched]"))
+                   (title (if sanskrit
+                              (format "%s — %s" wylie sanskrit)
+                            wylie)))
+              (unless (file-directory-p target-dir)
+                (make-directory target-dir t))
+              (with-temp-file out-path
+                (insert (format "#+TITLE: %s\n" title))
+                (insert ":PROPERTIES:\n")
+                (insert (format ":ID:           %s\n" id))
+                (insert (format ":wylie:        %s\n" wylie))
+                (when sanskrit
+                  (insert (format ":sanskrit:     %s\n" sanskrit)))
+                (insert (format ":preferred-de: %s\n" pref-de))
+                (insert (format ":preferred-en: %s\n" pref-en))
+                (insert (format ":migrated-from: %s\n"
+                                (file-name-nondirectory path)))
+                (insert (format ":migrated-on:   %s\n"
+                                (format-time-string "%Y-%m-%d")))
+                (insert ":END:\n\n")
+                (insert "* Notes\n\n\n")
+                (insert "* Claude Explanation\n")
+                (insert ":PROPERTIES:\n:TERM_CACHE: t\n:END:\n\n")
+                (insert "[awaiting first analysis]\n\n")
+                (insert "* Back-links\n")
+                (insert ":PROPERTIES:\n:TERM_CACHE: t\n:END:\n\n"))
+              'migrated)))))
+    (error 'error)))
+
+;;;###autoload
+(defun tibetan-zettel-migrate-thesaurus (&optional source-dir target-dir dry-run)
+  "Migrate Pass-5b Thesaurus zettels from SOURCE-DIR into TARGET-DIR.
+SOURCE-DIR defaults to `tibetan-thesaurus-directory' (the legacy
+location, typically `~/Documents/tibetan-thesaurus/').
+TARGET-DIR defaults to `tibetan-zettel-directory'
+(`~/buddhist-studies/knowledge/zettelkasten/').
+
+Walks every .org file in SOURCE-DIR; for each, parses via the
+Pass-5b reader and writes a v2-schema zettel into TARGET-DIR.  The
+new file is named `<ID>--<slug>__glossar.org' so Phase-1 detection
+picks it up.  The original PROPERTIES `:ID:' is preserved when
+present.  The new file carries `:migrated-from:' and `:migrated-on:'
+properties for traceability.
+
+Idempotent: if the target zettelkasten already has an entry for
+the wylie, the source is skipped (its file in SOURCE-DIR is left
+untouched — user can delete after verifying).
+
+DRY-RUN non-nil prints what would happen without writing.
+
+Returns a plist `(:migrated N :skipped M :errors K [:dry-run t])'
+suitable for messaging.  Reloads `tibetan-zettel--index' on
+success so the migrated zettels are immediately reachable via
+`tibetan-zettel-lookup'.
+
+Interactive: prompts for SOURCE-DIR + TARGET-DIR, defaults from
+the variables above.  Pass C-u for dry-run."
+  (interactive
+   (list (read-directory-name
+          "Source (Pass-5b thesaurus): "
+          (and (boundp 'tibetan-thesaurus-directory)
+               tibetan-thesaurus-directory))
+         (read-directory-name
+          "Target (zettelkasten): "
+          tibetan-zettel-directory)
+         current-prefix-arg))
+  (let* ((source-dir (expand-file-name
+                      (or source-dir
+                          (and (boundp 'tibetan-thesaurus-directory)
+                               tibetan-thesaurus-directory)
+                          (error "No SOURCE-DIR and no `tibetan-thesaurus-directory'"))))
+         (target-dir (expand-file-name
+                      (or target-dir tibetan-zettel-directory)))
+         (migrated 0)
+         (skipped 0)
+         (errors 0))
+    (when (file-directory-p source-dir)
+      (dolist (path (directory-files source-dir t "\\.org\\'"))
+        (when (file-regular-p path)
+          (cl-case (tibetan-zettel--migrate-one-pass5b
+                    path target-dir dry-run)
+            (migrated (cl-incf migrated))
+            (skipped  (cl-incf skipped))
+            (error    (cl-incf errors))))))
+    (unless dry-run
+      (tibetan-zettel-reload))
+    (let ((report (list :migrated migrated
+                        :skipped skipped
+                        :errors errors)))
+      (when dry-run
+        (setq report (append report (list :dry-run t))))
+      (when (called-interactively-p 'any)
+        (message
+         "tibetan-zettel migrate-thesaurus%s: %d migrated, %d skipped, %d errors"
+         (if dry-run " (dry-run)" "")
+         migrated skipped errors))
+      report)))
+
 (provide 'tibetan-zettel)
 ;;; tibetan-zettel.el ends here
