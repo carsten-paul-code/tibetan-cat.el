@@ -371,9 +371,41 @@ Examples:
            (s (replace-regexp-in-string "\\`-\\|-\\'" "" s)))
       s)))
 
+(defvar tibetan-zettel--last-denote-timestamp nil
+  "Last `--denote-timestamp' value handed out, for collision avoidance.
+Two zettels created in rapid succession would otherwise share an
+ID (the YYYYMMDDTHHMMSS format has one-second resolution).  When
+the clock would produce a value equal to or earlier than this,
+the function bumps to one second later instead.")
+
 (defun tibetan-zettel--denote-timestamp ()
-  "Return the current time as a Denote-style `YYYYMMDDTHHMMSS' string."
-  (format-time-string "%Y%m%dT%H%M%S"))
+  "Return a Denote-style `YYYYMMDDTHHMMSS' timestamp, guaranteed
+unique against previous calls within the running Emacs session.
+
+Production case: clock advances normally, every call returns a
+later value than the last.
+
+Collision case: two creates in the same second → the second one
+gets `last + 1 second' instead of the clock value, preserving
+uniqueness.  Users will essentially never notice; tests that
+batch-create benefit directly."
+  (let ((clock (format-time-string "%Y%m%dT%H%M%S")))
+    (when (and tibetan-zettel--last-denote-timestamp
+               ;; clock <= last  ⇔  not (last < clock)
+               (not (string< tibetan-zettel--last-denote-timestamp clock)))
+      (setq clock (let* ((prev tibetan-zettel--last-denote-timestamp)
+                         (year  (string-to-number (substring prev 0 4)))
+                         (month (string-to-number (substring prev 4 6)))
+                         (day   (string-to-number (substring prev 6 8)))
+                         (hour  (string-to-number (substring prev 9 11)))
+                         (min   (string-to-number (substring prev 11 13)))
+                         (sec   (string-to-number (substring prev 13 15))))
+                    (format-time-string
+                     "%Y%m%dT%H%M%S"
+                     (time-add (encode-time sec min hour day month year)
+                               1)))))
+    (setq tibetan-zettel--last-denote-timestamp clock)
+    clock))
 
 (defun tibetan-zettel--denote-filename (timestamp slug)
   "Assemble the canonical auto-created zettel filename.
@@ -1027,6 +1059,206 @@ the variables above.  Pass C-u for dry-run."
          (if dry-run " (dry-run)" "")
          migrated skipped errors))
       report)))
+
+;; ============================================================================
+;; Phase 7 — Back-link maintenance + GC (2026-04-26)
+;; ============================================================================
+;;
+;; Each zettel has a `* Back-links' section that accumulates
+;; `[[id:SEG-ID][label]]' entries pointing at every analysis file that
+;; referenced the zettel.  Maintained two ways:
+;;
+;; (a) Auto-add via the post-pass that walks an analysis buffer's
+;;     Interlinear `[[id:...]]' links and adds an entry for the
+;;     analysis's own :ID: to each referenced zettel.  Idempotent
+;;     (dedups on the source-id).
+;;
+;; (b) GC command that prunes entries whose target no longer resolves
+;;     via `org-id-find' — for when seg files get moved, deleted, or
+;;     re-IDed.  Manual / on-demand; never automatic, since deletion
+;;     of a back-link is irreversible without grep-bisecting the
+;;     zettel's history.
+
+(defun tibetan-zettel--read-source-label (analysis-file)
+  "Compute a short label for ANALYSIS-FILE — the file's basename
+(without extension), used as link text in back-link entries."
+  (when analysis-file
+    (file-name-base analysis-file)))
+
+(defun tibetan-zettel--add-back-link (zettel-path source-id source-label)
+  "Append `[[id:SOURCE-ID][SOURCE-LABEL]]' to ZETTEL-PATH's
+`* Back-links' section.  Idempotent — when an entry with the same
+SOURCE-ID is already present, no write happens.
+
+Returns t on a fresh add, nil on dedup-skip."
+  (when (and zettel-path source-id (file-readable-p zettel-path))
+    (let ((existing (with-temp-buffer
+                      (insert-file-contents zettel-path)
+                      (and (string-match
+                            (format "\\[\\[id:%s\\]"
+                                    (regexp-quote source-id))
+                            (buffer-string))
+                           t))))
+      (unless existing
+        (let ((content (with-temp-buffer
+                         (insert-file-contents zettel-path)
+                         (buffer-string))))
+          (with-temp-file zettel-path
+            (insert content)
+            (goto-char (point-min))
+            (when (re-search-forward "^\\* Back-links[ \t]*$" nil t)
+              ;; Skip optional :PROPERTIES: drawer attached to the
+              ;; heading.
+              (forward-line 1)
+              (when (looking-at-p "^:PROPERTIES:")
+                (re-search-forward "^:END:[ \t]*\n" nil t))
+              ;; Find the end of the section's body — the next
+              ;; top-level `* ' heading or end-of-buffer — and
+              ;; insert the new link just before it.
+              (let ((insert-point
+                     (save-excursion
+                       (if (re-search-forward "^\\* " nil t)
+                           (line-beginning-position)
+                         (point-max)))))
+                (goto-char insert-point)
+                ;; Make sure we're on a fresh line; the back-link
+                ;; bullet starts at column 0.
+                (unless (or (bobp) (eq (char-before) ?\n))
+                  (insert "\n"))
+                (insert (format "- [[id:%s][%s]]\n"
+                                source-id (or source-label source-id)))))))
+        t))))
+
+(defun tibetan-zettel--collect-zettel-id-links (buffer)
+  "Return the list of zettel `:ID:' strings referenced by
+`[[id:...]]' org links in BUFFER.  Deduped, order-preserved.
+
+Used by `--update-back-links-from-current-analysis' to find every
+zettel touched by an analysis (the Phase-2 Interlinear emits
+`[[id:ZETTEL-ID][wylie]]' links for tokens with zettels)."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (let ((seen (make-hash-table :test 'equal))
+            (out '()))
+        (while (re-search-forward "\\[\\[id:\\([^]]+\\)\\]" nil t)
+          (let ((id (match-string-no-properties 1)))
+            (unless (gethash id seen)
+              (puthash id t seen)
+              (push id out))))
+        (nreverse out)))))
+
+(defun tibetan-zettel--zettel-path-for-id (zettel-id)
+  "Return the on-disk path for the zettel whose `:ID:' is ZETTEL-ID,
+or nil.  Walks the index — fast — rather than calling org-id-find
+which would re-scan the world."
+  (let ((index (tibetan-zettel--ensure-index))
+        (found nil))
+    (maphash (lambda (_wylie entry)
+               (when (and (not found)
+                          (equal (plist-get entry :id) zettel-id))
+                 (setq found (plist-get entry :path))))
+             index)
+    found))
+
+;;;###autoload
+(defun tibetan-zettel-update-back-links-from-current-analysis ()
+  "Walk the current analysis buffer's `[[id:ZETTEL-ID]]' links
+(emitted by Phase-2's Interlinear renderer) and add a back-link
+to every referenced zettel pointing at the current analysis's
+own `:ID:'.
+
+Signals `user-error' when the buffer has no top-level :ID:
+property — back-links need a stable target.  Returns the count of
+zettels that gained a fresh link (deduped).
+
+Bound to `C-c u z L' (NOT to be confused with `C-c u z l' which
+lists thesaurus entries — different module).  Also reachable from
+the Tibetan menu."
+  (interactive)
+  (let* ((source-file (or (buffer-file-name)
+                          (error "Buffer has no file")))
+         (source-id
+          (with-temp-buffer
+            (insert-file-contents source-file)
+            (goto-char (point-min))
+            (when (re-search-forward
+                   "^[ \t]*:ID:[ \t]+\\(\\S-+\\)[ \t]*$" nil t)
+              (match-string 1))))
+         (source-label (tibetan-zettel--read-source-label source-file))
+         (added 0))
+    (unless source-id
+      (user-error "No top-level :ID: in this buffer — \
+add `:PROPERTIES:\n:ID: <unique>\n:END:' before back-link maintenance"))
+    (dolist (zettel-id (tibetan-zettel--collect-zettel-id-links
+                         (current-buffer)))
+      (let ((zpath (tibetan-zettel--zettel-path-for-id zettel-id)))
+        (when (and zpath
+                   (tibetan-zettel--add-back-link
+                    zpath source-id source-label))
+          (cl-incf added))))
+    (when (called-interactively-p 'any)
+      (message "tibetan-zettel: %d back-link%s added"
+               added (if (= 1 added) "" "s")))
+    added))
+
+;;;###autoload
+(defun tibetan-zettel-gc-back-links ()
+  "Walk every zettel's `* Back-links' section and prune entries whose
+`[[id:...]]' target no longer resolves via `org-id-find'.
+
+Manual / on-demand: never automatic, since back-link removal is
+irreversible without grep-bisecting the zettel's history.  Pair
+with the existing `auto-create' (Phase 3) and `migrate-thesaurus'
+(Phase 6) workflows for a clean zettelkasten.
+
+Returns `(:scanned N :pruned M)' as message + value."
+  (interactive)
+  (let ((scanned 0) (pruned 0)
+        (dir (expand-file-name tibetan-zettel-directory)))
+    (when (file-directory-p dir)
+      (dolist (path (directory-files dir t "\\.org\\'"))
+        (when (and (file-regular-p path)
+                   (tibetan-zettel--translation-relevant-p path))
+          (cl-incf scanned)
+          (let* ((content (with-temp-buffer
+                            (insert-file-contents path)
+                            (buffer-string)))
+                 (start 0)
+                 (broken-ids '()))
+            ;; Collect the IDs in the Back-links section.
+            (when (string-match "^\\* Back-links[ \t]*$" content)
+              (let ((sec-start (match-end 0))
+                    (sec-end (or (and (string-match
+                                       "^\\* " content
+                                       (match-end 0))
+                                      (match-beginning 0))
+                                 (length content)))
+                    (rx "\\[\\[id:\\([^]]+\\)\\]"))
+                (setq start sec-start)
+                (while (and (< start sec-end)
+                            (string-match rx content start))
+                  (let ((id (match-string 1 content)))
+                    (unless (and (fboundp 'org-id-find)
+                                 (org-id-find id))
+                      (push id broken-ids)))
+                  (setq start (match-end 0)))))
+            (when broken-ids
+              (with-temp-file path
+                (insert content)
+                (dolist (id broken-ids)
+                  (goto-char (point-min))
+                  (when (re-search-forward
+                         (format "^- \\[\\[id:%s\\].*\n?"
+                                 (regexp-quote id))
+                         nil t)
+                    (replace-match "")
+                    (cl-incf pruned))))
+              (tibetan-zettel-reload))))))
+    (when (called-interactively-p 'any)
+      (message "tibetan-zettel gc-back-links: scanned %d zettels, pruned %d broken back-links"
+               scanned pruned))
+    (list :scanned scanned :pruned pruned)))
 
 (provide 'tibetan-zettel)
 ;;; tibetan-zettel.el ends here

@@ -1296,5 +1296,172 @@ errors but don't abort the migration."
         (should (= 0 (plist-get report :skipped)))
         (should (= 0 (plist-get report :errors)))))))
 
+;; ============================================================================
+;; Phase 7 — Back-link maintenance + GC
+;;
+;; Each zettel's `* Back-links' section accumulates `[[id:SEG-ID][label]]'
+;; entries pointing at every analysis file that referenced the zettel.
+;; Maintained:
+;;   · auto-add when an analysis is generated (via the post-pass that
+;;     walks the Interlinear's `[[id:...]]' links).
+;;   · explicit GC command prunes entries whose target is no longer
+;;     resolvable (file deleted, ID changed, etc.).
+;;
+;; Idempotent: re-running maintenance on the same analysis adds nothing
+;; (dedup by source-ID).
+;; ============================================================================
+
+;; -------- Primitive: add a back-link entry --------------------------------
+
+(ert-deftest tibetan-zettel-add-back-link-empty-section ()
+  "First back-link goes under an empty `* Back-links' section
+(scaffold drawer in place but no entries)."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (path (tibetan-zettel--create-for-term :wylie "bdag")))
+      (tibetan-zettel--add-back-link path "seg-016-id" "seg-016")
+      (let ((content (with-temp-buffer
+                       (insert-file-contents path)
+                       (buffer-string))))
+        (should (string-match-p "\\[\\[id:seg-016-id\\]\\[seg-016\\]\\]"
+                                content))))))
+
+(ert-deftest tibetan-zettel-add-back-link-dedup ()
+  "Adding the same source-id twice doesn't produce two entries."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (path (tibetan-zettel--create-for-term :wylie "bdag")))
+      (tibetan-zettel--add-back-link path "seg-016-id" "seg-016")
+      (tibetan-zettel--add-back-link path "seg-016-id" "seg-016")
+      (let* ((content (with-temp-buffer
+                        (insert-file-contents path)
+                        (buffer-string)))
+             (count 0)
+             (start 0))
+        (while (string-match "\\[\\[id:seg-016-id\\]" content start)
+          (cl-incf count)
+          (setq start (match-end 0)))
+        (should (= 1 count))))))
+
+(ert-deftest tibetan-zettel-add-back-link-preserves-existing ()
+  "Adding a new back-link leaves earlier entries intact."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (path (tibetan-zettel--create-for-term :wylie "bdag")))
+      (tibetan-zettel--add-back-link path "seg-001-id" "seg-001")
+      (tibetan-zettel--add-back-link path "seg-002-id" "seg-002")
+      (let ((content (with-temp-buffer
+                       (insert-file-contents path)
+                       (buffer-string))))
+        (should (string-match-p "id:seg-001-id" content))
+        (should (string-match-p "id:seg-002-id" content))))))
+
+;; -------- Update-from-analysis: walk Interlinear id-links ----------------
+
+(defun tibetan-zettel-test--analysis-with-interlinear-fixture
+    (analysis-id zettel-ids)
+  "Return an analysis-buffer body string with ANALYSIS-ID at the top
+and Interlinear entries linking to each ZETTEL-ID."
+  (concat
+   ":PROPERTIES:\n"
+   (format ":ID: %s\n" analysis-id)
+   ":END:\n"
+   "#+TITLE: Analysis test\n\n"
+   "* Auto-Analysis\n"
+   "** Interlinear Gloss\n"
+   (mapconcat
+    (lambda (zid) (format "[[id:%s][token-%s]] [gloss for %s]" zid zid zid))
+    zettel-ids " ")
+   "\n"))
+
+(ert-deftest tibetan-zettel-update-back-links-from-analysis ()
+  "Walks the analysis buffer's Interlinear `[[id:...]]' links and
+adds a back-link to every referenced zettel."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (zettel1 (tibetan-zettel--create-for-term :wylie "bdag"))
+           (zettel2 (tibetan-zettel--create-for-term :wylie "chos"))
+           (id1 (plist-get (tibetan-zettel-lookup "bdag") :id))
+           (id2 (plist-get (tibetan-zettel-lookup "chos") :id))
+           (analysis-path
+            (tibetan-zettel-test--write
+             "seg-016.org"
+             (tibetan-zettel-test--analysis-with-interlinear-fixture
+              "analysis-016-id" (list id1 id2)))))
+      (with-current-buffer (find-file-noselect analysis-path)
+        (unwind-protect
+            (let ((added (tibetan-zettel-update-back-links-from-current-analysis)))
+              (should (= 2 added))
+              (let ((c1 (with-temp-buffer
+                          (insert-file-contents zettel1)
+                          (buffer-string)))
+                    (c2 (with-temp-buffer
+                          (insert-file-contents zettel2)
+                          (buffer-string))))
+                (should (string-match-p "id:analysis-016-id" c1))
+                (should (string-match-p "id:analysis-016-id" c2))))
+          (kill-buffer))))))
+
+(ert-deftest tibetan-zettel-update-back-links-from-analysis-no-id ()
+  "When the analysis buffer has no top-level :ID:, the helper signals
+a clear `user-error' rather than silently no-oping or writing
+broken file: links."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (analysis-path
+            (tibetan-zettel-test--write
+             "seg-016.org"
+             "#+TITLE: no id here\n* Auto-Analysis\n** Interlinear Gloss\n[[id:foo][bar]]\n")))
+      (with-current-buffer (find-file-noselect analysis-path)
+        (unwind-protect
+            (should-error
+             (tibetan-zettel-update-back-links-from-current-analysis)
+             :type 'user-error)
+          (kill-buffer))))))
+
+(ert-deftest tibetan-zettel-update-back-links-no-id-links ()
+  "An analysis buffer with no `[[id:...]]' references → 0 added."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (analysis-path
+            (tibetan-zettel-test--write
+             "seg-016.org"
+             ":PROPERTIES:\n:ID: x\n:END:\n* Auto-Analysis\n** Interlinear Gloss\n[[term-bdag][bdag]] [gloss]\n")))
+      (with-current-buffer (find-file-noselect analysis-path)
+        (unwind-protect
+            (should (= 0 (tibetan-zettel-update-back-links-from-current-analysis)))
+          (kill-buffer))))))
+
+;; -------- GC: prune broken back-links --------------------------------------
+
+(ert-deftest tibetan-zettel-gc-back-links-prunes-broken ()
+  "GC walks every zettel's Back-links and removes entries whose
+`[[id:...]]' target is no longer resolvable in `org-id-locations'."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (path (tibetan-zettel--create-for-term :wylie "bdag")))
+      (tibetan-zettel--add-back-link path "still-alive" "alive")
+      (tibetan-zettel--add-back-link path "deleted-segment" "ghost")
+      ;; Stub `org-id-find' to resolve only `still-alive'.
+      (cl-letf (((symbol-function 'org-id-find)
+                 (lambda (id &rest _)
+                   (and (equal id "still-alive") "/tmp/alive.org"))))
+        (let ((report (tibetan-zettel-gc-back-links)))
+          (should (= 1 (plist-get report :pruned)))
+          (let ((content (with-temp-buffer
+                           (insert-file-contents path)
+                           (buffer-string))))
+            (should     (string-match-p "id:still-alive" content))
+            (should-not (string-match-p "id:deleted-segment" content))))))))
+
+(ert-deftest tibetan-zettel-gc-back-links-empty ()
+  "GC over a directory with no zettels (or no back-links) returns
+zero pruned, no error."
+  (tibetan-zettel-test--with-fixture-dir
+    (let ((tibetan-zettel-directory tibetan-zettel-test--tempdir))
+      (let ((report (tibetan-zettel-gc-back-links)))
+        (should (= 0 (plist-get report :pruned)))
+        (should (= 0 (plist-get report :scanned)))))))
+
 (provide 'tibetan-zettel-test)
 ;;; tibetan-zettel-test.el ends here

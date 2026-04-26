@@ -141,6 +141,14 @@
       tibetan-zettel-migrate-thesaurus
       :help "Phase 6: one-shot import of legacy Kramer-format zettels at ~/Documents/tibetan-thesaurus/ into v2 zettels under knowledge/zettelkasten/.  Idempotent — re-runs skip already-migrated terms.  C-u for dry-run."
       :active (fboundp 'tibetan-zettel-migrate-thesaurus)]
+     ["Update Back-links from Current Analysis (C-c u z U)"
+      tibetan-zettel-update-back-links-from-current-analysis
+      :help "Phase 7: walk the current analysis buffer's Interlinear `[[id:ZETTEL-ID]]' links and add a back-link to each referenced zettel pointing at this analysis's :ID:.  Idempotent."
+      :active (fboundp 'tibetan-zettel-update-back-links-from-current-analysis)]
+     ["GC Broken Back-links (C-c u z G)"
+      tibetan-zettel-gc-back-links
+      :help "Phase 7: scan every zettel's `* Back-links' and prune entries whose target is no longer resolvable via `org-id-find'.  Manual / on-demand only — back-link removal is irreversible."
+      :active (fboundp 'tibetan-zettel-gc-back-links)]
      "---"
      ["Open Zettelkasten Folder" (lambda () (interactive)
                                    (dired "~/buddhist-studies/knowledge/zettelkasten/"))

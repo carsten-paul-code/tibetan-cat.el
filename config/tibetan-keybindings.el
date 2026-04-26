@@ -298,6 +298,23 @@
   ;; subsequent runs skip already-migrated terms.  Pass C-u for
   ;; dry-run (reports what would migrate without writing).
 
+(define-key tibetan-thesaurus-prefix-map (kbd "U")
+  'tibetan-zettel-update-back-links-from-current-analysis)
+  ;; Phase 7 of zettel-in-translation-workflow (2026-04-26): walk the
+  ;; current analysis buffer's `[[id:ZETTEL-ID]]' Interlinear links
+  ;; (Phase 2's ♦-marker output) and add a back-link to every
+  ;; referenced zettel pointing at the current analysis's `:ID:'.
+  ;; Idempotent — re-runs dedup against existing entries.  `U' for
+  ;; "Update back-links".
+
+(define-key tibetan-thesaurus-prefix-map (kbd "G")
+  'tibetan-zettel-gc-back-links)
+  ;; Phase 7 of zettel-in-translation-workflow (2026-04-26): GC-walk
+  ;; every zettel's `* Back-links' section and prune entries whose
+  ;; `[[id:...]]' target is no longer resolvable.  Manual / on-demand
+  ;; only — back-link removal is irreversible without grep-bisecting
+  ;; history, so we never auto-fire this.  `G' for Garbage-collect.
+
 (global-set-key (kbd "C-c u z") tibetan-thesaurus-prefix-map)
 
 ;; ============================================================================
