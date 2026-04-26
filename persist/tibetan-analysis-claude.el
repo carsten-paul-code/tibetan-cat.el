@@ -556,6 +556,284 @@ empty so the prompt builder can skip it cleanly."
               "authoritative.\n\n" body))))
 
 ;; ----------------------------------------------------------------------------
+;; Translation Comparison (paragraph-only feature, separate command)
+;; ----------------------------------------------------------------------------
+;;
+;; Refreshes the `* Translation Comparison' section of a par-NNN.org
+;; analysis file: reads the available translations (Lopez 2006,
+;; Wangjié & Mulligan, future DharmaMitra, plus the user's
+;; `* Working Translation' if present), asks Claude for a pairwise
+;; similarity matrix (0 = essentially incomparable, 1 = identical;
+;; pure content + grammatical agreement) plus a diagnostic block
+;; explaining substantive divergences, and writes the result back
+;; into the file as an org-table + prose.
+;;
+;; Bound to `C-c u T'.  Separate from `C-c u R' (reanalyze) so the
+;; matrix doesn't get silently overwritten — it's an explicit
+;; comparison snapshot the user requests.
+
+(defun tibetan-analysis--collect-paragraph-translations (analysis-file)
+  "Return alist of (label . body) for translations in ANALYSIS-FILE.
+Sources, in order:
+  - `** <Translator>' subsections under `* Reference Translations'
+    (Lopez, Wangjié, future DharmaMitra…)
+  - `* Working Translation' top-level body (the user's own German
+    rendering), labeled `Working Translation', omitted when empty.
+Returns nil when neither source has populated content."
+  (when (and analysis-file (file-exists-p analysis-file))
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (let ((collected '()))
+        ;; (a) Reference Translations top-level section
+        (goto-char (point-min))
+        (when (re-search-forward "^\\* Reference Translations\\b" nil t)
+          (let ((section-end
+                 (save-excursion
+                   (if (re-search-forward "^\\* " nil t)
+                       (line-beginning-position)
+                     (point-max)))))
+            (while (re-search-forward "^\\*\\* \\(.+?\\)[ \t]*$"
+                                      section-end t)
+              (let* ((label (string-trim (match-string 1)))
+                     (body-start
+                      (save-excursion (forward-line 1) (point)))
+                     (body-end
+                      (save-excursion
+                        (goto-char body-start)
+                        (if (re-search-forward "^\\*+ " section-end t)
+                            (line-beginning-position)
+                          section-end)))
+                     (body (string-trim
+                            (buffer-substring-no-properties
+                             body-start body-end))))
+                (when (not (string-empty-p body))
+                  (push (cons label body) collected))))))
+        ;; (b) Working Translation top-level section (the user's own)
+        (goto-char (point-min))
+        (when (re-search-forward "^\\* Working Translation\\b" nil t)
+          (let* ((body-start (save-excursion (forward-line 1) (point)))
+                 (body-end
+                  (save-excursion
+                    (goto-char body-start)
+                    (if (re-search-forward "^\\* " nil t)
+                        (line-beginning-position)
+                      (point-max))))
+                 (body (string-trim
+                        (buffer-substring-no-properties
+                         body-start body-end))))
+            (when (and body (not (string-empty-p body))
+                       ;; Skip placeholder-only sections
+                       (not (string-match-p "\\`#" body)))
+              (push (cons "Working Translation" body) collected))))
+        (nreverse collected)))))
+
+(defun tibetan-analysis--build-comparison-prompts (tibetan-text translations)
+  "Return (SYSTEM . USER) prompt cons for the translation comparison.
+TIBETAN-TEXT is the source paragraph; TRANSLATIONS is alist of
+(label . body) pairs as returned by
+`tibetan-analysis--collect-paragraph-translations'.
+
+The system prompt frames Claude as an evaluator scoring pairwise
+content + grammatical similarity on a 0–1 scale.  The user prompt
+lays out the source + each translation labeled, and requests two
+markdown sections (`## Comparison Matrix' and `## Diagnostic')."
+  (let* ((labels (mapcar #'car translations))
+         (system
+          (concat
+           "You are evaluating multiple translations of the same "
+           "Classical Tibetan passage for content and grammatical "
+           "similarity.  Produce TWO sections in markdown, in this "
+           "order and nothing else:\n\n"
+           "## Comparison Matrix\n"
+           "A symmetric markdown table with one row and one column "
+           "per translation.  Pairwise score from 0 (essentially "
+           "incomparable in content + grammar — different verb, "
+           "different argument structure, different sentence "
+           "boundaries) to 1.00 (identical / paraphrase-only).  "
+           "Diagonal is 1.00.  Score with two decimals.  No prose "
+           "in this section, just the table.\n\n"
+           "## Diagnostic\n"
+           "2–3 short paragraphs covering, in order:\n"
+           "1. Where the translations agree (the shared backbone).\n"
+           "2. Where they diverge meaningfully and WHY — Tibetan "
+           "ambiguity / interpretive choice / different segmentation "
+           "/ register / philological reading.  Quote the relevant "
+           "Tibetan / Wylie in italics.\n"
+           "3. Which reading the Tibetan grammar best supports, "
+           "and a one-sentence verdict on each non-diagonal pair "
+           "where the score is below 0.80."))
+         (user
+          (concat
+           "Tibetan source:\n\n"
+           tibetan-text
+           "\n\nTranslations:\n\n"
+           (mapconcat
+            (lambda (tr)
+              (format "- *%s:*\n%s" (car tr) (cdr tr)))
+            translations
+            "\n\n")
+           "\n\nLabels for the matrix axes (use exactly these):\n"
+           (mapconcat (lambda (l) (format "  - %s" l))
+                      labels "\n")
+           "\n\nProduce the two sections now.")))
+    (cons system user)))
+
+(defun tibetan-analysis--parse-comparison-response (response)
+  "Parse Claude's translation-comparison RESPONSE.
+Returns plist (:matrix STRING :diagnostic STRING) where:
+  :matrix     is the markdown / org-compatible table block (the
+              `| ... |' lines) extracted from the `## Comparison
+              Matrix' section, or nil when no table was emitted.
+  :diagnostic is the prose body of the `## Diagnostic' section
+              (everything after the heading until end-of-response),
+              or nil when absent."
+  (when (and response (stringp response))
+    (let (matrix diagnostic)
+      ;; Matrix: extract ALL `|`-bounded lines that follow the
+      ;; `## Comparison Matrix' heading until the next `##' or end.
+      (when (string-match "^## Comparison Matrix[ \t]*\n+\\(\\(?:\\(?:|.*\\|[ \t]*\\)\n\\)+\\)"
+                          response)
+        (setq matrix (string-trim (match-string 1 response))))
+      ;; Diagnostic: everything between `## Diagnostic' and end.
+      (when (string-match "^## Diagnostic[ \t]*\n+\\(\\(?:.\\|\n\\)+\\)\\'"
+                          response)
+        (setq diagnostic (string-trim (match-string 1 response))))
+      (when (or matrix diagnostic)
+        (list :matrix matrix :diagnostic diagnostic)))))
+
+(defun tibetan-analysis--write-comparison-section (analysis-file matrix-org diagnostic)
+  "Write `* Translation Comparison' section into ANALYSIS-FILE.
+MATRIX-ORG is the org-table body (string of `| ... |' rows).
+DIAGNOSTIC is the prose body.  Either may be nil; the section is
+still emitted if at least one is present.
+
+Position invariant: the section sits between `* Working Translation'
+and `* Auto-Analysis'.  If a `* Translation Comparison' section
+already exists, it's replaced in place; otherwise inserted at the
+canonical position.  Idempotent."
+  (with-current-buffer (find-file-noselect analysis-file)
+    (save-excursion
+      (goto-char (point-min))
+      ;; If already present, delete the existing block first.
+      (when (re-search-forward "^\\* Translation Comparison\\b" nil t)
+        (let ((start (line-beginning-position))
+              (end (save-excursion
+                     (forward-line 1)
+                     (if (re-search-forward "^\\* " nil t)
+                         (line-beginning-position)
+                       (point-max)))))
+          (delete-region start end)))
+      ;; Insertion point: just before `* Auto-Analysis', or before
+      ;; first `* ' heading after `* Working Translation', or at end.
+      (goto-char (point-min))
+      (cond
+       ((re-search-forward "^\\* Auto-Analysis\\b" nil t)
+        (beginning-of-line))
+       ((re-search-forward "^\\* Working Translation\\b" nil t)
+        (forward-line 1)
+        (if (re-search-forward "^\\* " nil t)
+            (beginning-of-line)
+          (goto-char (point-max))))
+       (t (goto-char (point-max))))
+      (let ((block
+             (concat
+              "* Translation Comparison\n"
+              "# Pairwise content + grammatical similarity (0 = "
+              "incomparable, 1 = identical).  Refresh via C-c u T.\n\n"
+              (when matrix-org (concat matrix-org "\n\n"))
+              (when diagnostic (concat diagnostic "\n\n")))))
+        (insert block))
+      (save-buffer))))
+
+;;;###autoload
+(defun tibetan-translation-comparison-refresh ()
+  "Refresh the `* Translation Comparison' section of the current par-NNN.org.
+Collects all available translations (Lopez, Wangjié, future
+Mitra, plus the user's `* Working Translation' if non-empty),
+asks Claude to score them pairwise (0 = incomparable, 1 =
+identical) and explain divergences, and rewrites the section.
+Bound to `C-c u T'.
+
+Requires gptel + a configured Anthropic API key.  Errors are
+surfaced via `message' rather than signalled."
+  (interactive)
+  (let* ((analysis-file (buffer-file-name))
+         (label (and analysis-file
+                     (file-name-nondirectory analysis-file))))
+    (unless (and analysis-file
+                 (string-match-p "/par-[0-9]+\\(?:-.*\\)?\\.org\\'"
+                                 analysis-file))
+      (error "Not in a par-NNN.org analysis file"))
+    (let* ((translations
+            (tibetan-analysis--collect-paragraph-translations analysis-file))
+           (tibetan-text
+            (with-temp-buffer
+              (insert-file-contents analysis-file)
+              (goto-char (point-min))
+              (when (re-search-forward "^\\* Tibetan Text\\b" nil t)
+                (let* ((body-start
+                        (save-excursion (forward-line 1) (point)))
+                       (body-end
+                        (save-excursion
+                          (goto-char body-start)
+                          (if (re-search-forward "^\\* " nil t)
+                              (line-beginning-position)
+                            (point-max)))))
+                  (string-trim
+                   (buffer-substring-no-properties body-start body-end)))))))
+      (when (or (null translations) (< (length translations) 2))
+        (error "Need at least 2 translations to compare; found %d"
+               (length (or translations '()))))
+      (when (or (null tibetan-text) (string-empty-p tibetan-text))
+        (error "Could not read Tibetan source from analysis file"))
+      (require 'tibetan-claude-queue)
+      (tibetan-claude-queue-submit
+       (lambda (done)
+         (condition-case err
+             (progn
+               (unless (and (featurep 'gptel) (fboundp 'gptel-request))
+                 (error "gptel not loaded"))
+               (tibetan-analysis--ensure-gptel-ready)
+               (let* ((prompts (tibetan-analysis--build-comparison-prompts
+                                tibetan-text translations))
+                      (gptel-cache '(system)))
+                 (gptel-request
+                  (cdr prompts)
+                  :system (car prompts)
+                  :callback
+                  (lambda (response info)
+                    (condition-case cb-err
+                        (cond
+                         ((stringp response)
+                          (let ((parsed
+                                 (tibetan-analysis--parse-comparison-response
+                                  response)))
+                            (if parsed
+                                (progn
+                                  (tibetan-analysis--write-comparison-section
+                                   analysis-file
+                                   (plist-get parsed :matrix)
+                                   (plist-get parsed :diagnostic))
+                                  (message
+                                   "Translation comparison refreshed: %s"
+                                   label))
+                              (message
+                               "Translation comparison: response unparseable"))))
+                         ((tibetan-analysis--claude-status-rate-limited-p info)
+                          (message "Translation comparison: rate-limited; try again shortly"))
+                         (t (message
+                             "Translation comparison: no response (%S)"
+                             info)))
+                      (error (message "Translation comparison callback error: %s"
+                                      (error-message-string cb-err))))
+                    (funcall done))))
+               nil)
+           (error (message "Translation comparison failed: %s"
+                           (error-message-string err))
+                  (funcall done))))
+       :label (format "tcomp:%s" (or label "?"))))))
+
+;; ----------------------------------------------------------------------------
 ;; Reference-translations context (paragraph analysis files only)
 ;; ----------------------------------------------------------------------------
 

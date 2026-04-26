@@ -710,6 +710,7 @@ when absent (e.g. seg-NNN.org), it's simply omitted from the alist."
         (dolist (section-name '("My Notes"
                                 "Working Translation"
                                 "Reference Translations"
+                                "Translation Comparison"
                                 "Apparatus"
                                 "Footnotes"))
           (let ((bounds (tibetan-analysis-find-section-bounds (current-buffer) section-name)))
@@ -750,6 +751,8 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
           (cdr (assoc "Working Translation" user-sections)))
          (reference-translations
           (cdr (assoc "Reference Translations" user-sections)))
+         (translation-comparison
+          (cdr (assoc "Translation Comparison" user-sections)))
          (apparatus
           (cdr (assoc "Apparatus" user-sections)))
          (footnotes
@@ -813,6 +816,14 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
       (when reference-translations
         (insert reference-translations)
         (unless (string-suffix-p "\n\n" reference-translations)
+          (insert "\n")))
+      ;; Translation Comparison — paragraph-only, refreshed by an
+      ;; explicit `C-c u T' (NOT by reanalyze).  Preserved verbatim
+      ;; here so a regular reanalyze doesn't silently overwrite the
+      ;; user's last comparison snapshot.
+      (when translation-comparison
+        (insert translation-comparison)
+        (unless (string-suffix-p "\n\n" translation-comparison)
           (insert "\n")))
       (insert "* Auto-Analysis\n")
       (insert ":PROPERTIES:\n")

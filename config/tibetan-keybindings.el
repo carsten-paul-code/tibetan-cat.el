@@ -130,6 +130,24 @@
   ;; - Also available via Menu: Tibetan > Batch Analyze All Segments
 
 ;; ============================================================================
+;; TRANSLATION COMPARISON - C-c u T
+;; ============================================================================
+
+(global-set-key (kbd "C-c u T") 'tibetan-translation-comparison-refresh)
+  ;; Refresh the `* Translation Comparison' section of the current
+  ;; par-NNN.org analysis file:
+  ;; - Collects Lopez 2006 / Wangjié & Mulligan / DharmaMitra / etc.
+  ;;   from `* Reference Translations' AND the user's own
+  ;;   `* Working Translation' (if non-empty)
+  ;; - Asks Claude for a pairwise similarity matrix (0 = essentially
+  ;;   incomparable, 1.00 = identical) and a diagnostic explaining
+  ;;   substantive divergences
+  ;; - Writes the result back as an org-table + prose between
+  ;;   Working Translation and Auto-Analysis
+  ;; - Idempotent: existing Translation Comparison block is replaced
+  ;; - Separate from C-c u R reanalyze (preserved on reanalyze)
+
+;; ============================================================================
 ;; COMBINED DOCUMENT - C-c u C
 ;; ============================================================================
 
