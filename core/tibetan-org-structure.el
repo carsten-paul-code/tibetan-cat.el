@@ -264,6 +264,87 @@ exists, or if point is not in a paragraph."
                   (string-trim text)))))))
     (error nil)))
 
+(defconst tibetan-org--paragraph-source-prefixes
+  '("tibetisch" "tibetan" "tibetan text")
+  "Lower-cased heading-prefix patterns for the *source* sub-heading
+(the Tibetan text itself).  Excluded from reference-translation
+extraction.")
+
+(defconst tibetan-org--paragraph-non-reference-prefixes
+  '("wylie"
+    "eigene übersetzung" "eigene uebersetzung"
+    "working translation"
+    "apparat" "notes" "notizen" "my notes" "footnotes"
+    "claude")
+  "Lower-cased heading-prefix patterns for sub-sections that are
+NOT reference translations (transliteration, user draft, philological
+notes, Claude-generated content).  Excluded together with the source
+prefixes; everything else under `** §N' is treated as a reference
+translation.")
+
+(defun tibetan-org--paragraph-reference-section-p (heading)
+  "Return non-nil if HEADING names a reference-translation sub-section.
+A reference is any sub-section that is NOT the source (Tibetisch)
+and NOT a structural / scratch / philological sibling."
+  (let ((nh (downcase (string-trim heading))))
+    (not (or (cl-some (lambda (p) (string-prefix-p p nh))
+                      tibetan-org--paragraph-source-prefixes)
+             (cl-some (lambda (p) (string-prefix-p p nh))
+                      tibetan-org--paragraph-non-reference-prefixes)))))
+
+(defun tibetan-org-get-paragraph-references ()
+  "Return alist of (heading . body) for reference-translation siblings.
+Walks every direct `***'-child of the enclosing `** §N' paragraph
+heading.  Skips the Tibetan source, transliteration, user draft,
+and philological-note sections (see
+`tibetan-org--paragraph-source-prefixes' and
+`tibetan-org--paragraph-non-reference-prefixes').  Empty bodies are
+filtered out.  Returns nil when point is not inside a paragraph or
+when no reference-translation siblings exist.
+
+Designed for the Rgyan-comparative.org layout
+  ** §N
+  *** Tibetisch (B2)        ← skipped (source)
+  *** Wylie                 ← skipped
+  *** Lopez 2006            ← extracted
+  *** Wangjié & Mulligan    ← extracted
+  *** Eigene Übersetzung    ← skipped (user draft)
+  *** Apparat und Notizen   ← skipped (philology)
+but generic to any §-based document with translation siblings."
+  (condition-case nil
+      (save-excursion
+        (when (tibetan-org--goto-paragraph-heading)
+          (save-restriction
+            (org-narrow-to-subtree)
+            (goto-char (point-min))
+            (let ((refs '()))
+              (while (re-search-forward "^\\*\\{3,\\}[ \t]+\\(.+?\\)[ \t]*$"
+                                        nil t)
+                (let ((heading (string-trim (match-string 1))))
+                  (when (tibetan-org--paragraph-reference-section-p heading)
+                    (let* ((body-start
+                            (save-excursion
+                              (forward-line 1)
+                              (when (looking-at-p "[ \t]*:PROPERTIES:[ \t]*$")
+                                (when (re-search-forward
+                                       "^[ \t]*:END:[ \t]*$" nil t)
+                                  (forward-line 1)))
+                              (point)))
+                           (body-end
+                            (save-excursion
+                              (goto-char body-start)
+                              (if (re-search-forward "^\\*+ " nil t)
+                                  (line-beginning-position)
+                                (point-max))))
+                           (body (string-trim
+                                  (buffer-substring-no-properties
+                                   body-start body-end))))
+                      (when (not (string-empty-p body))
+                        (push (cons heading body) refs))))))
+              (widen)
+              (nreverse refs)))))
+    (error nil)))
+
 ;;; Sentence Functions
 
 (defun tibetan-org-get-sentence-segments ()

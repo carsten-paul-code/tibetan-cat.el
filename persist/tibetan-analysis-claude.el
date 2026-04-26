@@ -553,6 +553,64 @@ empty so the prompt builder can skip it cleanly."
               "authoritative.\n\n" body))))
 
 ;; ----------------------------------------------------------------------------
+;; Reference-translations context (paragraph analysis files only)
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-analysis--format-reference-translations (analysis-file)
+  "Return the `* Reference Translations' block for the Claude user prompt.
+Reads the top-level `* Reference Translations' section of
+ANALYSIS-FILE and formats its `**'-subsections (one per translator —
+Lopez, Wangjié, DharmaMitra, …) as labeled context blocks.  Returns
+nil when:
+  - the section is absent (e.g. seg-NNN.org without paragraph imports);
+  - all `**'-subsection bodies are empty.
+Instructs Claude to cross-check its translation against the references
+and flag substantive divergences in the `## Grammar' section."
+  (when (and analysis-file (file-exists-p analysis-file))
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (goto-char (point-min))
+      (when (re-search-forward "^\\* Reference Translations\\b" nil t)
+        (let ((section-end
+               (save-excursion
+                 (if (re-search-forward "^\\* " nil t)
+                     (line-beginning-position)
+                   (point-max))))
+              (refs '()))
+          (while (re-search-forward "^\\*\\* \\(.+?\\)[ \t]*$"
+                                    section-end t)
+            (let* ((heading (string-trim (match-string 1)))
+                   (body-start
+                    (save-excursion (forward-line 1) (point)))
+                   (body-end
+                    (save-excursion
+                      (goto-char body-start)
+                      (if (re-search-forward "^\\*+ " section-end t)
+                          (line-beginning-position)
+                        section-end)))
+                   (body (string-trim
+                          (buffer-substring-no-properties
+                           body-start body-end))))
+              (when (not (string-empty-p body))
+                (push (cons heading body) refs))))
+          (when refs
+            (concat
+             "\n\nExisting reference translations of THIS passage "
+             "(read-only, imported from the comparative source).  "
+             "Use them as calibration: cross-check your translation "
+             "against them and prefer their conventions for proper "
+             "names and technical terms when defensible.  In the "
+             "`## Grammar' section, briefly note (one or two sentences) "
+             "where your translation diverges substantively from them "
+             "and which Tibetan reading supports your choice — this "
+             "helps the user judge between competing interpretations.\n"
+             (mapconcat
+              (lambda (r)
+                (format "\n— %s:\n%s" (car r) (cdr r)))
+              (nreverse refs)
+              ""))))))))
+
+;; ----------------------------------------------------------------------------
 ;; Surrounding-segments context (±2 neighbors from the same analysis folder)
 ;; ----------------------------------------------------------------------------
 
@@ -732,6 +790,15 @@ forms of grounding:
          (grounding-block
           (tibetan-analysis--format-parser-grounding
            (tibetan-analysis--read-analysis-parser-sections analysis-file)))
+         ;; Reference translations: in paragraph analysis files
+         ;; (par-NNN.org) these are imported from sibling subsections
+         ;; of the source `** §N' paragraph (Lopez, Wangjié, future
+         ;; DharmaMitra…).  Feeding them into the user prompt lets
+         ;; Claude calibrate its translation against existing renderings
+         ;; and flag interpretive divergences — see system prompt
+         ;; addendum for the comparison instruction.
+         (references-block
+          (tibetan-analysis--format-reference-translations analysis-file))
          (user (concat "Classical Tibetan passage:\n\n"
                        tibetan-text
                        (if wylie (format "\n\nWylie: %s" wylie) "")
@@ -739,6 +806,7 @@ forms of grounding:
                        (or vocab-block "")
                        (or surrounding-block "")
                        (or grounding-block "")
+                       (or references-block "")
                        "\n\nProduce the three sections now.")))
     (cons system user)))
 

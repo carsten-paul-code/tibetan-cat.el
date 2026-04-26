@@ -104,6 +104,171 @@
     :tags (:paragraph :extraction :text :generic)))
 
 ;; ============================================================================
+;; PARAGRAPH REFERENCE-TRANSLATIONS SUITE
+;; ============================================================================
+;;
+;; A paragraph in the Rgyan-comparative.org layout carries reference
+;; translations as sibling subsections of `** §N' — `*** Lopez 2006',
+;; `*** Wangjié & Mulligan', etc.  The CAT tool extracts these as
+;; alist of (heading . body) so they can flow into both the
+;; par-NNN.org scaffold and the Claude prompt context.
+
+(define-bdd-suite paragraph-references
+    "Sibling-section reference-translation extraction (generic)"
+
+  (spec "Extract Lopez and Wangjié subsections as references"
+    :given (with-temp-buffer
+             (org-mode)
+             (insert "* Text\n** §131\n*** Tibetisch (B2)\nབདུད།\n\n*** Wylie\nbdud\n\n*** Lopez 2006\nThe demons of...\n\n*** Wangjié & Mulligan\nThe weapons of demons...\n\n*** Eigene Übersetzung (Entwurf)\n[draft]\n")
+             (goto-char (point-min))
+             (search-forward "** §131")
+             (setq result (tibetan-org-get-paragraph-references)))
+    :when result
+    :then ((should result)
+           (should (= 2 (length result)))
+           (should (assoc "Lopez 2006" result))
+           (should (assoc "Wangjié & Mulligan" result))
+           (should-not (assoc "Tibetisch (B2)" result))
+           (should-not (assoc "Wylie" result))
+           (should-not (assoc "Eigene Übersetzung (Entwurf)" result))
+           (should (string-match-p "demons" (cdr (assoc "Lopez 2006" result))))
+           (should (string-match-p "weapons" (cdr (assoc "Wangjié & Mulligan" result)))))
+    :example "Rgyan-comparative paragraph layout"
+    :tags (:paragraph :references :extraction :critical))
+
+  (spec "Skip empty reference subsections"
+    :given (with-temp-buffer
+             (org-mode)
+             (insert "* Text\n** §1\n*** Tibetisch\nFoo\n\n*** Lopez 2006\n\n\n*** Wangjié & Mulligan\nReal content here\n")
+             (goto-char (point-min))
+             (search-forward "** §1")
+             (setq result (tibetan-org-get-paragraph-references)))
+    :when result
+    :then ((should (= 1 (length result)))
+           (should (assoc "Wangjié & Mulligan" result))
+           (should-not (assoc "Lopez 2006" result)))
+    :example "Empty Lopez body filtered out"
+    :tags (:paragraph :references :extraction))
+
+  (spec "Skip Apparat / Notes / Footnotes"
+    :given (with-temp-buffer
+             (org-mode)
+             (insert "* Text\n** §1\n*** Tibetisch\nFoo\n\n*** Lopez 2006\nA translation\n\n*** Apparat und Notizen\nB2: foo | H: bar\n\n*** Footnotes\n[fn:1] note\n")
+             (goto-char (point-min))
+             (search-forward "** §1")
+             (setq result (tibetan-org-get-paragraph-references)))
+    :when result
+    :then ((should (= 1 (length result)))
+           (should (assoc "Lopez 2006" result))
+           (should-not (assoc "Apparat und Notizen" result))
+           (should-not (assoc "Footnotes" result)))
+    :example "Philological-note sections excluded"
+    :tags (:paragraph :references :extraction))
+
+  (spec "Claude prompt helper formats Reference Translations as labeled blocks"
+    :given (let* ((tmpdir (make-temp-file "tibetan-par-prompt" t))
+                  (analysis-file (expand-file-name "par-007.org" tmpdir)))
+             (with-temp-file analysis-file
+               (insert "#+TITLE: Paragraph 7\n\n* Tibetan Text\nFoo།\n\n* My Notes\n\n\n* Working Translation\n\n\n* Reference Translations\n** Lopez 2006\nLopez body line 1.\nLopez body line 2.\n\n** Wangjié & Mulligan\nWangjié body.\n\n* Auto-Analysis\n** Wylie\nfoo /\n\n* Footnotes\n"))
+             (setq result
+                   (tibetan-analysis--format-reference-translations
+                    analysis-file)))
+    :when result
+    :then ((should result)
+           (tibetan-bdd-assert-contains result "reference translations of THIS passage"
+            "Instruction header present")
+           (tibetan-bdd-assert-contains result "## Grammar"
+            "Instruction references the Grammar section for divergence notes")
+           (tibetan-bdd-assert-contains result "— Lopez 2006:"
+            "Lopez label emitted")
+           (tibetan-bdd-assert-contains result "Lopez body line 1"
+            "Lopez body included")
+           (tibetan-bdd-assert-contains result "— Wangjié & Mulligan:"
+            "Wangjié label emitted")
+           (tibetan-bdd-assert-contains result "Wangjié body"
+            "Wangjié body included"))
+    :example "Claude user-prompt block from par-NNN.org Reference Translations"
+    :tags (:paragraph :references :claude :prompt :critical))
+
+  (spec "Claude prompt helper returns nil when section absent (segment files)"
+    :given (let* ((tmpdir (make-temp-file "tibetan-seg-prompt" t))
+                  (analysis-file (expand-file-name "seg-001.org" tmpdir)))
+             (with-temp-file analysis-file
+               (insert "#+TITLE: Segment 1\n\n* Tibetan Text\nFoo།\n\n* My Notes\n\n\n* Working Translation\n\n\n* Auto-Analysis\n** Wylie\nfoo /\n\n* Footnotes\n"))
+             (setq result
+                   (tibetan-analysis--format-reference-translations
+                    analysis-file)))
+    :when result
+    :then ((should-not result))
+    :example "seg-NNN.org has no top-level Reference Translations"
+    :tags (:paragraph :references :claude :prompt))
+
+  (spec "Reference Translations preserved across reanalyze"
+    :given (let* ((tmpdir (make-temp-file "tibetan-par-preserve" t))
+                  (source (expand-file-name "comp.org" tmpdir))
+                  (analysis-dir (expand-file-name "analysis" tmpdir))
+                  (analysis-file (expand-file-name "par-007.org" analysis-dir)))
+             (make-directory analysis-dir)
+             (cl-letf (((symbol-function 'tibetan-analysis-get-folder)
+                        (lambda () analysis-dir)))
+               (tibetan-analysis-create-paragraph-file
+                7 "བདུད།" source "** Wylie\nbdud\n"
+                '(("Lopez 2006" . "Original Lopez body — DO NOT WIPE")
+                  ("Wangjié & Mulligan" . "Wangjié body — DO NOT WIPE")))
+               ;; Simulate user editing the references manually
+               ;; (e.g. correcting an OCR typo in Wangjié):
+               (with-temp-buffer
+                 (insert-file-contents analysis-file)
+                 (goto-char (point-min))
+                 (search-forward "Wangjié body — DO NOT WIPE")
+                 (replace-match "Wangjié body USER-EDITED")
+                 (write-file analysis-file))
+               ;; Now reanalyze with fresh auto-content
+               (tibetan-analysis-regenerate-auto
+                analysis-file "བདུད།" "** Wylie\nbdud REGENERATED\n")
+               (setq result (with-temp-buffer
+                              (insert-file-contents analysis-file)
+                              (buffer-string)))))
+    :when result
+    :then ((tibetan-bdd-assert-contains result "Wangjié body USER-EDITED"
+            "User edits to references survive reanalyze")
+           (tibetan-bdd-assert-contains result "Original Lopez body — DO NOT WIPE"
+            "Untouched references survive reanalyze")
+           (tibetan-bdd-assert-contains result "bdud REGENERATED"
+            "Auto-Analysis IS regenerated"))
+    :example "Reference Translations preservation invariant"
+    :tags (:paragraph :references :preservation :critical))
+
+  (spec "References written into par-NNN.org scaffold"
+    :given (let* ((tmpdir (make-temp-file "tibetan-par-refs" t))
+                  (source (expand-file-name "Rgyan-comparative.org" tmpdir))
+                  (analysis-dir (expand-file-name "analysis" tmpdir)))
+             (make-directory analysis-dir)
+             (cl-letf (((symbol-function 'tibetan-analysis-get-folder)
+                        (lambda () analysis-dir)))
+               (tibetan-analysis-create-paragraph-file
+                131 "བདུད།" source "** Wylie\nbdud\n"
+                '(("Lopez 2006" . "The demons of...")
+                  ("Wangjié & Mulligan" . "The weapons of demons...")))
+               (setq result (with-temp-buffer
+                              (insert-file-contents
+                               (expand-file-name "par-131.org" analysis-dir))
+                              (buffer-string)))))
+    :when result
+    :then ((tibetan-bdd-assert-contains result "* Reference Translations"
+            "Reference Translations top-level section")
+           (tibetan-bdd-assert-contains result "** Lopez 2006"
+            "Lopez subsection present")
+           (tibetan-bdd-assert-contains result "The demons of..."
+            "Lopez body inserted")
+           (tibetan-bdd-assert-contains result "** Wangjié & Mulligan"
+            "Wangjié subsection present")
+           (tibetan-bdd-assert-contains result "The weapons of demons..."
+            "Wangjié body inserted"))
+    :example "par-131.org scaffold with references"
+    :tags (:paragraph :references :scaffold :critical)))
+
+;; ============================================================================
 ;; PARAGRAPH FILEPATH SUITE
 ;; ============================================================================
 

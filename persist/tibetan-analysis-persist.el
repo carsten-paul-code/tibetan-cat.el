@@ -559,11 +559,17 @@ E.g., \\='Tigress-Story-BlockPrint-Class.org\\=' -> \\='tigress\\='
 ;; FILE CREATION
 ;; ============================================================================
 
-(defun tibetan-analysis-create-paragraph-file (par-id tibetan-text source-file auto-content)
+(defun tibetan-analysis-create-paragraph-file
+    (par-id tibetan-text source-file auto-content &optional references)
   "Create a new paragraph analysis file for PAR-ID.
 TIBETAN-TEXT is the paragraph body.  SOURCE-FILE is the path of the
 comparative document.  AUTO-CONTENT is generated analysis content
-(string).  Returns the written filepath."
+(string).  REFERENCES, if non-nil, is an alist of (heading . body)
+pairs from sibling translation sub-sections in the source paragraph
+(e.g. `((\"Lopez 2006\" . \"...\") (\"Wangjié & Mulligan\" . \"...\"))');
+they are written into a `* Reference Translations' top-level section
+between `* Working Translation' and `* Auto-Analysis'.  Returns the
+written filepath."
   (let* ((num (cond ((numberp par-id) par-id)
                     ((and (stringp par-id)
                           (string-match "\\([0-9]+\\)" par-id))
@@ -591,6 +597,12 @@ comparative document.  AUTO-CONTENT is generated analysis content
       (insert "\n\n")
       (insert "* My Notes\n\n\n")
       (insert "* Working Translation\n\n\n")
+      (when references
+        (insert "* Reference Translations\n")
+        (insert "# Imported from the comparative source document.  ")
+        (insert "Read-only by convention — edit only in the source.\n\n")
+        (dolist (ref references)
+          (insert (format "** %s\n%s\n\n" (car ref) (cdr ref)))))
       (insert "* Auto-Analysis\n")
       (insert ":PROPERTIES:\n")
       (insert ":GENERATED: t\n")
@@ -682,12 +694,17 @@ Returns (START . END) or nil if not found."
 (defun tibetan-analysis-get-user-sections (filepath)
   "Extract user sections from analysis file at FILEPATH.
 Returns alist of (section-name . content) for My Notes,
-Working Translation, Footnotes."
+Working Translation, Reference Translations, Footnotes.
+`Reference Translations' is a paragraph-only section (par-NNN.org);
+when absent (e.g. seg-NNN.org), it's simply omitted from the alist."
   (when (file-exists-p filepath)
     (with-temp-buffer
       (insert-file-contents filepath)
       (let ((sections '()))
-        (dolist (section-name '("My Notes" "Working Translation" "Footnotes"))
+        (dolist (section-name '("My Notes"
+                                "Working Translation"
+                                "Reference Translations"
+                                "Footnotes"))
           (let ((bounds (tibetan-analysis-find-section-bounds (current-buffer) section-name)))
             (when bounds
               (let* ((start (car bounds))
@@ -724,6 +741,8 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
           (cdr (assoc "My Notes" user-sections)))
          (working-translation
           (cdr (assoc "Working Translation" user-sections)))
+         (reference-translations
+          (cdr (assoc "Reference Translations" user-sections)))
          (footnotes
           (cdr (assoc "Footnotes" user-sections)))
          (hash (tibetan-analysis-compute-hash tibetan-text))
@@ -779,6 +798,13 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
       (insert (or working-translation "* Working Translation\n\n\n"))
       (unless (string-suffix-p "\n\n" (or working-translation ""))
         (insert "\n"))
+      ;; Reference Translations — paragraph-only, preserved verbatim
+      ;; if present.  Only emitted when the original file had it
+      ;; (avoids polluting seg-NNN.org with an empty section).
+      (when reference-translations
+        (insert reference-translations)
+        (unless (string-suffix-p "\n\n" reference-translations)
+          (insert "\n")))
       (insert "* Auto-Analysis\n")
       (insert ":PROPERTIES:\n")
       (insert ":GENERATED: t\n")
@@ -3590,6 +3616,7 @@ right-side window."
     (error "Not inside a `** §N' paragraph"))
   (let* ((par-id (tibetan-org-get-paragraph-id))
          (tibetan-text (tibetan-org-get-paragraph-text))
+         (references (tibetan-org-get-paragraph-references))
          (source-file (buffer-file-name))
          (source-text (buffer-substring-no-properties
                        (point-min) (point-max))))
@@ -3616,7 +3643,8 @@ right-side window."
         (let* ((auto-content (tibetan-analysis-generate-content
                               tibetan-text (format "§%d" par-id) source-text))
                (new-filepath (tibetan-analysis-create-paragraph-file
-                              par-id tibetan-text source-file auto-content)))
+                              par-id tibetan-text source-file auto-content
+                              references)))
           (message "Created paragraph analysis file: %s" new-filepath)
           (let ((buf (find-file-noselect new-filepath)))
             (with-current-buffer buf
