@@ -544,6 +544,171 @@ See `tibetan-zettel--create-for-term' for the full argument list."
          :source-analysis-file source-analysis-file)))))
 
 ;; ============================================================================
+;; Phase 4 — Claude-cache write path (2026-04-24)
+;; ============================================================================
+;;
+;; When `tibetan-analysis--insert-claude-sections' parses a `## Vocabulary'
+;; block from a Claude response, each line whose Wylie key matches a
+;; zettel can have its gloss text cached into that zettel's `* Claude
+;; Explanation' section.  Cache writes:
+;;   · only fill EMPTY sections — never overwrite user edits or a
+;;     prior cache (that's what Phase 5's prompt-version-hash check
+;;     handles when a refresh IS warranted).
+;;   · stamp three properties (`:claude-cached:' / `:claude-model:' /
+;;     `:prompt-version:') so Phase 5 can detect stale entries when
+;;     the system prompt has changed since the cache was written.
+;;
+;; The Phase-4 writer ONLY writes; the Phase-5 reader will use the
+;; stamped properties to decide when to bypass the cache and refetch.
+
+(defun tibetan-zettel--prompt-version-hash (prompt)
+  "Return a 12-char SHA-256 hex prefix of PROMPT, suitable as the
+`:prompt-version:' property value.
+
+Short enough to fit on a property line, long enough that
+collisions across realistic prompt revisions are negligible.  When
+Phase 5 reads this property and compares against the current
+prompt's hash, mismatch → bypass cache, fetch fresh from Claude,
+overwrite the cached entry with the new response and stamps."
+  (substring (secure-hash 'sha256 (or prompt "")) 0 12))
+
+(defun tibetan-zettel--claude-explanation-empty-p (content)
+  "Return non-nil if CONTENT's `* Claude Explanation' section body
+is empty / placeholder (`[awaiting first analysis]' or just
+whitespace).  Used to gate cache writes — a populated section is
+left strictly alone.
+
+Searches for the Phase-3 scaffold marker line, since the Claude
+Explanation heading itself can appear anywhere; the body region
+is what we inspect."
+  (and content
+       (or (string-match-p "\\[awaiting first analysis\\]" content)
+           ;; The section exists with nothing under it (just the
+           ;; :TERM_CACHE: drawer + whitespace until the next
+           ;; top-level heading).
+           (string-match-p "^\\* Claude Explanation\n\\(?::PROPERTIES:\n[^*]*?:END:\n\\)?[ \t\n]*\\(\\*\\|\\'\\)"
+                           content))))
+
+(cl-defun tibetan-zettel--cache-claude-explanation
+    (path explanation &key model prompt-version)
+  "Write EXPLANATION into PATH's `* Claude Explanation' section.
+No-op when the section is already populated (writer is idempotent
+and respects user / prior-cache content).
+
+Stamps the zettel's PROPERTIES drawer with `:claude-cached:'
+(today's date), `:claude-model:' (MODEL or `(unknown)') and
+`:prompt-version:' (PROMPT-VERSION or `unknown') for Phase 5's
+freshness check.
+
+Returns t when an update was written, nil when skipped (already
+populated)."
+  (when (and path (file-readable-p path)
+             explanation (stringp explanation)
+             (not (string-empty-p (string-trim explanation))))
+    (let ((content (with-temp-buffer
+                     (insert-file-contents path)
+                     (buffer-string))))
+      (when (tibetan-zettel--claude-explanation-empty-p content)
+        ;; Atomically rewrite the file.
+        (with-temp-file path
+          (insert content)
+          ;; 1. Update PROPERTIES drawer with the three stamps.
+          (goto-char (point-min))
+          (when (re-search-forward "^:END:[ \t]*$" nil t)
+            (let ((end-of-drawer (match-beginning 0)))
+              (goto-char end-of-drawer)
+              ;; Remove existing stamps so we can re-emit them
+              ;; (idempotent re-stamp on same prompt-version).
+              (dolist (key '("claude-cached" "claude-model" "prompt-version"))
+                (save-excursion
+                  (goto-char (point-min))
+                  (when (re-search-forward
+                         (format "^:%s:.*$\n" (regexp-quote key))
+                         end-of-drawer t)
+                    (replace-match ""))))
+              ;; Re-locate :END: (the previous deletes shifted it).
+              (goto-char (point-min))
+              (re-search-forward "^:END:[ \t]*$")
+              (beginning-of-line)
+              (insert (format ":claude-cached:   %s\n"
+                              (format-time-string "%Y-%m-%d")))
+              (insert (format ":claude-model:    %s\n"
+                              (or model "(unknown)")))
+              (insert (format ":prompt-version:  %s\n"
+                              (or prompt-version "unknown")))))
+          ;; 2. Replace the placeholder body of `* Claude Explanation'.
+          (goto-char (point-min))
+          (when (re-search-forward "^\\* Claude Explanation[ \t]*$" nil t)
+            ;; Skip past any :PROPERTIES: drawer that follows the heading.
+            (forward-line 1)
+            (when (looking-at-p "^:PROPERTIES:")
+              (re-search-forward "^:END:[ \t]*\n" nil t))
+            (let ((body-start (point))
+                  (body-end (save-excursion
+                              (if (re-search-forward "^\\* " nil t)
+                                  (line-beginning-position)
+                                (point-max)))))
+              (delete-region body-start body-end)
+              (goto-char body-start)
+              (insert "\n" (string-trim explanation) "\n\n"))))
+        ;; Reload index so subsequent reads see the new stamps.
+        (tibetan-zettel-reload)
+        t))))
+
+(defun tibetan-zettel--extract-claude-vocab-gloss (line)
+  "Return the QUOTED gloss field from a Claude Vocabulary LINE.
+Format Claude emits is
+
+  wylie-key, part-of-speech, \"gloss\", commentary
+
+Only the third field (between the first pair of double quotes)
+is the cacheable short explanation.  Returns nil when the line
+lacks a quoted field."
+  (when (and line (stringp line) (string-match "\"\\([^\"]+\\)\"" line))
+    (string-trim (match-string 1 line))))
+
+(cl-defun tibetan-zettel--cache-claude-vocabulary
+    (vocab-alist &key model prompt-version)
+  "Walk VOCAB-ALIST (parsed `## Vocabulary' from a Claude response —
+each entry is (WYLIE-KEY . FULL-LINE)) and update zettels in place.
+
+For each entry whose WYLIE-KEY hits an existing zettel, calls
+`--cache-claude-explanation' with the line's quoted gloss field.
+Skips entries with no matching zettel and entries whose gloss
+field can't be extracted.
+
+MODEL and PROMPT-VERSION are passed through to the writer for the
+property stamps.  When the caller doesn't know either, default
+values are used.
+
+Returns the count of zettels actually updated (excludes skipped
+and no-match entries)."
+  (let ((updated 0)
+        (effective-model (or model
+                             (and (boundp 'gptel-model)
+                                  (format "%s" gptel-model))
+                             "(unknown)"))
+        (effective-version
+         (or prompt-version
+             (and (boundp 'tibetan-analysis--claude-system-prompt)
+                  (tibetan-zettel--prompt-version-hash
+                   tibetan-analysis--claude-system-prompt))
+             "unknown")))
+    (dolist (pair vocab-alist)
+      (let* ((wylie (car pair))
+             (line (cdr pair))
+             (entry (and wylie (tibetan-zettel-lookup wylie)))
+             (gloss (tibetan-zettel--extract-claude-vocab-gloss line)))
+        (when (and entry gloss)
+          (when (tibetan-zettel--cache-claude-explanation
+                 (plist-get entry :path)
+                 gloss
+                 :model effective-model
+                 :prompt-version effective-version)
+            (cl-incf updated)))))
+    updated))
+
+;; ============================================================================
 ;; Phase 3 — Interactive walker over the current analysis buffer's
 ;; `*** Buddhist Terms' subsection.  This is the user-facing hook: after
 ;; opening or regenerating a segment analysis file, run this to offer

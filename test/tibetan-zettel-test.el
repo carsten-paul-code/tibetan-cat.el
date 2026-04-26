@@ -760,5 +760,148 @@ tokens), the command signals a clear user-error."
              :type 'user-error)
           (kill-buffer))))))
 
+;; ============================================================================
+;; Phase 4 — Claude-cache write path (2026-04-24)
+;;
+;; When a Claude response carries a `## Vocabulary' block (parsed by
+;; `tibetan-analysis--parse-claude-vocabulary' into (wylie-key . full-line)
+;; pairs), each line whose wylie-key matches a zettel gets its gloss
+;; written into that zettel's `* Claude Explanation' section, gated by:
+;;   · the zettel must exist (no creation here — Phase 3 handles that).
+;;   · the section's body must be empty / placeholder
+;;     (`[awaiting first analysis]') — never overwrite user edits or
+;;     a populated cache.
+;;
+;; Writes also stamp three properties for Phase 5's invalidation:
+;;   :claude-cached:   YYYY-MM-DD  (today's date)
+;;   :claude-model:    the gptel model name in use, or `(unknown)'
+;;   :prompt-version:  first 12 chars of (sha256 of system prompt)
+;; ============================================================================
+
+(ert-deftest tibetan-zettel-prompt-version-hash-stable ()
+  "The prompt-version hash is deterministic for a given input."
+  (let ((h1 (tibetan-zettel--prompt-version-hash "system prompt body"))
+        (h2 (tibetan-zettel--prompt-version-hash "system prompt body"))
+        (h3 (tibetan-zettel--prompt-version-hash "different prompt")))
+    (should (equal h1 h2))
+    (should-not (equal h1 h3))
+    ;; Hash is short enough to be useful as a property value.
+    (should (= 12 (length h1)))))
+
+(ert-deftest tibetan-zettel-cache-claude-explanation-writes-to-empty ()
+  "Cache writer fills an empty `* Claude Explanation' section.
+Properties get stamped; the explanation text replaces the
+`[awaiting first analysis]' placeholder."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (path (tibetan-zettel--create-for-term
+                  :wylie "bdag"
+                  :script "བདག"
+                  :preferred-en "I, self")))
+      (tibetan-zettel--cache-claude-explanation
+       path
+       "First-person pronoun; functions as the absolutive subject in this clause."
+       :model "claude-opus-test"
+       :prompt-version "abc123def456")
+      (let ((content (with-temp-buffer
+                       (insert-file-contents path)
+                       (buffer-string))))
+        (should (string-match-p "absolutive subject" content))
+        (should-not (string-match-p "awaiting first analysis" content))
+        (should (string-match-p "^:claude-cached:[ \t]+[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}$"
+                                content))
+        (should (string-match-p "^:claude-model:[ \t]+claude-opus-test$"
+                                content))
+        (should (string-match-p "^:prompt-version:[ \t]+abc123def456$"
+                                content))))))
+
+(ert-deftest tibetan-zettel-cache-claude-skips-populated ()
+  "When the `* Claude Explanation' section already has a real body
+(not the `[awaiting first analysis]' placeholder), the writer
+LEAVES IT UNTOUCHED — never overwrites user edits or a previous
+cache.  Property stamps stay at their previous values."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (path (tibetan-zettel--create-for-term
+                  :wylie "bdag" :script "བདག")))
+      ;; Prime: write a first cache.
+      (tibetan-zettel--cache-claude-explanation
+       path "ORIGINAL EXPLANATION"
+       :model "claude-1" :prompt-version "version-one")
+      ;; Try again — the writer must short-circuit.
+      (tibetan-zettel--cache-claude-explanation
+       path "OVERWRITE ATTEMPT"
+       :model "claude-2" :prompt-version "version-two")
+      (let ((content (with-temp-buffer
+                       (insert-file-contents path)
+                       (buffer-string))))
+        (should     (string-match-p "ORIGINAL EXPLANATION" content))
+        (should-not (string-match-p "OVERWRITE ATTEMPT" content))
+        (should     (string-match-p "claude-1" content))
+        (should-not (string-match-p "claude-2" content))
+        (should     (string-match-p "version-one" content))
+        (should-not (string-match-p "version-two" content))))))
+
+(ert-deftest tibetan-zettel-cache-claude-vocabulary-walks-all ()
+  "Given a parsed Claude Vocabulary alist + the current prompt
+hash, the walker updates every zettel whose wylie-key matches.
+Tokens with no zettel are silently skipped."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir))
+      ;; Two zettels exist; one tokenised in vocab; one absent.
+      (tibetan-zettel--create-for-term :wylie "bdag" :script "བདག")
+      (tibetan-zettel--create-for-term :wylie "chos" :script "ཆོས")
+      (let* ((vocab '(("bdag" . "bdag, noun, \"first-person pronoun, absolutive subject\", marks the speaker")
+                      ("chos" . "chos, noun, \"dharma, topic of the verse\", recurring theme")
+                      ;; This entry has no matching zettel — skip silently.
+                      ("xyz"  . "xyz, particle, \"unknown\", does not exist")))
+             (updated (tibetan-zettel--cache-claude-vocabulary
+                       vocab
+                       :model "claude-test"
+                       :prompt-version "phase4test1")))
+        ;; Two updates reported.
+        (should (= 2 updated))
+        ;; Both zettels carry the cached body.
+        (let ((bdag-content (with-temp-buffer
+                              (insert-file-contents
+                               (plist-get (tibetan-zettel-lookup "bdag") :path))
+                              (buffer-string)))
+              (chos-content (with-temp-buffer
+                              (insert-file-contents
+                               (plist-get (tibetan-zettel-lookup "chos") :path))
+                              (buffer-string))))
+          (should (string-match-p "absolutive subject" bdag-content))
+          (should (string-match-p "topic of the verse" chos-content))
+          (should (string-match-p "phase4test1" bdag-content))
+          (should (string-match-p "phase4test1" chos-content)))))))
+
+(ert-deftest tibetan-zettel-cache-claude-vocabulary-empty-input ()
+  "Nil / empty vocab input → 0 updated, no error."
+  (tibetan-zettel-test--with-fixture-dir
+    (let ((tibetan-zettel-directory tibetan-zettel-test--tempdir))
+      (should (= 0 (tibetan-zettel--cache-claude-vocabulary nil)))
+      (should (= 0 (tibetan-zettel--cache-claude-vocabulary '()))))))
+
+(ert-deftest tibetan-zettel-cache-claude-extracts-quoted-gloss ()
+  "The walker extracts only the QUOTED short gloss field from each
+Claude Vocabulary line — not the whole line.  Format Claude emits:
+  wylie-key, part-of-speech, \"gloss\", commentary
+Only the third (quoted) field is the cacheable explanation; the
+commentary is too verbose for the cache."
+  (tibetan-zettel-test--with-fixture-dir
+    (let ((tibetan-zettel-directory tibetan-zettel-test--tempdir))
+      (tibetan-zettel--create-for-term :wylie "bdag" :script "བདག")
+      (tibetan-zettel--cache-claude-vocabulary
+       '(("bdag" . "bdag, noun, \"first-person pronoun, I/self\", marks the speaker"))
+       :model "x" :prompt-version "y")
+      (let ((content (with-temp-buffer
+                       (insert-file-contents
+                        (plist-get (tibetan-zettel-lookup "bdag") :path))
+                       (buffer-string))))
+        ;; Quoted gloss is in the cache.
+        (should (string-match-p "first-person pronoun, I/self" content))
+        ;; The trailing commentary is NOT (overly verbose for the cache).
+        (should-not (string-match-p "marks the speaker" content))))))
+
 (provide 'tibetan-zettel-test)
 ;;; tibetan-zettel-test.el ends here

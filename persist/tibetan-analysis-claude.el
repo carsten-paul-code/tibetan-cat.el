@@ -64,6 +64,11 @@
 (require 'md5)
 (require 'tibetan-claude-queue nil t)
 (require 'gptel nil t)
+;; Phase 4 of zettel-in-translation-workflow (2026-04-24) — soft-require
+;; so `--insert-claude-sections' can call `tibetan-zettel--cache-claude-
+;; vocabulary' to write per-term cache entries.  Missing module → no
+;; cache writes; the rest of the insert path is unaffected.
+(require 'tibetan-zettel nil t)
 
 ;; External gptel symbols — declared so the byte-compiler doesn't warn
 ;; on fresh checkouts where gptel isn't installed.  Runtime guards
@@ -1655,6 +1660,26 @@ reanalyse."
         (when (plist-get sections :vocabulary)
           (tibetan-analysis--merge-claude-vocabulary
            buf (plist-get sections :vocabulary)))
+        ;; Phase 4 of zettel-in-translation-workflow (2026-04-24):
+        ;; cache each Claude Vocabulary line into the matching zettel's
+        ;; `* Claude Explanation' section.  Only fills empty sections;
+        ;; existing populated caches are left alone.  Stamps each
+        ;; updated zettel with `:claude-cached:' / `:claude-model:' /
+        ;; `:prompt-version:' for Phase 5's freshness check.  No-op
+        ;; when the zettel module isn't loaded OR no vocab parsed.
+        (when (and (plist-get sections :vocabulary)
+                   (fboundp 'tibetan-zettel--cache-claude-vocabulary)
+                   (fboundp 'tibetan-analysis--parse-claude-vocabulary))
+          (let ((vocab (ignore-errors
+                         (tibetan-analysis--parse-claude-vocabulary
+                          (plist-get sections :vocabulary)))))
+            (when vocab
+              (let ((updated (ignore-errors
+                               (tibetan-zettel--cache-claude-vocabulary
+                                vocab))))
+                (when (and updated (> updated 0))
+                  (message "tibetan-zettel: cached Claude explanations into %d zettel(s)"
+                           updated))))))
         (save-buffer))
       (message "Claude sections inserted into %s"
                (file-name-nondirectory analysis-file))
