@@ -166,29 +166,32 @@ Example:
   mgon po, noun, \"protector\"
 
 ## Grammar
-ONE paragraph (5–8 sentences, roughly 120–180 words) that (a) \
-summarises the grammatical backbone of the passage AND (b) \
-JUSTIFIES specific translation choices where context mattered.
+A SHORT, STRUCTURED analysis as labeled bullets — easier to scan \
+than a wall of prose.  Use up to four bullets in this fixed order; \
+SKIP any bullet that doesn't apply rather than padding.  Each \
+bullet is 1–3 sentences; the whole section should fit in ~120–180 \
+words total.
 
-The backbone: identify the main finite verb(s) and any governing \
-converb(s); the chain structure if there is one (V-nas / V-te / \
-V-cing sequencing); one or two noteworthy constructions worth \
-flagging (an idiom, a reported-speech setup, a hedged or \
-approximative expression).  Name the metalanguage explicitly when \
-useful (Ergative, Ablative, Dative, Terminative, Instrumental, \
-Comitative, Genitive; converb type; nominalizer; finite verb; \
-honorific stem) and reference actual Tibetan forms in parentheses.
+- *Verb backbone:* main finite verb(s) and any governing converb \
+chain (V-nas / V-te / V-cing sequencing).  Name converb types \
+explicitly (sequential, conditional, simultaneous, causal).
+- *Case frame:* how the agent / patient / oblique arguments are \
+marked — quote the actual Tibetan forms in parentheses, e.g. \
+`ergative *kyis* on *bdag*' or `dative *la* marking the recipient'.
+- *Notable constructions:* one or two noteworthy items if any — \
+idioms, reported speech, hedges, nominalisation patterns, honorific \
+register flips.  Skip when the passage is straightforward.
+- *Translation justifications:* wherever the ## Translation above \
+made a non-obvious choice, justify in one sentence — e.g. \
+\"*blo sbyangs na* is rendered 'if one trains the mind' because \
+*na* here is the conditional converb (V+na), not the locative \
+particle\".  Two such notes per segment is a reasonable target; \
+skip if mechanical.
 
-The justification: wherever the ## Translation above made a choice \
-that depended on disambiguating a polysemous word, a converb \
-function, or a case-particle reading, say so in one sentence — \
-e.g. \"*blo sbyangs na* is rendered 'if one trains the mind' \
-because *na* here is the conditional converb (V+na, §2.8), not \
-the locative particle; the verb stem *sbyangs* is the perfect of \
-*sbyong ba*\" or \"*shugs las 'byung* is 'arises from [its own] \
-momentum' because the ablative *las* marks the cause / source of \
-the arising (Elative §1.8.4)\".  Two such notes per segment is a \
-reasonable target; skip if the translation was mechanical.
+Name metalanguage explicitly when useful (Ergative, Ablative, \
+Dative, Terminative, Instrumental, Comitative, Genitive, \
+nominalizer, honorific stem).  Reference Tibetan forms in italic \
+parentheses (`*tshig*`).
 
 You will be given the parser's own analysis in the user prompt — \
 treat it as ground truth for case and verb tagging; if you \
@@ -197,7 +200,7 @@ silently overruling.
 
 Per-particle functional detail (which §1.5.x applies to THIS ར, \
 which §2.11.x applies to THIS ནས, etc.) belongs in the later \
-`## Particles' section — NOT here.  Keep this paragraph at the \
+`## Particles' section — NOT here.  Keep this section at the \
 passage level.
 
 ## Particles

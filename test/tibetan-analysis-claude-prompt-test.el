@@ -517,12 +517,15 @@ version says `stays CLOSE TO THE GRAMMAR'."
                  "idiomatically, not literally" p))))
 
 (ert-deftest tibetan-analysis-claude-prompt-grammar-justifies-translation ()
-  "U2: the Grammar section directive must ask Claude to JUSTIFY
-specific translation choices, not just summarise the backbone."
+  "U2: the Grammar section directive must ask Claude to justify
+specific translation choices, not just summarise the backbone.
+Wording adjusted 2026-04-26 with the bullet-restructuring of
+the Grammar section (commit pending) — keep the regression
+guard but match the new keywords."
   (let ((p tibetan-analysis--claude-system-prompt))
-    (should (string-match-p "JUSTIFIES" p))
-    (should (string-match-p "translation choice" p))
-    (should (string-match-p "disambiguat" p))))
+    (should (string-match-p "Translation justifications" p))
+    (should (string-match-p "non-obvious choice" p))
+    (should (string-match-p "justify" p))))
 
 (ert-deftest tibetan-analysis-claude-prompt-fixed-buddhist-terms-inline ()
   "U3 (inline): the Translation directive asks for a short
