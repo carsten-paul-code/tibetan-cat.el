@@ -239,6 +239,36 @@
     :example "Reference Translations preservation invariant"
     :tags (:paragraph :references :preservation :critical))
 
+  (spec "Paragraph auto-content suppresses the inner Reference Translations placeholder"
+    :given (when (fboundp 'tibetan-analysis-generate-content)
+             (setq result (tibetan-analysis-generate-content
+                           "བདུད།" "§42" "")))
+    :when result
+    :then ((should result)
+           ;; Top-level *** Reference Translations is the segment-pipeline
+           ;; legacy slot; for paragraph files it duplicates the par-NNN.org
+           ;; top-level `* Reference Translations' section that's populated
+           ;; from comparative siblings.  Suppressed when seg-id is `§N'.
+           (should-not (string-match-p "^\\*\\*\\* Reference Translations$"
+                                       result))
+           (should-not (string-match-p "Add reference translations here"
+                                       result)))
+    :example "auto-content for `§42' has no inner Reference Translations slot"
+    :tags (:paragraph :dedup :auto-content :critical))
+
+  (spec "Segment auto-content STILL emits the inner Reference Translations placeholder"
+    :given (when (fboundp 'tibetan-analysis-generate-content)
+             (setq result (tibetan-analysis-generate-content
+                           "བདུད།" "Segment 7" "")))
+    :when result
+    :then ((should result)
+           ;; Backwards-compat: segment files still get the slot, since they
+           ;; populate it from inline 〔trans:N〕 / Resources files.
+           (should (string-match-p "\\*\\*\\* Reference Translations"
+                                   result)))
+    :example "auto-content for `Segment 7' keeps the slot"
+    :tags (:segment :auto-content :backwards-compat))
+
   (spec "Scaffold creates an Apparatus section between Auto-Analysis and Footnotes"
     :given (let* ((tmpdir (make-temp-file "tibetan-par-app" t))
                   (source (expand-file-name "comp.org" tmpdir))

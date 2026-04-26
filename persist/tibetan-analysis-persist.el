@@ -3384,22 +3384,34 @@ it with `let' around the call when Claude data is available."
             ;; — orphan `** Claude Grammar' at level 2 stuck at end
             ;; of Auto-Analysis (bug surfaced 2026-04-24 seg-16 regen).
             ;;
-            ;; 8d: Reference translations from external sources
-            (insert "*** Reference Translations\n")
-            (let* ((seg-num (and seg-id
-                                 (condition-case nil
-                                     (tibetan-analysis--extract-segment-number seg-id)
-                                   (error nil))))
-                   (ref-translations
-                    (tibetan-analysis--find-reference-translations
-                     tibetan-text seg-num source-text)))
-              (if ref-translations
-                  (dolist (ref ref-translations)
-                    (let ((source (car ref))
-                          (text (cdr ref)))
-                      (insert (format "**** %s\n%s\n\n" source text))))
-                (insert "[Add reference translations here, e.g. from Blue Annals (Roerich), or other published translations]\n")))
-            (insert "\n")
+            ;; 8d: Reference translations from external sources.
+            ;; Skipped when SEG-ID is a paragraph identifier (`§N'):
+            ;; paragraph analysis files (par-NNN.org) carry their
+            ;; reference translations in a TOP-LEVEL `* Reference
+            ;; Translations' section populated by
+            ;; `tibetan-analysis-create-paragraph-file' from sibling
+            ;; subsections of the source `** §N' heading.  Emitting
+            ;; the segment-pipeline `*** Reference Translations'
+            ;; placeholder here as well would just clutter the file
+            ;; with a redundant "[Add reference translations here…]"
+            ;; line beneath the already-populated top-level block.
+            (unless (and (stringp seg-id)
+                         (string-prefix-p "§" seg-id))
+              (insert "*** Reference Translations\n")
+              (let* ((seg-num (and seg-id
+                                   (condition-case nil
+                                       (tibetan-analysis--extract-segment-number seg-id)
+                                     (error nil))))
+                     (ref-translations
+                      (tibetan-analysis--find-reference-translations
+                       tibetan-text seg-num source-text)))
+                (if ref-translations
+                    (dolist (ref ref-translations)
+                      (let ((source (car ref))
+                            (text (cdr ref)))
+                        (insert (format "**** %s\n%s\n\n" source text))))
+                  (insert "[Add reference translations here, e.g. from Blue Annals (Roerich), or other published translations]\n")))
+              (insert "\n"))
 
             ;; Reorder level-2 sections into the workshop-agreed
             ;; priority: Wylie → Particle Map → Interlinear Gloss →
