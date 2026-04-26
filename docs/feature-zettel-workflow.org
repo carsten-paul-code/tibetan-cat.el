@@ -1,7 +1,7 @@
 #+TITLE: Zettel in Translation Workflow — Feature Design
 #+DATE: 2026-04-24
 #+AUTHOR: Carsten Paul + Claude
-#+STATUS: v1 approved — Phases 1–6 shipped, Phase 7 next
+#+STATUS: v1 approved — ALL PHASES SHIPPED (1–7)
 
 * Intent
 
@@ -396,7 +396,16 @@ stale links on demand.
 | 4     | Claude-cache write path                              | =core/tibetan-zettel.el=, =persist/tibetan-analysis-claude.el= | *shipped 2394c50* |
 | 5     | Buddhist Terms reads from zettel cache               | =core/tibetan-zettel.el=, =persist/tibetan-analysis-persist.el= | *shipped d908183* |
 | 6     | Unify Pass-5b Thesaurus → v2 schema + migration cmd | =core/tibetan-zettel.el=, =config/tibetan-keybindings.el=, =config/tibetan-menu.el= | *shipped c686907* |
-| 7     | Back-link maintenance + GC command                  | =core/tibetan-zettel.el=                             | pending   |
+| 7     | Back-link maintenance + GC command                  | =core/tibetan-zettel.el=, =config/tibetan-keybindings.el=, =config/tibetan-menu.el= | *shipped 813ca11* |
+
+** Feature complete
+
+All seven phases shipped 2026-04-24 → 2026-04-26.  +109 tests
+across the lifecycle of the feature (suite 1452 before Phase 1's
+buildup → 1561 after Phase 7).  The zettelkasten now serves as a
+personal lexicon, a Claude cache, a translation override layer, a
+cross-document consistency enforcer, and a reverse-indexed
+back-link graph — exactly as the v1 spec specified.
 
 Total: roughly 5–6 sessions.  Phase 1 is the keystone; all others
 depend on it.
@@ -534,6 +543,10 @@ fixed spec.
 | 2026-04-26  | Claude   | Phase 6 shipped (=c686907=): Pass-5b Thesaurus   |
 |             |          | migration + `C-c u z M' command + menu entry;    |
 |             |          | +6 tests; suite 1553 / 1552 / 0 / 1              |
+| 2026-04-26  | Claude   | Phase 7 shipped (=813ca11=): back-link primitives|
+|             |          | + `C-c u z U' / `C-c u z G' commands + menu      |
+|             |          | entries; +8 tests; suite 1561 / 1560 / 0 / 1.    |
+|             |          | FEATURE COMPLETE.                                |
 
 * Success criteria
 
