@@ -1,7 +1,7 @@
 #+TITLE: Zettel in Translation Workflow — Feature Design
 #+DATE: 2026-04-24
 #+AUTHOR: Carsten Paul + Claude
-#+STATUS: v1 approved — Phases 1–5 shipped, Phase 6 next
+#+STATUS: v1 approved — Phases 1–6 shipped, Phase 7 next
 
 * Intent
 
@@ -395,7 +395,7 @@ stale links on demand.
 | 3     | Auto-creation for ~<term>~-tagged missing tokens    | =core/tibetan-zettel.el=, =config/tibetan-keybindings.el=, =config/tibetan-menu.el= | *shipped 087b08b* |
 | 4     | Claude-cache write path                              | =core/tibetan-zettel.el=, =persist/tibetan-analysis-claude.el= | *shipped 2394c50* |
 | 5     | Buddhist Terms reads from zettel cache               | =core/tibetan-zettel.el=, =persist/tibetan-analysis-persist.el= | *shipped d908183* |
-| 6     | Unify Pass-5b Thesaurus → v2 schema + migration cmd | =core/tibetan-thesaurus.el=                          | pending   |
+| 6     | Unify Pass-5b Thesaurus → v2 schema + migration cmd | =core/tibetan-zettel.el=, =config/tibetan-keybindings.el=, =config/tibetan-menu.el= | *shipped c686907* |
 | 7     | Back-link maintenance + GC command                  | =core/tibetan-zettel.el=                             | pending   |
 
 Total: roughly 5–6 sessions.  Phase 1 is the keystone; all others
@@ -531,6 +531,9 @@ fixed spec.
 |             |          | stale-detector + writer-overwrite-on-stale +     |
 |             |          | Buddhist Terms renderer hook; +10 tests; suite   |
 |             |          | 1547 / 1546 / 0 / 1                              |
+| 2026-04-26  | Claude   | Phase 6 shipped (=c686907=): Pass-5b Thesaurus   |
+|             |          | migration + `C-c u z M' command + menu entry;    |
+|             |          | +6 tests; suite 1553 / 1552 / 0 / 1              |
 
 * Success criteria
 
