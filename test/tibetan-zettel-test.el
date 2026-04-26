@@ -816,22 +816,26 @@ Properties get stamped; the explanation text replaces the
                                 content))))))
 
 (ert-deftest tibetan-zettel-cache-claude-skips-populated ()
-  "When the `* Claude Explanation' section already has a real body
-(not the `[awaiting first analysis]' placeholder), the writer
-LEAVES IT UNTOUCHED — never overwrites user edits or a previous
-cache.  Property stamps stay at their previous values."
+  "When the `* Claude Explanation' section is already populated AND
+the cached prompt-version matches what the writer is being asked
+to stamp, the writer LEAVES THE BODY UNTOUCHED — idempotent re-run
+with same Claude prompt is a no-op.
+
+Phase 5 (commit-after-2394c50) extended the writer with smart
+invalidation on prompt-version MISMATCH; the
+`overwrites-on-stale-version' test below covers that path.  This
+test pins the SAME-version idempotent path."
   (tibetan-zettel-test--with-fixture-dir
     (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
            (path (tibetan-zettel--create-for-term
                   :wylie "bdag" :script "བདག")))
-      ;; Prime: write a first cache.
       (tibetan-zettel--cache-claude-explanation
        path "ORIGINAL EXPLANATION"
-       :model "claude-1" :prompt-version "version-one")
-      ;; Try again — the writer must short-circuit.
+       :model "claude-1" :prompt-version "same-version")
+      ;; Re-run with the SAME prompt-version → must short-circuit.
       (tibetan-zettel--cache-claude-explanation
        path "OVERWRITE ATTEMPT"
-       :model "claude-2" :prompt-version "version-two")
+       :model "claude-2" :prompt-version "same-version")
       (let ((content (with-temp-buffer
                        (insert-file-contents path)
                        (buffer-string))))
@@ -839,8 +843,7 @@ cache.  Property stamps stay at their previous values."
         (should-not (string-match-p "OVERWRITE ATTEMPT" content))
         (should     (string-match-p "claude-1" content))
         (should-not (string-match-p "claude-2" content))
-        (should     (string-match-p "version-one" content))
-        (should-not (string-match-p "version-two" content))))))
+        (should     (string-match-p "same-version" content))))))
 
 (ert-deftest tibetan-zettel-cache-claude-vocabulary-walks-all ()
   "Given a parsed Claude Vocabulary alist + the current prompt
@@ -902,6 +905,206 @@ commentary is too verbose for the cache."
         (should (string-match-p "first-person pronoun, I/self" content))
         ;; The trailing commentary is NOT (overly verbose for the cache).
         (should-not (string-match-p "marks the speaker" content))))))
+
+;; ============================================================================
+;; Phase 5 — Cache reader + stale detection + writer-overwrite-on-stale
+;;
+;; The Buddhist Terms renderer consults the zettel's `* Claude Explanation'
+;; section.  When fresh (cached prompt-version matches the current system
+;; prompt's hash), the cached body is used; the rendering is suffixed with
+;; `[via zettel cache]' for transparency.  When stale (prompt has changed
+;; since the cache was written), the read returns nil and the renderer
+;; falls back to the 84000Definitions body.  The writer is extended to
+;; OVERWRITE populated entries when the cached prompt-version differs from
+;; the current — so a system-prompt revision (e.g. the U1+U2 tightening
+;; commit a1de885) auto-invalidates every cached entry on next reference.
+;; ============================================================================
+
+;; -------- Reader / stale-detector ------------------------------------------
+
+(ert-deftest tibetan-zettel-read-claude-explanation-empty ()
+  "A zettel that's never been Claude-cached returns nil from the
+reader (no `* Claude Explanation' content beyond the placeholder)."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (path (tibetan-zettel--create-for-term :wylie "bdag")))
+      (let ((entry (tibetan-zettel-lookup "bdag")))
+        (should entry)
+        (should-not (tibetan-zettel--read-claude-explanation entry))))))
+
+(ert-deftest tibetan-zettel-read-claude-explanation-fresh ()
+  "A zettel cached at the CURRENT prompt-version returns its body.
+The reader matches `:prompt-version:' against the prompt-hash arg
+the caller passes (the analysis flow passes the live system-prompt
+hash)."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (path (tibetan-zettel--create-for-term :wylie "bdag")))
+      (tibetan-zettel--cache-claude-explanation
+       path "Cached body for bdag."
+       :model "claude-test"
+       :prompt-version "fresh-hash-001")
+      (let ((entry (tibetan-zettel-lookup "bdag")))
+        (should (equal "Cached body for bdag."
+                       (tibetan-zettel--read-claude-explanation
+                        entry :current-prompt-version "fresh-hash-001")))))))
+
+(ert-deftest tibetan-zettel-read-claude-explanation-stale ()
+  "A zettel whose cached `:prompt-version:' DOESN'T match the
+current prompt-hash returns nil — caller falls back to the 84000
+body and a re-write replaces the cache."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (path (tibetan-zettel--create-for-term :wylie "bdag")))
+      (tibetan-zettel--cache-claude-explanation
+       path "Old body cached against the old prompt."
+       :model "claude-test" :prompt-version "old-hash")
+      (let ((entry (tibetan-zettel-lookup "bdag")))
+        (should-not (tibetan-zettel--read-claude-explanation
+                     entry :current-prompt-version "new-hash"))))))
+
+(ert-deftest tibetan-zettel-read-claude-explanation-no-version-arg ()
+  "When the caller doesn't pass `:current-prompt-version', the
+reader uses the live system prompt's hash (default fallback to
+the zettel-module's own default)."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           ;; Stub the prompt symbol so the hash is predictable.
+           (tibetan-analysis--claude-system-prompt "predictable")
+           (live-hash (tibetan-zettel--prompt-version-hash
+                       "predictable"))
+           (path (tibetan-zettel--create-for-term :wylie "bdag")))
+      (tibetan-zettel--cache-claude-explanation
+       path "Body."
+       :prompt-version live-hash)
+      (let ((entry (tibetan-zettel-lookup "bdag")))
+        ;; No :current-prompt-version arg → reader picks live-hash → match.
+        (should (equal "Body."
+                       (tibetan-zettel--read-claude-explanation entry)))))))
+
+(ert-deftest tibetan-zettel-cache-stale-p-fresh-and-stale ()
+  "The stale-p predicate distinguishes fresh from stale caches."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (path (tibetan-zettel--create-for-term :wylie "bdag")))
+      (tibetan-zettel--cache-claude-explanation
+       path "Body." :prompt-version "v1")
+      (let ((entry (tibetan-zettel-lookup "bdag")))
+        (should-not (tibetan-zettel--cache-stale-p
+                     entry :current-prompt-version "v1"))
+        (should (tibetan-zettel--cache-stale-p
+                 entry :current-prompt-version "v2"))))))
+
+;; -------- Writer overwrite-on-stale -----------------------------------------
+
+(ert-deftest tibetan-zettel-cache-claude-overwrites-on-stale-version ()
+  "When the writer is invoked with a prompt-version that DIFFERS
+from the cached one, it OVERWRITES the populated section and
+re-stamps the properties.  This is the smart-invalidation branch
+that complements Phase 4's idempotent write."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (path (tibetan-zettel--create-for-term :wylie "bdag")))
+      (tibetan-zettel--cache-claude-explanation
+       path "OLD BODY" :model "claude-1" :prompt-version "v1")
+      (tibetan-zettel--cache-claude-explanation
+       path "NEW BODY" :model "claude-2" :prompt-version "v2")
+      (let ((content (with-temp-buffer
+                       (insert-file-contents path)
+                       (buffer-string))))
+        (should     (string-match-p "NEW BODY" content))
+        (should-not (string-match-p "OLD BODY" content))
+        (should     (string-match-p "claude-2" content))
+        (should-not (string-match-p "claude-1" content))
+        (should     (string-match-p ":prompt-version:[ \t]+v2" content))))))
+
+(ert-deftest tibetan-zettel-cache-claude-no-overwrite-on-same-version ()
+  "When the writer is invoked with the SAME prompt-version that's
+already cached, it leaves the body alone (idempotent — Phase 4
+behaviour preserved)."
+  (tibetan-zettel-test--with-fixture-dir
+    (let* ((tibetan-zettel-directory tibetan-zettel-test--tempdir)
+           (path (tibetan-zettel--create-for-term :wylie "bdag")))
+      (tibetan-zettel--cache-claude-explanation
+       path "FIRST BODY" :model "claude-1" :prompt-version "v1")
+      (tibetan-zettel--cache-claude-explanation
+       path "SECOND BODY" :model "claude-1" :prompt-version "v1")
+      (let ((content (with-temp-buffer
+                       (insert-file-contents path)
+                       (buffer-string))))
+        (should     (string-match-p "FIRST BODY" content))
+        (should-not (string-match-p "SECOND BODY" content))))))
+
+;; -------- Renderer integration: Buddhist Terms reads from cache ------------
+
+(ert-deftest tibetan-zettel-buddhist-terms-render-prefers-cache ()
+  "When a Buddhist term has a fresh-cached zettel, the
+`*** Buddhist Terms' rendering uses the zettel body and suffixes
+the entry with `[via zettel cache]'.  When no cache, the
+84000Definitions body is used as before (regression guard)."
+  ;; Stub the zettel so the renderer's lookup returns a known fresh entry.
+  (cl-letf* ((tibetan-analysis--claude-system-prompt "live-prompt")
+             ((symbol-function 'tibetan-zettel-lookup)
+              (lambda (wylie)
+                (and (equal wylie "tshad med bzhi po")
+                     (list :id "z-id"
+                           :path "/tmp/z.org"
+                           :wylie "tshad med bzhi po"
+                           :preferred-en "four immeasurables"
+                           :claude-cached-p t))))
+             ((symbol-function 'tibetan-zettel--read-claude-explanation)
+              (lambda (entry &rest _)
+                (and (equal (plist-get entry :wylie) "tshad med bzhi po")
+                     "Cached Claude body — pithy explanation."))))
+    ;; The renderer takes (script wylie body) triples from
+    ;; `--collect-buddhist-terms'; we pass them directly here to test
+    ;; the rendering layer in isolation.
+    (let ((rendered
+           (with-temp-buffer
+             (tibetan-analysis--render-buddhist-terms-section
+              '(("ཚད་མེད་བཞི་པོ" "tshad med bzhi po"
+                 "<term> four immeasurables: meditation on love, …")))
+             (buffer-string))))
+      (should (string-match-p "Cached Claude body" rendered))
+      (should (string-match-p "via zettel cache" rendered))
+      ;; The 84000 body is NOT in the rendered output — cache wins.
+      (should-not (string-match-p "meditation on love" rendered)))))
+
+(ert-deftest tibetan-zettel-buddhist-terms-render-fallback-to-84000 ()
+  "When no zettel exists for the term (or the cache is empty), the
+renderer falls back to the 84000 body — Phase 5 doesn't break the
+pre-existing behaviour."
+  (cl-letf (((symbol-function 'tibetan-zettel-lookup)
+             (lambda (_wylie) nil)))
+    (let ((rendered
+           (with-temp-buffer
+             (tibetan-analysis--render-buddhist-terms-section
+              '(("ཚད་མེད་བཞི་པོ" "tshad med bzhi po"
+                 "<term> four immeasurables: meditation on love, …")))
+             (buffer-string))))
+      (should     (string-match-p "meditation on love" rendered))
+      (should-not (string-match-p "via zettel cache" rendered)))))
+
+(ert-deftest tibetan-zettel-buddhist-terms-render-fallback-on-stale ()
+  "When the zettel has a STALE cache (prompt-version mismatch), the
+reader returns nil and the renderer falls back to 84000 — the
+zettel itself isn't shown as the source until a fresh Claude call
+overwrites the cache."
+  (cl-letf (((symbol-function 'tibetan-zettel-lookup)
+             (lambda (wylie)
+               (and (equal wylie "tshad med bzhi po")
+                    (list :wylie "tshad med bzhi po"
+                          :claude-cached-p t))))
+            ((symbol-function 'tibetan-zettel--read-claude-explanation)
+             (lambda (&rest _) nil)))   ; stale → nil
+    (let ((rendered
+           (with-temp-buffer
+             (tibetan-analysis--render-buddhist-terms-section
+              '(("ཚད་མེད་བཞི་པོ" "tshad med bzhi po"
+                 "<term> four immeasurables: meditation on love, …")))
+             (buffer-string))))
+      (should     (string-match-p "meditation on love" rendered))
+      (should-not (string-match-p "via zettel cache" rendered)))))
 
 (provide 'tibetan-zettel-test)
 ;;; tibetan-zettel-test.el ends here

@@ -2291,6 +2291,49 @@ in the `*** Buddhist Terms' subsection."
         (concat (substring s 0 (- max-len 1)) "…")
       s)))
 
+(defun tibetan-analysis--render-buddhist-terms-section (terms)
+  "Insert `*** Buddhist Terms' section into the current buffer for
+TERMS.  TERMS is the list of `(SCRIPT WYLIE 84000-BODY)' triples
+returned by `tibetan-analysis--collect-buddhist-terms'.
+
+Phase 5 of zettel-in-translation-workflow (2026-04-26): for each
+term, consults `tibetan-zettel--read-claude-explanation' first.
+When a fresh cache exists (zettel exists AND `:prompt-version:'
+matches the live system prompt's hash), the zettel's body is
+rendered with a `[via zettel cache]' suffix.  When no cache or
+stale, falls back to the truncated 84000Definitions body — same
+behaviour as pre-Phase-5 U3.
+
+The cache reader returns nil when the prompt-version is stale,
+so the writer (Phase 5 extension to commit 2394c50's writer) can
+overwrite on the next Claude response without manual
+invalidation."
+  (when terms
+    (insert "*** Buddhist Terms\n")
+    (dolist (entry terms)
+      (let* ((script (nth 0 entry))
+             (wylie (nth 1 entry))
+             (84000-body (nth 2 entry))
+             (zettel-entry
+              (and wylie (fboundp 'tibetan-zettel-lookup)
+                   (ignore-errors (tibetan-zettel-lookup wylie))))
+             (cached-body
+              (and zettel-entry
+                   (fboundp 'tibetan-zettel--read-claude-explanation)
+                   (ignore-errors
+                     (tibetan-zettel--read-claude-explanation
+                      zettel-entry))))
+             (head (tibetan-analysis--format-word-with-wylie script))
+             (body (or cached-body 84000-body))
+             (clean (tibetan-analysis--format-buddhist-term-body
+                     body 400))
+             (suffix (if cached-body
+                         "  [via zettel cache]"
+                       "")))
+        (insert (format "- %s\n" head))
+        (insert (format "  %s%s\n" clean suffix))))
+    (insert "\n")))
+
 (defun tibetan-analysis--render-grammar-section (tibetan-text particles verbs
                                                               bialek-analysis
                                                               &optional
@@ -2372,7 +2415,9 @@ nil, the subsection is omitted."
   (insert "*** Claude Grammar\n")
   (insert "\n\n")
   ;; ------------------------------------------------------------------
-  ;; Sub-section 3 (optional): Buddhist Terms (U3, 2026-04-24).
+  ;; Sub-section 3 (optional): Buddhist Terms (U3, 2026-04-24;
+  ;; Phase 5 of zettel-in-translation-workflow on 2026-04-26 adds
+  ;; the zettel-cache read path).
   ;; One entry per token with an 84000 `<term>'-tagged Steinert hit.
   ;; Surfaces the 84000Definitions paragraph so students meeting
   ;; `ཚད་མེད་བཞི་པོ' (Four Immeasurables), `བྱང་ཆུབ་ཀྱི་སེམས'
@@ -2385,19 +2430,7 @@ nil, the subsection is omitted."
                     (tibetan-analysis--collect-buddhist-terms
                      enriched-vocab-pairs))))
     (when terms
-      (insert "*** Buddhist Terms\n")
-      (dolist (entry terms)
-        (let* ((script (nth 0 entry))
-               (wylie (nth 1 entry))
-               (body (nth 2 entry))
-               (head (tibetan-analysis--format-word-with-wylie
-                      script))
-               (clean (tibetan-analysis--format-buddhist-term-body
-                       body 400)))
-          (insert (format "- %s\n" head))
-          (insert (format "  %s\n" clean))
-          (ignore wylie)))
-      (insert "\n")))
+      (tibetan-analysis--render-buddhist-terms-section terms)))
   ;; ------------------------------------------------------------------
   ;; Sub-section 4: Particles in This Segment.
   ;;

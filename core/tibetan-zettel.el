@@ -592,50 +592,66 @@ is what we inspect."
 (cl-defun tibetan-zettel--cache-claude-explanation
     (path explanation &key model prompt-version)
   "Write EXPLANATION into PATH's `* Claude Explanation' section.
-No-op when the section is already populated (writer is idempotent
-and respects user / prior-cache content).
+
+Phase 4 contract (idempotent): empty / placeholder section →
+write; populated section with same prompt-version → leave alone.
+
+Phase 5 extension (smart invalidation): populated section with
+DIFFERENT cached `:prompt-version:' than the PROMPT-VERSION arg
+→ OVERWRITE.  Means a system-prompt revision propagates to all
+cached entries on next reference, without a manual
+`claude-invalidate-all'.
 
 Stamps the zettel's PROPERTIES drawer with `:claude-cached:'
 (today's date), `:claude-model:' (MODEL or `(unknown)') and
-`:prompt-version:' (PROMPT-VERSION or `unknown') for Phase 5's
-freshness check.
+`:prompt-version:' (PROMPT-VERSION or `unknown').  Stamps are
+removed-and-reinserted on each write so re-runs leave a clean
+drawer.
 
 Returns t when an update was written, nil when skipped (already
-populated)."
+populated AND prompt-version matches)."
   (when (and path (file-readable-p path)
              explanation (stringp explanation)
              (not (string-empty-p (string-trim explanation))))
-    (let ((content (with-temp-buffer
-                     (insert-file-contents path)
-                     (buffer-string))))
-      (when (tibetan-zettel--claude-explanation-empty-p content)
+    (let* ((content (with-temp-buffer
+                      (insert-file-contents path)
+                      (buffer-string)))
+           (empty-p (tibetan-zettel--claude-explanation-empty-p content))
+           (cached-version
+            (and (string-match
+                  "^:prompt-version:[ \t]+\\(\\S-+\\)[ \t]*$"
+                  content)
+                 (match-string 1 content)))
+           (stale-p (and cached-version
+                         prompt-version
+                         (not (equal cached-version prompt-version)))))
+      (when (or empty-p stale-p)
         ;; Atomically rewrite the file.
         (with-temp-file path
           (insert content)
           ;; 1. Update PROPERTIES drawer with the three stamps.
           (goto-char (point-min))
           (when (re-search-forward "^:END:[ \t]*$" nil t)
-            (let ((end-of-drawer (match-beginning 0)))
-              (goto-char end-of-drawer)
-              ;; Remove existing stamps so we can re-emit them
-              ;; (idempotent re-stamp on same prompt-version).
-              (dolist (key '("claude-cached" "claude-model" "prompt-version"))
-                (save-excursion
-                  (goto-char (point-min))
-                  (when (re-search-forward
-                         (format "^:%s:.*$\n" (regexp-quote key))
-                         end-of-drawer t)
-                    (replace-match ""))))
-              ;; Re-locate :END: (the previous deletes shifted it).
+            (let ((end-of-drawer (copy-marker (match-beginning 0))))
+              ;; Remove ALL existing cache stamps in one sweep — single
+              ;; alternation regex catches the three keys regardless of
+              ;; their order in the drawer.  Marker `end-of-drawer'
+              ;; auto-tracks deletions so its position stays valid.
               (goto-char (point-min))
-              (re-search-forward "^:END:[ \t]*$")
+              (while (re-search-forward
+                      "^:\\(?:claude-cached\\|claude-model\\|prompt-version\\):.*\n"
+                      end-of-drawer t)
+                (replace-match ""))
+              ;; Re-locate :END: via the marker, insert fresh stamps.
+              (goto-char end-of-drawer)
               (beginning-of-line)
               (insert (format ":claude-cached:   %s\n"
                               (format-time-string "%Y-%m-%d")))
               (insert (format ":claude-model:    %s\n"
                               (or model "(unknown)")))
               (insert (format ":prompt-version:  %s\n"
-                              (or prompt-version "unknown")))))
+                              (or prompt-version "unknown")))
+              (set-marker end-of-drawer nil)))
           ;; 2. Replace the placeholder body of `* Claude Explanation'.
           (goto-char (point-min))
           (when (re-search-forward "^\\* Claude Explanation[ \t]*$" nil t)
@@ -666,6 +682,79 @@ is the cacheable short explanation.  Returns nil when the line
 lacks a quoted field."
   (when (and line (stringp line) (string-match "\"\\([^\"]+\\)\"" line))
     (string-trim (match-string 1 line))))
+
+(defun tibetan-zettel--current-prompt-version ()
+  "Return the live `tibetan-analysis--claude-system-prompt' hash, or
+nil when the prompt symbol is unavailable.  Used by the Phase 5
+reader and stale-p detector when the caller doesn't supply an
+explicit `:current-prompt-version'."
+  (when (and (boundp 'tibetan-analysis--claude-system-prompt)
+             tibetan-analysis--claude-system-prompt)
+    (tibetan-zettel--prompt-version-hash
+     tibetan-analysis--claude-system-prompt)))
+
+(defun tibetan-zettel--read-cached-prompt-version (path)
+  "Return PATH zettel's cached `:prompt-version:' property, or nil."
+  (when (and path (file-readable-p path))
+    (with-temp-buffer
+      (insert-file-contents path nil 0 4096)
+      (when (re-search-forward
+             "^:prompt-version:[ \t]+\\(\\S-+\\)[ \t]*$" nil t)
+        (match-string 1)))))
+
+(cl-defun tibetan-zettel--cache-stale-p
+    (entry &key current-prompt-version)
+  "Return non-nil when ENTRY's cached prompt-version differs from
+the current live system prompt's hash.  ENTRY is a plist returned
+by `tibetan-zettel-lookup'.
+
+`:current-prompt-version' override takes precedence over the live
+hash; used by tests to pin a specific value.
+
+Returns nil when no cache exists yet (no `:prompt-version:'
+property in the zettel) — vacuously fresh."
+  (let* ((path (plist-get entry :path))
+         (cached (tibetan-zettel--read-cached-prompt-version path))
+         (live (or current-prompt-version
+                   (tibetan-zettel--current-prompt-version))))
+    (and cached live (not (equal cached live)))))
+
+(cl-defun tibetan-zettel--read-claude-explanation
+    (entry &key current-prompt-version)
+  "Return ENTRY's cached `* Claude Explanation' body, or nil.
+
+Returns nil when:
+  · the section is empty / placeholder (no cache),
+  · OR the cached `:prompt-version:' differs from the current
+    (or supplied via `:current-prompt-version') — stale entries
+    are invisible to the reader so the analysis flow falls back
+    to fresh data and the writer overwrites on next reference.
+
+ENTRY is a plist returned by `tibetan-zettel-lookup'."
+  (let ((path (plist-get entry :path)))
+    (when (and path (file-readable-p path)
+               (not (tibetan-zettel--cache-stale-p
+                     entry :current-prompt-version current-prompt-version)))
+      (with-temp-buffer
+        (insert-file-contents path)
+        (goto-char (point-min))
+        (when (re-search-forward "^\\* Claude Explanation[ \t]*$" nil t)
+          (forward-line 1)
+          ;; Skip optional :PROPERTIES: drawer.
+          (when (looking-at-p "^:PROPERTIES:")
+            (re-search-forward "^:END:[ \t]*\n" nil t))
+          (let ((body-start (point))
+                (body-end (save-excursion
+                            (if (re-search-forward "^\\* " nil t)
+                                (line-beginning-position)
+                              (point-max)))))
+            (let ((body (string-trim
+                         (buffer-substring-no-properties
+                          body-start body-end))))
+              (unless (or (string-empty-p body)
+                          (string-match-p "\\`\\[awaiting first analysis\\]\\'"
+                                          body))
+                body))))))))
 
 (cl-defun tibetan-zettel--cache-claude-vocabulary
     (vocab-alist &key model prompt-version)
