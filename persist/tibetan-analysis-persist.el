@@ -1847,27 +1847,41 @@ particles like `'i' / `'o'."
                     (format "*%s*\\1" p)
                     result)))
 
-    ;; Add zero-marker annotations for verbs that expect unmarked arguments
-    (let ((zero-notes '()))
+    ;; Embed zero-markers (Ø) inline before transitive verbs that expect
+    ;; an unmarked agent.  Replaces earlier behaviour of appending
+    ;; `[Ø AGENT expected before V]' lines below the Wylie — having
+    ;; the Ø sit at the verb's position keeps the particle markup +
+    ;; argument-structure on one visual line, which reads better
+    ;; alongside the Particle Map's case-particle highlighting.
+    ;;
+    ;; "Intransitive" contains "Transitive" as substring — check
+    ;; Intransitive first so we don't add Ø for intransitive verbs
+    ;; like pham/'thon/sleb.
+    (let ((case-fold-search nil))
       (dolist (verb verbs)
         (when (and verb (listp verb) (consp (car verb)))
           (let* ((lemma (alist-get 'lemma verb))
                  (trans (alist-get 'transitivity verb))
                  (frame (alist-get 'case_frame verb)))
-            ;; "Intransitive" contains "Transitive" as substring — check
-            ;; Intransitive first so we don't add Ø-AGENT notes for
-            ;; intransitive verbs like pham/'thon/sleb.
             (when (and lemma
                        (not (string-match-p "[Ii]ntransitive" (or trans "")))
                        (or (string-match-p "[Tt]ransitive" (or trans ""))
                            (string-match-p "Erg" (or frame ""))))
-              (push (format "[Ø AGENT expected before %s]"
-                           (condition-case nil
-                               (tibetan-to-wylie-fixed lemma)
-                             (error lemma)))
-                    zero-notes)))))
-      (when zero-notes
-        (setq result (concat result "\n\n" (string-join (nreverse zero-notes) "\n")))))
+              (let* ((verb-wylie (condition-case nil
+                                     (tibetan-to-wylie-fixed lemma)
+                                   (error lemma)))
+                     ;; Replace the FIRST whole-word occurrence only;
+                     ;; if a verb appears twice in the segment we don't
+                     ;; want two Ø markers cluttering the line.  The
+                     ;; first occurrence is typically the canonical
+                     ;; argument site; later occurrences are usually
+                     ;; nominalised re-references.
+                     (re (format "\\b%s\\b" (regexp-quote verb-wylie))))
+                (when (and verb-wylie
+                           (not (string-empty-p verb-wylie))
+                           (string-match re result))
+                  (setq result
+                        (replace-match (concat "Ø " verb-wylie) t t result)))))))))
 
     result))
 

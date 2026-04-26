@@ -179,5 +179,61 @@
     :then ((tibetan-bdd-assert-matches "COM" result))
     :tags (:case-markers)))
 
+;; ============================================================================
+;; ZERO-MARKER RENDERING SUITE
+;; ============================================================================
+;;
+;; The Particle Map flags transitive verbs that lack an explicit
+;; ergative-marked agent with `Ø' (zero-marker).  Earlier versions
+;; emitted these as trailing notes (`[Ø AGENT expected before V]')
+;; appended after the Wylie line; the new convention embeds Ø
+;; directly inline in the map at the verb's position so the visual
+;; alignment between particle markup and verb-argument structure
+;; stays in one line.
+
+(define-bdd-suite zero-marker-rendering
+    "Particle Map renders Ø inline, not as trailing notes"
+
+  (spec "Ø appears inline before transitive verb"
+    :given (when (fboundp 'tibetan-analysis--generate-particle-map)
+             (cl-letf (((symbol-function 'tibetan-to-wylie-fixed)
+                        (lambda (s)
+                          (cond ((equal s "FOO") "alpha smra beta")
+                                ((equal s "smra") "smra")
+                                (t s)))))
+               (setq result
+                     (tibetan-analysis--generate-particle-map
+                      "FOO"
+                      nil
+                      '(((lemma . "smra")
+                         (transitivity . "Transitive")
+                         (case_frame . "Erg-Abs")))))))
+    :when result
+    :then ((should result)
+           (should (string-match-p "Ø smra" result))
+           (should-not (string-match-p "\\[Ø AGENT expected" result)))
+    :example "Particle Map embeds Ø inline before `smra'"
+    :tags (:zero-marker :rendering :critical))
+
+  (spec "Ø NOT inserted before intransitive verbs"
+    :given (when (fboundp 'tibetan-analysis--generate-particle-map)
+             (cl-letf (((symbol-function 'tibetan-to-wylie-fixed)
+                        (lambda (s)
+                          (cond ((equal s "BAR") "phyin pa")
+                                ((equal s "phyin") "phyin")
+                                (t s)))))
+               (setq result
+                     (tibetan-analysis--generate-particle-map
+                      "BAR"
+                      nil
+                      '(((lemma . "phyin")
+                         (transitivity . "Intransitive")
+                         (case_frame . "Abs")))))))
+    :when result
+    :then ((should result)
+           (should-not (string-match-p "Ø" result)))
+    :example "Intransitive `phyin' gets no Ø"
+    :tags (:zero-marker :rendering :backwards-compat)))
+
 (provide 'particle-analysis-spec)
 ;;; particle-analysis-spec.el ends here
