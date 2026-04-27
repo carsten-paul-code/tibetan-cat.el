@@ -284,9 +284,21 @@ Keys:
                    Gloss, the CAT Gloss, and the Claude Translation
                    prompt.  The Detailed Dictionary always keeps
                    the bilingual `DE // EN' form for reference.
+  :source-mode     value of `#+SOURCE_MODE:' — the document's
+                   reading mode (e.g. `parallel-sanskrit' for the
+                   Yogācārabhūmi parallel-reading workflow where
+                   Sanskrit is primary and Tibetan secondary).
+                   nil when unset (today's default — Tibetan-only
+                   source).  Phase 3 of sanskrit-parallel-workflow
+                   (2026-04-27) injects a Sanskrit-primary system
+                   block into the Claude prompt when this equals
+                   `parallel-sanskrit'.  See
+                   `core/tibetan-sanskrit-parallel.el' for the
+                   inline reader used by `core/' callers without
+                   the persist dependency.
 
 Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
-  (let (title work author sources ctx vocab corpus target-lang)
+  (let (title work author sources ctx vocab corpus target-lang source-mode)
     (when (and source-file (file-exists-p source-file))
       (condition-case nil
           (with-temp-buffer
@@ -307,6 +319,11 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
               (let ((val (string-trim (match-string 1))))
                 (unless (string-empty-p val)
                   (setq target-lang (downcase val)))))
+            (goto-char (point-min))
+            (when (re-search-forward "^#\\+SOURCE_MODE:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (unless (string-empty-p val)
+                  (setq source-mode val))))
             (goto-char (point-min))
             (while (re-search-forward
                     "^#\\+TIBETAN_CLAUDE_CONTEXT:[ \t]*\\(.*\\)$" nil t)
@@ -342,7 +359,8 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
           :claude-context ctx
           :vocab-file vocab
           :corpus corpus
-          :target-lang target-lang)))
+          :target-lang target-lang
+          :source-mode source-mode)))
 
 
 ;;;###autoload

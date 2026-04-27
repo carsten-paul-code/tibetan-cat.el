@@ -88,6 +88,14 @@
 (require 'tibetan-org-structure)  ; Org-mode structure support (new format)
 (require 'tibetan-text-classifier) ; Text type classification (NEW)
 
+;; Sanskrit-parallel reading bridge (Phase 1, 2026-04-27).  Read-only
+;; primitives: walker for `**** Sanskrit' siblings + source-mode
+;; predicate (`#+SOURCE_MODE: parallel-sanskrit').  Soft-required —
+;; missing module does not break loading; the analysis pipeline
+;; treats the document as Tibetan-only.  Future Sanskrit CAT will
+;; consume the same primitives.
+(require 'tibetan-sanskrit-parallel nil t)
+
 ;; ============================================================================
 ;; LOAD ANALYSIS MODULES
 ;; ============================================================================

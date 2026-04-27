@@ -100,6 +100,57 @@ below it."
                  (string-match-p "\\bSentence\\b" heading))))
       (error nil))))
 
+;;; Subtree Body Reader (shared helper)
+
+(defun tibetan-org--read-subtree-body ()
+  "Read the body text of the current org subtree.
+
+The body is the text between the heading line and the first
+child heading (any depth), with a leading `:PROPERTIES: … :END:'
+drawer skipped.  Returns the trimmed body string, or nil when
+the body is empty / whitespace-only.
+
+Point need not be on the heading line — `org-back-to-heading'
+moves back automatically.  Internally uses
+`save-restriction' + `org-narrow-to-subtree' so callers with
+existing narrowing remain unaffected.
+
+Used by `tibetan-org-get-segment-text' (segment Tibetan text) and
+`tibetan-sanskrit-parallel-text-for-segment' (Sanskrit sibling
+text).  Extracted 2026-04-27 as part of Phase 1 of the
+sanskrit-parallel-workflow feature so both walkers share the
+same drawer-skip + child-stop semantics — there is no second
+copy of this pattern to drift."
+  (save-excursion
+    (unless (org-at-heading-p)
+      (org-back-to-heading t))
+    (save-restriction
+      (org-narrow-to-subtree)
+      (let* ((body-start
+              (save-excursion
+                (forward-line 1)        ; Past the heading line.
+                ;; Skip a leading `:PROPERTIES: … :END:' drawer
+                ;; if present — drawers are Org syntax for per-
+                ;; heading metadata (e.g. :FOLIO: D3a3 on a
+                ;; Yogācārabhūmi segment, or :EDITION:
+                ;; Bhattacharya 1957:1 on a `**** Sanskrit'
+                ;; sibling).
+                (when (looking-at-p "[ \t]*:PROPERTIES:[ \t]*$")
+                  (when (re-search-forward
+                         "^[ \t]*:END:[ \t]*$" nil t)
+                    (forward-line 1)))
+                (point)))
+             (body-end
+              (save-excursion
+                (goto-char body-start)
+                ;; Stop at the first child heading (any depth).
+                (if (re-search-forward "^\\*+ " nil t)
+                    (line-beginning-position)
+                  (point-max))))
+             (text (buffer-substring-no-properties body-start body-end)))
+        (when (and text (not (string-empty-p (string-trim text))))
+          (string-trim text))))))
+
 ;;; Segment Functions
 
 (defun tibetan-org-get-segment-text ()
@@ -111,40 +162,18 @@ Skips an `:PROPERTIES: … :END:' drawer immediately following the
 heading (used e.g. for `:FOLIO:' markers on Yogācārabhūmi segments)
 so the drawer body is not mistaken for Tibetan text.  Also skips any
 child `**** Working Translation' / other subheadings — only the
-segment's own body text is returned."
+segment's own body text is returned.
+
+Internally delegates to `tibetan-org--read-subtree-body' (the
+shared helper that implements the drawer-skip + child-stop body
+extraction).  Pre-Phase 1 of sanskrit-parallel-workflow this
+function carried its own copy of that logic; the helper was
+extracted 2026-04-27 so segment and Sanskrit walkers share one
+pattern."
   (condition-case nil
       (save-excursion
         (when (tibetan-org-at-segment-p)
-          ;; Move to heading (handles both on heading and in content)
-          (unless (org-at-heading-p)
-            (org-back-to-heading t))
-
-          ;; Use narrowing approach which is more reliable than org-element
-          ;; especially when called from org-map-entries
-          (save-restriction
-            (org-narrow-to-subtree)
-            (let* ((body-start
-                    (save-excursion
-                      (forward-line 1)          ; Past the heading line.
-                      ;; Skip a leading `:PROPERTIES: … :END:' drawer
-                      ;; if present — drawers are Org syntax for per-
-                      ;; heading metadata (e.g. :FOLIO: D3a3).
-                      (when (looking-at-p "[ \t]*:PROPERTIES:[ \t]*$")
-                        (when (re-search-forward
-                               "^[ \t]*:END:[ \t]*$" nil t)
-                          (forward-line 1)))
-                      (point)))
-                   (body-end
-                    (save-excursion
-                      (goto-char body-start)
-                      ;; Stop at the first child heading (any depth).
-                      (if (re-search-forward "^\\*+ " nil t)
-                          (line-beginning-position)
-                        (point-max))))
-                   (text (buffer-substring-no-properties body-start body-end)))
-              (widen)
-              (when (and text (not (string-empty-p (string-trim text))))
-                (string-trim text))))))
+          (tibetan-org--read-subtree-body)))
     (error nil)))
 
 (defun tibetan-org-get-segment-id ()

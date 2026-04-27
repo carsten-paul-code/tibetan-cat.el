@@ -100,6 +100,13 @@
 ;; migration and then the thesaurus tests retire.
 (condition-case nil (require 'tibetan-zettel-test) (error nil))
 
+;; Sanskrit-parallel reading workflow (Phase 1, 2026-04-27) — walker
+;; that extracts the `**** Sanskrit' sibling next to a `**** Segment',
+;; plus the `#+SOURCE_MODE: parallel-sanskrit' source-mode predicate.
+;; Read-only foundation for the Yogācārabhūmi parallel reading
+;; workflow (Sanskrit primary, Tibetan secondary).
+(condition-case nil (require 'tibetan-sanskrit-parallel-test) (error nil))
+
 ;; Source-aware Claude prompt (reads #+TIBETAN_CLAUDE_CONTEXT: and friends)
 (condition-case nil (require 'tibetan-analysis-claude-prompt-test) (error nil))
 
