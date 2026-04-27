@@ -238,6 +238,156 @@ result directly without guarding."
 ;; Source-mode predicate
 ;; ----------------------------------------------------------------------------
 
+;; ----------------------------------------------------------------------------
+;; Source-mode header management (Phase 5, 2026-04-27)
+;; ----------------------------------------------------------------------------
+;;
+;; Three commands manage the `#+SOURCE_MODE:' header on source
+;; documents.  They are patterned on `tibetan-analysis-set-source-
+;; target-lang' (`persist/tibetan-analysis-claude.el:367') —
+;; replace-in-place when the header exists, insert after `#+TITLE:'
+;; when missing, prepend when no `#+TITLE:' either.  No interactive
+;; arguments beyond the source file path; the toggle command picks
+;; up `parallel-sanskrit' from a defcustom-able default below.
+
+(defcustom tibetan-cat-source-mode-default-parallel "parallel-sanskrit"
+  "The mode token written by `tibetan-cat-toggle-source-mode-parallel'.
+
+Currently `parallel-sanskrit' is the only implemented mode.
+Future modes (`parallel-pali', `commentary-with-base', …) would
+extend this list and route through the same toggle command via
+a per-mode interactive variant — for now the constant default
+keeps the toggle one-keystroke."
+  :type 'string
+  :group 'tibetan-cat)
+
+(defun tibetan-cat-set-source-mode (source-file mode)
+  "Set `#+SOURCE_MODE:' to MODE on SOURCE-FILE.
+
+When SOURCE-FILE already has a `#+SOURCE_MODE:' line, the value
+is replaced in place.  Otherwise the new line is inserted right
+after the first `#+TITLE:' line so document metadata stays
+contiguous at the top of the file.  When neither header is
+present, the mode header is prepended to the buffer.
+
+Re-analyses of this document pick up the new value automatically
+via `tibetan-analysis--read-source-metadata' — no manual reload
+needed.  Interactive callers get a final-state message.
+
+Errors when MODE is nil / empty, or when SOURCE-FILE is nil /
+non-existent / not writable."
+  (interactive
+   (list (or (and (fboundp 'tibetan-analysis--source-file-from-analysis)
+                  (tibetan-analysis--source-file-from-analysis
+                   (buffer-file-name)))
+             buffer-file-name
+             (read-file-name "Source file: " nil nil t))
+         (read-string "Source mode (e.g. parallel-sanskrit): "
+                      tibetan-cat-source-mode-default-parallel)))
+  (unless (and mode (stringp mode) (not (string-empty-p (string-trim mode))))
+    (user-error "Source mode must be a non-empty string (got %S)" mode))
+  (unless (and source-file (stringp source-file)
+               (not (string-empty-p source-file))
+               (file-exists-p source-file)
+               (file-writable-p source-file))
+    (user-error
+     "Cannot write source-mode header — source file missing / not writable: %s"
+     source-file))
+  (let ((mode (string-trim mode)))
+    (with-temp-buffer
+      (insert-file-contents source-file)
+      (goto-char (point-min))
+      (cond
+       ;; Replace existing line in place.
+       ((re-search-forward "^#\\+SOURCE_MODE:[ \t]*.*$" nil t)
+        (replace-match (format "#+SOURCE_MODE: %s" mode) t t))
+       ;; Insert immediately after the first #+TITLE: line.
+       ((progn (goto-char (point-min))
+               (re-search-forward "^#\\+TITLE:.*$" nil t))
+        (end-of-line)
+        (insert (format "\n#+SOURCE_MODE: %s" mode)))
+       ;; No #+TITLE either — prepend to the buffer.
+       (t
+        (goto-char (point-min))
+        (insert (format "#+SOURCE_MODE: %s\n" mode))))
+      (write-region (point-min) (point-max) source-file))
+    (when (called-interactively-p 'any)
+      (message "Source mode set to `%s' on %s" mode
+               (file-name-nondirectory source-file)))))
+
+(defun tibetan-cat-clear-source-mode (source-file)
+  "Remove the `#+SOURCE_MODE:' header from SOURCE-FILE, if present.
+
+No-op (and no error) when the header is absent.  Returns the
+document to today's Tibetan-only behaviour: the next reanalyse
+emits no `** Sanskrit Source' section, the Claude system prompt
+reverts to Tibetan-only translation, and the user prompt drops
+the Sanskrit (primary) block.
+
+Errors when SOURCE-FILE is nil / non-existent / not writable."
+  (interactive
+   (list (or (and (fboundp 'tibetan-analysis--source-file-from-analysis)
+                  (tibetan-analysis--source-file-from-analysis
+                   (buffer-file-name)))
+             buffer-file-name
+             (read-file-name "Source file: " nil nil t))))
+  (unless (and source-file (stringp source-file)
+               (not (string-empty-p source-file))
+               (file-exists-p source-file)
+               (file-writable-p source-file))
+    (user-error
+     "Cannot clear source-mode header — source file missing / not writable: %s"
+     source-file))
+  (with-temp-buffer
+    (insert-file-contents source-file)
+    (goto-char (point-min))
+    (when (re-search-forward "^#\\+SOURCE_MODE:.*\n?" nil t)
+      (replace-match "" t t)
+      (write-region (point-min) (point-max) source-file)))
+  (when (called-interactively-p 'any)
+    (message "Source mode cleared on %s"
+             (file-name-nondirectory source-file))))
+
+;;;###autoload
+(defun tibetan-cat-toggle-source-mode-parallel ()
+  "Toggle `#+SOURCE_MODE: parallel-sanskrit' on the current source file.
+
+When the source file is in parallel-sanskrit mode, the header is
+removed (back to today's Tibetan-only behaviour).  Otherwise the
+header is set (or replaced if a different mode token was
+present) to `parallel-sanskrit'.
+
+Source file resolution:
+  1. If the current buffer is an analysis file (seg-NNN*.org),
+     follow its `#+SOURCE:' link to the source document.
+  2. Otherwise, treat the current buffer's file as the source.
+  3. If neither resolves, prompt for a path.
+
+Bound to `C-c u z P' (parallel-Sanskrit) under the existing
+`C-c u z' source-document prefix.  Sibling of `C-c u z L'
+(target language)."
+  (interactive)
+  (let* ((source-file
+          (or (and (fboundp 'tibetan-analysis--source-file-from-analysis)
+                   (tibetan-analysis--source-file-from-analysis
+                    (buffer-file-name)))
+              buffer-file-name
+              (read-file-name "Source file: " nil nil t))))
+    (unless (and source-file (file-exists-p source-file))
+      (user-error "Cannot resolve source file: %S" source-file))
+    (cond
+     ((tibetan-cat--source-mode-parallel-p source-file)
+      (tibetan-cat-clear-source-mode source-file)
+      (message "Sanskrit-parallel mode DISABLED on %s"
+               (file-name-nondirectory source-file)))
+     (t
+      (tibetan-cat-set-source-mode source-file
+                                    tibetan-cat-source-mode-default-parallel)
+      (message "Sanskrit-parallel mode ENABLED on %s — next %s will %s"
+               (file-name-nondirectory source-file)
+               "C-c u R / C-c u r"
+               "render ** Sanskrit Source and ask Claude to translate from Sanskrit")))))
+
 (defun tibetan-cat--source-mode-parallel-p (source-file)
   "Return non-nil iff SOURCE-FILE has `#+SOURCE_MODE: parallel-sanskrit'.
 

@@ -132,6 +132,10 @@
      ["Set Source Target Language (C-c u z L)" tibetan-analysis-set-source-target-lang
       :help "Set the current source file's `#+TIBETAN_TARGET_LANG:' header (de / en) — drives which half of bilingual glosses surfaces"
       :active (fboundp 'tibetan-analysis-set-source-target-lang)]
+     ["Toggle Sanskrit-Parallel Mode (C-c u z P)"
+      tibetan-cat-toggle-source-mode-parallel
+      :help "Toggle `#+SOURCE_MODE: parallel-sanskrit' on the current source file.  When ON: next reanalyse emits ** Sanskrit Source above Wylie AND the Claude prompt becomes Sanskrit-primary with optional ### Tibetan Divergence notes.  When OFF: today's Tibetan-only behaviour."
+      :active (fboundp 'tibetan-cat-toggle-source-mode-parallel)]
      "---"
      ["Auto-Create Zettels for Buddhist Terms (C-c u z B)"
       tibetan-zettel-auto-create-from-current-analysis

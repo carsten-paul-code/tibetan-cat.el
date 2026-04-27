@@ -525,5 +525,165 @@ exist, so non-parallel documents are unaffected."
       (should wyl-idx)
       (should (< skt-idx wyl-idx)))))
 
+;; ============================================================================
+;; PHASE 5 — Toggle command for `#+SOURCE_MODE: parallel-sanskrit'
+;; ============================================================================
+;;
+;; Three commands for managing the per-document opt-in flag:
+;;
+;;   tibetan-cat-set-source-mode (source-file mode)
+;;     Insert / replace `#+SOURCE_MODE: <mode>' in SOURCE-FILE.
+;;     Patterned on `tibetan-analysis-set-source-target-lang' —
+;;     header replaces in place when present, inserts after
+;;     `#+TITLE:' when missing, prepends when no #+TITLE either.
+;;
+;;   tibetan-cat-clear-source-mode (source-file)
+;;     Remove the `#+SOURCE_MODE:' line entirely.  Returns the
+;;     document to today's Tibetan-only behaviour.
+;;
+;;   tibetan-cat-toggle-source-mode-parallel ()
+;;     Interactive wrapper.  Resolves the source file from the
+;;     current buffer (or via the analysis-file → source-file
+;;     reverse link), reads the existing mode, and either sets
+;;     the mode to `parallel-sanskrit' (when absent / different)
+;;     or clears it (when already `parallel-sanskrit').
+;;
+;; Bound to `C-c u z P' (parallel-Sanskrit) under the existing
+;; `C-c u z' thesaurus / source-document prefix map — sibling of
+;; `C-c u z L' which sets target language.
+
+(ert-deftest tibetan-cat-set-source-mode-inserts-header-when-absent ()
+  "When SOURCE-FILE has no `#+SOURCE_MODE:' line yet,
+`tibetan-cat-set-source-mode' inserts one — placed immediately
+after `#+TITLE:' to keep document metadata contiguous at the
+top of the file."
+  (skip-unless (fboundp 'tibetan-cat-set-source-mode))
+  (tibetan-sanskrit-parallel-test--with-temp-source-file
+   "#+TITLE: Yogācārabhūmi\n#+AUTHOR: Asaṅga\n\n* Tibetan Text\n"
+   (tibetan-cat-set-source-mode filepath "parallel-sanskrit")
+   (with-temp-buffer
+     (insert-file-contents filepath)
+     (let ((s (buffer-string)))
+       (should (string-match-p "^#\\+SOURCE_MODE: parallel-sanskrit$" s))
+       ;; Header is contiguous — appears between #+TITLE and the
+       ;; blank line that precedes the first heading.
+       (let ((title-pos (string-match "^#\\+TITLE:" s))
+             (mode-pos  (string-match "^#\\+SOURCE_MODE:" s))
+             (heading-pos (string-match "^\\* " s)))
+         (should title-pos)
+         (should mode-pos)
+         (should heading-pos)
+         (should (< title-pos mode-pos heading-pos)))))))
+
+(ert-deftest tibetan-cat-set-source-mode-replaces-existing-line ()
+  "When `#+SOURCE_MODE:' already exists,
+`tibetan-cat-set-source-mode' replaces the value in place — no
+duplicate lines, no orphaned old value."
+  (skip-unless (fboundp 'tibetan-cat-set-source-mode))
+  (tibetan-sanskrit-parallel-test--with-temp-source-file
+   "#+TITLE: T\n#+SOURCE_MODE: parallel-pali\n\n* Tibetan Text\n"
+   (tibetan-cat-set-source-mode filepath "parallel-sanskrit")
+   (with-temp-buffer
+     (insert-file-contents filepath)
+     (let ((s (buffer-string)))
+       (should (string-match-p "^#\\+SOURCE_MODE: parallel-sanskrit$" s))
+       (should-not (string-match-p "parallel-pali" s))
+       ;; Single line — `string-match' starting after the first hit
+       ;; finds nothing.
+       (let ((first (string-match "^#\\+SOURCE_MODE:" s)))
+         (should first)
+         (should-not (string-match "^#\\+SOURCE_MODE:" s (1+ first))))))))
+
+(ert-deftest tibetan-cat-set-source-mode-prepends-when-no-title ()
+  "When SOURCE-FILE has no `#+TITLE:' header either, the mode
+header is prepended to the buffer rather than discarded."
+  (skip-unless (fboundp 'tibetan-cat-set-source-mode))
+  (tibetan-sanskrit-parallel-test--with-temp-source-file
+   "* Tibetan Text\nbody\n"
+   (tibetan-cat-set-source-mode filepath "parallel-sanskrit")
+   (with-temp-buffer
+     (insert-file-contents filepath)
+     (let ((s (buffer-string)))
+       (should (string-match-p "^#\\+SOURCE_MODE: parallel-sanskrit$" s))
+       (should (= 0 (string-match "^#\\+SOURCE_MODE:" s)))))))
+
+(ert-deftest tibetan-cat-set-source-mode-rejects-empty-mode ()
+  "Empty / nil MODE arg signals user-error rather than writing
+a malformed `#+SOURCE_MODE:' line."
+  (skip-unless (fboundp 'tibetan-cat-set-source-mode))
+  (tibetan-sanskrit-parallel-test--with-temp-source-file
+   "#+TITLE: T\n"
+   (should-error (tibetan-cat-set-source-mode filepath nil)
+                 :type 'user-error)
+   (should-error (tibetan-cat-set-source-mode filepath "")
+                 :type 'user-error)))
+
+(ert-deftest tibetan-cat-set-source-mode-rejects-missing-file ()
+  "Missing / non-writable SOURCE-FILE signals user-error."
+  (skip-unless (fboundp 'tibetan-cat-set-source-mode))
+  (should-error (tibetan-cat-set-source-mode nil "parallel-sanskrit")
+                :type 'user-error)
+  (should-error (tibetan-cat-set-source-mode "/nonexistent/path.org"
+                                              "parallel-sanskrit")
+                :type 'user-error))
+
+(ert-deftest tibetan-cat-clear-source-mode-removes-header ()
+  "`tibetan-cat-clear-source-mode' deletes the `#+SOURCE_MODE:'
+line — surrounding content is preserved."
+  (skip-unless (fboundp 'tibetan-cat-clear-source-mode))
+  (tibetan-sanskrit-parallel-test--with-temp-source-file
+   "#+TITLE: T\n#+SOURCE_MODE: parallel-sanskrit\n#+AUTHOR: Asaṅga\n\n* Tibetan Text\n"
+   (tibetan-cat-clear-source-mode filepath)
+   (with-temp-buffer
+     (insert-file-contents filepath)
+     (let ((s (buffer-string)))
+       (should-not (string-match-p "^#\\+SOURCE_MODE:" s))
+       ;; Other headers preserved.
+       (should (string-match-p "^#\\+TITLE: T$" s))
+       (should (string-match-p "^#\\+AUTHOR: Asaṅga$" s))
+       (should (string-match-p "^\\* Tibetan Text$" s))))))
+
+(ert-deftest tibetan-cat-clear-source-mode-noop-when-absent ()
+  "Clearing a file that has no `#+SOURCE_MODE:' header is a
+no-op — file content stays byte-identical, no error signalled."
+  (skip-unless (fboundp 'tibetan-cat-clear-source-mode))
+  (tibetan-sanskrit-parallel-test--with-temp-source-file
+   "#+TITLE: T\n\n* Tibetan Text\nbody\n"
+   (let ((before (with-temp-buffer
+                   (insert-file-contents filepath)
+                   (buffer-string))))
+     (tibetan-cat-clear-source-mode filepath)
+     (let ((after (with-temp-buffer
+                    (insert-file-contents filepath)
+                    (buffer-string))))
+       (should (equal before after))))))
+
+(ert-deftest tibetan-cat-set-and-clear-source-mode-roundtrip ()
+  "Round-trip: set then clear returns the file to byte-identical
+state (modulo the `#+SOURCE_MODE:' line being absent both
+times)."
+  (skip-unless (fboundp 'tibetan-cat-set-source-mode))
+  (skip-unless (fboundp 'tibetan-cat-clear-source-mode))
+  (tibetan-sanskrit-parallel-test--with-temp-source-file
+   "#+TITLE: T\n#+AUTHOR: A\n\n* Tibetan Text\nbody\n"
+   (let ((before (with-temp-buffer
+                   (insert-file-contents filepath)
+                   (buffer-string))))
+     (tibetan-cat-set-source-mode filepath "parallel-sanskrit")
+     ;; Intermediate state has the header.
+     (should (tibetan-cat--source-mode-parallel-p filepath))
+     (tibetan-cat-clear-source-mode filepath)
+     ;; Final state has no header AND matches the initial buffer.
+     (should-not (tibetan-cat--source-mode-parallel-p filepath))
+     (let ((after (with-temp-buffer
+                    (insert-file-contents filepath)
+                    (buffer-string))))
+       (should (equal before after))))))
+
+(ert-deftest tibetan-cat-toggle-source-mode-parallel-fbound ()
+  "The interactive toggle command is bound."
+  (should (fboundp 'tibetan-cat-toggle-source-mode-parallel))
+  (should (commandp 'tibetan-cat-toggle-source-mode-parallel)))
+
 (provide 'tibetan-sanskrit-parallel-test)
 ;;; tibetan-sanskrit-parallel-test.el ends here

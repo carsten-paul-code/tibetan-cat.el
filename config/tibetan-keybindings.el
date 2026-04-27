@@ -290,6 +290,18 @@
   ;; via the buffer's `#+SOURCE:' header; otherwise uses the current
   ;; buffer's file.  The change takes effect on next `C-c u R'.
 
+(define-key tibetan-thesaurus-prefix-map (kbd "P")
+  'tibetan-cat-toggle-source-mode-parallel)
+  ;; Phase 5 of sanskrit-parallel-workflow (2026-04-27): toggle
+  ;; `#+SOURCE_MODE: parallel-sanskrit' on the current source file.
+  ;; Sibling of `C-c u z L' (target language) — both manage per-
+  ;; document opt-in headers that change downstream rendering and
+  ;; Claude prompting.  When ON: the next reanalyse emits a
+  ;; `** Sanskrit Source' section above Wylie AND the Claude system
+  ;; prompt instructs Sanskrit-primary translation with optional
+  ;; `### Tibetan Divergence' notes.  Toggling OFF returns the
+  ;; document to today's Tibetan-only behaviour.
+
 (define-key tibetan-thesaurus-prefix-map (kbd "R")
   'tibetan-thesaurus-rerun-affected-by-zettel)
   ;; Re-analyse every segment under an analysis folder whose Tibetan
