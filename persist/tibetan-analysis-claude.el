@@ -2060,12 +2060,48 @@ whichever target heading is still missing.  Idempotent."
               (goto-char (point-max))
               (insert (format "\n*** %s\n\n" heading)))))))))))
 
+(defun tibetan-analysis--claude-body-md-h3-to-org (body parent-level)
+  "Convert markdown `### foo' lines in BODY to org headings.
+
+Each line that starts with `### ' (three hashes followed by a
+space, line-anchored) is rewritten to a real org heading at
+PARENT-LEVEL + 1 — one level deeper than the section the body
+belongs to, so it nests cleanly underneath.
+
+  Parent at level 2 (`** Claude Translation', segment layout)
+    `### Tibetan Divergence' → `*** Tibetan Divergence'
+  Parent at level 3 (`*** Claude Translation', sentence layout)
+    `### Tibetan Divergence' → `**** Tibetan Divergence'
+
+Mid-line `###' (e.g. `section ### 4.5 of the text') is preserved
+as plain text — only line-anchored matches are converted.
+
+Pure function — used by `--replace-claude-section-body' to render
+optional Claude-emitted sub-headings (currently
+`### Tibetan Divergence' from sanskrit-parallel mode, Phase 3 of
+sanskrit-parallel-workflow, 2026-04-27) as foldable, navigable
+org headings rather than flat markdown text in the analysis file.
+
+If BODY contains no `### ' lines the input is returned unchanged,
+so non-parallel Translation bodies (today's overwhelming majority)
+are byte-identical pre- and post-Phase 4."
+  (let ((stars (make-string (1+ parent-level) ?*)))
+    (replace-regexp-in-string "^### " (concat stars " ") body)))
+
 (defun tibetan-analysis--replace-claude-section-body
     (buffer heading body &optional level)
   "Replace the body under `HEADING' at org LEVEL in BUFFER with BODY.
 LEVEL defaults to 3 for backwards compatibility.  Leaves the heading
 itself in place; body is trimmed + terminated with one trailing blank
-line."
+line.
+
+Phase 4 of sanskrit-parallel-workflow (2026-04-27): before insert,
+the body passes through `tibetan-analysis--claude-body-md-h3-to-org'
+which rewrites any line-anchored `### foo' markdown sub-heading to
+a real org heading at LEVEL + 1.  This is how Claude's optional
+`### Tibetan Divergence' note (parallel-Sanskrit mode) becomes a
+nested org heading rather than flat markdown text in the analysis
+file.  Non-divergence bodies (no `### ' lines) are unchanged."
   (let ((level (or level 3)))
     (with-current-buffer buffer
       (save-excursion
@@ -2081,7 +2117,10 @@ line."
                        (point-max))))
             (delete-region start end)
             (goto-char start)
-            (insert (format "%s\n\n" (string-trim body)))))))))
+            (insert (format "%s\n\n"
+                            (string-trim
+                             (tibetan-analysis--claude-body-md-h3-to-org
+                              body level))))))))))
 
 (defun tibetan-analysis--claude-effective-section-order (buffer)
   "Return the layout-appropriate Claude section-order for BUFFER.

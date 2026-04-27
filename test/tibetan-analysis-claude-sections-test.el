@@ -974,5 +974,216 @@ has no Particles block (even with the customvar default on)."
       (when (file-exists-p file) (delete-file file))
       (when (file-exists-p tmp) (delete-directory tmp t)))))
 
+;; ============================================================================
+;; PHASE 4 — `### Tibetan Divergence' sub-heading round-trip
+;; ============================================================================
+;;
+;; In sanskrit-parallel mode (Phase 3), the Claude system prompt
+;; instructs the model to emit an optional `### Tibetan Divergence'
+;; markdown sub-heading inside `## Translation' when the Tibetan
+;; rendering diverges meaningfully from the Sanskrit.  These tests
+;; prove the round-trip:
+;;
+;;   1. The parser passes the sub-heading through verbatim into the
+;;      `:translation' body string — no fork of
+;;      `--parse-claude-sections', no new top-level field.
+;;
+;;   2. The writer converts the markdown sub-heading to a real org
+;;      heading nested under the parent Claude Translation heading,
+;;      so the user can fold and navigate it.
+;;       - Segment layout (parent at level 2) → divergence at level 3
+;;       - Sentence layout (parent at level 3) → divergence at level 4
+;;
+;;   3. The reader returns the Translation body INCLUDING the
+;;      converted sub-heading (because `--claude-stop-re' only stops
+;;      at headings AT the parent level or shallower — deeper
+;;      sub-headings are preserved as part of the body).
+;;
+;;   4. Backward compatibility:  Translations without `### ' lines
+;;      are written and read back unchanged.
+
+(ert-deftest tibetan-claude-sections-parser-preserves-divergence-subheading ()
+  "The parser keeps `### Tibetan Divergence' verbatim inside the
+:translation body.  The schema does not fork — Phase 3 only adds
+content; the parser is unchanged."
+  (let* ((response (concat "## Translation\n"
+                           "From the Sanskrit: I came after praising.\n\n"
+                           "### Tibetan Divergence\n"
+                           "stod nas reads as a sequential converb here, "
+                           "not the manner-clause scope a Sanskrit reader "
+                           "would assume.\n\n"
+                           "## Vocabulary\n"
+                           "stod, verb, praise\n\n"
+                           "## Grammar\n"
+                           "ERG on agent.\n"))
+         (sections (tibetan-analysis--parse-claude-sections response))
+         (translation (plist-get sections :translation)))
+    (should translation)
+    (should (string-match-p "From the Sanskrit" translation))
+    (should (string-match-p "### Tibetan Divergence" translation))
+    (should (string-match-p "sequential converb" translation))
+    ;; The Vocabulary block is correctly separated — divergence
+    ;; doesn't leak into the next section.
+    (should (equal (plist-get sections :vocabulary)
+                   "stod, verb, praise"))
+    (should (equal (plist-get sections :grammar)
+                   "ERG on agent."))))
+
+(ert-deftest tibetan-claude-sections-md-h3-to-org-helper-callable ()
+  "The markdown-→-org conversion helper is fbound and accepts
+(BODY PARENT-LEVEL) → STRING."
+  (should (fboundp 'tibetan-analysis--claude-body-md-h3-to-org))
+  (let ((out (tibetan-analysis--claude-body-md-h3-to-org
+              "### foo\nbody\n" 2)))
+    (should (stringp out))))
+
+(ert-deftest tibetan-claude-sections-md-h3-to-org-converts-parent-level-2 ()
+  "`### foo' under a level-2 parent becomes `*** foo' (level 3 —
+one level deeper than the parent)."
+  (let ((out (tibetan-analysis--claude-body-md-h3-to-org
+              "Body line.\n### Tibetan Divergence\nNote text.\n" 2)))
+    (should (string-match-p "^\\*\\*\\* Tibetan Divergence$" out))
+    (should-not (string-match-p "^### Tibetan Divergence" out))
+    (should (string-match-p "Body line" out))
+    (should (string-match-p "Note text" out))))
+
+(ert-deftest tibetan-claude-sections-md-h3-to-org-converts-parent-level-3 ()
+  "`### foo' under a level-3 parent becomes `**** foo' (level 4)."
+  (let ((out (tibetan-analysis--claude-body-md-h3-to-org
+              "### Tibetan Divergence\nNote.\n" 3)))
+    (should (string-match-p "^\\*\\*\\*\\* Tibetan Divergence$" out))
+    (should-not (string-match-p "^\\*\\*\\* Tibetan Divergence$" out))))
+
+(ert-deftest tibetan-claude-sections-md-h3-to-org-leaves-non-h3-alone ()
+  "Body lines that do NOT start with `### ' (and even `## '
+top-level headings — Claude shouldn't emit those inside a
+section, but defensive) are returned unchanged."
+  (let ((out (tibetan-analysis--claude-body-md-h3-to-org
+              "Plain prose.\n## Not a sub-heading.\nMore prose.\n"
+              2)))
+    (should (string-match-p "Plain prose" out))
+    (should (string-match-p "## Not a sub-heading" out))
+    ;; No spurious `*** ' lines inserted.
+    (should-not (string-match-p "^\\*+ Plain" out))
+    (should-not (string-match-p "^\\*+ Not a" out))
+    (should-not (string-match-p "^\\*+ More" out))))
+
+(ert-deftest tibetan-claude-sections-md-h3-to-org-only-line-start ()
+  "Only `### ' at the start of a line is converted.  Mid-line
+`###' (e.g. inside prose) is preserved as-is."
+  (let ((out (tibetan-analysis--claude-body-md-h3-to-org
+              "He cited section ### 4.5 of the text.\n" 2)))
+    (should (string-match-p "section ### 4\\.5" out))
+    (should-not (string-match-p "^\\*\\*\\* 4" out))))
+
+(ert-deftest tibetan-claude-sections-writer-emits-divergence-as-org-heading-segment ()
+  "Segment layout (`** Claude Translation' at level 2):  the
+writer dumps Translation body and converts `### Tibetan Divergence'
+to a level-3 org sub-heading nested under the parent."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
+    (let ((response (concat "## Translation\n"
+                            "From the Sanskrit: I came after praising.\n\n"
+                            "### Tibetan Divergence\n"
+                            "stod nas: sequential converb scope.\n\n"
+                            "## Vocabulary\n"
+                            "stod, praise\n\n"
+                            "## Grammar\n"
+                            "ERG on agent.\n")))
+      (tibetan-analysis--insert-claude-sections response analysis-file)
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf (kill-buffer buf)))
+      (with-temp-buffer
+        (insert-file-contents analysis-file)
+        (let ((s (buffer-string)))
+          ;; Original markdown form is gone.
+          (should-not (string-match-p "^### Tibetan Divergence" s))
+          ;; Real org sub-heading at level 3 is present.
+          (should (string-match-p "^\\*\\*\\* Tibetan Divergence$" s))
+          ;; Translation body preserved.
+          (should (string-match-p "From the Sanskrit" s))
+          ;; Divergence note text preserved.
+          (should (string-match-p "sequential converb scope" s))
+          ;; Translation parent is still level 2.
+          (should (string-match-p "^\\*\\* Claude Translation$" s)))))))
+
+(ert-deftest tibetan-claude-sections-writer-emits-divergence-as-org-heading-sentence ()
+  "Sentence layout (`*** Claude Translation' at level 3):  the
+writer converts `### Tibetan Divergence' to a level-4 org
+sub-heading nested under the parent."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--sentence-scaffold
+       "[Requesting translation...]" nil nil)
+    (let ((response (concat "## Translation\n"
+                            "Sanskrit-driven translation.\n\n"
+                            "### Tibetan Divergence\n"
+                            "Tibetan glosses sandhied form.\n\n"
+                            "## Grammar\nfine\n")))
+      (tibetan-analysis--insert-claude-sections response analysis-file)
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf (kill-buffer buf)))
+      (with-temp-buffer
+        (insert-file-contents analysis-file)
+        (let ((s (buffer-string)))
+          (should (string-match-p "^\\*\\*\\*\\* Tibetan Divergence$" s))
+          (should-not (string-match-p "^### Tibetan Divergence" s))
+          (should-not (string-match-p "^\\*\\*\\* Tibetan Divergence$" s)))))))
+
+(ert-deftest tibetan-claude-sections-writer-no-divergence-leaves-body-clean ()
+  "Translation without `### ' lines is written verbatim — no
+spurious org headings created.  REGRESSION GUARD: existing non-
+parallel documents must keep producing today's body shape."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
+    (let ((response (concat "## Translation\n"
+                            "Plain English translation.\n"
+                            "Continued prose with no sub-heading.\n"
+                            "## Grammar\n"
+                            "ERG on agent\n")))
+      (tibetan-analysis--insert-claude-sections response analysis-file)
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf (kill-buffer buf)))
+      (with-temp-buffer
+        (insert-file-contents analysis-file)
+        (let ((s (buffer-string)))
+          (should (string-match-p "Plain English translation" s))
+          (should (string-match-p "Continued prose" s))
+          ;; No spurious sub-headings under Claude Translation.
+          (should-not (string-match-p "^\\*\\*\\* Plain" s))
+          (should-not (string-match-p "^\\*\\*\\* Continued" s)))))))
+
+(ert-deftest tibetan-claude-sections-divergence-roundtrips-through-reader ()
+  "After insert, `--read-claude-sections' returns the Translation
+body INCLUDING the converted org sub-heading and its prose.  The
+reader's stop-re for level 2 only halts at level-2-or-shallower
+headings, so deeper `***' children are preserved as part of the
+body — exactly what reanalysis with `:re-request-claude nil'
+needs to round-trip the divergence."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
+    (let ((response (concat "## Translation\n"
+                            "Sanskrit-primary translation.\n\n"
+                            "### Tibetan Divergence\n"
+                            "Tibetan stod nas: sequential converb.\n\n"
+                            "## Vocabulary\n"
+                            "stod, praise\n\n"
+                            "## Grammar\n"
+                            "fine\n")))
+      (tibetan-analysis--insert-claude-sections response analysis-file)
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf (kill-buffer buf)))
+      (let* ((p (tibetan-analysis--read-claude-sections analysis-file))
+             (translation (plist-get p :translation)))
+        (should (stringp translation))
+        ;; Translation prose preserved.
+        (should (string-match-p "Sanskrit-primary translation" translation))
+        ;; Org sub-heading preserved as part of the body.
+        (should (string-match-p "^\\*\\*\\* Tibetan Divergence$" translation))
+        ;; Divergence note text preserved.
+        (should (string-match-p "sequential converb" translation))
+        ;; Vocabulary correctly separated.
+        (should (string-match-p "stod, praise"
+                                (plist-get p :vocabulary)))))))
+
 (provide 'tibetan-analysis-claude-sections-test)
 ;;; tibetan-analysis-claude-sections-test.el ends here
