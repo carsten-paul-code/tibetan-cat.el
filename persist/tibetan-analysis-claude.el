@@ -982,8 +982,80 @@ segments."
                     "boundaries.\n\n"
                     (mapconcat #'identity (nreverse parts) "\n\n"))))))))
 
+;; ----------------------------------------------------------------------------
+;; Sanskrit-parallel reading mode (Phase 3, 2026-04-27)
+;; ----------------------------------------------------------------------------
+;;
+;; Two helpers — system-block + user-block — emit the additions
+;; injected when the source carries `#+SOURCE_MODE: parallel-sanskrit'
+;; and (for the user-block) when the caller has located the
+;; segment's Sanskrit text via `tibetan-sanskrit-parallel-text-for-
+;; segment-id'.  Both are constant per document so they participate
+;; in Anthropic prompt caching just like the existing target-lang
+;; and portfolio blocks: the system prefix stays byte-identical
+;; across every segment of a parallel-Sanskrit document, so
+;; requests 2..N within the 5-min TTL hit warm cache.
+
+(defconst tibetan-analysis--claude-parallel-mode-system-block-text
+  "
+
+This document is a parallel Sanskrit-Tibetan reading.  The \
+SANSKRIT is the primary source; the Tibetan is a secondary \
+translation prepared by the Tibetan canon translators.  The user \
+prompt below contains BOTH passages — Sanskrit first (as primary), \
+followed by the Tibetan translation.
+
+For the `## Translation' section: translate from the SANSKRIT.  \
+When the Tibetan rendering diverges meaningfully from the \
+Sanskrit (different lexical choice, different scope of negation, \
+glossed compound vs. analytic, etc.), append a `### Tibetan \
+Divergence' sub-heading inside `## Translation' with a brief \
+note (1-3 sentences) on the divergence and what it tells the \
+reader.  Omit the sub-heading when the renderings are \
+essentially equivalent.
+
+The `## Vocabulary', `## Grammar', and `## Particles' sections \
+continue to describe the TIBETAN text — the parser-side analysis \
+is Tibetan-driven and independent of the Sanskrit primary."
+  "Constant directive injected into the Claude system prompt for
+parallel-Sanskrit documents.  Constant per document so it
+participates in Anthropic prompt caching alongside the base
+system prompt and the target-lang / portfolio blocks.")
+
+(defun tibetan-analysis--claude-parallel-mode-system-block ()
+  "Return the parallel-Sanskrit-mode directive for the system prompt.
+Constant return value — exposed as a function so callers and tests
+can refer to it by name and so a future variant could dispatch on
+the source-mode token."
+  tibetan-analysis--claude-parallel-mode-system-block-text)
+
+(defun tibetan-analysis--claude-parallel-mode-user-block (sanskrit-plist)
+  "Return the Sanskrit user-prompt block for SANSKRIT-PLIST.
+
+SANSKRIT-PLIST is the walker plist returned by
+`tibetan-sanskrit-parallel-text-for-segment-id', i.e.
+`(:iast STR :devanagari STR-or-nil :script-source SYM)'.
+
+Format:
+  Sanskrit (primary):
+    IAST: <iast>
+  [  Devanagari: <devanagari>]
+
+Returns \"\" for nil input or empty `:iast' so callers can
+concatenate without guarding.  Pure function — no buffer I/O."
+  (let* ((iast (and sanskrit-plist (plist-get sanskrit-plist :iast)))
+         (devanagari (and sanskrit-plist
+                          (plist-get sanskrit-plist :devanagari))))
+    (if (or (null iast) (string-empty-p iast))
+        ""
+      (concat "Sanskrit (primary):\n"
+              (format "  IAST: %s\n" iast)
+              (when (and devanagari (not (string-empty-p devanagari)))
+                (format "  Devanagari: %s\n" devanagari))
+              "\n"))))
+
 (defun tibetan-analysis--build-claude-prompts
-    (tibetan-text source-file &optional analysis-file)
+    (tibetan-text source-file &optional analysis-file sanskrit-plist)
   "Build (SYSTEM . USER) Claude prompts for TIBETAN-TEXT.
 SOURCE-FILE, if non-nil, supplies genre/author/context metadata and a
 Resources vocabulary file.  ANALYSIS-FILE, if non-nil, supplies four
@@ -995,7 +1067,17 @@ forms of grounding:
   3. ±2 surrounding segments (Tibetan + Working Translation if present)
      from the same analysis folder so Claude can resolve anaphora and
      discourse without over-interpreting an isolated line;
-  4. the file's own seg-id (used to resolve the neighbors in (3))."
+  4. the file's own seg-id (used to resolve the neighbors in (3)).
+
+SANSKRIT-PLIST, if non-nil, is the parallel-mode walker plist
+`(:iast STR :devanagari STR-or-nil :script-source SYM)' returned
+by `tibetan-sanskrit-parallel-text-for-segment-id'.  When supplied
+together with `#+SOURCE_MODE: parallel-sanskrit' on the source
+file, the user prompt prepends a Sanskrit (primary) block above
+the Tibetan passage and the system prompt gains a Sanskrit-primary
+directive (Phase 3 of sanskrit-parallel-workflow, 2026-04-27).
+Backward compatible with all existing callers that pass only the
+first three args."
   (let* ((meta   (tibetan-analysis--read-source-metadata source-file))
          (title  (plist-get meta :title))
          (work   (plist-get meta :work))
@@ -1068,10 +1150,23 @@ forms of grounding:
                     "preserved, etc.  Vocabulary, Grammar, and Particles "
                     "sections stay in English (metalanguage)."))
            (t nil)))
+         ;; Phase 3 of sanskrit-parallel-workflow (2026-04-27): when
+         ;; the source is in parallel-Sanskrit mode, append the
+         ;; Sanskrit-primary directive AFTER the target-lang block.
+         ;; Constant per document → participates in prompt caching
+         ;; with no separate cache breakpoint required (the whole
+         ;; system prompt is one cached prefix; adding a constant
+         ;; per-document suffix simply produces a new per-document
+         ;; cache key).
+         (source-mode-val (plist-get meta :source-mode))
+         (parallel-mode-block
+          (when (equal source-mode-val "parallel-sanskrit")
+            (tibetan-analysis--claude-parallel-mode-system-block)))
          (system (concat tibetan-analysis--claude-system-prompt
                          (or src-block "")
                          (or portfolio-block "")
-                         (or target-lang-block "")))
+                         (or target-lang-block "")
+                         (or parallel-mode-block "")))
          (glossary-block
           (when glossary
             (concat
@@ -1098,7 +1193,20 @@ forms of grounding:
          ;; addendum for the comparison instruction.
          (references-block
           (tibetan-analysis--format-reference-translations analysis-file))
-         (user (concat "Classical Tibetan passage:\n\n"
+         ;; Phase 3 of sanskrit-parallel-workflow (2026-04-27): when
+         ;; the caller has located the segment's `**** Sanskrit'
+         ;; sibling and threaded the walker's plist through, prepend
+         ;; an IAST + (optional) Devanagari block ABOVE the Tibetan
+         ;; passage in the user prompt.  Sanskrit reads first because
+         ;; in parallel-mode it IS the primary source — the system
+         ;; prompt's parallel-mode directive instructs Claude to
+         ;; translate from the Sanskrit, with the Tibetan as parallel
+         ;; reference.  Empty string for nil sanskrit-plist so non-
+         ;; parallel callers see no change.
+         (parallel-user-block
+          (tibetan-analysis--claude-parallel-mode-user-block sanskrit-plist))
+         (user (concat (or parallel-user-block "")
+                       "Classical Tibetan passage:\n\n"
                        tibetan-text
                        (if wylie (format "\n\nWylie: %s" wylie) "")
                        (or glossary-block "")
@@ -1232,8 +1340,31 @@ failures are reported via `message' and the placeholder."
              (let* ((src (or source-file
                              (tibetan-analysis--source-file-from-analysis
                               analysis-file)))
+                    ;; Phase 3 of sanskrit-parallel-workflow
+                    ;; (2026-04-27): when the source file is in
+                    ;; parallel-Sanskrit mode, look up the segment's
+                    ;; `**** Sanskrit' sibling and thread it into
+                    ;; the prompt builder so the system prompt gains
+                    ;; the Sanskrit-primary directive AND the user
+                    ;; prompt prepends the IAST + Devanagari block.
+                    ;; Soft-coded:  walker is soft-required; missing
+                    ;; module → no Sanskrit injection (degrades to
+                    ;; today's Tibetan-only behaviour gracefully).
+                    (skt-plist
+                     (and src
+                          analysis-file
+                          (fboundp 'tibetan-sanskrit-parallel-text-for-segment-id)
+                          (fboundp 'tibetan-analysis--seg-id-from-filename)
+                          (let ((seg-id
+                                 (tibetan-analysis--seg-id-from-filename
+                                  analysis-file)))
+                            (and seg-id
+                                 (condition-case nil
+                                     (tibetan-sanskrit-parallel-text-for-segment-id
+                                      src seg-id)
+                                   (error nil))))))
                     (prompts (tibetan-analysis--build-claude-prompts
-                              tibetan-text src analysis-file))
+                              tibetan-text src analysis-file skt-plist))
                     (system-prompt (car prompts))
                     (user-prompt   (cdr prompts))
                     ;; Prompt caching: the system prompt is identical

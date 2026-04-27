@@ -535,5 +535,155 @@ parenthetical explanation on first mention of fixed Buddhist terms
     (should (string-match-p "Four Immeasurables" p))
     (should (string-match-p "parenthetical explanation" p))))
 
+;; ============================================================================
+;; PHASE 3 — Sanskrit-parallel reading mode injects directive + Sanskrit block
+;; ============================================================================
+;;
+;; When the source carries `#+SOURCE_MODE: parallel-sanskrit', the
+;; built system prompt gains a directive instructing Claude to treat
+;; the Sanskrit as primary.  When the caller threads a sanskrit-plist
+;; (the walker's return value), the user prompt prepends a Sanskrit
+;; block with IAST + optional Devanagari.  Both are gated; both
+;; default to absent so today's Tibetan-only documents stay byte-
+;; identical.
+
+(ert-deftest tibetan-claude-prompt-parallel-sanskrit-injects-system-block ()
+  "Source with `#+SOURCE_MODE: parallel-sanskrit' → system prompt
+includes a Sanskrit-primary directive."
+  (tibetan-test--with-source
+      "#+TITLE: YBh\n#+SOURCE_MODE: parallel-sanskrit\n"
+    (let* ((prompts (tibetan-analysis--build-claude-prompts
+                     "བདག་" source-file))
+           (system (car prompts)))
+      ;; Distinct phrase that only the parallel-mode block carries.
+      (should (string-match-p "SANSKRIT is the primary" system))
+      ;; Tibetan-Divergence sub-heading mention so Claude knows the
+      ;; output schema accepts it.
+      (should (string-match-p "Tibetan Divergence" system)))))
+
+(ert-deftest tibetan-claude-prompt-no-parallel-block-without-header ()
+  "Without `#+SOURCE_MODE:' header the system prompt has no
+Sanskrit-primary directive — today's behaviour preserved."
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (let* ((prompts (tibetan-analysis--build-claude-prompts
+                     "བདག་" source-file))
+           (system (car prompts)))
+      (should-not (string-match-p "SANSKRIT is the primary" system))
+      (should-not (string-match-p "Tibetan Divergence" system)))))
+
+(ert-deftest tibetan-claude-prompt-rejects-other-source-modes ()
+  "Hypothetical `#+SOURCE_MODE: parallel-pali' (or any non-
+parallel-sanskrit value) does NOT inject the Sanskrit block."
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+SOURCE_MODE: parallel-pali\n"
+    (let* ((prompts (tibetan-analysis--build-claude-prompts
+                     "བདག་" source-file))
+           (system (car prompts)))
+      (should-not (string-match-p "SANSKRIT is the primary" system)))))
+
+(ert-deftest tibetan-claude-prompt-injects-sanskrit-user-block ()
+  "When `--build-claude-prompts' is called with a sanskrit-plist
+arg, the user prompt prepends an IAST line above the Tibetan
+passage so Claude sees Sanskrit first."
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+SOURCE_MODE: parallel-sanskrit\n"
+    (let* ((sanskrit-plist (list :iast "ahaṃ"
+                                 :devanagari nil
+                                 :script-source 'iast-line))
+           (prompts (tibetan-analysis--build-claude-prompts
+                     "བདག་" source-file nil sanskrit-plist))
+           (user (cdr prompts)))
+      (should (string-match-p "Sanskrit (primary):" user))
+      (should (string-match-p "IAST: ahaṃ" user))
+      ;; Sanskrit precedes the Tibetan passage in user prompt.
+      (let ((skt-pos (string-match "Sanskrit (primary):" user))
+            (tib-pos (string-match "Classical Tibetan" user)))
+        (should skt-pos)
+        (should tib-pos)
+        (should (< skt-pos tib-pos))))))
+
+(ert-deftest tibetan-claude-prompt-sanskrit-user-block-emits-devanagari ()
+  "When sanskrit-plist carries Devanagari, the user prompt shows
+both an IAST line and a Devanagari line."
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+SOURCE_MODE: parallel-sanskrit\n"
+    (let* ((sanskrit-plist (list :iast "ahaṃ"
+                                 :devanagari "अहम्"
+                                 :script-source 'iast-and-devanagari))
+           (prompts (tibetan-analysis--build-claude-prompts
+                     "བདག་" source-file nil sanskrit-plist))
+           (user (cdr prompts)))
+      (should (string-match-p "IAST: ahaṃ" user))
+      (should (string-match-p "Devanagari: अहम्" user)))))
+
+(ert-deftest tibetan-claude-prompt-omits-sanskrit-user-block-when-nil ()
+  "Without a sanskrit-plist arg (legacy callers), user prompt has
+no Sanskrit block — backward compatible with all existing
+callers that pass only TIBETAN-TEXT + SOURCE-FILE [+ ANALYSIS]."
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (let* ((prompts (tibetan-analysis--build-claude-prompts
+                     "བདག་" source-file))
+           (user (cdr prompts)))
+      (should-not (string-match-p "Sanskrit (primary):" user))
+      (should-not (string-match-p "IAST:" user)))))
+
+(ert-deftest tibetan-claude-prompt-system-block-stable-across-segments ()
+  "Two `--build-claude-prompts' calls on the same parallel-Sanskrit
+source file with DIFFERENT Tibetan text produce byte-identical
+SYSTEM prompts.  This is the cache invariant — Anthropic prompt
+caching depends on the system prefix being constant per
+document.  The user prompt rightly differs (per-segment text);
+the system stays warm."
+  (tibetan-test--with-source
+      "#+TITLE: Doc\n#+SOURCE_MODE: parallel-sanskrit\n"
+    (let* ((p1 (tibetan-analysis--build-claude-prompts "བདག་" source-file))
+           (p2 (tibetan-analysis--build-claude-prompts "ཁྱོད་" source-file)))
+      (should (equal (car p1) (car p2)))
+      ;; And user prompts ARE different (per-segment text varies).
+      (should-not (equal (cdr p1) (cdr p2))))))
+
+(ert-deftest tibetan-claude-prompt-parallel-and-target-lang-coexist ()
+  "A document with BOTH `#+TIBETAN_TARGET_LANG: de' AND
+`#+SOURCE_MODE: parallel-sanskrit' produces a system prompt
+carrying both directives.  The German target-lang block must
+not be displaced or overwritten by the parallel-mode block."
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_TARGET_LANG: de\n#+SOURCE_MODE: parallel-sanskrit\n"
+    (let* ((prompts (tibetan-analysis--build-claude-prompts
+                     "བདག་" source-file))
+           (system (car prompts)))
+      (should (string-match-p "GERMAN" system))
+      (should (string-match-p "SANSKRIT is the primary" system)))))
+
+(ert-deftest tibetan-claude-prompt-parallel-mode-system-block-helper-callable ()
+  "The constant-block helper is fbound and returns a non-empty
+string for callers that want to inspect or test the directive
+in isolation (without building a full prompt)."
+  (should (fboundp 'tibetan-analysis--claude-parallel-mode-system-block))
+  (let ((block (tibetan-analysis--claude-parallel-mode-system-block)))
+    (should (stringp block))
+    (should (string-match-p "SANSKRIT is the primary" block))))
+
+(ert-deftest tibetan-claude-prompt-parallel-mode-user-block-helper ()
+  "The user-block helper accepts a sanskrit-plist and returns the
+formatted block, or empty string for nil / empty-iast input."
+  (should (fboundp 'tibetan-analysis--claude-parallel-mode-user-block))
+  ;; nil → empty
+  (should (string-empty-p
+           (tibetan-analysis--claude-parallel-mode-user-block nil)))
+  ;; empty :iast → empty
+  (should (string-empty-p
+           (tibetan-analysis--claude-parallel-mode-user-block
+            (list :iast "" :devanagari nil :script-source 'iast-line))))
+  ;; populated → formatted
+  (let ((out (tibetan-analysis--claude-parallel-mode-user-block
+              (list :iast "ahaṃ" :devanagari "अहम्"
+                    :script-source 'iast-and-devanagari))))
+    (should (string-match-p "Sanskrit (primary):" out))
+    (should (string-match-p "IAST: ahaṃ" out))
+    (should (string-match-p "Devanagari: अहम्" out))))
+
 (provide 'tibetan-analysis-claude-prompt-test)
 ;;; tibetan-analysis-claude-prompt-test.el ends here
