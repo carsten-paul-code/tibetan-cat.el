@@ -2648,7 +2648,8 @@ nil, the subsection is omitted."
   (insert "\n"))
 
 (defconst tibetan-analysis--priority-section-order
-  '("** Wylie Transliteration"
+  '("** Sanskrit Source"
+    "** Wylie Transliteration"
     "** Interlinear Gloss"
     "** Claude Translation"
     "** Grammar"
@@ -2658,6 +2659,17 @@ nil, the subsection is omitted."
 `* Auto-Analysis' output, in this exact order.  Any level-2 section
 NOT listed here is kept and emitted afterwards in the order it was
 generated.
+
+`** Sanskrit Source' (Phase 2 of sanskrit-parallel-workflow,
+2026-04-27) sits at position 0 — when present, the Sanskrit IS
+the primary source for the document and reads first, before the
+Tibetan Wylie.  It is emitted only when
+`tibetan-analysis--sanskrit-text-for-render' is bound to a non-
+nil sanskrit-plist by the caller (the auto-analyse / reanalyse
+path threads the walker result through).  Listing it here
+unconditionally is safe: the reorder pass only places sections
+that exist, so non-parallel documents (no Sanskrit text) are
+byte-identical in output before and after this list change.
 
 Pass 6b (2026-04-22) redesign: the four redundant particle sections
 — Particle Map, Particle Overview, Grammatical Markers, and the
@@ -2785,6 +2797,59 @@ reads the preserved Claude sections BEFORE calling
 particles through this var.  The Grammar renderer consults it to
 attach per-occurrence Portfolio snippets; nil → compact parser-only
 output, identical to Pass 6b behaviour.")
+
+(defvar tibetan-analysis--sanskrit-text-for-render nil
+  "Dynamic binding: Sanskrit-text plist for the in-flight render.
+
+Set by callers that have located the segment's `**** Sanskrit'
+sibling (typically via
+`tibetan-sanskrit-parallel-text-for-segment-id' from
+`core/tibetan-sanskrit-parallel.el').  When non-nil, the value
+is the plist returned by that walker:
+  (:iast STRING :devanagari STRING-or-nil :script-source SYMBOL).
+
+The renderer `tibetan-analysis--render-sanskrit-source' reads
+this var (indirectly, through the caller passing the value) and
+emits a `** Sanskrit Source' level-2 section.  When nil — the
+default — no Sanskrit section is emitted; today's Tibetan-only
+documents are unchanged.
+
+Phase 2 of the sanskrit-parallel-workflow (2026-04-27).")
+
+(defun tibetan-analysis--render-sanskrit-source (sanskrit-plist)
+  "Return a `** Sanskrit Source' org section as a string.
+
+SANSKRIT-PLIST is the walker plist
+`(:iast STRING :devanagari STRING-or-nil :script-source SYMBOL)'
+or nil.  Returns:
+  - empty string for nil input or empty `:iast', so callers can
+    safely concatenate without guarding.
+  - a complete level-2 section for a populated plist:
+
+      ** Sanskrit Source
+
+      IAST: <iast>
+      [Devanagari: <devanagari>]
+
+The trailing blank line ensures the section concatenates cleanly
+with the next section in the buffer.
+
+Pure function — no buffer side effects, no metadata reads.  All
+Sanskrit-source decisions (whether to emit, which lines to
+include) happen here so callers stay simple.
+
+Phase 2 of the sanskrit-parallel-workflow (2026-04-27)."
+  (let* ((iast (and sanskrit-plist (plist-get sanskrit-plist :iast)))
+         (devanagari (and sanskrit-plist
+                          (plist-get sanskrit-plist :devanagari))))
+    (if (or (null iast) (string-empty-p iast))
+        ""
+      (concat "** Sanskrit Source\n"
+              "\n"
+              (format "IAST: %s\n" iast)
+              (when (and devanagari (not (string-empty-p devanagari)))
+                (format "Devanagari: %s\n" devanagari))
+              "\n"))))
 
 (defun tibetan-analysis-generate-content (tibetan-text &optional seg-id source-text source-file)
   "Generate auto-analysis content for TIBETAN-TEXT.
@@ -2914,6 +2979,23 @@ it with `let' around the call when Claude data is available."
                   (puthash lemma verb verb-table)))))
 
           (with-temp-buffer
+            ;; ============================================================
+            ;; SECTION 0: Sanskrit Source (parallel-mode only)
+            ;; Phase 2 of sanskrit-parallel-workflow (2026-04-27).
+            ;; Emitted ONLY when `tibetan-analysis--sanskrit-text-for-
+            ;; render' is bound to a sanskrit-plist by the caller.  The
+            ;; reorder pass at the end places this section first in the
+            ;; final output (Sanskrit is primary in parallel-Sanskrit
+            ;; documents), so its position here is informational —
+            ;; correctness comes from `--priority-section-order'.
+            ;;
+            ;; For non-parallel documents (the dynamic var stays at its
+            ;; nil default), the renderer returns an empty string and
+            ;; nothing is inserted — today's behaviour preserved.
+            ;; ============================================================
+            (insert (tibetan-analysis--render-sanskrit-source
+                     tibetan-analysis--sanskrit-text-for-render))
+
             ;; ============================================================
             ;; SECTION 1: Wylie Transliteration
             ;; Reading the sequence first.

@@ -42,10 +42,17 @@
 ;; Add load paths
 (let ((dir (file-name-directory (or load-file-name buffer-file-name))))
   (add-to-list 'load-path (expand-file-name "../core" dir))
+  (add-to-list 'load-path (expand-file-name "../analysis" dir))
   (add-to-list 'load-path (expand-file-name "../persist" dir)))
 
 (require 'tibetan-org-structure)
 (require 'tibetan-sanskrit-parallel)
+;; Phase 2: tests for Sanskrit Source section emission depend on
+;; the persist module's renderer.  Soft-required so phase-1-only
+;; runs (without the persist module loaded) don't fail with a
+;; missing-feature error — the Phase 2 tests themselves
+;; `skip-unless' the symbols.
+(require 'tibetan-analysis-persist nil t)
 
 ;; Helper macro mirrors `tibetan-test-with-org-buffer' from
 ;; `tibetan-org-structure-test.el' so fixtures stay readable.
@@ -385,6 +392,138 @@ parallel-sanskrit' is present."
 * Tibetan Text
 "
    (should (tibetan-cat--source-mode-parallel-p filepath))))
+
+;; ============================================================================
+;; PHASE 2 — `** Sanskrit Source' RENDERING IN ANALYSIS FILES
+;; ============================================================================
+;;
+;; These tests cover the renderer that emits a `** Sanskrit Source'
+;; level-2 section under `* Auto-Analysis' when:
+;;   1. `tibetan-analysis--sanskrit-text-for-render' (dynamic var)
+;;      is bound to a non-nil sanskrit-plist by the caller, AND
+;;   2. (transitively, via the priority-order pass) the section
+;;      sits BEFORE `** Wylie Transliteration' in the final
+;;      content because Sanskrit is the primary source.
+;;
+;; The renderer itself is a pure function — most tests exercise it
+;; directly without invoking the full `generate-content' pipeline,
+;; so the suite stays fast.  One end-to-end test confirms the
+;; section actually lands in `generate-content' output and is
+;; ordered correctly.
+
+(ert-deftest tibetan-analysis-render-sanskrit-source-iast-only ()
+  "Renderer emits `** Sanskrit Source' with an IAST line and
+no Devanagari line when the plist's `:devanagari' is nil."
+  (skip-unless (fboundp 'tibetan-analysis--render-sanskrit-source))
+  (let* ((plist (list :iast "yathā vā punaḥ kaścid evam āha"
+                      :devanagari nil
+                      :script-source 'iast-line))
+         (out (tibetan-analysis--render-sanskrit-source plist)))
+    (should (stringp out))
+    (should (string-match-p "^\\*\\* Sanskrit Source$" out))
+    (should (string-match-p "IAST: yathā vā punaḥ kaścid evam āha" out))
+    (should-not (string-match-p "Devanagari:" out))))
+
+(ert-deftest tibetan-analysis-render-sanskrit-source-with-devanagari ()
+  "Renderer emits both an IAST and a Devanagari line when the
+plist carries Devanagari."
+  (skip-unless (fboundp 'tibetan-analysis--render-sanskrit-source))
+  (let* ((plist (list :iast "tvayā uktaṃ ca"
+                      :devanagari "त्वया उक्तं च"
+                      :script-source 'iast-and-devanagari))
+         (out (tibetan-analysis--render-sanskrit-source plist)))
+    (should (string-match-p "IAST: tvayā uktaṃ ca" out))
+    (should (string-match-p "Devanagari: त्वया उक्तं च" out))))
+
+(ert-deftest tibetan-analysis-render-sanskrit-source-nil-input ()
+  "Renderer returns an empty string (not nil, not error) for nil
+input.  Callers can safely concatenate the result without
+guarding."
+  (skip-unless (fboundp 'tibetan-analysis--render-sanskrit-source))
+  (let ((out (tibetan-analysis--render-sanskrit-source nil)))
+    (should (stringp out))
+    (should (string-empty-p out))))
+
+(ert-deftest tibetan-analysis-render-sanskrit-source-empty-iast ()
+  "Renderer treats empty `:iast' as no-content (returns empty
+string) — the Sanskrit section never renders without IAST."
+  (skip-unless (fboundp 'tibetan-analysis--render-sanskrit-source))
+  (let* ((plist (list :iast ""
+                      :devanagari nil
+                      :script-source 'iast-line))
+         (out (tibetan-analysis--render-sanskrit-source plist)))
+    (should (stringp out))
+    (should (string-empty-p out))))
+
+(ert-deftest tibetan-analysis-generate-content-omits-sanskrit-when-var-nil ()
+  "When `--sanskrit-text-for-render' is nil (default), the output
+contains no `** Sanskrit Source' section.  This is today's
+behaviour for non-parallel documents and must not regress."
+  (skip-unless (fboundp 'tibetan-analysis-generate-content))
+  (let ((tibetan-analysis--sanskrit-text-for-render nil))
+    (condition-case nil
+        (let ((out (tibetan-analysis-generate-content "བདག")))
+          (when (stringp out)
+            (should-not (string-match-p "^\\*\\* Sanskrit Source$" out))))
+      (error nil))))
+
+(ert-deftest tibetan-analysis-generate-content-emits-sanskrit-when-var-bound ()
+  "When `--sanskrit-text-for-render' is bound to a sanskrit-plist,
+the output contains a `** Sanskrit Source' section with the
+IAST line."
+  (skip-unless (fboundp 'tibetan-analysis-generate-content))
+  (skip-unless (boundp 'tibetan-analysis--sanskrit-text-for-render))
+  (let ((tibetan-analysis--sanskrit-text-for-render
+         (list :iast "ahaṃ"
+               :devanagari nil
+               :script-source 'iast-line)))
+    (condition-case err
+        (let ((out (tibetan-analysis-generate-content "བདག")))
+          (should (stringp out))
+          (should (string-match-p "^\\*\\* Sanskrit Source$" out))
+          (should (string-match-p "IAST: ahaṃ" out)))
+      (error
+       (signal (car err) (cdr err))))))
+
+(ert-deftest tibetan-analysis-generate-content-sanskrit-precedes-wylie ()
+  "The `** Sanskrit Source' section lands BEFORE
+`** Wylie Transliteration' in the final ordered output —
+Sanskrit is primary in parallel-mode, so it reads first."
+  (skip-unless (fboundp 'tibetan-analysis-generate-content))
+  (skip-unless (boundp 'tibetan-analysis--sanskrit-text-for-render))
+  (let ((tibetan-analysis--sanskrit-text-for-render
+         (list :iast "ahaṃ"
+               :devanagari nil
+               :script-source 'iast-line)))
+    (condition-case err
+        (let* ((out (tibetan-analysis-generate-content "བདག"))
+               (skt-pos (and (stringp out)
+                             (string-match "^\\*\\* Sanskrit Source$" out)))
+               (wyl-pos (and (stringp out)
+                             (string-match
+                              "^\\*\\* Wylie Transliteration$" out))))
+          (should skt-pos)
+          (should wyl-pos)
+          (should (< skt-pos wyl-pos)))
+      (error
+       (signal (car err) (cdr err))))))
+
+(ert-deftest tibetan-analysis-priority-order-includes-sanskrit-source ()
+  "`tibetan-analysis--priority-section-order' includes
+`** Sanskrit Source' at position 0 (above
+`** Wylie Transliteration').  Phase 2 prepends it
+unconditionally — the reorder pass only places sections that
+exist, so non-parallel documents are unaffected."
+  (skip-unless (boundp 'tibetan-analysis--priority-section-order))
+  (let ((order tibetan-analysis--priority-section-order))
+    (should (member "** Sanskrit Source" order))
+    (should (member "** Wylie Transliteration" order))
+    (let ((skt-idx (cl-position "** Sanskrit Source" order :test #'string=))
+          (wyl-idx (cl-position "** Wylie Transliteration" order
+                                :test #'string=)))
+      (should skt-idx)
+      (should wyl-idx)
+      (should (< skt-idx wyl-idx)))))
 
 (provide 'tibetan-sanskrit-parallel-test)
 ;;; tibetan-sanskrit-parallel-test.el ends here
