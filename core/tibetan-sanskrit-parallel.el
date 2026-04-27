@@ -239,6 +239,35 @@ result directly without guarding."
 ;; ----------------------------------------------------------------------------
 
 ;; ----------------------------------------------------------------------------
+;; Mode-gated walker (Phase 6, 2026-04-27)
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-sanskrit-parallel-plist-for-segment-id (source-file seg-id)
+  "Return the Sanskrit plist for SEG-ID in SOURCE-FILE — gated by mode.
+
+This is a convenience wrapper for analysis call sites
+(`tibetan-auto-analyze-document', `tibetan-analysis-reanalyze-
+file', the per-segment open / reanalyse paths).  Returns:
+
+  - the walker plist
+    `(:iast STR :devanagari STR-or-nil :script-source SYM)'
+    when SOURCE-FILE has `#+SOURCE_MODE: parallel-sanskrit' AND
+    the segment has a `**** Sanskrit' sibling.
+
+  - nil otherwise — including when SOURCE-FILE is not in
+    parallel mode (today's behaviour preserved byte-for-byte for
+    Tibetan-only documents), when the file is missing, or when
+    SEG-ID is not an integer.
+
+Call sites bind `tibetan-analysis--sanskrit-text-for-render' to
+this function's return value and the renderer fires conditionally
+in `tibetan-analysis--render-sanskrit-source' (Phase 2)."
+  (when (and source-file
+             (integerp seg-id)
+             (tibetan-cat--source-mode-parallel-p source-file))
+    (tibetan-sanskrit-parallel-text-for-segment-id source-file seg-id)))
+
+;; ----------------------------------------------------------------------------
 ;; Source-mode header management (Phase 5, 2026-04-27)
 ;; ----------------------------------------------------------------------------
 ;;

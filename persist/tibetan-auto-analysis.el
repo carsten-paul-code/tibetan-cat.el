@@ -358,8 +358,21 @@ Progress is shown in the echo area."
 
         (if (tibetan-auto--should-skip-p filepath)
             (setq skipped (1+ skipped))
-          ;; Generate analysis
-          (let ((auto-content (tibetan-analysis-generate-content seg-text)))
+          ;; Generate analysis.  Phase 6 of sanskrit-parallel-workflow
+          ;; (2026-04-27): when the source is in parallel-Sanskrit
+          ;; mode, thread the segment's `**** Sanskrit' sibling
+          ;; through the dynamic render var so the section emitter
+          ;; produces `** Sanskrit Source' above Wylie.  When the
+          ;; source is not in parallel mode (or the walker module is
+          ;; absent), the wrapper returns nil and behaviour is byte-
+          ;; identical to pre-Phase-6.
+          (let* ((tibetan-analysis--sanskrit-text-for-render
+                  (and (fboundp 'tibetan-sanskrit-parallel-plist-for-segment-id)
+                       (condition-case nil
+                           (tibetan-sanskrit-parallel-plist-for-segment-id
+                            source-file seg-num)
+                         (error nil))))
+                 (auto-content (tibetan-analysis-generate-content seg-text)))
             (tibetan-analysis-create-file seg-num seg-text source-file auto-content)
             (setq created-segs (1+ created-segs))
             ;; Track for the Claude-fire pass below.  Store (filepath . text)

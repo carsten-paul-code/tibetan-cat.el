@@ -3650,8 +3650,19 @@ sentence."
                 (error
                  (message "Claude auto-fire skipped for seg-%s: %s"
                           seg-id (error-message-string err))))))
-        ;; Create new file
-        (let* ((auto-content (tibetan-analysis-generate-content
+        ;; Create new file.  Phase 6 of sanskrit-parallel-workflow
+        ;; (2026-04-27): in parallel-Sanskrit mode, thread the
+        ;; segment's `**** Sanskrit' sibling through the render var
+        ;; so the new file emits `** Sanskrit Source' above Wylie.
+        ;; The wrapper returns nil when the source isn't in parallel
+        ;; mode, so non-parallel callers see no change.
+        (let* ((tibetan-analysis--sanskrit-text-for-render
+                (and (fboundp 'tibetan-sanskrit-parallel-plist-for-segment-id)
+                     (condition-case nil
+                         (tibetan-sanskrit-parallel-plist-for-segment-id
+                          source-file seg-id)
+                       (error nil))))
+               (auto-content (tibetan-analysis-generate-content
                               tibetan-text seg-id source-text))
                (new-filepath (tibetan-analysis-create-file seg-id tibetan-text source-file auto-content)))
           (message "Created analysis file: %s" new-filepath)
@@ -3713,8 +3724,23 @@ segment > sentence > paragraph > legacy, most-specific-wins."
       ;; gated because it wipes the auto-analysis section, but the
       ;; friction is now one keystroke.
       (when (y-or-n-p "Re-analyze segment? (regen auto section + re-fire Claude; notes preserved) ")
-        (let ((auto-content (tibetan-analysis-generate-content
-                             tibetan-text seg-id source-text)))
+        ;; Phase 6 of sanskrit-parallel-workflow (2026-04-27): pick up
+        ;; parallel-mode rendering on `C-c u R'.  Source file is the
+        ;; current buffer (the user invokes reanalyse from the source
+        ;; doc); when it carries `#+SOURCE_MODE: parallel-sanskrit'
+        ;; AND the segment has a `**** Sanskrit' sibling, the render
+        ;; var fires the `** Sanskrit Source' renderer.  Wrapper
+        ;; returns nil for non-parallel docs → today's behaviour
+        ;; preserved.
+        (let* ((source-file (buffer-file-name))
+               (tibetan-analysis--sanskrit-text-for-render
+                (and (fboundp 'tibetan-sanskrit-parallel-plist-for-segment-id)
+                     (condition-case nil
+                         (tibetan-sanskrit-parallel-plist-for-segment-id
+                          source-file seg-id)
+                       (error nil))))
+               (auto-content (tibetan-analysis-generate-content
+                              tibetan-text seg-id source-text)))
           (tibetan-analysis-regenerate-auto filepath tibetan-text auto-content)
           ;; Refresh the buffer if it's open
           (let ((buf (get-file-buffer filepath)))
@@ -3947,6 +3973,20 @@ without touching the file.  Otherwise return a plist:
                        (fboundp 'tibetan-analysis--parse-claude-vocabulary)
                        (tibetan-analysis--parse-claude-vocabulary
                         claude-vocabulary-raw)))
+                 ;; Phase 6 of sanskrit-parallel-workflow (2026-04-27):
+                 ;; in parallel-Sanskrit mode, thread the segment's
+                 ;; `**** Sanskrit' sibling through to the renderer
+                 ;; via the dynamic var so `C-c u r' (batch reanalyse)
+                 ;; populates `** Sanskrit Source' from the source
+                 ;; on every regen pass.  Wrapper returns nil for
+                 ;; non-parallel sources or when no source-file is
+                 ;; supplied — today's behaviour preserved.
+                 (tibetan-analysis--sanskrit-text-for-render
+                  (and (fboundp 'tibetan-sanskrit-parallel-plist-for-segment-id)
+                       (condition-case nil
+                           (tibetan-sanskrit-parallel-plist-for-segment-id
+                            source-file seg-id)
+                         (error nil))))
                  (auto-content (tibetan-analysis-generate-content
                                 tibetan-text seg-id source-text)))
             (tibetan-analysis-regenerate-auto filepath tibetan-text

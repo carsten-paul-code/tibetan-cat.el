@@ -685,5 +685,207 @@ times)."
   (should (fboundp 'tibetan-cat-toggle-source-mode-parallel))
   (should (commandp 'tibetan-cat-toggle-source-mode-parallel)))
 
+;; ============================================================================
+;; PHASE 6 — End-to-end integration: dynamic var binding on real call paths
+;; ============================================================================
+;;
+;; Phase 2 shipped `tibetan-analysis--sanskrit-text-for-render' (dynamic
+;; var) and the `** Sanskrit Source' renderer that fires when it is
+;; non-nil.  Phase 6 wires the var to the walker on the real
+;; `tibetan-auto-analyze-document' / `--open-segment-analysis-impl' /
+;; `--reanalyze-segment-impl' / `tibetan-analysis-reanalyze-file' call
+;; paths.  Result: real `C-c u A' / `C-c u B' / `C-c u r' / `C-c u R'
+;; runs on a parallel-Sanskrit document populate the
+;; `** Sanskrit Source' section automatically.
+;;
+;; Test strategy: stub `tibetan-analysis-generate-content' to capture
+;; the dynamic var's value at the moment it would have been consulted.
+;; Asserting on the captured value verifies the call site bound the
+;; var correctly without depending on the full vocabulary / Claude
+;; / parser stack.
+
+(defvar tibetan-sanskrit-parallel-test--captured-render-var nil
+  "Capture slot used by Phase 6 stubs to record the value of
+`tibetan-analysis--sanskrit-text-for-render' at the moment
+`generate-content' was called.  Reset to nil at the start of
+each test.")
+
+(defun tibetan-sanskrit-parallel-test--capturing-stub
+    (_tibetan-text &optional _seg-id _source-text _source-file)
+  "Stub for `tibetan-analysis-generate-content' that captures the
+in-flight value of the Sanskrit-render dynamic var, then returns
+a minimal valid auto-content body so the surrounding caller can
+finish.  Used by Phase 6 integration tests."
+  (setq tibetan-sanskrit-parallel-test--captured-render-var
+        tibetan-analysis--sanskrit-text-for-render)
+  ;; Return a minimal body that survives the section-reorder pass.
+  ":PROPERTIES:\n:GENERATED: t\n:END:\n\n** Wylie Transliteration\n[stub]\n\n** Claude Translation\n[Requesting translation...]\n\n")
+
+(defmacro tibetan-sanskrit-parallel-test--with-parallel-source-and-analysis
+    (parallel-mode &rest body)
+  "Set up a temp source file + temp analysis file for Phase 6
+integration tests.  When PARALLEL-MODE is non-nil, the source
+gets `#+SOURCE_MODE: parallel-sanskrit'.  Source has Segment 1
+with a `**** Sanskrit' sibling carrying IAST line `aham asmi'.
+
+Bindings inside BODY:
+  source-file      Absolute path to the temp source.org
+  analysis-dir     Directory holding the analysis file
+  analysis-file    Absolute path to seg-001.org (created with
+                   minimal scaffold so reanalyze-file can run)."
+  (declare (indent 1))
+  `(let* ((source-dir (make-temp-file "tibetan-skt-phase6-src-" t))
+          (analysis-dir (make-temp-file "tibetan-skt-phase6-ana-" t))
+          (source-file (expand-file-name "source.org" source-dir))
+          (analysis-file (expand-file-name "seg-001.org" analysis-dir)))
+     (unwind-protect
+         (progn
+           (with-temp-file source-file
+             (insert "#+TITLE: YBh test\n")
+             (when ,parallel-mode
+               (insert "#+SOURCE_MODE: parallel-sanskrit\n"))
+             (insert "\n* Tibetan Text\n** Section 1\n*** Sentence 1\n"
+                     "**** Segment 1\nབདག་ཡིན།\n\n"
+                     "**** Sanskrit\naham asmi\n\n"
+                     "**** Working Translation\n\n"))
+           (with-temp-file analysis-file
+             (insert "#+TITLE: Segment 1 Analysis\n#+TIBETAN_HASH: x\n\n"
+                     "* Tibetan Text\nབདག་ཡིན།\n\n"
+                     "* Auto-Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                     "** Wylie Transliteration\n[old]\n\n"
+                     "** Claude Translation\n[Requesting translation...]\n\n"
+                     "* My Notes\n\n* Working Translation\n\n* Footnotes\n"))
+           (setq tibetan-sanskrit-parallel-test--captured-render-var nil)
+           ,@body)
+       (when (file-exists-p source-file) (delete-file source-file))
+       (when (file-exists-p analysis-file) (delete-file analysis-file))
+       (when (file-exists-p source-dir)
+         (delete-directory source-dir t))
+       (when (file-exists-p analysis-dir)
+         (delete-directory analysis-dir t)))))
+
+(ert-deftest tibetan-sanskrit-parallel-reanalyze-file-binds-render-var-when-parallel ()
+  "`tibetan-analysis-reanalyze-file' on a parallel-Sanskrit source
+binds `--sanskrit-text-for-render' to the walker's plist for
+Segment 1, so the renderer that runs inside `generate-content'
+sees the IAST + Devanagari payload."
+  (skip-unless (fboundp 'tibetan-analysis-reanalyze-file))
+  (tibetan-sanskrit-parallel-test--with-parallel-source-and-analysis t
+    (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+               #'tibetan-sanskrit-parallel-test--capturing-stub))
+      (tibetan-analysis-reanalyze-file analysis-file
+                                        :source-file source-file
+                                        :re-request-claude nil)
+      (let ((captured tibetan-sanskrit-parallel-test--captured-render-var))
+        (should captured)
+        (should (equal (plist-get captured :iast) "aham asmi"))))))
+
+(ert-deftest tibetan-sanskrit-parallel-reanalyze-file-leaves-render-var-nil-when-not-parallel ()
+  "Same source minus `#+SOURCE_MODE:' header → walker still finds
+the Sanskrit sibling (positional walker doesn't gate on mode),
+but the auto-analyse + reanalyse paths only thread it through
+the dynamic var when the source IS in parallel mode.
+REGRESSION GUARD for non-parallel documents: the var stays nil,
+so today's behaviour is preserved byte-for-byte."
+  (skip-unless (fboundp 'tibetan-analysis-reanalyze-file))
+  (tibetan-sanskrit-parallel-test--with-parallel-source-and-analysis nil
+    (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+               #'tibetan-sanskrit-parallel-test--capturing-stub))
+      (tibetan-analysis-reanalyze-file analysis-file
+                                        :source-file source-file
+                                        :re-request-claude nil)
+      ;; Without the `#+SOURCE_MODE:' header the call site does NOT
+      ;; bind the var to the walker result, so the stub captures the
+      ;; ambient nil.
+      (should (null tibetan-sanskrit-parallel-test--captured-render-var)))))
+
+(ert-deftest tibetan-sanskrit-parallel-reanalyze-file-leaves-render-var-nil-without-source-file ()
+  "Reanalyze without supplying `:source-file' (legacy callers) →
+no walker call, dynamic var stays nil.  The reanalyse-file
+contract for non-Sanskrit-aware callers is unchanged."
+  (skip-unless (fboundp 'tibetan-analysis-reanalyze-file))
+  (tibetan-sanskrit-parallel-test--with-parallel-source-and-analysis t
+    (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+               #'tibetan-sanskrit-parallel-test--capturing-stub))
+      (tibetan-analysis-reanalyze-file analysis-file
+                                        :re-request-claude nil)
+      (should (null tibetan-sanskrit-parallel-test--captured-render-var)))))
+
+(ert-deftest tibetan-sanskrit-parallel-auto-analyze-document-binds-render-var-when-parallel ()
+  "`tibetan-auto-analyze-document' creating a fresh seg-001.org
+from a parallel-Sanskrit source binds `--sanskrit-text-for-
+render' to the Sanskrit plist for Segment 1.  This is the
+`C-c u B' batch path."
+  (skip-unless (fboundp 'tibetan-auto-analyze-document))
+  (let* ((source-dir (make-temp-file "tibetan-skt-auto-" t))
+         (source-file (expand-file-name "source.org" source-dir))
+         (skipped-claude tibetan-auto-fire-claude-on-create))
+    (unwind-protect
+        (progn
+          ;; Don't fire Claude during the test — we only care about
+          ;; the structural pass.
+          (setq tibetan-auto-fire-claude-on-create nil)
+          (with-temp-file source-file
+            (insert "#+TITLE: YBh\n#+SOURCE_MODE: parallel-sanskrit\n\n"
+                    "* Tibetan Text\n** Section 1\n*** Sentence 1\n"
+                    "**** Segment 1\nབདག་ཡིན།\n\n"
+                    "**** Sanskrit\naham asmi\n\n"
+                    "**** Working Translation\n\n"))
+          (setq tibetan-sanskrit-parallel-test--captured-render-var nil)
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     #'tibetan-sanskrit-parallel-test--capturing-stub))
+            ;; Open the source file in a buffer so
+            ;; `tibetan-auto-analyze-document' can find its segments.
+            (let ((buf (find-file-noselect source-file)))
+              (unwind-protect
+                  (with-current-buffer buf
+                    (org-mode)
+                    (tibetan-auto-analyze-document))
+                (when (buffer-live-p buf)
+                  (kill-buffer buf)))))
+          (let ((captured tibetan-sanskrit-parallel-test--captured-render-var))
+            (should captured)
+            (should (equal (plist-get captured :iast) "aham asmi"))))
+      (setq tibetan-auto-fire-claude-on-create skipped-claude)
+      ;; Clean up any seg-NNN.org files auto-analyse created next to
+      ;; the source.
+      (dolist (f (directory-files source-dir t "^seg-[0-9]+.*\\.org$"))
+        (delete-file f))
+      (when (file-exists-p source-file) (delete-file source-file))
+      (when (file-exists-p source-dir) (delete-directory source-dir t)))))
+
+(ert-deftest tibetan-sanskrit-parallel-auto-analyze-document-leaves-render-var-nil-when-not-parallel ()
+  "REGRESSION GUARD: without `#+SOURCE_MODE: parallel-sanskrit',
+`tibetan-auto-analyze-document' never binds the render var.
+Existing Tibetan-only documents stay byte-identical."
+  (skip-unless (fboundp 'tibetan-auto-analyze-document))
+  (let* ((source-dir (make-temp-file "tibetan-skt-auto-" t))
+         (source-file (expand-file-name "source.org" source-dir))
+         (skipped-claude tibetan-auto-fire-claude-on-create))
+    (unwind-protect
+        (progn
+          (setq tibetan-auto-fire-claude-on-create nil)
+          (with-temp-file source-file
+            (insert "#+TITLE: Plain Tibetan\n\n"
+                    "* Tibetan Text\n** Section 1\n*** Sentence 1\n"
+                    "**** Segment 1\nབདག་ཡིན།\n\n"
+                    "**** Working Translation\n\n"))
+          (setq tibetan-sanskrit-parallel-test--captured-render-var nil)
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     #'tibetan-sanskrit-parallel-test--capturing-stub))
+            (let ((buf (find-file-noselect source-file)))
+              (unwind-protect
+                  (with-current-buffer buf
+                    (org-mode)
+                    (tibetan-auto-analyze-document))
+                (when (buffer-live-p buf)
+                  (kill-buffer buf)))))
+          (should (null tibetan-sanskrit-parallel-test--captured-render-var)))
+      (setq tibetan-auto-fire-claude-on-create skipped-claude)
+      (dolist (f (directory-files source-dir t "^seg-[0-9]+.*\\.org$"))
+        (delete-file f))
+      (when (file-exists-p source-file) (delete-file source-file))
+      (when (file-exists-p source-dir) (delete-directory source-dir t)))))
+
 (provide 'tibetan-sanskrit-parallel-test)
 ;;; tibetan-sanskrit-parallel-test.el ends here
