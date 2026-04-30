@@ -112,6 +112,10 @@
 ;; handling.  Stubs HTTP so tests run without network.
 (condition-case nil (require 'tibetan-dharmamitra-api-test) (error nil))
 
+;; DharmaMitra alignment orchestrator (Phase 2, 2026-04-27): per-segment
+;; candidate lookup via translate → search.  Stubs both API functions.
+(condition-case nil (require 'tibetan-sanskrit-parallel-dharmamitra-test) (error nil))
+
 ;; Source-aware Claude prompt (reads #+TIBETAN_CLAUDE_CONTEXT: and friends)
 (condition-case nil (require 'tibetan-analysis-claude-prompt-test) (error nil))
 

@@ -96,6 +96,12 @@
 ;; gotrapatala.org and similar parallel-mode documents.
 (require 'tibetan-dharmamitra-api nil t)
 
+;; DharmaMitra alignment orchestrator (Phase 2 of dharmamitra-realign,
+;; 2026-04-27).  Per-segment translate → search pipeline that returns
+;; ranked Sanskrit candidates for a Tibetan segment.  Soft-required;
+;; depends on `tibetan-dharmamitra-api' (also soft).
+(require 'tibetan-sanskrit-parallel-dharmamitra nil t)
+
 ;; Sanskrit-parallel reading bridge (Phase 1, 2026-04-27).  Read-only
 ;; primitives: walker for `**** Sanskrit' siblings + source-mode
 ;; predicate (`#+SOURCE_MODE: parallel-sanskrit').  Soft-required —

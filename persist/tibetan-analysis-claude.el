@@ -296,9 +296,22 @@ Keys:
                    `core/tibetan-sanskrit-parallel.el' for the
                    inline reader used by `core/' callers without
                    the persist dependency.
+  :dm-sanskrit-source  value of `#+DM_SANSKRIT_SOURCE:' — the
+                   DharmaMitra source identifier for the Sanskrit-
+                   side parallel work (e.g. `SA_T06_bsa034' for
+                   Asaṅga's Bodhisattvabhūmi).  Phase 2 of the
+                   dharmamitra-realign workflow (2026-04-27).
+                   The realign command uses this to constrain
+                   the search to the right corpus when re-aligning
+                   `**** Sanskrit' siblings.  nil when unset.
+  :dm-tibetan-source  value of `#+DM_TIBETAN_SOURCE:' — the DM
+                   identifier for the Tibetan-side parallel
+                   (e.g. `BO_T06_D4037' for the Derge
+                   Bodhisattvabhūmi).  nil when unset.
 
 Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
-  (let (title work author sources ctx vocab corpus target-lang source-mode)
+  (let (title work author sources ctx vocab corpus target-lang source-mode
+              dm-sanskrit-source dm-tibetan-source)
     (when (and source-file (file-exists-p source-file))
       (condition-case nil
           (with-temp-buffer
@@ -324,6 +337,18 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
               (let ((val (string-trim (match-string 1))))
                 (unless (string-empty-p val)
                   (setq source-mode val))))
+            (goto-char (point-min))
+            (when (re-search-forward
+                   "^#\\+DM_SANSKRIT_SOURCE:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (unless (string-empty-p val)
+                  (setq dm-sanskrit-source val))))
+            (goto-char (point-min))
+            (when (re-search-forward
+                   "^#\\+DM_TIBETAN_SOURCE:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (unless (string-empty-p val)
+                  (setq dm-tibetan-source val))))
             (goto-char (point-min))
             (while (re-search-forward
                     "^#\\+TIBETAN_CLAUDE_CONTEXT:[ \t]*\\(.*\\)$" nil t)
@@ -360,7 +385,9 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
           :vocab-file vocab
           :corpus corpus
           :target-lang target-lang
-          :source-mode source-mode)))
+          :source-mode source-mode
+          :dm-sanskrit-source dm-sanskrit-source
+          :dm-tibetan-source dm-tibetan-source)))
 
 
 ;;;###autoload

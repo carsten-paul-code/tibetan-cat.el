@@ -179,6 +179,64 @@ header → nil."
     (let ((meta (tibetan-analysis--read-source-metadata source-file)))
       (should (null (plist-get meta :target-lang))))))
 
+(ert-deftest tibetan-claude-prompt-reads-dm-sanskrit-source-header ()
+  "`#+DM_SANSKRIT_SOURCE:' header is captured under the
+`:dm-sanskrit-source' key so the dharmamitra-realign workflow
+can constrain the Sanskrit corpus search to the right work
+(e.g. `SA_T06_bsa034' for Asaṅga's Bodhisattvabhūmi).  Phase 2
+of dharmamitra-realign workflow (2026-04-27)."
+  (tibetan-test--with-source
+      "#+TITLE: Gotrapaṭala\n#+DM_SANSKRIT_SOURCE: SA_T06_bsa034\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :dm-sanskrit-source) "SA_T06_bsa034"))))
+  ;; Missing header → nil.
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (null (plist-get meta :dm-sanskrit-source)))))
+  ;; Blank value treated as unset.
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+DM_SANSKRIT_SOURCE:   \n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (null (plist-get meta :dm-sanskrit-source))))))
+
+(ert-deftest tibetan-claude-prompt-reads-dm-tibetan-source-header ()
+  "`#+DM_TIBETAN_SOURCE:' header is captured under the
+`:dm-tibetan-source' key.  Used by the realign workflow to
+identify the Tibetan-side parallel work (e.g. `BO_T06_D4037'
+for the Derge Bodhisattvabhūmi)."
+  (tibetan-test--with-source
+      "#+TITLE: Gotrapaṭala\n#+DM_TIBETAN_SOURCE: BO_T06_D4037\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :dm-tibetan-source) "BO_T06_D4037"))))
+  ;; Missing header → nil.
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (null (plist-get meta :dm-tibetan-source))))))
+
+(ert-deftest tibetan-claude-prompt-dm-source-headers-coexist-with-others ()
+  "DM source headers don't collide with target-lang, corpus,
+source-mode, or claude-context — all coexist on the same file."
+  (tibetan-test--with-source
+      (concat
+       "#+TITLE: Gotrapaṭala\n"
+       "#+TIBETAN_TARGET_LANG: en\n"
+       "#+TIBETAN_CORPUS: Yogacarabhumi\n"
+       "#+SOURCE_MODE: parallel-sanskrit\n"
+       "#+DM_SANSKRIT_SOURCE: SA_T06_bsa034\n"
+       "#+DM_TIBETAN_SOURCE: BO_T06_D4037\n"
+       "#+TIBETAN_CLAUDE_CONTEXT: Asaṅga, Yogācārabhūmi context.\n")
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :title) "Gotrapaṭala"))
+      (should (equal (plist-get meta :target-lang) "en"))
+      (should (equal (plist-get meta :corpus) "Yogacarabhumi"))
+      (should (equal (plist-get meta :source-mode) "parallel-sanskrit"))
+      (should (equal (plist-get meta :dm-sanskrit-source) "SA_T06_bsa034"))
+      (should (equal (plist-get meta :dm-tibetan-source) "BO_T06_D4037"))
+      (should (equal (plist-get meta :claude-context)
+                     '("Asaṅga, Yogācārabhūmi context."))))))
+
 (ert-deftest tibetan-claude-prompt-reads-corpus-header ()
   "`#+TIBETAN_CORPUS:' header is captured under the `:corpus' key so the
 dictionary ranker can promote the corresponding Steinert sub-dictionary."
