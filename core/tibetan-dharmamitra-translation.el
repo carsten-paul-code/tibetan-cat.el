@@ -24,6 +24,7 @@
 ;;; Code:
 
 (require 'tibetan-dharmamitra-api)
+(require 'tibetan-sanskrit-parallel nil t)
 
 ;; ----------------------------------------------------------------------------
 ;; Writer
@@ -165,13 +166,6 @@ Returns t on successful write, nil otherwise."
 ;; Sanskrit fire (Phase A.2, 2026-04-30)
 ;; ----------------------------------------------------------------------------
 
-(defconst tibetan-dharmamitra-translation--placeholder-marker-prefix
-  "[Sanskrit alignment exhausted"
-  "Prefix marking a daṇḍa-split placeholder generated during the
-gotrapatala alignment prep — explicitly skipped by
-`fire-sanskrit' so we don't ask DM to translate our own
-internal markers.")
-
 ;;;###autoload
 (defun tibetan-dharmamitra-translation-fire-sanskrit (sanskrit-text analysis-file)
   "Translate SANSKRIT-TEXT (IAST) via DharmaMitra; write result to
@@ -179,9 +173,15 @@ ANALYSIS-FILE's `* DharmaMitra Translation (Sanskrit)' section.
 
 No-op when:
   - SANSKRIT-TEXT is empty / nil
-  - SANSKRIT-TEXT is a `[Sanskrit alignment exhausted...]'
-    placeholder marker (produced by the gotrapatala prep
-    script when no real Sanskrit clause was available)
+  - SANSKRIT-TEXT is a Sanskrit-alignment placeholder marker
+    recognised by
+    `tibetan-sanskrit-parallel--placeholder-text-p'
+    (`[Sanskrit alignment pending …]',
+     `[Sanskrit alignment exhausted …]',
+     `[No Sanskrit counterpart …]').  In practice the walker
+    already returns nil for placeholders before we get here,
+    but this defence-in-depth check guards against direct
+    callers that bypass the walker.
   - chat-translate returns nil (HTTP error / empty response)
 
 DM auto-detects the input encoding (IAST / Devanagari).  If
@@ -192,9 +192,9 @@ Returns t on successful write, nil otherwise."
   (when (and sanskrit-text
              (stringp sanskrit-text)
              (not (string-empty-p (string-trim sanskrit-text)))
-             (not (string-prefix-p
-                   tibetan-dharmamitra-translation--placeholder-marker-prefix
-                   sanskrit-text))
+             (not (and (fboundp 'tibetan-sanskrit-parallel--placeholder-text-p)
+                       (tibetan-sanskrit-parallel--placeholder-text-p
+                        sanskrit-text)))
              analysis-file)
     (let ((translation (tibetan-dharmamitra-api-chat-translate sanskrit-text)))
       (when (and translation (not (string-empty-p translation)))

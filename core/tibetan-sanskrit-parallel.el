@@ -91,6 +91,61 @@ Returns nil for nil, non-string, or empty input."
          (string-match-p "[ऀ-ॿ]" str))))
 
 ;; ----------------------------------------------------------------------------
+;; Placeholder marker recognition (alignment-fix work, 2026-04-30)
+;; ----------------------------------------------------------------------------
+
+(defconst tibetan-sanskrit-parallel--placeholder-prefixes
+  '("[Sanskrit alignment pending"
+    "[Sanskrit alignment exhausted"
+    "[No Sanskrit counterpart")
+  "Recognised prefixes for `**** Sanskrit' placeholder bodies.
+
+A `**** Sanskrit' sibling whose body starts with any of these
+strings is treated as `no Sanskrit available' — the walker
+returns nil rather than a plist, so the DM Sanskrit-fire path,
+the Claude parallel-mode user-prompt builder, and the
+`** Sanskrit Source' renderer all behave the same as for a
+segment that has no `**** Sanskrit' sibling at all.
+
+Three markers exist today:
+
+  `[Sanskrit alignment pending …]' — universal pending marker.
+    The current alignment is known-invalid (e.g.  daṇḍa-split
+    that crossed a structural boundary between Tibetan and
+    Sanskrit recensions); the editorial pass hasn't happened
+    yet.  Most segments of `gotrapatala.org' carry this after
+    2026-04-30's bulk-mark.
+
+  `[Sanskrit alignment exhausted …]' — the daṇḍa-split prep
+    ran out of Sanskrit clauses before reaching the end of the
+    Tibetan segments (gotrapatala.org segs 70-97 originally).
+
+  `[No Sanskrit counterpart …]' — explicit Tibetan-only
+    marker for translator's homages, uddāna verses, or other
+    canon-side editorial material with no Sanskrit equivalent
+    in any extant edition.  Reserved for class-time use.
+
+Adding a new prefix here is the only change required to teach
+the whole parallel-mode pipeline about a new marker shape.")
+
+(defun tibetan-sanskrit-parallel--placeholder-text-p (str)
+  "Return non-nil when STR is a Sanskrit-alignment placeholder marker.
+
+Checks STR against
+`tibetan-sanskrit-parallel--placeholder-prefixes' via
+`string-prefix-p'.  Defensive against nil and non-string
+input — returns nil for both.
+
+Used by `--parse-body' to short-circuit placeholder bodies into
+nil so the walker reports `no Sanskrit available'.  Other
+modules (DM fire-sanskrit, Claude prompt user-block) can call
+this directly to apply the same gate without re-implementing
+the prefix list."
+  (and (stringp str)
+       (cl-some (lambda (prefix) (string-prefix-p prefix str))
+                tibetan-sanskrit-parallel--placeholder-prefixes)))
+
+;; ----------------------------------------------------------------------------
 ;; Body parser
 ;; ----------------------------------------------------------------------------
 
@@ -108,7 +163,13 @@ Returned plist:
    :devanagari STRING-or-nil     ; trimmed line 2 if Devanagari
    :script-source SYMBOL)        ; `iast-line' or `iast-and-devanagari'
 
-Returns nil when BODY is nil, empty, or contains no IAST line."
+Returns nil when:
+  - BODY is nil, empty, or contains no IAST line.
+  - The IAST line is a placeholder marker recognised by
+    `tibetan-sanskrit-parallel--placeholder-text-p' (alignment-
+    fix work, 2026-04-30).  Placeholder segments thus look the
+    same to downstream consumers as segments that have no
+    `**** Sanskrit' sibling at all."
   (when (and body (stringp body) (not (string-empty-p (string-trim body))))
     (let* ((lines (split-string body "\n"))
            (trimmed (mapcar #'string-trim lines))
@@ -116,7 +177,8 @@ Returns nil when BODY is nil, empty, or contains no IAST line."
            (iast (car non-empty))
            (line2 (cadr non-empty))
            devanagari script-source)
-      (when iast
+      (when (and iast
+                 (not (tibetan-sanskrit-parallel--placeholder-text-p iast)))
         (cond
          ((and line2 (tibetan-sanskrit-parallel--has-devanagari-p line2))
           (setq devanagari line2
