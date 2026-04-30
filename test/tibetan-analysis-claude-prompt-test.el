@@ -607,28 +607,31 @@ parenthetical explanation on first mention of fixed Buddhist terms
 
 (ert-deftest tibetan-claude-prompt-parallel-sanskrit-injects-system-block ()
   "Source with `#+SOURCE_MODE: parallel-sanskrit' → system prompt
-includes a Sanskrit-primary directive."
+includes the parallel-reading directive (Phase B of multi-
+translator-parallel-reading, 2026-04-30: instructs Claude to
+emit TWO translation sections, one per source language)."
   (tibetan-test--with-source
       "#+TITLE: YBh\n#+SOURCE_MODE: parallel-sanskrit\n"
     (let* ((prompts (tibetan-analysis--build-claude-prompts
                      "བདག་" source-file))
            (system (car prompts)))
-      ;; Distinct phrase that only the parallel-mode block carries.
-      (should (string-match-p "SANSKRIT is the primary" system))
-      ;; Tibetan-Divergence sub-heading mention so Claude knows the
-      ;; output schema accepts it.
-      (should (string-match-p "Tibetan Divergence" system)))))
+      ;; Distinct phrases that only the parallel-mode block carries.
+      (should (string-match-p "parallel Sanskrit-Tibetan reading" system))
+      (should (string-match-p "TWO translation sections" system))
+      ;; New schema heading appears verbatim so Claude knows to emit it.
+      (should (string-match-p "## Translation (Sanskrit)" system)))))
 
 (ert-deftest tibetan-claude-prompt-no-parallel-block-without-header ()
   "Without `#+SOURCE_MODE:' header the system prompt has no
-Sanskrit-primary directive — today's behaviour preserved."
+parallel-reading directive — today's behaviour preserved."
   (tibetan-test--with-source
       "#+TITLE: T\n"
     (let* ((prompts (tibetan-analysis--build-claude-prompts
                      "བདག་" source-file))
            (system (car prompts)))
-      (should-not (string-match-p "SANSKRIT is the primary" system))
-      (should-not (string-match-p "Tibetan Divergence" system)))))
+      (should-not (string-match-p "parallel Sanskrit-Tibetan reading" system))
+      (should-not (string-match-p "TWO translation sections" system))
+      (should-not (string-match-p "## Translation (Sanskrit)" system)))))
 
 (ert-deftest tibetan-claude-prompt-rejects-other-source-modes ()
   "Hypothetical `#+SOURCE_MODE: parallel-pali' (or any non-
@@ -638,7 +641,8 @@ parallel-sanskrit value) does NOT inject the Sanskrit block."
     (let* ((prompts (tibetan-analysis--build-claude-prompts
                      "བདག་" source-file))
            (system (car prompts)))
-      (should-not (string-match-p "SANSKRIT is the primary" system)))))
+      (should-not (string-match-p "parallel Sanskrit-Tibetan reading" system))
+      (should-not (string-match-p "TWO translation sections" system)))))
 
 (ert-deftest tibetan-claude-prompt-injects-sanskrit-user-block ()
   "When `--build-claude-prompts' is called with a sanskrit-plist
@@ -713,7 +717,8 @@ not be displaced or overwritten by the parallel-mode block."
                      "བདག་" source-file))
            (system (car prompts)))
       (should (string-match-p "GERMAN" system))
-      (should (string-match-p "SANSKRIT is the primary" system)))))
+      (should (string-match-p "parallel Sanskrit-Tibetan reading" system))
+      (should (string-match-p "TWO translation sections" system)))))
 
 (ert-deftest tibetan-claude-prompt-parallel-mode-system-block-helper-callable ()
   "The constant-block helper is fbound and returns a non-empty
@@ -722,7 +727,9 @@ in isolation (without building a full prompt)."
   (should (fboundp 'tibetan-analysis--claude-parallel-mode-system-block))
   (let ((block (tibetan-analysis--claude-parallel-mode-system-block)))
     (should (stringp block))
-    (should (string-match-p "SANSKRIT is the primary" block))))
+    (should (string-match-p "parallel Sanskrit-Tibetan reading" block))
+    (should (string-match-p "TWO translation sections" block))
+    (should (string-match-p "## Translation (Sanskrit)" block))))
 
 (ert-deftest tibetan-claude-prompt-parallel-mode-user-block-helper ()
   "The user-block helper accepts a sanskrit-plist and returns the

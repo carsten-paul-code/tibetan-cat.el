@@ -1185,5 +1185,200 @@ needs to round-trip the divergence."
         (should (string-match-p "stod, praise"
                                 (plist-get p :vocabulary)))))))
 
+;; ============================================================================
+;; Phase B of multi-translator-parallel-reading (2026-04-30):
+;; `## Translation (Sanskrit)` is the second Claude translation
+;; section emitted in parallel-Sanskrit mode.  The parser must
+;; route it to a distinct `:translation-sanskrit' plist key without
+;; clobbering the bare `## Translation' (Tibetan).  The writer
+;; scaffolds `** Claude Translation (Sanskrit)' on demand —
+;; non-parallel responses leave the analysis file byte-identical.
+;; The reader / restorer round-trip the new key.
+;; ============================================================================
+
+(ert-deftest tibetan-claude-sections-parse-tibetan-and-sanskrit-distinct ()
+  "A response with BOTH `## Translation' and `## Translation (Sanskrit)'
+parses into two distinct plist keys: `:translation' carries the
+Tibetan body, `:translation-sanskrit' carries the Sanskrit body."
+  (let* ((response (concat "## Translation\n"
+                           "Tibetan rendering.\n\n"
+                           "## Translation (Sanskrit)\n"
+                           "Sanskrit rendering.\n\n"
+                           "## Vocabulary\n"
+                           "bdag, noun, \"I/self\"\n"))
+         (parsed (tibetan-analysis--parse-claude-sections response)))
+    (should (equal (plist-get parsed :translation)
+                   "Tibetan rendering."))
+    (should (equal (plist-get parsed :translation-sanskrit)
+                   "Sanskrit rendering."))
+    (should (string-match-p "bdag" (plist-get parsed :vocabulary)))))
+
+(ert-deftest tibetan-claude-sections-parse-sanskrit-only-leaves-tibetan-nil ()
+  "A response carrying only `## Translation (Sanskrit)' (no bare
+Translation) routes into `:translation-sanskrit' and leaves
+`:translation' nil — never accidentally fills the Tibetan slot."
+  (let* ((response (concat "## Translation (Sanskrit)\n"
+                           "Sanskrit only.\n"))
+         (parsed (tibetan-analysis--parse-claude-sections response)))
+    (should (equal (plist-get parsed :translation-sanskrit)
+                   "Sanskrit only."))
+    (should (null (plist-get parsed :translation)))))
+
+(ert-deftest tibetan-claude-sections-parse-tibetan-only-leaves-sanskrit-nil ()
+  "A response with ONLY bare `## Translation' (no Sanskrit variant)
+leaves `:translation-sanskrit' nil — non-parallel files keep
+producing nil for the new key."
+  (let* ((response "## Translation\nJust Tibetan.\n")
+         (parsed (tibetan-analysis--parse-claude-sections response)))
+    (should (equal (plist-get parsed :translation) "Just Tibetan."))
+    (should (null (plist-get parsed :translation-sanskrit)))))
+
+(ert-deftest tibetan-claude-sections-section-order-includes-sanskrit ()
+  "The canonical Claude section-order defconst lists the Sanskrit
+variant at level 2, immediately after the Tibetan translation —
+required so insert / restore iterate over it consistently."
+  (let* ((order tibetan-analysis--claude-section-order)
+         (entry (assq :translation-sanskrit order)))
+    (should entry)
+    (should (equal (nth 1 entry) "Claude Translation (Sanskrit)"))
+    (should (equal (nth 2 entry) 2))
+    ;; Position immediately after :translation.
+    (let ((pos-tib (cl-position :translation order :key #'car))
+          (pos-skt (cl-position :translation-sanskrit order :key #'car)))
+      (should pos-tib)
+      (should pos-skt)
+      (should (= pos-skt (1+ pos-tib))))))
+
+(ert-deftest tibetan-claude-sections-priority-order-includes-sanskrit ()
+  "The priority-section-order in `tibetan-analysis-persist'
+positions `** Claude Translation (Sanskrit)' immediately after
+`** Claude Translation' so the reader sees Tibetan first, then
+Sanskrit."
+  (let* ((order tibetan-analysis--priority-section-order)
+         (pos-tib (cl-position "** Claude Translation" order :test #'equal))
+         (pos-skt (cl-position "** Claude Translation (Sanskrit)"
+                               order :test #'equal)))
+    (should pos-tib)
+    (should pos-skt)
+    (should (= pos-skt (1+ pos-tib)))))
+
+(ert-deftest tibetan-claude-sections-insert-creates-sanskrit-heading ()
+  "Inserting a response with `## Translation (Sanskrit)' into an
+analysis file that lacks the heading scaffolds
+`** Claude Translation (Sanskrit)' at level 2 (immediately after
+the Tibetan-side `** Claude Translation') and writes the body."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
+    (let ((response (concat "## Translation\n"
+                            "Tibetan body.\n\n"
+                            "## Translation (Sanskrit)\n"
+                            "Sanskrit body.\n")))
+      (tibetan-analysis--insert-claude-sections response analysis-file)
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf (kill-buffer buf)))
+      (with-temp-buffer
+        (insert-file-contents analysis-file)
+        (let ((content (buffer-string)))
+          ;; Both headings present at level 2.
+          (should (string-match-p "^\\*\\* Claude Translation$" content))
+          (should (string-match-p "^\\*\\* Claude Translation (Sanskrit)$"
+                                  content))
+          ;; Tibetan-side body lives under the bare heading.
+          (should (string-match-p "Tibetan body" content))
+          ;; Sanskrit-side body lives under the variant heading.
+          (should (string-match-p "Sanskrit body" content))
+          ;; Variant heading appears AFTER bare heading in the buffer
+          ;; (Tibetan first, Sanskrit immediately follows).
+          (let ((pos-tib (string-match "^\\*\\* Claude Translation$" content))
+                (pos-skt (string-match "^\\*\\* Claude Translation (Sanskrit)$"
+                                       content)))
+            (should pos-tib)
+            (should pos-skt)
+            (should (< pos-tib pos-skt))))))))
+
+(ert-deftest tibetan-claude-sections-insert-without-sanskrit-no-heading ()
+  "Inserting a response WITHOUT `## Translation (Sanskrit)' into a
+non-parallel analysis file leaves the Sanskrit variant heading
+absent — the byte-identical-when-absent guarantee."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
+    (let ((response (concat "## Translation\n"
+                            "Tibetan body.\n\n"
+                            "## Vocabulary\n"
+                            "bdag, noun, \"I/self\"\n")))
+      (tibetan-analysis--insert-claude-sections response analysis-file)
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf (kill-buffer buf)))
+      (with-temp-buffer
+        (insert-file-contents analysis-file)
+        (should-not (string-match-p
+                     "^\\*\\* Claude Translation (Sanskrit)$"
+                     (buffer-string)))))))
+
+(ert-deftest tibetan-claude-sections-read-sanskrit-translation ()
+  "Reading an analysis file that already carries a populated
+`** Claude Translation (Sanskrit)' returns the body in the
+`:translation-sanskrit' plist slot."
+  (tibetan-sections-test--with-analysis
+      (concat (tibetan-sections-test--scaffold "Tibetan body" nil)
+              "\n** Claude Translation (Sanskrit)\n"
+              "Sanskrit body preserved.\n\n")
+    (let ((p (tibetan-analysis--read-claude-sections analysis-file)))
+      (should (equal (plist-get p :translation) "Tibetan body"))
+      (should (equal (plist-get p :translation-sanskrit)
+                     "Sanskrit body preserved.")))))
+
+(ert-deftest tibetan-claude-sections-restore-round-trips-sanskrit ()
+  "`--restore-claude-sections' writes the `:translation-sanskrit'
+slot back into the analysis file's
+`** Claude Translation (Sanskrit)' section.  The full read →
+restore → re-read cycle preserves the body."
+  (tibetan-sections-test--with-analysis
+      (concat (tibetan-sections-test--scaffold "T1" "G1")
+              "\n** Claude Translation (Sanskrit)\n"
+              "ORIGINAL Sanskrit\n\n")
+    ;; Step 1: read existing.
+    (let* ((before (tibetan-analysis--read-claude-sections analysis-file)))
+      (should (equal (plist-get before :translation-sanskrit)
+                     "ORIGINAL Sanskrit"))
+      ;; Step 2: restore an updated value.
+      (tibetan-analysis--restore-claude-sections
+       analysis-file
+       (list :translation          (plist-get before :translation)
+             :translation-sanskrit "UPDATED Sanskrit"
+             :grammar              (plist-get before :grammar)))
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf)))
+      ;; Step 3: re-read confirms the new body landed.
+      (let ((after (tibetan-analysis--read-claude-sections analysis-file)))
+        (should (equal (plist-get after :translation-sanskrit)
+                       "UPDATED Sanskrit"))
+        ;; Tibetan side untouched.
+        (should (equal (plist-get after :translation) "T1"))
+        (should (equal (plist-get after :grammar)     "G1"))))))
+
+(ert-deftest tibetan-claude-sections-restore-without-sanskrit-no-heading ()
+  "Restoring a plist with `:translation-sanskrit' nil into an
+analysis file that lacks the variant heading does NOT scaffold
+the heading.  Non-parallel files stay byte-clean."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "T1" "G1")
+    (tibetan-analysis--restore-claude-sections
+     analysis-file
+     (list :translation          "T1-restored"
+           :translation-sanskrit nil
+           :grammar              "G1-restored"))
+    (let ((buf (find-buffer-visiting analysis-file)))
+      (when buf
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf)))
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (should-not (string-match-p
+                   "^\\*\\* Claude Translation (Sanskrit)$"
+                   (buffer-string))))))
+
 (provide 'tibetan-analysis-claude-sections-test)
 ;;; tibetan-analysis-claude-sections-test.el ends here

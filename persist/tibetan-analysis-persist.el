@@ -2652,6 +2652,7 @@ nil, the subsection is omitted."
     "** Wylie Transliteration"
     "** Interlinear Gloss"
     "** Claude Translation"
+    "** Claude Translation (Sanskrit)"
     "** Grammar"
     "** Sentence Structure"
     "** Verb Classification (Hill 2010)")
@@ -2670,6 +2671,13 @@ path threads the walker result through).  Listing it here
 unconditionally is safe: the reorder pass only places sections
 that exist, so non-parallel documents (no Sanskrit text) are
 byte-identical in output before and after this list change.
+
+`** Claude Translation (Sanskrit)' (Phase B of multi-translator-
+parallel-reading, 2026-04-30) is the Claude translation of the
+Sanskrit primary source, a sibling of the Tibetan-side
+`** Claude Translation'.  Same byte-identical-when-absent
+guarantee: the reorder pass only positions sections present in
+the buffer, so non-parallel files render unchanged.
 
 Pass 6b (2026-04-22) redesign: the four redundant particle sections
 — Particle Map, Particle Overview, Grammatical Markers, and the
