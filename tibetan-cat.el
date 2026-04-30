@@ -102,6 +102,13 @@
 ;; depends on `tibetan-dharmamitra-api' (also soft).
 (require 'tibetan-sanskrit-parallel-dharmamitra nil t)
 
+;; DharmaMitra as a translator alongside Claude (Phase A.1 of
+;; multi-translator-parallel-reading, 2026-04-30).  Adds a
+;; `* DharmaMitra Translation (Tibetan)' section to each per-segment
+;; analysis file, fired from the same `C-c u A' / `C-c u B' /
+;; `C-c u r' paths as Claude.  Soft-required.
+(require 'tibetan-dharmamitra-translation nil t)
+
 ;; Sanskrit-parallel reading bridge (Phase 1, 2026-04-27).  Read-only
 ;; primitives: walker for `**** Sanskrit' siblings + source-mode
 ;; predicate (`#+SOURCE_MODE: parallel-sanskrit').  Soft-required —

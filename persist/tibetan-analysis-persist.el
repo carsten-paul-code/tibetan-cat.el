@@ -3676,7 +3676,18 @@ sentence."
           ;; Request Claude translation asynchronously (never break on failure)
           (condition-case err
               (tibetan-analysis--request-claude-translation tibetan-text new-filepath)
-            (error (message "Claude translation skipped: %s" (error-message-string err)))))))))
+            (error (message "Claude translation skipped: %s" (error-message-string err))))
+          ;; Phase A.1 of multi-translator-parallel-reading (2026-04-30):
+          ;; Fire DharmaMitra translation alongside Claude.  Soft-coded —
+          ;; missing module / API failures are silent (NOT broadcast as
+          ;; user-facing errors) so a DM outage doesn't disrupt the
+          ;; Claude-driven primary workflow.
+          (when (fboundp 'tibetan-dharmamitra-translation-fire-tibetan)
+            (condition-case err
+                (tibetan-dharmamitra-translation-fire-tibetan
+                 tibetan-text new-filepath)
+              (error (message "DharmaMitra translation skipped: %s"
+                              (error-message-string err))))))))))
 
 ;;;###autoload
 (defun tibetan-reanalyze-segment ()

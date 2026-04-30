@@ -116,6 +116,11 @@
 ;; candidate lookup via translate → search.  Stubs both API functions.
 (condition-case nil (require 'tibetan-sanskrit-parallel-dharmamitra-test) (error nil))
 
+;; DharmaMitra as a translator alongside Claude (Phase A.1 of
+;; multi-translator-parallel-reading, 2026-04-30): per-segment
+;; `** DharmaMitra Translation (Tibetan)' section in analysis files.
+(condition-case nil (require 'tibetan-dharmamitra-translation-test) (error nil))
+
 ;; Source-aware Claude prompt (reads #+TIBETAN_CLAUDE_CONTEXT: and friends)
 (condition-case nil (require 'tibetan-analysis-claude-prompt-test) (error nil))
 
