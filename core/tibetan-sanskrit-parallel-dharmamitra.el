@@ -458,5 +458,152 @@ read from it; the renderer does not display the buffer itself."
       (setq buffer-read-only t))
     buf))
 
+;; ============================================================================
+;; PHASE 5 — Apply + interactive commands
+;; ============================================================================
+
+(declare-function tibetan-sanskrit-parallel-write-sanskrit-for-segment-id
+                  "tibetan-sanskrit-parallel" (source-file seg-id new-iast))
+
+(defun tibetan-sanskrit-parallel-dm--apply-proposal (source-file proposal)
+  "Apply PROPOSAL to SOURCE-FILE if its `:status' is `change'.
+
+Skips proposals with status `unchanged' (no edit needed) or
+`no-candidates' (DM had nothing to propose; we don't blank the
+existing sibling).  Skipping is by design — we never
+overwrite without a positive proposal.
+
+Returns the writer's return value (t / nil) on `change',
+otherwise nil."
+  (when (eq (plist-get proposal :status) 'change)
+    (let ((seg-id (plist-get proposal :seg-id))
+          (proposed (plist-get proposal :proposed-sanskrit)))
+      (when (and seg-id proposed (not (string-empty-p proposed)))
+        (tibetan-sanskrit-parallel-write-sanskrit-for-segment-id
+         source-file seg-id proposed)))))
+
+(defun tibetan-sanskrit-parallel-dm--apply-proposals (source-file proposals)
+  "Apply every PROPOSAL in PROPOSALS whose `:status' is `change'.
+Returns the count of successfully applied proposals."
+  (let ((count 0))
+    (dolist (p proposals)
+      (when (tibetan-sanskrit-parallel-dm--apply-proposal source-file p)
+        (cl-incf count)))
+    count))
+
+;; ----------------------------------------------------------------------------
+;; Interactive commands
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-sanskrit-parallel-dm--resolve-source-file ()
+  "Return the source file for the realign command.
+If the current buffer is an analysis seg-NNN.org file, follow
+its `#+SOURCE:' link.  Otherwise treat the current buffer as
+the source.  Falls back to a prompt."
+  (or (and (fboundp 'tibetan-analysis--source-file-from-analysis)
+           (tibetan-analysis--source-file-from-analysis
+            (buffer-file-name)))
+      buffer-file-name
+      (read-file-name "Source file: " nil nil t)))
+
+;;;###autoload
+(defun tibetan-sanskrit-parallel-dm-realign-document (&optional apply)
+  "DharmaMitra-driven re-alignment of all `**** Sanskrit' siblings.
+
+Without prefix arg: pops a `*Sanskrit Realign Preview*' buffer
+showing per-segment proposals (current vs proposed Sanskrit,
+Claude reason).  Re-run with `C-u' to apply the changes.
+
+With `C-u' prefix: applies every proposal whose `:status' is
+`change' to the source file's `**** Sanskrit' siblings, then
+displays a summary buffer.
+
+Source file is resolved from the current buffer (analysis or
+source); falls back to a prompt.  Requires
+`#+DM_SANSKRIT_SOURCE:' on the source file's headers — without
+it the per-segment pipeline returns no candidates and every
+proposal lands as `no-candidates'.
+
+The pipeline calls DharmaMitra (chat-translate + search) and
+Claude (disambiguation) once per segment.  Plan ~3 sec per
+segment; gotrapatala (97 segments) is roughly 5 minutes."
+  (interactive "P")
+  (let ((source-file (tibetan-sanskrit-parallel-dm--resolve-source-file)))
+    (unless (and source-file (file-exists-p source-file))
+      (user-error "Cannot resolve source file"))
+    (message "DharmaMitra realign: scanning %s — this calls DM + Claude per segment, may take several minutes..."
+             (file-name-nondirectory source-file))
+    (let ((proposals (tibetan-sanskrit-parallel-dm-realign-document-proposals
+                      source-file)))
+      (cond
+       (apply
+        (let ((n (tibetan-sanskrit-parallel-dm--apply-proposals
+                  source-file proposals)))
+          (display-buffer
+           (tibetan-sanskrit-parallel-dm--render-preview-buffer
+            source-file proposals))
+          (message "DharmaMitra realign: applied %d change%s to %s"
+                   n (if (= n 1) "" "s")
+                   (file-name-nondirectory source-file))))
+       (t
+        (display-buffer
+         (tibetan-sanskrit-parallel-dm--render-preview-buffer
+          source-file proposals))
+        (message "DharmaMitra realign preview: %d proposal%s. Re-run with C-u to apply."
+                 (length proposals)
+                 (if (= (length proposals) 1) "" "s")))))))
+
+;;;###autoload
+(defun tibetan-sanskrit-parallel-dm-realign-segment (&optional apply)
+  "DharmaMitra-driven re-alignment of the `**** Sanskrit' sibling
+for the segment under cursor.
+
+Without prefix arg: pops a preview buffer showing the proposal
+for this single segment.  With `C-u': applies it directly.
+
+Like `tibetan-sanskrit-parallel-dm-realign-document' but
+narrowed to one segment — useful for spot-checking a specific
+segment without firing the full document pipeline."
+  (interactive "P")
+  (unless (and (derived-mode-p 'org-mode)
+               (fboundp 'tibetan-org-at-segment-p)
+               (tibetan-org-at-segment-p))
+    (user-error "Not in a `**** Segment' subtree"))
+  (let* ((source-file (tibetan-sanskrit-parallel-dm--resolve-source-file))
+         (seg-id (tibetan-org-get-segment-id)))
+    (unless (and source-file (file-exists-p source-file))
+      (user-error "Cannot resolve source file"))
+    (unless seg-id
+      (user-error "Cannot resolve segment ID"))
+    (message "DharmaMitra realign: querying segment %d..." seg-id)
+    (let* ((data (tibetan-sanskrit-parallel-segment-data-for-id
+                  source-file seg-id))
+           (tibetan (and data (plist-get data :tibetan)))
+           (current (and data (plist-get data :current-sanskrit)))
+           (cands (and tibetan
+                       (tibetan-sanskrit-parallel-dm-candidates-for-tibetan
+                        tibetan source-file)))
+           (pick (and cands
+                      (tibetan-sanskrit-parallel-dm-claude-pick
+                       tibetan cands)))
+           (proposal (tibetan-sanskrit-parallel-dm--build-proposal
+                      seg-id tibetan current pick))
+           (proposals (list proposal)))
+      (cond
+       (apply
+        (let ((n (tibetan-sanskrit-parallel-dm--apply-proposals
+                  source-file proposals)))
+          (display-buffer
+           (tibetan-sanskrit-parallel-dm--render-preview-buffer
+            source-file proposals))
+          (message "DharmaMitra realign: applied %d change to segment %d"
+                   n seg-id)))
+       (t
+        (display-buffer
+         (tibetan-sanskrit-parallel-dm--render-preview-buffer
+          source-file proposals))
+        (message "DharmaMitra realign preview for segment %d. C-u to apply."
+                 seg-id))))))
+
 (provide 'tibetan-sanskrit-parallel-dharmamitra)
 ;;; tibetan-sanskrit-parallel-dharmamitra.el ends here

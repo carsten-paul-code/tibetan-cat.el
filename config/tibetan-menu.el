@@ -136,6 +136,14 @@
       tibetan-cat-toggle-source-mode-parallel
       :help "Toggle `#+SOURCE_MODE: parallel-sanskrit' on the current source file.  When ON: next reanalyse emits ** Sanskrit Source above Wylie AND the Claude prompt becomes Sanskrit-primary with optional ### Tibetan Divergence notes.  When OFF: today's Tibetan-only behaviour."
       :active (fboundp 'tibetan-cat-toggle-source-mode-parallel)]
+     ["DharmaMitra Realign Segment (C-c u z d)"
+      tibetan-sanskrit-parallel-dm-realign-segment
+      :help "Re-align the **** Sanskrit sibling for the segment under cursor via DharmaMitra search + Claude disambiguation.  Without prefix: preview.  C-u: apply.  Requires #+DM_SANSKRIT_SOURCE: header on the source file."
+      :active (fboundp 'tibetan-sanskrit-parallel-dm-realign-segment)]
+     ["DharmaMitra Realign Document (C-c u z D)"
+      tibetan-sanskrit-parallel-dm-realign-document
+      :help "Re-align every **** Sanskrit sibling in the document via DharmaMitra search + Claude disambiguation.  Without prefix: preview only.  C-u: apply.  Calls DM + Claude per segment; gotrapatala (97 segments) takes ~5 minutes wallclock."
+      :active (fboundp 'tibetan-sanskrit-parallel-dm-realign-document)]
      "---"
      ["Auto-Create Zettels for Buddhist Terms (C-c u z B)"
       tibetan-zettel-auto-create-from-current-analysis

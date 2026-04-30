@@ -302,6 +302,22 @@
   ;; `### Tibetan Divergence' notes.  Toggling OFF returns the
   ;; document to today's Tibetan-only behaviour.
 
+(define-key tibetan-thesaurus-prefix-map (kbd "d")
+  'tibetan-sanskrit-parallel-dm-realign-segment)
+  ;; Phase 5 of dharmamitra-realign workflow (2026-04-27):
+  ;; DharmaMitra-driven Sanskrit re-alignment for the segment under
+  ;; cursor.  Without prefix → preview buffer; `C-u' → apply.
+  ;; Requires `#+DM_SANSKRIT_SOURCE:' and `#+DM_TIBETAN_SOURCE:'
+  ;; headers on the source file.
+
+(define-key tibetan-thesaurus-prefix-map (kbd "D")
+  'tibetan-sanskrit-parallel-dm-realign-document)
+  ;; Phase 5 of dharmamitra-realign workflow (2026-04-27):
+  ;; DharmaMitra-driven Sanskrit re-alignment for every segment in
+  ;; the document.  Without prefix → preview buffer; `C-u' → apply.
+  ;; Calls DM + Claude per segment; ~5 minutes wallclock for a
+  ;; 97-segment file like gotrapatala.org.
+
 (define-key tibetan-thesaurus-prefix-map (kbd "R")
   'tibetan-thesaurus-rerun-affected-by-zettel)
   ;; Re-analyse every segment under an analysis folder whose Tibetan

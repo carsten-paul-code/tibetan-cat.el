@@ -779,5 +779,219 @@ and reason are visible in the buffer."
         (should (string-match-p "SA_T06_bsa034:64" s))))
     (with-current-buffer buf (kill-buffer))))
 
+;; ============================================================================
+;; PHASE 5 — Writer + apply + interactive commands
+;; ============================================================================
+;;
+;; Phase 4 shipped the read-only preview engine.  Phase 5 adds the
+;; write side: the generic Sanskrit writer (in
+;; core/tibetan-sanskrit-parallel.el), the DM-specific apply
+;; functions that wrap it, and the two interactive commands
+;; `M-x tibetan-sanskrit-parallel-dm-realign-segment' /
+;; `M-x ...realign-document'.
+;;
+;; Tests stub the DM API + claude-pick so no network or Claude
+;; calls happen.  The writer is exercised against a real temp
+;; org-mode file (no stubs needed — it's pure file I/O) so we
+;; verify that the segment + Sanskrit sibling navigation lands
+;; in the right buffer position and that surrounding content is
+;; preserved.
+
+;; ----------------------------------------------------------------------------
+;; Generic Sanskrit writer (in core/tibetan-sanskrit-parallel.el)
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-skt-write-sanskrit-replaces-existing-sibling-body ()
+  "When the segment has an existing `**** Sanskrit' sibling,
+the writer replaces its body with the new IAST string.  Body
+of the **** Segment heading and the next Sentence sibling are
+untouched."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id))
+  (tibetan-skt-dm-test--with-source-file-multi-segment
+   (let ((ok (tibetan-sanskrit-parallel-write-sanskrit-for-segment-id
+              source-file 1 "iha bodhisattvaḥ replaced")))
+     (should ok)
+     (with-temp-buffer
+       (insert-file-contents source-file)
+       (let ((s (buffer-string)))
+         ;; New text is present.
+         (should (string-match-p "iha bodhisattvaḥ replaced" s))
+         ;; Old text is gone.
+         (should-not (string-match-p "current sanskrit one" s))
+         ;; Tibetan body of segment 1 is still there.
+         (should (string-match-p "བདག་གིས་ལས་བྱས" s))
+         ;; Segment 2 + its Sanskrit are untouched.
+         (should (string-match-p "ཁྱོད་ཀྱིས་ཤེས" s))
+         (should (string-match-p "current sanskrit two" s)))))))
+
+(ert-deftest tibetan-skt-write-sanskrit-creates-sibling-when-missing ()
+  "When the segment has no `**** Sanskrit' sibling, the writer
+creates one with the given body."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id))
+  (let* ((dir (make-temp-file "tibetan-skt-write-" t))
+         (f (expand-file-name "src.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file f
+            (insert "#+TITLE: T\n\n"
+                    "* Tibetan Text\n"
+                    "*** Sentence 1\n"
+                    "**** Segment 1\n"
+                    "བདག་\n\n"
+                    "*** Sentence 2\n"
+                    "**** Segment 2\n"
+                    "ཁྱོད་\n"))
+          (let ((ok (tibetan-sanskrit-parallel-write-sanskrit-for-segment-id
+                     f 1 "fresh sanskrit")))
+            (should ok)
+            (with-temp-buffer
+              (insert-file-contents f)
+              (let ((s (buffer-string)))
+                (should (string-match-p "^\\*\\*\\*\\* Sanskrit$" s))
+                (should (string-match-p "fresh sanskrit" s))
+                ;; Tibetan body still present.
+                (should (string-match-p "བདག་" s))
+                ;; Other segment untouched.
+                (should (string-match-p "ཁྱོད་" s))))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-skt-write-sanskrit-nil-when-segment-missing ()
+  "Out-of-range SEG-ID returns nil; file unchanged."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id))
+  (tibetan-skt-dm-test--with-source-file-multi-segment
+   (let ((before (with-temp-buffer
+                   (insert-file-contents source-file)
+                   (buffer-string))))
+     (should-not (tibetan-sanskrit-parallel-write-sanskrit-for-segment-id
+                  source-file 99 "nope"))
+     (let ((after (with-temp-buffer
+                    (insert-file-contents source-file)
+                    (buffer-string))))
+       (should (equal before after))))))
+
+(ert-deftest tibetan-skt-write-sanskrit-writes-only-targeted-segment ()
+  "Writing to segment 1 doesn't disturb segment 2's Sanskrit
+body — the writer locates the right sibling within the right
+sentence parent."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id))
+  (tibetan-skt-dm-test--with-source-file-multi-segment
+   (tibetan-sanskrit-parallel-write-sanskrit-for-segment-id
+    source-file 1 "NEW_FOR_ONE")
+   (with-temp-buffer
+     (insert-file-contents source-file)
+     (let ((s (buffer-string)))
+       (should (string-match-p "NEW_FOR_ONE" s))
+       ;; Segment 2's Sanskrit body remains the original.
+       (should (string-match-p "current sanskrit two" s))
+       ;; Segment 1's old Sanskrit is gone.
+       (should-not (string-match-p "current sanskrit one" s))))))
+
+;; ----------------------------------------------------------------------------
+;; DM apply-proposal (status-aware)
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-skt-dm-apply-proposal-applies-change-status ()
+  "Proposal with `:status' `change' calls the writer with the
+proposed text."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--apply-proposal))
+  (let (write-calls)
+    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id)
+               (lambda (file seg text)
+                 (push (list file seg text) write-calls)
+                 t)))
+      (let ((p (list :seg-id 5
+                     :tibetan-text "བདག་"
+                     :current-sanskrit "old"
+                     :proposed-sanskrit "new"
+                     :status 'change
+                     :reason "ok")))
+        (tibetan-sanskrit-parallel-dm--apply-proposal "/tmp/x.org" p)
+        (should (= (length write-calls) 1))
+        (let ((call (car write-calls)))
+          (should (equal (nth 0 call) "/tmp/x.org"))
+          (should (= (nth 1 call) 5))
+          (should (equal (nth 2 call) "new")))))))
+
+(ert-deftest tibetan-skt-dm-apply-proposal-skips-unchanged-status ()
+  "Proposal with `:status' `unchanged' is a no-op — no write call."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--apply-proposal))
+  (let (write-calls)
+    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id)
+               (lambda (&rest args)
+                 (push args write-calls)
+                 t)))
+      (let ((p (list :seg-id 5 :status 'unchanged
+                     :proposed-sanskrit "x")))
+        (tibetan-sanskrit-parallel-dm--apply-proposal "/tmp/x.org" p)
+        (should (= (length write-calls) 0))))))
+
+(ert-deftest tibetan-skt-dm-apply-proposal-skips-no-candidates-status ()
+  "Proposal with `:status' `no-candidates' is a no-op — no write call.
+DM had nothing to propose; we don't blank out the existing
+sibling."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--apply-proposal))
+  (let (write-calls)
+    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id)
+               (lambda (&rest args)
+                 (push args write-calls)
+                 t)))
+      (let ((p (list :seg-id 5 :status 'no-candidates
+                     :proposed-sanskrit nil)))
+        (tibetan-sanskrit-parallel-dm--apply-proposal "/tmp/x.org" p)
+        (should (= (length write-calls) 0))))))
+
+;; ----------------------------------------------------------------------------
+;; DM apply-proposals (batch, returns count)
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-skt-dm-apply-proposals-touches-only-change-status ()
+  "Apply-all writes ONLY proposals with `change' status; returns
+count of writes."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--apply-proposals))
+  (let (write-calls)
+    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id)
+               (lambda (_file seg _text)
+                 (push seg write-calls)
+                 t)))
+      (let* ((proposals
+              (list (list :seg-id 1 :status 'change
+                          :proposed-sanskrit "a")
+                    (list :seg-id 2 :status 'unchanged
+                          :proposed-sanskrit "b")
+                    (list :seg-id 3 :status 'no-candidates
+                          :proposed-sanskrit nil)
+                    (list :seg-id 4 :status 'change
+                          :proposed-sanskrit "d")))
+             (n (tibetan-sanskrit-parallel-dm--apply-proposals
+                 "/tmp/x.org" proposals)))
+        (should (= n 2))
+        (should (equal (sort write-calls #'<) '(1 4)))))))
+
+(ert-deftest tibetan-skt-dm-apply-proposals-empty-returns-zero ()
+  "Empty proposal list returns 0; writer not called."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--apply-proposals))
+  (let ((write-calls 0))
+    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id)
+               (lambda (&rest _) (cl-incf write-calls) t)))
+      (should (= 0 (tibetan-sanskrit-parallel-dm--apply-proposals
+                    "/tmp/x.org" nil)))
+      (should (= 0 (tibetan-sanskrit-parallel-dm--apply-proposals
+                    "/tmp/x.org" '())))
+      (should (= write-calls 0)))))
+
+;; ----------------------------------------------------------------------------
+;; Interactive commands
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-skt-dm-realign-document-fbound-and-commandp ()
+  "The document realign command is interactive."
+  (should (fboundp 'tibetan-sanskrit-parallel-dm-realign-document))
+  (should (commandp 'tibetan-sanskrit-parallel-dm-realign-document)))
+
+(ert-deftest tibetan-skt-dm-realign-segment-fbound-and-commandp ()
+  "The segment realign command is interactive."
+  (should (fboundp 'tibetan-sanskrit-parallel-dm-realign-segment))
+  (should (commandp 'tibetan-sanskrit-parallel-dm-realign-segment)))
+
 (provide 'tibetan-sanskrit-parallel-dharmamitra-test)
 ;;; tibetan-sanskrit-parallel-dharmamitra-test.el ends here
