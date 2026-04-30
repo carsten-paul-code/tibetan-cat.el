@@ -22,6 +22,24 @@
   (add-to-list 'load-path (expand-file-name "../analysis" dir)))
 
 (require 'tibetan-enhanced-parser)
+;; Soft-require for the negation-MWU regression tests below — the
+;; verb-classifier module populates `tibetan-verb-database' at load
+;; time so `tibetan-verb-lookup' can answer Hill-DB queries.
+(require 'tibetan-verb-classifier nil t)
+;; The negation-MWU integration tests below exercise the MWU finder
+;; against real Steinert data; soft-require the loaders so Steinert
+;; lookups answer in batch mode when the SQLite DB is present.
+;; Tests gate themselves on `tibetan-steinert-available-p' and
+;; skip cleanly when the DB isn't reachable (CI / fresh checkout).
+(let ((dir (file-name-directory (or load-file-name buffer-file-name))))
+  (add-to-list 'load-path (expand-file-name "../data" dir)))
+(require 'tibetan-glossary-loader nil t)
+(require 'tibetan-steinert nil t)
+
+(defun tibetan-enhanced-parser-test--steinert-ready-p ()
+  "t when the Steinert SQLite DB is available for live MWU lookups."
+  (and (fboundp 'tibetan-steinert-available-p)
+       (tibetan-steinert-available-p)))
 
 ;; ============================================================================
 ;; DICTIONARY LOADING TESTS
@@ -135,6 +153,117 @@
         (should (numberp (nth 0 unit)))  ; start index
         (should (numberp (nth 1 unit)))  ; end index
         (should (stringp (nth 2 unit)))))))  ; joined form
+
+;; ============================================================================
+;; Negation + Hill-DB-verb MWU rejection (uddāna seg-008 regression)
+;; ============================================================================
+;;
+;; Live test on gotrapatala.org seg-008 (`སྤྱོད་དང་རབ་གནས་ཐ་མ་ཡིན་༎')
+;; surfaced a verb-extraction failure: the copula `ཡིན' (Hill-DB-
+;; attested copula `to be (equative)') was missing from the verb
+;; list.  Root cause: the MWU finder bundled `མ་ཡིན' (Steinert
+;; gloss `is not; not being') as a 2-syllable MWU at positions 5-7,
+;; which:
+;;   1. Made `ཡིན' look covered-by-MWU to the verb extractor.
+;;   2. The MWU's `is not' gloss didn't match
+;;      `tibetan-clause-seg--mwu-verbal-p' (no leading `to X' / `verb'
+;;      / Sanskrit absolutive marker), so step 2 of the verb
+;;      extractor also skipped it.
+;;   3. `ཡིན' was thus invisible to verb extraction.
+;;
+;; In the live segment, `མ' grammatically belongs to `ཐ་མ' (`tha
+;; ma' = `last/final'), NOT to `ཡིན'.  But even when `མ' IS the
+;; negation (e.g. `སྨྲས་ པ་མ་ཡིན' = `did not say'), the verb
+;; extractor's `prev-word-negates-p' logic already handles the
+;; pattern correctly when `མ' and the verb are SEPARATE words —
+;; bundling them as an MWU only hides the verb.
+;;
+;; Fix scope: the MWU finder rejects 2-syllable Steinert candidates
+;; whose head is `མ' / `མི' AND tail is a Hill-DB-attested verb.
+;; This frees the verb extractor to handle them via the negation
+;; mechanism it already has.
+
+(ert-deftest tibetan-mwu-finder-rejects-ma-yin-bundle ()
+  "`tibetan-find-multiword-units' must NOT bundle `མ་ཡིན' as a
+2-syllable MWU when `ཡིན' is a Hill-DB-attested verb.  Letting
+the MWU win hides the copula from verb extraction.
+
+Steinert-gated — the `མ་ཡིན' candidate only enters the MWU
+finder when the Steinert SQLite DB is reachable."
+  (skip-unless (fboundp 'tibetan-find-multiword-units))
+  (skip-unless (fboundp 'tibetan-verb-lookup))
+  (skip-unless (tibetan-enhanced-parser-test--steinert-ready-p))
+  ;; Sanity: `ཡིན' must be in Hill-DB for the test premise to hold.
+  (skip-unless (tibetan-verb-lookup "ཡིན"))
+  (let* ((words '("སྨྲས" "པ" "མ" "ཡིན"))
+         (mwus (tibetan-find-multiword-units words)))
+    (should-not
+     (cl-find-if (lambda (m)
+                   (and (listp m) (>= (length m) 3)
+                        (string= (nth 2 m) "མ་ཡིན")))
+                 mwus))))
+
+(ert-deftest tibetan-mwu-finder-rejects-mi-yin-bundle ()
+  "Analogous to `མ་ཡིན': `མི་ཡིན' must not be bundled either —
+the negation mechanism handles `མི' + verb correctly when they
+are separate words.
+
+Steinert-gated."
+  (skip-unless (fboundp 'tibetan-find-multiword-units))
+  (skip-unless (fboundp 'tibetan-verb-lookup))
+  (skip-unless (tibetan-enhanced-parser-test--steinert-ready-p))
+  (skip-unless (tibetan-verb-lookup "ཡིན"))
+  (let* ((words '("བདག" "མི" "ཡིན"))
+         (mwus (tibetan-find-multiword-units words)))
+    (should-not
+     (cl-find-if (lambda (m)
+                   (and (listp m) (>= (length m) 3)
+                        (string= (nth 2 m) "མི་ཡིན")))
+                 mwus))))
+
+(ert-deftest tibetan-mwu-finder-tha-ma-found-when-followed-by-yin ()
+  "Direct consequence of the `མ་ཡིན'-rejection: in the seg-008
+sequence `…ཐ་མ་ཡིན…', the MWU finder is now free to take
+`ཐ་མ' (`tha ma' = `last') at i=4 because `མ་ཡིན' at i+1=5 is
+no longer a competing Steinert candidate.
+
+Before this fix, the shadow-check rejected `ཐ་མ' in favour of
+the (about-to-be-found) `མ་ཡིན'; with `མ་ཡིན' rejected,
+`ཐ་མ' wins.
+
+Steinert-gated — both candidates are Steinert hits."
+  (skip-unless (fboundp 'tibetan-find-multiword-units))
+  (skip-unless (tibetan-enhanced-parser-test--steinert-ready-p))
+  (let* ((words '("སྤྱོད" "དང" "རབ" "གནས" "ཐ" "མ" "ཡིན"))
+         (mwus (tibetan-find-multiword-units words)))
+    (should
+     (cl-find-if (lambda (m)
+                   (and (listp m) (>= (length m) 3)
+                        (string= (nth 2 m) "ཐ་མ")))
+                 mwus))))
+
+(ert-deftest tibetan-mwu-finder-negation-predicate-recognises-ma-yin ()
+  "`tibetan-enhanced-parser--negation-plus-hill-verb-p' recognises
+`མ་ཡིན' / `མི་ཡིན' / `མ་བྱེད' (negation of Hill-DB verbs) and
+returns nil for non-negation forms or non-Hill-DB second
+syllables."
+  (skip-unless (fboundp 'tibetan-enhanced-parser--negation-plus-hill-verb-p))
+  (skip-unless (fboundp 'tibetan-verb-lookup))
+  ;; Hill-DB verb under negation — should match.
+  (when (tibetan-verb-lookup "ཡིན")
+    (should (tibetan-enhanced-parser--negation-plus-hill-verb-p "མ་ཡིན"))
+    (should (tibetan-enhanced-parser--negation-plus-hill-verb-p "མི་ཡིན")))
+  (when (tibetan-verb-lookup "བྱེད")
+    (should (tibetan-enhanced-parser--negation-plus-hill-verb-p "མ་བྱེད"))
+    (should (tibetan-enhanced-parser--negation-plus-hill-verb-p "མི་བྱེད")))
+  ;; Not a 2-syllable form, head not negation, or tail not Hill-DB —
+  ;; should NOT match.
+  (should-not (tibetan-enhanced-parser--negation-plus-hill-verb-p "བདག"))
+  (should-not (tibetan-enhanced-parser--negation-plus-hill-verb-p "ཐ་མ"))
+  (should-not (tibetan-enhanced-parser--negation-plus-hill-verb-p "མ་ཐ"))
+  ;; Three syllables — out of scope.
+  (should-not
+   (tibetan-enhanced-parser--negation-plus-hill-verb-p "མ་ཡིན་པ")))
 
 ;; ============================================================================
 ;; WORD UNIT ANALYSIS TESTS

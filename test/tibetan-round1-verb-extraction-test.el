@@ -452,20 +452,30 @@ the copula `to be').  The renderer should:
     it's part of the topic compound `རབ་གནས' (rab gnas,
     `establishment').
 
-A stricter test than 5/6/7 — we DO expect a clause here, just
-not headed by spyod or gnas."
+After the 2026-04-30 follow-up fix (MWU finder rejects `མ-V'
+/ `མི-V' when V is a Hill-DB verb, freeing the copula from
+the spurious `མ་ཡིན' bundle), `ཡིན' is now correctly detected
+as a Hill-DB verb at extraction time.
+
+Steinert-gated — `མ་ཡིན' / `རབ་གནས' Steinert lookups are
+needed to reproduce the bug pre-fix and the fix's effect."
   (skip-unless (fboundp 'tibetan-analysis--render-clause-structure))
   (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
   (skip-unless (fboundp 'tibetan-parse-enhanced))
+  (skip-unless (and (fboundp 'tibetan-steinert-available-p)
+                    (tibetan-steinert-available-p)))
   (let* ((seg "སྤྱོད་དང་རབ་གནས་ཐ་མ་ཡིན་༎")
          (parsed (tibetan-parse-enhanced seg))
          (words (alist-get 'words parsed))
          (mwu (alist-get 'multiword-units parsed))
          (verbs (tibetan-extract-verbs-compound-aware seg words mwu))
          (rendered (tibetan-analysis--render-clause-structure
-                    words verbs mwu)))
+                    words verbs mwu))
+         (lemmas (mapcar (lambda (v) (alist-get 'lemma v)) verbs)))
     ;; Topic nouns must NOT be promoted to verb heads.
-    (should-not (string-match-p "verb སྤྱོད" rendered))))
+    (should-not (string-match-p "verb སྤྱོད" rendered))
+    ;; The copula must now be detected.
+    (should (member "ཡིན" lemmas))))
 
 (ert-deftest tibetan-round1-minimal-entry-tags-source ()
   "`--minimal-entry' carries a `source' field identifying the

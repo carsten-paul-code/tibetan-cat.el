@@ -112,6 +112,45 @@ particle listed in `tibetan-enhanced-parser--case-particle-tails'."
          (member (car (last parts))
                  tibetan-enhanced-parser--case-particle-tails))))
 
+(defun tibetan-enhanced-parser--negation-plus-hill-verb-p (joined)
+  "Return non-nil when JOINED is `མ-V' or `མི-V' with V a Hill-DB verb.
+
+Live test on gotrapatala.org seg-008 (`སྤྱོད་དང་རབ་གནས་ཐ་མ་
+ཡིན་༎') showed the MWU finder bundling `མ་ཡིན' as a Steinert
+2-syllable MWU, hiding the copula `ཡིན' from verb extraction.
+The verb extractor's `prev-word-negates-p' mechanism already
+handles `མ' / `མི' + verb correctly when they are SEPARATE
+words; bundling them as an MWU only causes harm.
+
+This predicate is consumed by the MWU finder's steinert-hit
+branch — when it returns non-nil for a candidate JOINED, the
+2-syllable Steinert hit is rejected so the MWU finder falls
+through to length-1 and the verb extractor sees `མ' / `མི'
+and the verb as separate words.
+
+Returns nil for:
+  - non-2-syllable forms (`མ་ཡིན་པ' falls outside)
+  - heads other than `མ' / `མི' (`ཐ་མ' has tail `མ' but head
+    is `ཐ', not negation)
+  - tails not present in the Hill-DB verb table — closed-set
+    minor verbs (`མཛད', `གསོལ', `བྱུང', …) are intentionally
+    out of scope, so user-facing genuine `མ-V' / `མི-V'
+    Steinert idioms involving honorific or aspectual verbs
+    keep their MWU bundling.
+
+Defensive: returns nil when Hill-DB lookup is unavailable
+\(`tibetan-verb-lookup' not fbound) — the predicate becomes a
+no-op rather than raising."
+  (when (and joined (stringp joined) (not (string-empty-p joined))
+             (fboundp 'tibetan-verb-lookup))
+    (let ((parts (split-string joined "་" t)))
+      (and parts
+           (= (length parts) 2)
+           (or (string= (nth 0 parts) "མ")
+               (string= (nth 0 parts) "མི"))
+           (tibetan-verb-lookup (nth 1 parts))
+           t))))
+
 (defun tibetan-find-multiword-units (words)
   "Find multi-word compound/proper noun units in WORDS list.
 Uses longest-match-first strategy.
@@ -204,6 +243,17 @@ Returns list of (start-index . end-index . entry-data) tuples."
                                              comp-vocab compound proper-noun))
                                     (not (tibetan-enhanced-parser--case-particle-tail-p
                                           joined))
+                                    ;; Reject `མ-V' / `མི-V' when V is a
+                                    ;; Hill-DB-attested verb — the verb
+                                    ;; extractor's `prev-word-negates-p'
+                                    ;; handles the negation pattern when
+                                    ;; the two are separate words, and
+                                    ;; bundling them only hides the verb
+                                    ;; from extraction.  Live test:
+                                    ;; gotrapatala seg-008 `མ་ཡིན'
+                                    ;; absorbing `ཡིན' (Hill-DB copula).
+                                    (not (tibetan-enhanced-parser--negation-plus-hill-verb-p
+                                          joined))
                                     (fboundp 'tibetan-lookup-word-in-steinert))
                            (ignore-errors
                              (let ((hit (tibetan-lookup-word-in-steinert
@@ -218,6 +268,26 @@ Returns list of (start-index . end-index . entry-data) tuples."
                                         (shadow
                                          (and shifted
                                               (not (tibetan-enhanced-parser--case-particle-tail-p
+                                                    shifted))
+                                              ;; A `མ-V' / `མི-V' shifted
+                                              ;; candidate (V in Hill-DB)
+                                              ;; is rejected by the
+                                              ;; primary-hit branch's
+                                              ;; `--negation-plus-hill-
+                                              ;; verb-p' guard, so it
+                                              ;; must NOT shadow the
+                                              ;; position-i candidate
+                                              ;; either — otherwise we'd
+                                              ;; defer to a candidate we
+                                              ;; were already going to
+                                              ;; reject, leaving NO MWU
+                                              ;; at either position.
+                                              ;; (uddāna seg-008
+                                              ;; `…ཐ་མ་ཡིན…': `ཐ་མ'
+                                              ;; was shadowed by `མ་ཡིན'
+                                              ;; while `མ་ཡིན' itself
+                                              ;; was rejected.)
+                                              (not (tibetan-enhanced-parser--negation-plus-hill-verb-p
                                                     shifted))
                                               (tibetan-lookup-word-in-steinert
                                                shifted))))
