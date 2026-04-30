@@ -429,6 +429,235 @@ DM-fire path, both of which run by-id and not by-cursor."
                   filepath 1)))))
 
 ;; ============================================================================
+;; RESET SANSKRIT-SIDE SECTIONS (alignment-fix work, 2026-04-30)
+;;
+;; When the source file's Sanskrit alignment changes structurally
+;; (e.g. bulk re-marked as `[Sanskrit alignment pending …]'),
+;; existing analysis files carry stale Sanskrit-side sections
+;; whose bodies were generated against the OLD alignment.  The
+;; reset command removes those sections so the next reanalyse
+;; regenerates them — or omits them if the source is now pending.
+;;
+;; Sections removed:
+;;   level 2 (inside `* Auto-Analysis'):
+;;     ** Sanskrit Source
+;;     ** Claude Translation (Sanskrit)
+;;     ** Claude Translation (Combined)
+;;     ** Claude Divergence
+;;   level 1 (top-level):
+;;     * DharmaMitra Translation (Sanskrit)
+;;
+;; Preserved:
+;;   ** Claude Translation (Tibetan-side, bare heading)
+;;   * DharmaMitra Translation (Tibetan)
+;;   * My Notes / * Working Translation / * Footnotes (user content)
+;;   All parser-side sections (Wylie, Interlinear, Grammar, etc.)
+;; ============================================================================
+
+(defconst tibetan-sanskrit-parallel-test--all-sanskrit-sections-buffer
+  "#+TITLE: Test All Sanskrit Sections
+* Tibetan Text
+བདག
+
+* My Notes
+USER NOTE — must survive
+
+* Working Translation
+WORKING TRANSLATION — must survive
+
+* Auto-Analysis
+:PROPERTIES:
+:GENERATED: t
+:END:
+
+** Sanskrit Source
+
+IAST: ahaṃ
+
+** Wylie Transliteration
+bdag /
+
+** Claude Translation
+TIBETAN TRANSLATION — must survive
+
+** Claude Translation (Sanskrit)
+SANSKRIT TRANSLATION — to be removed
+
+** Claude Translation (Combined)
+COMBINED — to be removed
+
+** Claude Divergence
+- DIVERGENCE NOTE — to be removed
+
+** Grammar
+GRAMMAR BODY — must survive
+
+* Footnotes
+FOOTNOTE — must survive
+
+* DharmaMitra Translation (Tibetan)
+DM-TIBETAN — must survive
+
+* DharmaMitra Translation (Sanskrit)
+DM-SANSKRIT — to be removed
+"
+  "Analysis-file fixture carrying ALL five Sanskrit-side sections
+\(four level-2 + one level-1) plus the four sections that must
+NOT be removed (Tibetan Translation, DM Tibetan, user content,
+Wylie + Grammar parser blocks).")
+
+(ert-deftest tibetan-sanskrit-parallel-reset-sections-removes-all-five-sanskrit-sections ()
+  "`--reset-sanskrit-sections-in-file' removes all four level-2
+Sanskrit-side sections plus the level-1 DM Sanskrit section.
+Returns the count of sections removed."
+  (let ((tmpfile (make-temp-file "tibetan-skt-reset-" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmpfile
+            (insert tibetan-sanskrit-parallel-test--all-sanskrit-sections-buffer))
+          (let ((removed
+                 (tibetan-sanskrit-parallel--reset-sanskrit-sections-in-file
+                  tmpfile)))
+            (should (= removed 5))
+            ;; Verify the file actually changed.
+            (with-temp-buffer
+              (insert-file-contents tmpfile)
+              (let ((s (buffer-string)))
+                (should-not (string-match-p "^\\*\\* Sanskrit Source$" s))
+                (should-not (string-match-p
+                             "^\\*\\* Claude Translation (Sanskrit)$" s))
+                (should-not (string-match-p
+                             "^\\*\\* Claude Translation (Combined)$" s))
+                (should-not (string-match-p "^\\*\\* Claude Divergence$" s))
+                (should-not (string-match-p
+                             "^\\* DharmaMitra Translation (Sanskrit)$"
+                             s))))))
+      (delete-file tmpfile))))
+
+(ert-deftest tibetan-sanskrit-parallel-reset-sections-preserves-tibetan-sections ()
+  "`--reset-sanskrit-sections-in-file' must NOT touch the Tibetan-
+side translation, DM Tibetan, parser sections, or user content."
+  (let ((tmpfile (make-temp-file "tibetan-skt-reset-" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmpfile
+            (insert tibetan-sanskrit-parallel-test--all-sanskrit-sections-buffer))
+          (tibetan-sanskrit-parallel--reset-sanskrit-sections-in-file tmpfile)
+          (with-temp-buffer
+            (insert-file-contents tmpfile)
+            (let ((s (buffer-string)))
+              ;; Headings preserved.
+              (should (string-match-p "^\\*\\* Claude Translation$" s))
+              (should (string-match-p
+                       "^\\* DharmaMitra Translation (Tibetan)$" s))
+              (should (string-match-p "^\\*\\* Wylie Transliteration$" s))
+              (should (string-match-p "^\\*\\* Grammar$" s))
+              (should (string-match-p "^\\* My Notes$" s))
+              (should (string-match-p "^\\* Working Translation$" s))
+              (should (string-match-p "^\\* Footnotes$" s))
+              ;; Bodies preserved.
+              (should (string-match-p "TIBETAN TRANSLATION — must survive" s))
+              (should (string-match-p "DM-TIBETAN — must survive" s))
+              (should (string-match-p "GRAMMAR BODY — must survive" s))
+              (should (string-match-p "USER NOTE — must survive" s))
+              (should (string-match-p
+                       "WORKING TRANSLATION — must survive" s))
+              (should (string-match-p "FOOTNOTE — must survive" s)))))
+      (delete-file tmpfile))))
+
+(ert-deftest tibetan-sanskrit-parallel-reset-sections-idempotent ()
+  "Running `--reset-sanskrit-sections-in-file' twice in a row:
+first call removes the sections and returns the count; second
+call returns 0 (no-op) and leaves the file byte-identical."
+  (let ((tmpfile (make-temp-file "tibetan-skt-reset-" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmpfile
+            (insert tibetan-sanskrit-parallel-test--all-sanskrit-sections-buffer))
+          (let ((first
+                 (tibetan-sanskrit-parallel--reset-sanskrit-sections-in-file
+                  tmpfile)))
+            (should (= first 5)))
+          ;; Capture state after first run.
+          (let ((after-first
+                 (with-temp-buffer
+                   (insert-file-contents tmpfile)
+                   (buffer-string))))
+            (let ((second
+                   (tibetan-sanskrit-parallel--reset-sanskrit-sections-in-file
+                    tmpfile)))
+              (should (= second 0)))
+            (with-temp-buffer
+              (insert-file-contents tmpfile)
+              (should (string= (buffer-string) after-first)))))
+      (delete-file tmpfile))))
+
+(ert-deftest tibetan-sanskrit-parallel-reset-sections-clean-file-no-op ()
+  "A file that never carried any Sanskrit-side sections is left
+byte-identical and returns 0."
+  (let ((clean-content
+         "#+TITLE: Clean
+* Tibetan Text
+བདག
+
+* Auto-Analysis
+** Wylie Transliteration
+bdag /
+
+** Claude Translation
+Just the Tibetan side.
+
+* My Notes
+
+* Footnotes
+")
+        (tmpfile (make-temp-file "tibetan-skt-reset-" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmpfile (insert clean-content))
+          (let ((removed
+                 (tibetan-sanskrit-parallel--reset-sanskrit-sections-in-file
+                  tmpfile)))
+            (should (= removed 0)))
+          (with-temp-buffer
+            (insert-file-contents tmpfile)
+            (should (string= (buffer-string) clean-content))))
+      (delete-file tmpfile))))
+
+(ert-deftest tibetan-sanskrit-parallel-reset-sections-folder-iterates ()
+  "`--reset-sanskrit-sections-in-folder' walks every `seg-NNN.org'
+\(and `sent-NNN.org') file in FOLDER, returns a plist summary
+\(`:files-touched' / `:files-clean' / `:sections-removed')."
+  (let ((folder (make-temp-file "tibetan-skt-reset-folder-" t)))
+    (unwind-protect
+        (progn
+          ;; Two seg files with sections; one already-clean seg file.
+          (with-temp-file (expand-file-name "seg-001.org" folder)
+            (insert
+             tibetan-sanskrit-parallel-test--all-sanskrit-sections-buffer))
+          (with-temp-file (expand-file-name "seg-002.org" folder)
+            (insert
+             tibetan-sanskrit-parallel-test--all-sanskrit-sections-buffer))
+          (with-temp-file (expand-file-name "seg-003.org" folder)
+            (insert "* Tibetan Text\nbdag\n* Footnotes\n"))
+          (let ((summary
+                 (tibetan-sanskrit-parallel--reset-sanskrit-sections-in-folder
+                  folder)))
+            (should (= (plist-get summary :files-touched)   2))
+            (should (= (plist-get summary :files-clean)     1))
+            (should (= (plist-get summary :sections-removed) 10))))
+      (delete-directory folder t))))
+
+(ert-deftest tibetan-sanskrit-parallel-reset-sections-folder-handles-missing ()
+  "Missing or non-directory FOLDER is reported via the summary
+plist `:error' key — no exception thrown — so a misclick on the
+interactive command doesn't burn a stack trace."
+  (let ((summary
+         (tibetan-sanskrit-parallel--reset-sanskrit-sections-in-folder
+          "/no/such/folder/exists/here")))
+    (should (plist-get summary :error))))
+
+;; ============================================================================
 ;; SEGMENT-ID LOOKUP TESTS (file-based, used by Phase 3 Claude path)
 ;; ============================================================================
 

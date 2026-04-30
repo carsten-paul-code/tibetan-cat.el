@@ -144,6 +144,10 @@
       tibetan-sanskrit-parallel-dm-realign-document
       :help "DM-search + Claude-pick the matching Sanskrit for every segment.  Without prefix: preview.  C-u: write `* Sanskrit (DharmaMitra)' to each seg-NNN.org analysis file (source untouched).  ~5 minutes wallclock for a 97-segment file."
       :active (fboundp 'tibetan-sanskrit-parallel-dm-realign-document)]
+     ["Reset Sanskrit-Side Sections in Folder…"
+      tibetan-sanskrit-parallel-reset-sanskrit-sections-in-folder
+      :help "Remove every ** Sanskrit Source / ** Claude Translation (Sanskrit) / ** Claude Translation (Combined) / ** Claude Divergence / * DharmaMitra Translation (Sanskrit) from every seg-/sent-NNN.org in FOLDER.  Used after a structural alignment change — the next reanalyse regenerates them or omits them when the source is now pending.  Tibetan-side sections + user content (My Notes / Working Translation / Footnotes) are preserved."
+      :active (fboundp 'tibetan-sanskrit-parallel-reset-sanskrit-sections-in-folder)]
      "---"
      ["Auto-Create Zettels for Buddhist Terms (C-c u z B)"
       tibetan-zettel-auto-create-from-current-analysis

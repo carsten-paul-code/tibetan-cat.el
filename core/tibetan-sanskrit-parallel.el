@@ -563,5 +563,242 @@ change."
 ;; `core/tibetan-sanskrit-parallel-dharmamitra.el' for the
 ;; analysis-file writer that replaces this function.
 
+;; ----------------------------------------------------------------------------
+;; Reset Sanskrit-side sections (alignment-fix work, 2026-04-30)
+;; ----------------------------------------------------------------------------
+;;
+;; When a parallel-Sanskrit source file's `**** Sanskrit' alignment
+;; changes structurally — the most common trigger is a bulk re-mark
+;; to `[Sanskrit alignment pending …]' after the daṇḍa-split is
+;; deemed structurally invalid — every existing analysis file in
+;; the folder still carries Sanskrit-side sections whose bodies
+;; were generated against the OLD alignment.  These commands
+;; remove those sections cleanly so the next reanalyse regenerates
+;; them from the new source (or omits them if the source is now
+;; pending).
+;;
+;; Sections targeted:
+;;
+;;   level 2 (inside `* Auto-Analysis'):
+;;     `** Sanskrit Source'
+;;     `** Claude Translation (Sanskrit)'
+;;     `** Claude Translation (Combined)'
+;;     `** Claude Divergence'
+;;
+;;   level 1 (top-level):
+;;     `* DharmaMitra Translation (Sanskrit)'
+;;
+;; PRESERVED — never touched by reset:
+;;   `** Claude Translation' (Tibetan-side bare heading)
+;;   `* DharmaMitra Translation (Tibetan)'
+;;   All parser-side sections (Wylie, Interlinear, Grammar, Sentence
+;;     Structure, Verb Classification, Detailed Dictionary,
+;;     Provided Translations and its `*** Claude *' children)
+;;   `* My Notes', `* Working Translation', `* Footnotes' — user
+;;     content (CLAUDE.md §6 invariant).
+
+(defconst tibetan-sanskrit-parallel--reset-level2-headings
+  '("Sanskrit Source"
+    "Claude Translation (Sanskrit)"
+    "Claude Translation (Combined)"
+    "Claude Divergence")
+  "Level-2 headings (inside `* Auto-Analysis') that the reset
+command removes from each analysis file.
+
+Adding a new heading here is the only change needed to teach
+the reset command about a new Sanskrit-side section type — the
+buffer-level deletion algorithm is heading-name driven.")
+
+(defconst tibetan-sanskrit-parallel--reset-level1-headings
+  '("DharmaMitra Translation (Sanskrit)")
+  "Level-1 (top-level) headings that the reset command removes.
+Currently the only such heading is the Sanskrit-side DharmaMitra
+translation — the Tibetan-side counterpart `* DharmaMitra
+Translation (Tibetan)' is intentionally NOT in this list.")
+
+(defun tibetan-sanskrit-parallel--reset-delete-section-in-buffer
+    (heading-text level)
+  "Delete the section under HEADING-TEXT at org LEVEL in the current buffer.
+Stops the deletion at the next heading at LEVEL-or-shallower or
+end of buffer.  Returns t if a section was deleted, nil
+otherwise.  Idempotent — re-running on a buffer where the
+section is already absent is a safe no-op."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((heading-re
+           (format "^%s %s[ \t]*$"
+                   (regexp-quote (make-string level ?*))
+                   (regexp-quote heading-text)))
+          ;; `*\\{1,N\\}' plus a mandatory non-`*' follower so the
+          ;; stop matches level-N-or-shallower headings only —
+          ;; deeper headings don't trigger the stop, so the section
+          ;; body (with its child sub-headings) is fully captured.
+          (stop-re (format "^\\*\\{1,%d\\}[^*\n]" level))
+          (deleted nil))
+      (while (re-search-forward heading-re nil t)
+        (let* ((heading-start (line-beginning-position))
+               (after-heading (progn (forward-line 1) (point)))
+               (section-end
+                (or (save-excursion
+                      (goto-char after-heading)
+                      (when (re-search-forward stop-re nil t)
+                        (line-beginning-position)))
+                    (point-max))))
+          (delete-region heading-start section-end)
+          (setq deleted t)
+          ;; After deletion, re-anchor at the deletion point so the
+          ;; outer loop's re-search-forward resumes correctly when
+          ;; multiple instances of the same heading exist (rare but
+          ;; possible after a botched batch).
+          (goto-char heading-start)))
+      deleted)))
+
+(defun tibetan-sanskrit-parallel--reset-squash-blank-runs ()
+  "Collapse runs of 3+ blank lines down to a single blank line.
+The deletion above can leave \"\\n\\n\\n\\n\" gaps where two
+adjacent target sections both got removed; this restores normal
+spacing.  Operates on the current buffer."
+  (save-excursion
+    (goto-char (point-min))
+    (while (re-search-forward "\n\n\n+" nil t)
+      (replace-match "\n\n"))))
+
+;;;###autoload
+(defun tibetan-sanskrit-parallel--reset-sanskrit-sections-in-file (filepath)
+  "Remove Sanskrit-side sections from FILEPATH, save, return count.
+
+Removes every section listed in
+`tibetan-sanskrit-parallel--reset-level2-headings' (level-2
+inside `* Auto-Analysis') and
+`tibetan-sanskrit-parallel--reset-level1-headings' (level-1
+top-level).  See the commentary above for the full list and
+the preserved-content invariants.
+
+Returns the integer count of sections removed (0 when the file
+was already clean).  Idempotent: re-running on a clean file
+returns 0 and leaves the file byte-identical.
+
+The buffer is saved only when at least one section was
+removed — clean files don't generate a no-op save event that
+would alter `mtime' or trigger external file-watchers."
+  (let ((touched 0)
+        (buf (find-file-noselect filepath)))
+    (unwind-protect
+        (with-current-buffer buf
+          (let ((was-modified (buffer-modified-p)))
+            (org-mode)
+            (dolist (h tibetan-sanskrit-parallel--reset-level2-headings)
+              (when (tibetan-sanskrit-parallel--reset-delete-section-in-buffer
+                     h 2)
+                (cl-incf touched)))
+            (dolist (h tibetan-sanskrit-parallel--reset-level1-headings)
+              (when (tibetan-sanskrit-parallel--reset-delete-section-in-buffer
+                     h 1)
+                (cl-incf touched)))
+            (when (> touched 0)
+              (tibetan-sanskrit-parallel--reset-squash-blank-runs)
+              (save-buffer))
+            ;; If file was unvisited before this call AND we made
+            ;; no changes, leave its modified flag untouched.  No-
+            ;; op safety: don't accidentally save other buffers.
+            (unless was-modified
+              (set-buffer-modified-p nil))))
+      ;; Don't kill the buffer — caller might be batching and
+      ;; killing each buffer would defeat any user-side caching.
+      ;; (Unit tests delete the temp file at unwind time, which
+      ;; auto-clears the buffer via Emacs' built-in cleanup.)
+      nil)
+    touched))
+
+;;;###autoload
+(defun tibetan-sanskrit-parallel--reset-sanskrit-sections-in-folder (folder)
+  "Run `--reset-sanskrit-sections-in-file' on every `seg-NNN.org'
+and `sent-NNN.org' file in FOLDER.
+
+Returns a plist summary:
+  (:files-touched     N
+   :files-clean       M
+   :sections-removed  K)
+
+When FOLDER is nil, missing, or not a directory, returns
+  (:error \"reason …\")
+so the interactive command can report the failure without an
+exception.
+
+Files outside the seg/sent naming convention are silently
+skipped — the reset target is a parallel-Sanskrit reading's
+analysis folder, not arbitrary org files."
+  (cond
+   ((or (null folder)
+        (not (stringp folder))
+        (string-empty-p folder))
+    (list :error "FOLDER must be a non-empty string."))
+   ((not (file-directory-p folder))
+    (list :error (format "Not a directory: %s" folder)))
+   (t
+    (let ((files
+           (sort (directory-files
+                  folder t "^\\(seg\\|sent\\)-[0-9]+.*\\.org\\'")
+                 #'string-lessp))
+          (touched 0)
+          (clean 0)
+          (sections 0))
+      (dolist (f files)
+        (let ((n (tibetan-sanskrit-parallel--reset-sanskrit-sections-in-file
+                  f)))
+          (cl-incf sections n)
+          (if (> n 0) (cl-incf touched) (cl-incf clean))))
+      (list :files-touched touched
+            :files-clean   clean
+            :sections-removed sections)))))
+
+;;;###autoload
+(defun tibetan-sanskrit-parallel-reset-sanskrit-sections-in-folder
+    (folder)
+  "Interactive entry point — reset Sanskrit-side sections in FOLDER.
+
+Removes every `** Sanskrit Source', `** Claude Translation
+(Sanskrit)', `** Claude Translation (Combined)', `** Claude
+Divergence', and `* DharmaMitra Translation (Sanskrit)' from
+every `seg-NNN.org' / `sent-NNN.org' analysis file in FOLDER.
+
+Designed for after-the-fact cleanup when the parallel-Sanskrit
+source's `**** Sanskrit' alignment is bulk-changed (e.g. marked
+as `[Sanskrit alignment pending …]' for class-time editorial
+verification).  Existing analysis files generated against the
+old alignment carry Sanskrit-side sections that no longer
+match; this command removes them cleanly so the next reanalyse
+regenerates them — or, when the source is now pending, omits
+them.
+
+Prompts for confirmation.  Default FOLDER is the current
+analysis folder per `tibetan-analysis-get-folder' (when
+available); otherwise the user is prompted for a directory.
+
+Reports the summary in `*Messages*' on completion."
+  (interactive
+   (list (read-directory-name
+          "Reset Sanskrit-side sections in folder: "
+          (when (fboundp 'tibetan-analysis-get-folder)
+            (ignore-errors (tibetan-analysis-get-folder))))))
+  (when (yes-or-no-p
+         (format "Remove Sanskrit-side sections from every seg-/sent-NNN.org in %s? "
+                 folder))
+    (let ((summary
+           (tibetan-sanskrit-parallel--reset-sanskrit-sections-in-folder
+            folder)))
+      (cond
+       ((plist-get summary :error)
+        (message "tibetan-sanskrit-parallel-reset: %s"
+                 (plist-get summary :error)))
+       (t
+        (message
+         "tibetan-sanskrit-parallel-reset: folder=%s touched=%d clean=%d sections-removed=%d"
+         folder
+         (plist-get summary :files-touched)
+         (plist-get summary :files-clean)
+         (plist-get summary :sections-removed))))
+      summary)))
+
 (provide 'tibetan-sanskrit-parallel)
 ;;; tibetan-sanskrit-parallel.el ends here
