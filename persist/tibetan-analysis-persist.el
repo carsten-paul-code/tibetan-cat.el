@@ -3655,13 +3655,20 @@ sentence."
             ;; when the existing analysis file lacks a populated DM
             ;; section.  Idempotent — re-running `C-c u A' on a file
             ;; that already has a DM section does NOT re-fire the API.
+            ;; Phase A.2 (2026-04-30): uses `fire-for-segment' for
+            ;; Tibetan + Sanskrit;  the umbrella function gates each
+            ;; language internally.  Outer predicate gates only the
+            ;; Tibetan side — Sanskrit is fired unconditionally when
+            ;; applicable (the cache makes re-fires cheap, and
+            ;; per-language predicates would be over-engineered for
+            ;; this open-existing path).
             (when (and (fboundp 'tibetan-dharmamitra-translation-needs-request-p)
-                       (fboundp 'tibetan-dharmamitra-translation-fire-tibetan)
+                       (fboundp 'tibetan-dharmamitra-translation-fire-for-segment)
                        (tibetan-dharmamitra-translation-needs-request-p
                         filepath "Tibetan"))
               (condition-case err
-                  (tibetan-dharmamitra-translation-fire-tibetan
-                   tibetan-text filepath)
+                  (tibetan-dharmamitra-translation-fire-for-segment
+                   tibetan-text filepath source-file seg-id)
                 (error
                  (message "DharmaMitra auto-fire skipped for seg-%s: %s"
                           seg-id (error-message-string err))))))
@@ -3696,11 +3703,13 @@ sentence."
           ;; Fire DharmaMitra translation alongside Claude.  Soft-coded —
           ;; missing module / API failures are silent (NOT broadcast as
           ;; user-facing errors) so a DM outage doesn't disrupt the
-          ;; Claude-driven primary workflow.
-          (when (fboundp 'tibetan-dharmamitra-translation-fire-tibetan)
+          ;; Claude-driven primary workflow.  Phase A.2 (2026-04-30):
+          ;; uses umbrella `fire-for-segment' which fires BOTH Tibetan
+          ;; AND Sanskrit (parallel-mode + sibling) automatically.
+          (when (fboundp 'tibetan-dharmamitra-translation-fire-for-segment)
             (condition-case err
-                (tibetan-dharmamitra-translation-fire-tibetan
-                 tibetan-text new-filepath)
+                (tibetan-dharmamitra-translation-fire-for-segment
+                 tibetan-text new-filepath source-file seg-id)
               (error (message "DharmaMitra translation skipped: %s"
                               (error-message-string err))))))))))
 
@@ -3781,10 +3790,12 @@ segment > sentence > paragraph > legacy, most-specific-wins."
           ;; on explicit reanalyse (`C-c u R'), refresh the DM
           ;; translation unconditionally — the user asked for a re-
           ;; analysis, they want fresh translations from every engine.
-          (when (fboundp 'tibetan-dharmamitra-translation-fire-tibetan)
+          ;; Phase A.2 (2026-04-30): uses umbrella `fire-for-segment'
+          ;; that handles both Tibetan and Sanskrit (parallel-mode).
+          (when (fboundp 'tibetan-dharmamitra-translation-fire-for-segment)
             (condition-case err
-                (tibetan-dharmamitra-translation-fire-tibetan
-                 tibetan-text filepath)
+                (tibetan-dharmamitra-translation-fire-for-segment
+                 tibetan-text filepath source-file seg-id)
               (error (message "DharmaMitra translation skipped: %s"
                               (error-message-string err))))))))))
 

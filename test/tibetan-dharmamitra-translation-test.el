@@ -269,5 +269,206 @@ a file that doesn't exist)."
   (should-not (tibetan-dharmamitra-translation-needs-request-p
                "/nonexistent/path/seg-005.org")))
 
+;; ============================================================================
+;; PHASE A.2 — Sanskrit translation in parallel-mode docs
+;; ============================================================================
+;;
+;; When the source has `#+SOURCE_MODE: parallel-sanskrit' AND the
+;; segment has a `**** Sanskrit' sibling, also fire DM chat-translate
+;; on the IAST and write `* DharmaMitra Translation (Sanskrit)' to
+;; the analysis file.
+;;
+;; Plus:  umbrella function `fire-for-segment' that handles BOTH
+;; languages so call sites don't have to.
+
+;; ----------------------------------------------------------------------------
+;; fire-sanskrit (focused; tested in isolation)
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-dm-trans-fire-sanskrit-calls-chat-translate-with-iast ()
+  "fire-sanskrit calls chat-translate once with the IAST text."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-sanskrit))
+  (let (translate-calls)
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+               (lambda (text &rest _)
+                 (push text translate-calls)
+                 "stub Sanskrit translation")))
+      (tibetan-dm-trans-test--with-analysis-file
+          (tibetan-dm-trans-test--baseline-analysis)
+        (tibetan-dharmamitra-translation-fire-sanskrit
+         "iha bodhisattvaḥ prakṛtyaiva" analysis-file)
+        (should (= (length translate-calls) 1))
+        (should (equal (car translate-calls) "iha bodhisattvaḥ prakṛtyaiva"))))))
+
+(ert-deftest tibetan-dm-trans-fire-sanskrit-writes-to-sanskrit-section ()
+  "Resulting translation lands in `* DharmaMitra Translation
+(Sanskrit)' — NOT in the Tibetan section."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-sanskrit))
+  (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+             (lambda (&rest _) "In this context, a Bodhisattva...")))
+    (tibetan-dm-trans-test--with-analysis-file
+        (tibetan-dm-trans-test--baseline-analysis)
+      (tibetan-dharmamitra-translation-fire-sanskrit
+       "iha bodhisattvaḥ prakṛtyaiva" analysis-file)
+      (with-temp-buffer
+        (insert-file-contents analysis-file)
+        (let ((s (buffer-string)))
+          (should (string-match-p
+                   "^\\* DharmaMitra Translation (Sanskrit)$" s))
+          (should (string-match-p "In this context, a Bodhisattva" s))
+          ;; Tibetan section was NOT created.
+          (should-not (string-match-p
+                       "^\\* DharmaMitra Translation (Tibetan)$" s)))))))
+
+(ert-deftest tibetan-dm-trans-fire-sanskrit-skips-empty-text ()
+  "Empty / nil Sanskrit text → no API call."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-sanskrit))
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+               (lambda (&rest _) (cl-incf calls) "x")))
+      (tibetan-dm-trans-test--with-analysis-file
+          (tibetan-dm-trans-test--baseline-analysis)
+        (tibetan-dharmamitra-translation-fire-sanskrit "" analysis-file)
+        (tibetan-dharmamitra-translation-fire-sanskrit nil analysis-file)
+        (should (= calls 0))))))
+
+(ert-deftest tibetan-dm-trans-fire-sanskrit-skips-placeholder-marker ()
+  "When the IAST is a `[Sanskrit alignment exhausted...]'
+placeholder (set during the gotrapatala daṇḍa-split prep), no
+API call is made — we don't ask DM to translate our own
+internal markers."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-sanskrit))
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+               (lambda (&rest _) (cl-incf calls) "x")))
+      (tibetan-dm-trans-test--with-analysis-file
+          (tibetan-dm-trans-test--baseline-analysis)
+        (tibetan-dharmamitra-translation-fire-sanskrit
+         "[Sanskrit alignment exhausted — verify and edit; clause 95 of 69 requested]"
+         analysis-file)
+        (should (= calls 0))))))
+
+;; ----------------------------------------------------------------------------
+;; Umbrella fire-for-segment
+;; ----------------------------------------------------------------------------
+
+(defmacro tibetan-dm-trans-test--with-parallel-source-and-sibling (&rest body)
+  "Bind SOURCE-FILE to a temp parallel-Sanskrit source with a
+Sanskrit sibling on Segment 5; bind ANALYSIS-FILE to a temp seg-005.org."
+  (declare (indent 0))
+  `(let* ((sdir (make-temp-file "tibetan-dm-trans-src-" t))
+          (adir (make-temp-file "tibetan-dm-trans-ana-" t))
+          (source-file (expand-file-name "source.org" sdir))
+          (analysis-file (expand-file-name "seg-005.org" adir)))
+     (unwind-protect
+         (progn
+           (with-temp-file source-file
+             (insert "#+TITLE: T\n"
+                     "#+SOURCE_MODE: parallel-sanskrit\n\n"
+                     "* Tibetan Text\n"
+                     "** Section 1\n*** Sentence 1\n"
+                     "**** Segment 5\nསྡོམ་ལ་\n\n"
+                     "**** Sanskrit\nuddānam ādhāro liṅgam\n"))
+           (with-temp-file analysis-file
+             (insert (tibetan-dm-trans-test--baseline-analysis)))
+           ,@body)
+       (delete-directory sdir t)
+       (delete-directory adir t))))
+
+(ert-deftest tibetan-dm-trans-fire-for-segment-fires-tibetan-always ()
+  "fire-for-segment always fires Tibetan translation."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
+  (let ((tib-calls 0) (skt-calls 0))
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-translation-fire-tibetan)
+               (lambda (&rest _) (cl-incf tib-calls) t))
+              ((symbol-function 'tibetan-dharmamitra-translation-fire-sanskrit)
+               (lambda (&rest _) (cl-incf skt-calls) t)))
+      (tibetan-dm-trans-test--with-analysis-file
+          (tibetan-dm-trans-test--baseline-analysis)
+        ;; No source-file / seg-id given → only Tibetan fires.
+        (tibetan-dharmamitra-translation-fire-for-segment
+         "བདག་" analysis-file)
+        (should (= tib-calls 1))
+        (should (= skt-calls 0))))))
+
+(ert-deftest tibetan-dm-trans-fire-for-segment-fires-sanskrit-when-parallel-and-sibling ()
+  "fire-for-segment fires Sanskrit when source is parallel-mode AND
+the segment has a `**** Sanskrit' sibling."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
+  (let ((tib-calls 0) (skt-calls 0) skt-text)
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-translation-fire-tibetan)
+               (lambda (&rest _) (cl-incf tib-calls) t))
+              ((symbol-function 'tibetan-dharmamitra-translation-fire-sanskrit)
+               (lambda (text _file &rest _)
+                 (cl-incf skt-calls)
+                 (setq skt-text text)
+                 t)))
+      (tibetan-dm-trans-test--with-parallel-source-and-sibling
+        (tibetan-dharmamitra-translation-fire-for-segment
+         "སྡོམ་ལ་" analysis-file source-file 5)
+        (should (= tib-calls 1))
+        (should (= skt-calls 1))
+        (should (equal skt-text "uddānam ādhāro liṅgam"))))))
+
+(ert-deftest tibetan-dm-trans-fire-for-segment-skips-sanskrit-when-not-parallel ()
+  "Non-parallel-mode source → only Tibetan fires; Sanskrit
+skipped even if a `**** Sanskrit' sibling somehow exists."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
+  (let ((tib-calls 0) (skt-calls 0))
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-translation-fire-tibetan)
+               (lambda (&rest _) (cl-incf tib-calls) t))
+              ((symbol-function 'tibetan-dharmamitra-translation-fire-sanskrit)
+               (lambda (&rest _) (cl-incf skt-calls) t)))
+      (let* ((sdir (make-temp-file "tibetan-dm-trans-nonpar-" t))
+             (adir (make-temp-file "tibetan-dm-trans-ana-" t))
+             (source-file (expand-file-name "source.org" sdir))
+             (analysis-file (expand-file-name "seg-005.org" adir)))
+        (unwind-protect
+            (progn
+              (with-temp-file source-file
+                ;; No #+SOURCE_MODE: parallel-sanskrit header.
+                (insert "#+TITLE: T\n\n"
+                        "* Tibetan Text\n*** Sentence 1\n"
+                        "**** Segment 5\nསྡོམ་ལ་\n\n"
+                        "**** Sanskrit\nshould not be sent\n"))
+              (with-temp-file analysis-file
+                (insert (tibetan-dm-trans-test--baseline-analysis)))
+              (tibetan-dharmamitra-translation-fire-for-segment
+               "སྡོམ་ལ་" analysis-file source-file 5)
+              (should (= tib-calls 1))
+              (should (= skt-calls 0)))
+          (delete-directory sdir t)
+          (delete-directory adir t))))))
+
+(ert-deftest tibetan-dm-trans-fire-for-segment-skips-sanskrit-when-no-sibling ()
+  "Parallel-mode but no `**** Sanskrit' sibling on the segment →
+only Tibetan fires."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
+  (let ((tib-calls 0) (skt-calls 0))
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-translation-fire-tibetan)
+               (lambda (&rest _) (cl-incf tib-calls) t))
+              ((symbol-function 'tibetan-dharmamitra-translation-fire-sanskrit)
+               (lambda (&rest _) (cl-incf skt-calls) t)))
+      (let* ((sdir (make-temp-file "tibetan-dm-trans-nosib-" t))
+             (adir (make-temp-file "tibetan-dm-trans-ana-" t))
+             (source-file (expand-file-name "source.org" sdir))
+             (analysis-file (expand-file-name "seg-005.org" adir)))
+        (unwind-protect
+            (progn
+              (with-temp-file source-file
+                (insert "#+TITLE: T\n#+SOURCE_MODE: parallel-sanskrit\n\n"
+                        "* Tibetan Text\n*** Sentence 1\n"
+                        "**** Segment 5\nསྡོམ་ལ་\n\n"
+                        ;; No **** Sanskrit sibling.
+                        "**** Working Translation\n\n"))
+              (with-temp-file analysis-file
+                (insert (tibetan-dm-trans-test--baseline-analysis)))
+              (tibetan-dharmamitra-translation-fire-for-segment
+               "སྡོམ་ལ་" analysis-file source-file 5)
+              (should (= tib-calls 1))
+              (should (= skt-calls 0)))
+          (delete-directory sdir t)
+          (delete-directory adir t))))))
+
 (provide 'tibetan-dharmamitra-translation-test)
 ;;; tibetan-dharmamitra-translation-test.el ends here

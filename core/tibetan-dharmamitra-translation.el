@@ -161,5 +161,90 @@ Returns t on successful write, nil otherwise."
         (tibetan-dharmamitra-translation--write-section
          analysis-file translation "Tibetan")))))
 
+;; ----------------------------------------------------------------------------
+;; Sanskrit fire (Phase A.2, 2026-04-30)
+;; ----------------------------------------------------------------------------
+
+(defconst tibetan-dharmamitra-translation--placeholder-marker-prefix
+  "[Sanskrit alignment exhausted"
+  "Prefix marking a daṇḍa-split placeholder generated during the
+gotrapatala alignment prep — explicitly skipped by
+`fire-sanskrit' so we don't ask DM to translate our own
+internal markers.")
+
+;;;###autoload
+(defun tibetan-dharmamitra-translation-fire-sanskrit (sanskrit-text analysis-file)
+  "Translate SANSKRIT-TEXT (IAST) via DharmaMitra; write result to
+ANALYSIS-FILE's `* DharmaMitra Translation (Sanskrit)' section.
+
+No-op when:
+  - SANSKRIT-TEXT is empty / nil
+  - SANSKRIT-TEXT is a `[Sanskrit alignment exhausted...]'
+    placeholder marker (produced by the gotrapatala prep
+    script when no real Sanskrit clause was available)
+  - chat-translate returns nil (HTTP error / empty response)
+
+DM auto-detects the input encoding (IAST / Devanagari).  If
+your sibling carries Devanagari instead of IAST, the same call
+works — the function is encoding-agnostic.
+
+Returns t on successful write, nil otherwise."
+  (when (and sanskrit-text
+             (stringp sanskrit-text)
+             (not (string-empty-p (string-trim sanskrit-text)))
+             (not (string-prefix-p
+                   tibetan-dharmamitra-translation--placeholder-marker-prefix
+                   sanskrit-text))
+             analysis-file)
+    (let ((translation (tibetan-dharmamitra-api-chat-translate sanskrit-text)))
+      (when (and translation (not (string-empty-p translation)))
+        (tibetan-dharmamitra-translation--write-section
+         analysis-file translation "Sanskrit")))))
+
+;; ----------------------------------------------------------------------------
+;; Umbrella fire-for-segment — handles BOTH languages
+;; ----------------------------------------------------------------------------
+
+(declare-function tibetan-sanskrit-parallel-plist-for-segment-id
+                  "tibetan-sanskrit-parallel" (source-file seg-id))
+
+;;;###autoload
+(defun tibetan-dharmamitra-translation-fire-for-segment
+    (tibetan-text analysis-file &optional source-file seg-id)
+  "Fire DharmaMitra translation(s) for a segment.
+
+ALWAYS fires Tibetan translation when TIBETAN-TEXT is non-empty.
+
+Additionally fires Sanskrit translation when:
+  - SOURCE-FILE is non-nil
+  - SOURCE-FILE has `#+SOURCE_MODE: parallel-sanskrit'
+  - The segment SEG-ID has a `**** Sanskrit' sibling on the source
+  - The sibling's IAST text is not a placeholder marker
+
+Sanskrit gating is delegated to
+`tibetan-sanskrit-parallel-plist-for-segment-id', which returns
+nil for any of the above failures.
+
+This is the call site's main entry point — replaces the
+single-language `fire-tibetan' calls."
+  ;; Tibetan path — always fires when text is present.
+  (when (and tibetan-text
+             (stringp tibetan-text)
+             (not (string-empty-p (string-trim tibetan-text))))
+    (tibetan-dharmamitra-translation-fire-tibetan tibetan-text analysis-file))
+  ;; Sanskrit path — gated on parallel-mode + sibling-present.
+  (when (and source-file seg-id
+             (fboundp 'tibetan-sanskrit-parallel-plist-for-segment-id))
+    (let ((skt-plist
+           (condition-case nil
+               (tibetan-sanskrit-parallel-plist-for-segment-id
+                source-file seg-id)
+             (error nil))))
+      (when skt-plist
+        (let ((iast (plist-get skt-plist :iast)))
+          (when (and iast (stringp iast))
+            (tibetan-dharmamitra-translation-fire-sanskrit
+             iast analysis-file)))))))
+
 (provide 'tibetan-dharmamitra-translation)
 ;;; tibetan-dharmamitra-translation.el ends here
