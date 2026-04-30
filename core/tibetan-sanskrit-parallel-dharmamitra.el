@@ -108,5 +108,165 @@ first."
                                     out))
                   (nreverse out))))))))))
 
+;; ============================================================================
+;; PHASE 3 — Claude disambiguation among DM candidates
+;; ============================================================================
+;;
+;; Semantic-search rank is not always right (verified: rank 2 was
+;; the correct match in our gotrapatala probe, rank 1 was
+;; thematically-related-but-topically-wrong).  Phase 3 layers
+;; Claude on top: given Tibetan + N candidates, ask Claude to
+;; identify the actual parallel.  Falls back to top candidate when
+;; Claude is unavailable or its response is unparseable, with the
+;; reason stamped in the return plist for the dry-run preview.
+
+(defcustom tibetan-sanskrit-parallel-dm-claude-pick-timeout 30
+  "Seconds to wait for Claude's pick response before falling back
+to the top candidate."
+  :type 'integer
+  :group 'tibetan-cat)
+
+(defun tibetan-sanskrit-parallel-dm--build-claude-pick-prompt
+    (tibetan-text candidates)
+  "Build the disambiguation prompt for CANDIDATES given TIBETAN-TEXT.
+
+Pure function — no I/O.  The output is plain text Claude can
+read; the response is expected back in the `## Choice' / `##
+Reason' schema parsed by
+`tibetan-sanskrit-parallel-dm--parse-claude-pick-response'."
+  (concat
+   "You are a Buddhist studies scholar comparing a Classical "
+   "Tibetan canonical translation with candidate Sanskrit "
+   "parallels from the same śāstra.  Identify which Sanskrit "
+   "candidate is the actual source/parallel of the Tibetan "
+   "passage.\n\n"
+   "Tibetan passage:\n"
+   tibetan-text
+   "\n\n"
+   "Sanskrit candidates (ranked by DharmaMitra semantic search; "
+   "rank 1 was the search system's top match, but it may not be "
+   "the correct parallel):\n\n"
+   (mapconcat
+    (lambda (cand)
+      (format "Rank %d:\n%s"
+              (or (plist-get cand :rank) 0)
+              (or (plist-get cand :text) "[no text]")))
+    candidates "\n\n")
+   "\n\n"
+   "Respond in EXACTLY this format (no preamble, no closing "
+   "remarks):\n\n"
+   "## Choice\n"
+   "<single integer: the rank number of the correct candidate>\n\n"
+   "## Reason\n"
+   "<one or two sentences explaining the lexical / grammatical "
+   "match>\n"))
+
+(defun tibetan-sanskrit-parallel-dm--parse-claude-pick-response
+    (response candidates)
+  "Parse RESPONSE against CANDIDATES into a `(:chosen-rank N :reason STR)' plist.
+
+Pure function — no I/O.  Returns nil when:
+  - RESPONSE is nil / empty / not a string
+  - `## Choice' heading is missing or carries no integer
+  - parsed rank is outside [1, length-of-CANDIDATES]
+
+When parsing succeeds, returns the plist; the calling
+`claude-pick' uses it to look up the matching candidate."
+  (when (and (stringp response)
+             (not (string-empty-p response)))
+    (let (rank reason)
+      (when (string-match
+             "## Choice[ \t]*\n[ \t]*\\([0-9]+\\)[ \t]*"
+             response)
+        (setq rank (string-to-number (match-string 1 response))))
+      (when (string-match
+             "## Reason[ \t]*\n\\(\\(?:.\\|\n\\)+?\\)\\(?:\n##\\|\\'\\)"
+             response)
+        (setq reason (string-trim (match-string 1 response))))
+      (when (and rank
+                 (>= rank 1)
+                 (<= rank (length candidates)))
+        (list :chosen-rank rank
+              :reason (or reason ""))))))
+
+(defun tibetan-sanskrit-parallel-dm--ask-claude-sync (prompt)
+  "Synchronously call Claude with PROMPT.  Returns response string or nil.
+
+Uses gptel under the hood (same Claude infrastructure as
+`tibetan-analysis--request-claude-translation') but blocks on
+`accept-process-output' until the callback fires or
+`tibetan-sanskrit-parallel-dm-claude-pick-timeout' seconds
+elapse.  No queue — this runs outside `tibetan-claude-queue' so
+it doesn't compete with translation requests for slots.
+
+Returns nil for any failure (gptel not loaded, HTTP error,
+timeout, empty response).  Tests `cl-letf' this function so the
+caller orchestration can be exercised without network."
+  (condition-case err
+      (when (and (featurep 'gptel) (fboundp 'gptel-request))
+        (let ((response nil)
+              (done nil))
+          (gptel-request prompt
+            :callback (lambda (r _info)
+                        (setq response r)
+                        (setq done t)))
+          (with-timeout
+              (tibetan-sanskrit-parallel-dm-claude-pick-timeout nil)
+            (while (not done)
+              (accept-process-output nil 0.1)))
+          (and done response)))
+    (error
+     (message "DharmaMitra realign: Claude pick failed: %s"
+              (error-message-string err))
+     nil)))
+
+;;;###autoload
+(defun tibetan-sanskrit-parallel-dm-claude-pick (tibetan-text candidates)
+  "Ask Claude to identify the correct Sanskrit parallel from CANDIDATES.
+
+CANDIDATES is the list of plists returned by
+`tibetan-sanskrit-parallel-dm-candidates-for-tibetan'.
+
+Returns a plist:
+  (:chosen-id ID :chosen-text TEXT :chosen-rank N :reason STR)
+
+The `:reason' field carries either Claude's explanation or a
+fallback marker — `single-candidate', `claude-unavailable-...',
+`claude-response-unparseable-...' — so the realign command's
+dry-run preview shows what happened.  Returns nil when CANDIDATES
+is empty.
+
+When CANDIDATES has exactly one entry, returns it directly without
+calling Claude (no disambiguation needed)."
+  (cond
+   ((null candidates) nil)
+   ((= (length candidates) 1)
+    (let ((c (car candidates)))
+      (list :chosen-id (plist-get c :id)
+            :chosen-text (plist-get c :text)
+            :chosen-rank (plist-get c :rank)
+            :reason "single-candidate")))
+   (t
+    (let* ((prompt (tibetan-sanskrit-parallel-dm--build-claude-pick-prompt
+                    tibetan-text candidates))
+           (response (tibetan-sanskrit-parallel-dm--ask-claude-sync prompt))
+           (parsed (and response
+                        (tibetan-sanskrit-parallel-dm--parse-claude-pick-response
+                         response candidates)))
+           (chosen-rank (or (plist-get parsed :chosen-rank) 1))
+           (reason
+            (cond
+             (parsed (plist-get parsed :reason))
+             ((null response) "claude-unavailable-fallback-to-top")
+             (t "claude-response-unparseable-fallback-to-top")))
+           (chosen (cl-find-if
+                    (lambda (c) (= (plist-get c :rank) chosen-rank))
+                    candidates)))
+      (when chosen
+        (list :chosen-id (plist-get chosen :id)
+              :chosen-text (plist-get chosen :text)
+              :chosen-rank (plist-get chosen :rank)
+              :reason (or reason "")))))))
+
 (provide 'tibetan-sanskrit-parallel-dharmamitra)
 ;;; tibetan-sanskrit-parallel-dharmamitra.el ends here

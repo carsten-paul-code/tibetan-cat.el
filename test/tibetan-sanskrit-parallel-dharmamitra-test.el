@@ -283,5 +283,223 @@ empty string."
                       nil source-file)))
        (should (= tx-calls 0))))))
 
+;; ============================================================================
+;; PHASE 3 — Claude disambiguation among DM candidates
+;; ============================================================================
+;;
+;; When DharmaMitra returns 3+ candidates for a Tibetan segment,
+;; semantic-search rank does not always pick the right parallel
+;; (probed: rank 2 was the correct match for our test query, rank 1
+;; was thematically related but topically wrong).  Phase 3 layers
+;; Claude on top: given Tibetan + N candidate plists, ask Claude to
+;; identify the actual parallel.  Falls back to top candidate when
+;; Claude is unavailable.
+;;
+;; Tests stub `tibetan-sanskrit-parallel-dm--ask-claude-sync' so no
+;; gptel / network is touched.  The prompt builder and response
+;; parser are pure functions, separately exercised.
+
+(defun tibetan-skt-dm-test--three-candidates ()
+  "Return three pre-shaped candidate plists for Phase 3 stubs."
+  (list
+   (list :id "SA_T06_bsa034:64"
+         :text "iha bodhisattvaḥ prakṛtyaiva dānarucirbhavati"
+         :segmentnr "SA_T06_bsa034:64"
+         :title "Asaṅga: Bodhisattvabhūmi"
+         :rank 1)
+   (list :id "SA_T06_bsa034:221"
+         :text "evamayaṃ prathamaścittotpādaḥ"
+         :segmentnr "SA_T06_bsa034:221"
+         :title "Asaṅga: Bodhisattvabhūmi"
+         :rank 2)
+   (list :id "SA_T06_bsa034:189"
+         :text "third unrelated"
+         :segmentnr "SA_T06_bsa034:189"
+         :title "Asaṅga: Bodhisattvabhūmi"
+         :rank 3)))
+
+;; ----------------------------------------------------------------------------
+;; Prompt builder (pure function)
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-skt-dm-build-claude-pick-prompt-includes-tibetan ()
+  "Prompt carries the Tibetan passage verbatim."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--build-claude-pick-prompt))
+  (let* ((tib "བདག་གིས་ལས་བྱས།")
+         (cands (tibetan-skt-dm-test--three-candidates))
+         (prompt (tibetan-sanskrit-parallel-dm--build-claude-pick-prompt
+                  tib cands)))
+    (should (string-match-p (regexp-quote tib) prompt))))
+
+(ert-deftest tibetan-skt-dm-build-claude-pick-prompt-includes-all-candidates ()
+  "Prompt enumerates every candidate (text and rank)."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--build-claude-pick-prompt))
+  (let* ((cands (tibetan-skt-dm-test--three-candidates))
+         (prompt (tibetan-sanskrit-parallel-dm--build-claude-pick-prompt
+                  "བདག་" cands)))
+    (should (string-match-p "iha bodhisattvaḥ prakṛtyaiva" prompt))
+    (should (string-match-p "evamayaṃ prathamaścittotpādaḥ" prompt))
+    (should (string-match-p "third unrelated" prompt))
+    (should (string-match-p "Rank 1" prompt))
+    (should (string-match-p "Rank 2" prompt))
+    (should (string-match-p "Rank 3" prompt))))
+
+(ert-deftest tibetan-skt-dm-build-claude-pick-prompt-asks-for-structured-response ()
+  "Prompt instructs Claude to use the `## Choice' / `## Reason'
+schema so the parser can extract a deterministic answer."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--build-claude-pick-prompt))
+  (let ((prompt (tibetan-sanskrit-parallel-dm--build-claude-pick-prompt
+                 "བདག་" (tibetan-skt-dm-test--three-candidates))))
+    (should (string-match-p "## Choice" prompt))
+    (should (string-match-p "## Reason" prompt))))
+
+;; ----------------------------------------------------------------------------
+;; Response parser (pure function)
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-skt-dm-parse-claude-pick-response-extracts-rank ()
+  "Parser extracts a rank integer from `## Choice\\nN'."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--parse-claude-pick-response))
+  (let* ((cands (tibetan-skt-dm-test--three-candidates))
+         (response "## Choice\n2\n\n## Reason\nMatches the verb prakṛtyaiva.")
+         (parsed (tibetan-sanskrit-parallel-dm--parse-claude-pick-response
+                  response cands)))
+    (should parsed)
+    (should (= (plist-get parsed :chosen-rank) 2))
+    (should (string-match-p "prakṛtyaiva" (plist-get parsed :reason)))))
+
+(ert-deftest tibetan-skt-dm-parse-claude-pick-response-tolerates-leading-whitespace ()
+  "Parser handles whitespace around the rank number."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--parse-claude-pick-response))
+  (let* ((cands (tibetan-skt-dm-test--three-candidates))
+         (parsed (tibetan-sanskrit-parallel-dm--parse-claude-pick-response
+                  "## Choice\n  3  \n\n## Reason\nfoo" cands)))
+    (should (= (plist-get parsed :chosen-rank) 3))))
+
+(ert-deftest tibetan-skt-dm-parse-claude-pick-response-rejects-out-of-range-rank ()
+  "Parser returns nil when the rank exceeds the candidate count.
+Caller will fall back to top candidate."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--parse-claude-pick-response))
+  (let ((cands (tibetan-skt-dm-test--three-candidates)))  ;; 3 cands
+    (should-not (tibetan-sanskrit-parallel-dm--parse-claude-pick-response
+                 "## Choice\n99\n\n## Reason\nfoo" cands))
+    (should-not (tibetan-sanskrit-parallel-dm--parse-claude-pick-response
+                 "## Choice\n0\n\n## Reason\nfoo" cands))))
+
+(ert-deftest tibetan-skt-dm-parse-claude-pick-response-malformed-returns-nil ()
+  "Garbage / missing `## Choice' → nil."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--parse-claude-pick-response))
+  (let ((cands (tibetan-skt-dm-test--three-candidates)))
+    (should-not (tibetan-sanskrit-parallel-dm--parse-claude-pick-response
+                 "no headings here just prose" cands))
+    (should-not (tibetan-sanskrit-parallel-dm--parse-claude-pick-response
+                 "## Choice\nnot-a-number" cands))
+    (should-not (tibetan-sanskrit-parallel-dm--parse-claude-pick-response
+                 nil cands))
+    (should-not (tibetan-sanskrit-parallel-dm--parse-claude-pick-response
+                 "" cands))))
+
+;; ----------------------------------------------------------------------------
+;; Public claude-pick — happy path
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-skt-dm-claude-pick-returns-shaped-plist ()
+  "Given Tibetan + candidates + stubbed Claude returning rank 2,
+returns a plist `(:chosen-id :chosen-text :chosen-rank :reason)'
+sourced from the matching candidate."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm-claude-pick))
+  (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-dm--ask-claude-sync)
+             (lambda (_prompt)
+               "## Choice\n2\n\n## Reason\nVerb matches.")))
+    (let* ((cands (tibetan-skt-dm-test--three-candidates))
+           (out (tibetan-sanskrit-parallel-dm-claude-pick "བདག་" cands)))
+      (should out)
+      (should (equal (plist-get out :chosen-id) "SA_T06_bsa034:221"))
+      (should (equal (plist-get out :chosen-text)
+                     "evamayaṃ prathamaścittotpādaḥ"))
+      (should (= (plist-get out :chosen-rank) 2))
+      (should (string-match-p "Verb matches" (plist-get out :reason))))))
+
+(ert-deftest tibetan-skt-dm-claude-pick-single-candidate-skips-claude ()
+  "A single candidate needs no disambiguation — return it directly
+without calling Claude."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm-claude-pick))
+  (let ((claude-calls 0))
+    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-dm--ask-claude-sync)
+               (lambda (_prompt)
+                 (cl-incf claude-calls)
+                 "should not be called")))
+      (let* ((single (list (car (tibetan-skt-dm-test--three-candidates))))
+             (out (tibetan-sanskrit-parallel-dm-claude-pick "བདག་" single)))
+        (should out)
+        (should (equal (plist-get out :chosen-id) "SA_T06_bsa034:64"))
+        (should (= (plist-get out :chosen-rank) 1))
+        (should (string-match-p "single" (plist-get out :reason)))
+        (should (= claude-calls 0))))))
+
+;; ----------------------------------------------------------------------------
+;; Public claude-pick — fallbacks
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-skt-dm-claude-pick-nil-when-no-candidates ()
+  "Empty candidates list returns nil (caller treated as failure)."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm-claude-pick))
+  (should (null (tibetan-sanskrit-parallel-dm-claude-pick "བདག་" nil)))
+  (should (null (tibetan-sanskrit-parallel-dm-claude-pick "བདག་" '()))))
+
+(ert-deftest tibetan-skt-dm-claude-pick-falls-back-to-top-when-claude-unavailable ()
+  "When Claude returns nil (gptel missing, HTTP failure), fall back
+to the top candidate (rank 1).  The `:reason' field stamps the
+fallback path so the dry-run preview can display it."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm-claude-pick))
+  (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-dm--ask-claude-sync)
+             (lambda (_prompt) nil)))
+    (let* ((cands (tibetan-skt-dm-test--three-candidates))
+           (out (tibetan-sanskrit-parallel-dm-claude-pick "བདག་" cands)))
+      (should out)
+      (should (= (plist-get out :chosen-rank) 1))
+      (should (equal (plist-get out :chosen-id) "SA_T06_bsa034:64"))
+      ;; Reason flags the fallback path explicitly.
+      (should (string-match-p "claude-unavailable" (plist-get out :reason))))))
+
+(ert-deftest tibetan-skt-dm-claude-pick-falls-back-when-response-unparseable ()
+  "When Claude returns a non-empty string the parser can't extract
+a rank from, fall back to top with a different stamp."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm-claude-pick))
+  (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-dm--ask-claude-sync)
+             (lambda (_prompt) "I am unable to choose. Sorry.")))
+    (let* ((cands (tibetan-skt-dm-test--three-candidates))
+           (out (tibetan-sanskrit-parallel-dm-claude-pick "བདག་" cands)))
+      (should out)
+      (should (= (plist-get out :chosen-rank) 1))
+      (should (string-match-p "unparseable" (plist-get out :reason))))))
+
+(ert-deftest tibetan-skt-dm-claude-pick-falls-back-when-rank-out-of-range ()
+  "Claude says `## Choice\\n99' but only 3 candidates exist → top
+candidate fallback."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm-claude-pick))
+  (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-dm--ask-claude-sync)
+             (lambda (_prompt) "## Choice\n99\n\n## Reason\nout-of-range")))
+    (let* ((cands (tibetan-skt-dm-test--three-candidates))
+           (out (tibetan-sanskrit-parallel-dm-claude-pick "བདག་" cands)))
+      (should out)
+      (should (= (plist-get out :chosen-rank) 1))
+      (should (string-match-p "unparseable" (plist-get out :reason))))))
+
+(ert-deftest tibetan-skt-dm-claude-pick-prompt-flows-through-to-claude ()
+  "The Tibetan + candidates reach the Claude wrapper — verifies the
+prompt is built and passed, not silently dropped."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm-claude-pick))
+  (let (captured-prompt)
+    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-dm--ask-claude-sync)
+               (lambda (prompt)
+                 (setq captured-prompt prompt)
+                 "## Choice\n1\n\n## Reason\ndefault")))
+      (tibetan-sanskrit-parallel-dm-claude-pick
+       "བདག་གིས་ལས་བྱས།" (tibetan-skt-dm-test--three-candidates))
+      (should captured-prompt)
+      (should (string-match-p (regexp-quote "བདག་གིས་ལས་བྱས།") captured-prompt))
+      (should (string-match-p "iha bodhisattvaḥ prakṛtyaiva" captured-prompt)))))
+
 (provide 'tibetan-sanskrit-parallel-dharmamitra-test)
 ;;; tibetan-sanskrit-parallel-dharmamitra-test.el ends here
