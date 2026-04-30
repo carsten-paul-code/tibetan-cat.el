@@ -3,9 +3,11 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-04-30 (§5.16 added: multi-translator parallel
-reading + placeholder-marker generalization + reset-Sanskrit-sections
-command + verb-detect uddāna-verse fix; previous: §5.10–§5.13: dictionary polish,
+editing. Last updated 2026-04-30 (§5.17 added: two-language-parallel-
+analysis architectural elevation — Sanskrit + Combined as peer top-level
+sections, three Claude calls per segment in parallel mode, reanalyse-
+preservation regression closed for DM sections; supersedes the §5.16
+suffixed-Tibetan-side schema. Previous: §5.10–§5.13: dictionary polish,
 grammar unification, thesaurus + target-language pipeline, three-level
 dispatch).
 
@@ -220,7 +222,7 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-04-30): **1792 tests, 1791 expected, 0 unexpected
+Current state (2026-04-30): **1787 tests, 1786 expected, 0 unexpected
 failures, 1 intentional skip (compound-analysis-callable).**  Carsten
 runs this after every change and expects it to stay green.
 
@@ -820,6 +822,117 @@ phase walkthrough + reader-flow ordering + alignment workflow +
 why automated realign couldn't fix gotrapatala + verb-detect
 fix root-cause + commit trail.
 
+**SUPERSEDED 2026-04-30 by §5.17.**  The Phase B–D suffixed
+schema (`** Claude Translation (Sanskrit)' / `(Combined)' /
+`** Claude Divergence' INSIDE `* Auto-Analysis') is retired.
+Sanskrit and Combined output now live in dedicated top-level
+sections via three independent Claude calls.  See §5.17 for
+the new architecture.
+
+### 5.17 Two-language parallel analysis (done, tested, 2026-04-30)
+
+**Architectural elevation** of yesterday's §5.16 work.  After
+§5.16's seg-005 live test surfaced a Combined-translation
+duplication bug (the parallel-mode prompt asked Claude for a
+Combined section even when only Tibetan input was present),
+Carsten asked for Sanskrit to become a first-class peer of
+the Tibetan analysis with a dedicated synthesis layer above
+both — instead of a sibling section inside the Tibetan
+analysis file.
+
+Per parallel-Sanskrit segment, three independent top-level
+analysis sections in one `seg-NNN.org` file:
+
+| Section                   | Producer                       | Pre-existing? |
+|---------------------------|--------------------------------|---------------|
+| `* Auto-Analysis`         | Claude (Tibetan call)          | yes (slimmed) |
+| `* Sanskrit Text`         | walker (raw IAST + Devanagari) | NEW (Phase 3) |
+| `* Sanskrit Analysis`     | Claude (Sanskrit call)         | NEW (Phase 2) |
+| `* Combined Analysis`     | Claude (Combined call)         | NEW (Phase 4) |
+
+Plus the three pre-existing top-level DM sections (`*
+DharmaMitra Translation (Tibetan)' / `(Sanskrit)' / `*
+Sanskrit (DharmaMitra)').
+
+**Phases (two commits):**
+
+1. `a5caeac` — Phases 1+2+3+4 bundled.
+   - Phase 1: retired the §5.16 parallel-mode block
+     instructions from the Tibetan prompt + the suffixed
+     parser keys / scaffolders / section-order entries.
+     Tibetan call now byte-identical for parallel and non-
+     parallel docs.
+   - Phase 2: NEW `persist/tibetan-analysis-sanskrit.el` —
+     Sanskrit Claude pipeline (5-section response: Translation
+     / Devanagari / Sandhi / Word List / Grammar).
+   - Phase 3: `--render-sanskrit-source' rewritten to emit
+     `* Sanskrit Text' top-level (was `** Sanskrit Source'
+     under `* Auto-Analysis').
+   - Phase 4: NEW `persist/tibetan-analysis-combined.el' —
+     Combined synthesis pipeline (2-section response:
+     Translation / Divergence; both gated on all four inputs
+     being present).
+
+2. `9802833` — Phase 5: dispatcher + reanalyse preservation.
+   - New `tibetan-analysis--fire-parallel-mode-claude-calls'
+     orchestrates Sanskrit + (chained) Combined.  Wired into
+     `reanalyze-file' + auto-analyze batch + auto-fire-on-
+     create batch.
+   - `--get-user-sections' / `--regenerate-auto' extended to
+     preserve the six new top-level sections.  Closes a
+     latent regression where DM sections were silently
+     destroyed by every reanalyse-without-refire.
+
+**Three Claude calls in parallel mode:**
+
+| Call     | Module                                      | Schema |
+|----------|---------------------------------------------|--------|
+| Tibetan  | `tibetan-analysis-claude.el` (slimmed)      | `## Translation` / `## Vocabulary` / `## Grammar` / `## Particles` |
+| Sanskrit | `tibetan-analysis-sanskrit.el` (NEW)        | `## Translation` / `## Devanagari` / `## Sandhi` / `## Word List` / `## Grammar` |
+| Combined | `tibetan-analysis-combined.el` (NEW)        | `## Translation` / `## Divergence` (the latter only when serious differences) |
+
+Each call's system prompt is constant per document.  Anthropic
+prompt cache stays warm for each call type independently.
+Tibetan + Sanskrit fire concurrently; Combined chains off
+Sanskrit's callback when both translations are present.
+
+**Section independence:** each top-level analysis section is
+owned by one call type — Tibetan reanalyse touches only `*
+Auto-Analysis`, Sanskrit reanalyse only `* Sanskrit Analysis',
+etc.  Same pattern as today's DM top-level sections.
+
+**Reanalyse preservation (regression fix):**  before this
+work, `--get-user-sections' didn't list the DM sections
+(shipped Phase A.1–A.2 earlier today), so reanalyse-without-
+refire silently destroyed them.  Phase A.3 masked the bug
+because batch reanalyse typically runs with refire on.  Phase
+5 extends the section list with all six new top-level names
+\(Sanskrit Text, Sanskrit Analysis, Combined Analysis, three
+DM variants).
+
+**Migration of existing analysis files:** soft.  Existing
+files keep their current layout until next reanalyse — at that
+point the Tibetan side regenerates without the now-retired
+suffixed sections, the Sanskrit/Combined sections appear on
+re-fire, and the prior file's top-level sections are
+preserved.  Phase 6 (a migration helper to drop the now-inert
+`** Claude Translation (Sanskrit)' / `(Combined)' / `**
+Claude Divergence' subsections lingering inside `* Auto-
+Analysis' from yesterday's §5.16 work) is **deferred** —
+pairs with the analysis-files refactoring Carsten plans.
+
+**Suite trajectory:** 1792 (post-§5.16 + verb-detect work) →
+1755 (Phase 1 retire) → 1771 (Phase 2 add) → 1769 (Phase 3
+update) → 1783 (Phase 4 add) → **1787** (Phase 5 add).  Net
+−5 because Phase 1 retired more tests than the new modules
+added.  For a refactor that retires schema, lower-but-tighter
+is the right outcome.
+
+Design doc: `docs/feature-two-language-parallel.org` — full
+phase walkthrough + per-segment file layout diagram + the
+three Claude system-prompt drafts + dispatcher mechanics +
+preservation invariants + verification recipe + commit trail.
+
 ### 5.8 Claude integration hardening + Anthropic prompt caching (done, 2026-04-20)
 
 Five cumulative improvements to the Claude request path, all
@@ -1064,7 +1177,7 @@ folio alongside the text so the caller can thread it through.
 ## 9. First thing to do in a new session
 
 1. `make test` (or the batch command in §4). Confirm baseline green
-   (expect 1792 / 1791 expected / 0 unexpected / 1 skipped at 2026-04-30).
+   (expect 1787 / 1786 expected / 0 unexpected / 1 skipped at 2026-04-30).
 2. Skim `MEMORY.md` (auto-memory) — `working_discipline.md` is the
    baseline rule set; this file refines it for tibetan-cat.el.
 3. Skim `git log --oneline -20` for anything newer than §5.13 (this

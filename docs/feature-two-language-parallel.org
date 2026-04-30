@@ -1,0 +1,330 @@
+#+TITLE: Two-Language Parallel Analysis — Feature Design
+#+DATE: 2026-04-30
+#+AUTHOR: Carsten Paul + Claude
+#+STATUS: SHIPPED (Phases 1–5; Phase 6 deferred to pair with analysis-files refactor)
+
+* TL;DR
+
+Per parallel-Sanskrit segment, three independent top-level
+analysis sections in one =seg-NNN.org= file:
+
+| Section                       | Producer                       | Phase  |
+|-------------------------------+--------------------------------+--------|
+| =* Auto-Analysis=             | Claude (Tibetan-only call)     | (pre)  |
+| =* Sanskrit Text=             | walker (raw IAST + Devanagari) | 3      |
+| =* Sanskrit Analysis=         | Claude (Sanskrit call)         | 2      |
+| =* Combined Analysis=         | Claude (Combined call)         | 4      |
+
+Plus the three pre-existing top-level DM sections (=*
+DharmaMitra Translation (Tibetan)= / =(Sanskrit)= /
+=* Sanskrit (DharmaMitra)=).
+
+The Tibetan call goes back to its pre-Phase-B four-section
+shape and is byte-identical for parallel and non-parallel
+documents — they share the same Anthropic prompt-cache prefix.
+The Sanskrit and Combined calls use dedicated modules with
+their own constant-per-document system prompts.
+
+* Why this exists
+
+This morning's Phase B-D work had Claude emit Sanskrit /
+Combined / Divergence sections as suffixes inside the same
+Tibetan response (`## Translation (Sanskrit)' / `(Combined)' /
+`## Divergence`).  Carsten observed during a live test on
+gotrapatala seg-005 that the Combined section duplicated the
+Tibetan translation — because the prompt schema asked for it
+unconditionally even when the source had only a placeholder
+Sanskrit body.
+
+The diagnosis: treating Sanskrit as a sibling section inside
+the Tibetan analysis was the wrong abstraction.  Sanskrit
+deserves first-class status as an independent analysis;  the
+synthesis above the two sources deserves its own dedicated
+slot;  the Combined-duplication issue then disappears because
+each call gates itself on its own input availability.
+
+* Per-segment file layout (parallel-mode, all sections present)
+
+#+begin_example
+seg-NNN.org
+
+#+TITLE / #+SOURCE / #+TIBETAN_HASH / #+ANALYSIS_VERSION / …
+
+* Tibetan Text                        ← raw input
+  <Tibetan Unicode>
+
+* My Notes                            ← user content
+* Working Translation                 ← user content
+* Sanskrit Text                       ← Phase 3, raw IAST + Devanagari
+
+* Auto-Analysis                       ← TIBETAN-side (pre-existing pipeline)
+  :PROPERTIES: :GENERATED: t :END:
+  ** Wylie Transliteration
+  ** Interlinear Gloss
+  ** Claude Translation               ← Tibetan-only (no parallel-mode bleed)
+  ** Grammar
+  ** Sentence Structure
+  ** Verb Classification (Hill 2010)
+  ** Detailed Dictionary
+  ** Provided Translations
+    *** DharmaMitra
+    *** CAT Gloss
+    *** Claude Vocabulary
+    *** Claude Particles
+
+* Sanskrit Analysis                   ← Phase 2, Sanskrit pipeline
+  :PROPERTIES: :GENERATED: t :END:
+  ** Devanagari                       ← only when source has IAST only
+  ** Sandhi Decomposition
+  ** Word List
+  ** Claude Translation               ← Sanskrit-side
+  ** Grammar
+
+* Combined Analysis                   ← Phase 4, synthesis
+  :PROPERTIES: :GENERATED: t :END:
+  ** Combined Translation
+  ** Divergence                       ← only for serious differences
+
+* Footnotes                           ← user content
+
+* DharmaMitra Translation (Tibetan)   ← Phase A.1 (pre-existing)
+* DharmaMitra Translation (Sanskrit)  ← Phase A.2 (pre-existing)
+* Sanskrit (DharmaMitra)              ← realign feature (pre-existing)
+#+end_example
+
+For non-parallel documents (no =#+SOURCE_MODE: parallel-sanskrit=,
+or every Sanskrit body is a placeholder): only =* Tibetan Text= /
+user-content / =* Auto-Analysis= / =* Footnotes= /
+=* DharmaMitra Translation (Tibetan)= render.  Byte-identical
+to today's non-parallel default.
+
+* Three Claude calls (parallel mode)
+
+| Call     | Producer module                                  | Response schema                                                |
+|----------+--------------------------------------------------+----------------------------------------------------------------|
+| Tibetan  | =persist/tibetan-analysis-claude.el=              | =## Translation= / =## Vocabulary= / =## Grammar= / =## Particles= |
+| Sanskrit | =persist/tibetan-analysis-sanskrit.el= (Phase 2)  | =## Translation= / =## Devanagari= / =## Sandhi= / =## Word List= / =## Grammar= |
+| Combined | =persist/tibetan-analysis-combined.el= (Phase 4)  | =## Translation= / =## Divergence=                                 |
+
+Each call's system prompt is constant per document.  Anthropic
+prompt cache stays warm for each call type independently.
+
+Tibetan + Sanskrit fire concurrently via gptel.  The Combined
+call is chained off the Sanskrit call's callback: once the
+Sanskrit response lands AND the Tibetan translation is present
+in the analysis file (either preserved from a prior run or
+freshly arrived from the parallel Tibetan call), Combined
+fires with all four inputs.
+
+** Sanskrit system prompt (constant per document)
+
+The Sanskrit call defines the role:  "Sanskrit philologist for
+a graduate Yogācārabhūmi reading class".  Five-section
+response:
+
+- =## Translation=  — Sanskrit-to-target-lang
+- =## Devanagari=   — only when source has IAST only
+- =## Sandhi=       — surface form → component stems + sandhi rule
+- =## Word List=    — per-word lemma + case/number + gloss
+- =## Grammar=      — prose case-frame + verb conjugation analysis
+
+** Combined system prompt (constant per document)
+
+The Combined call defines the role:  "comparative reader of
+parallel Sanskrit-Tibetan philological corpora".  Two-section
+response:
+
+- =## Translation=  — synthesis (default to Sanskrit when
+  diverging without compelling reason)
+- =## Divergence=   — only for serious differences (collapse,
+  expansion, substitution, doctrinal shift)
+
+* Section-independence pattern
+
+Each top-level analysis section is owned by one call type:
+
+- Tibetan reanalyse drops + regenerates =* Auto-Analysis=.
+  Sanskrit / Combined sections untouched.
+- Sanskrit reanalyse drops + regenerates =* Sanskrit Analysis=.
+  Tibetan / Combined untouched.
+- Combined reanalyse drops + regenerates =* Combined Analysis=.
+  Others untouched.
+
+Same pattern as the pre-existing =* DharmaMitra Translation
+(Tibetan)= / =(Sanskrit)= top-level sections.  Each survives
+reanalyse-without-refire via
+=tibetan-analysis-get-user-sections= +
+=tibetan-analysis-regenerate-auto='s canonical-order rebuild.
+
+* The dispatcher
+
+=tibetan-analysis--fire-parallel-mode-claude-calls (tibetan-text
+source-file analysis-file)= in
+=persist/tibetan-analysis-persist.el= is the single entry point
+that:
+
+1. Looks up the segment's =**** Sanskrit= sibling via
+   =tibetan-sanskrit-parallel-text-for-segment-id=.
+2. Returns nil cleanly when the walker returns nil
+   \(non-parallel source / no sibling / placeholder body).
+3. Fires the Sanskrit Claude call async.  The Sanskrit call's
+   callback chains the Combined call when both translations
+   are present.
+
+Wired into:
+
+- =tibetan-analysis-reanalyze-file=  — single-segment + batch
+  reanalyse (=C-c u R= / =C-c u r=).  When =:re-request-claude
+  t= the dispatcher fires alongside the Tibetan + DM calls.
+- =tibetan-auto-analyze-document=  — =C-c u B= per-file pass
+  AND the auto-fire-claude-on-create batch.
+
+Soft-coded throughout: missing modules degrade to today's
+Tibetan-only behaviour without errors.
+
+* Reanalyse preservation
+
+CLAUDE.md §6 invariant:  user content + Claude content is
+preserved across regen paths.  Phase 5 extends
+=tibetan-analysis-get-user-sections= to collect SIX new top-
+level section names alongside the existing user-content list:
+
+- =* Sanskrit Text=
+- =* Sanskrit Analysis=
+- =* Combined Analysis=
+- =* DharmaMitra Translation (Tibetan)=
+- =* DharmaMitra Translation (Sanskrit)=
+- =* Sanskrit (DharmaMitra)=
+
+=tibetan-analysis-regenerate-auto= rebuilds the file in
+canonical order including all of these.  Latent regression
+closed: before this commit, the DM sections (shipped Phase
+A.1–A.2 earlier today) were silently destroyed by every
+=:re-request-claude nil= reanalyse — Phase A.3 masked it
+because batch reanalyse typically runs with refire on.
+
+=* Sanskrit Text= has special handling — the dynamic var
+=tibetan-analysis--sanskrit-text-for-render= (when bound)
+overrides the preserved body, so a fresh walker plist
+regenerates the section while a nil var keeps the prior body.
+Parity with how =* Auto-Analysis= regen overrides on each
+reanalyse.
+
+* Migration of existing analysis files
+
+**Soft migration.**  Existing =seg-NNN.org= files keep their
+current layout until next reanalysis.  At reanalysis:
+
+- Files with no parallel-mode sections (all non-parallel docs;
+  96 of 97 gotrapatala segs after this morning's cleanup):
+  layout unchanged.  Tibetan call only.  Output is byte-
+  identical to today's pre-this-work output (modulo Claude
+  variation).
+- Files with the now-retired Phase B–D Tibetan-side Sanskrit
+  subsections (=** Claude Translation (Sanskrit)= /
+  =(Combined)= / =** Claude Divergence= inside =* Auto-
+  Analysis=) — these get retained by the regen until Phase 6's
+  migration helper drops them.  In the meantime they're inert
+  (the Tibetan call no longer produces them, so they linger as
+  dead history).
+
+Phase 6 (migration helper) is paired with the analysis-files
+refactoring Carsten plans next.
+
+* Module / function inventory
+
+| Path                                                  | Role                                                                                                |
+|-------------------------------------------------------+-----------------------------------------------------------------------------------------------------|
+| =persist/tibetan-analysis-claude.el=                   | Tibetan Claude pipeline.  Slimmed:  parallel-mode block / suffixed parser keys / scaffolders gone. |
+| =persist/tibetan-analysis-sanskrit.el= (NEW, Phase 2)  | Sanskrit pipeline:  build-prompts / parse / insert / read / restore / request-translation.         |
+| =persist/tibetan-analysis-combined.el= (NEW, Phase 4)  | Combined pipeline:  same surface, smaller.                                                          |
+| =persist/tibetan-analysis-persist.el=                  | =--render-sanskrit-source= now emits =* Sanskrit Text= top-level.  =--get-user-sections= collects 6 new names.  =--regenerate-auto= rebuilds in canonical order.  Hosts the three-call dispatcher. |
+| =persist/tibetan-auto-analysis.el=                     | Two batch paths wire the dispatcher alongside the Tibetan call.                                    |
+| =core/tibetan-sanskrit-parallel.el=                    | Walker + placeholder predicate (unchanged from this morning's work).                                |
+
+Reused (no rewrites):
+
+- =tibetan-sanskrit-parallel-text-for-segment-id= (walker)
+- =tibetan-sanskrit-parallel--placeholder-text-p= (placeholder gate)
+- =tibetan-cat--source-mode-parallel-p= (header gate)
+- =tibetan-claude-queue= (rate-limit + serialisation)
+- =tibetan-analysis--ensure-gptel-ready= (auth)
+- =tibetan-analysis--read-section-body= (generic org section reader)
+
+* Cross-phase invariants
+
+- Suite green at every phase boundary, total moves up
+  monotonically (CLAUDE.md §4).  1792 (pre-work) → 1755 (Phase
+  1 retire) → 1771 (Phase 2 add) → 1769 (Phase 3 update) →
+  1783 (Phase 4 add) → 1787 (Phase 5 add).  Net +5 over today's
+  retire/add cycle, which is the right outcome for a
+  refactor.
+- Non-parallel documents produce byte-identical Tibetan-call
+  output before and after the full series.
+- Each Claude call's system prompt is constant per document.
+- User content (=* My Notes=, =* Working Translation=, =*
+  Footnotes=) preserved across every reanalyse path.
+- DM sections preserved across reanalyse-without-refire (latent
+  regression closed by Phase 5).
+
+* Verification
+
+End-to-end after Phase 7 ship:
+
+1. =cd /Users/cp/tibetan-cat.el && emacs -batch -L . -L test -l
+   test/run-all-tests.el -f ert-run-tests-batch-and-exit= →
+   all green; total 1787.
+
+2. Open a Milarepa source (Tibetan-only, no =#+SOURCE_MODE:=).
+   =C-c u R= seg-026.  Confirm output is byte-identical to
+   today's pre-this-work output.
+
+3. Open =gotrapatala.org=.  =C-c u R= seg-005.  Confirm:
+   - =* Auto-Analysis= present (Tibetan-only, no parallel-mode
+     bleed).
+   - =* Sanskrit Text= absent (source has placeholder body).
+   - =* Sanskrit Analysis= absent.
+   - =* Combined Analysis= absent.
+   - No "Combined duplicates Translation" issue.
+
+4. Edit a gotrapatala segment to give it a real Sanskrit chunk
+   \(replace the pending placeholder with verified IAST from
+   class).  =C-c u R=.  Confirm:
+   - =* Sanskrit Text= renders with the IAST line + (auto)
+     Devanagari.
+   - Three Claude calls fire (visible in =gptel-log-buffer=).
+   - =* Sanskrit Analysis= populates with Translation + Sandhi
+     + Word List + Grammar.
+   - =* Combined Analysis= populates with the synthesis + (when
+     applicable) Divergence.
+
+5. Toggle parallel mode off via =C-c u z P=; reanalyse;
+   confirm the Sanskrit + Combined sections disappear and
+   only the Tibetan-side renders.
+
+* Commit trail
+
+| Commit   | Description                                                              |
+|----------+--------------------------------------------------------------------------|
+| a5caeac  | two-language-parallel: Sanskrit + Combined as peer analyses (Phases 1-4) |
+| 9802833  | two-language-parallel: three-call dispatch + reanalyse preservation (Phase 5) |
+| (next)   | docs/feature-two-language-parallel.org + CLAUDE.md §5.17 (Phase 7)       |
+
+Phase 6 (migration helper) deferred — pairs with the
+analysis-files refactor Carsten plans next.
+
+* Followups (out of scope for this work series)
+
+- Genre-aware POS tagging for uddāna verses (=skye= / =bsam=
+  used as nominalised topic labels can't be distinguished from
+  their verb senses without context).  Larger feature, not
+  started.
+- Sentence-level (=sent-NNN.org=) two-language analysis.
+  Today's wiring is segment-only.  Sentence files aggregate
+  multiple segments;  the Sanskrit-side chunk for a sentence
+  isn't well-defined when the constituent segments have
+  different Sanskrit alignment statuses.
+- Tibetan-call concurrency:  today the Tibetan call still goes
+  through =tibetan-claude-queue='s serialised path.  When the
+  Sanskrit call also queues, total wallclock per segment grows.
+  Consider letting the two raw calls share a parallel slot.
