@@ -2653,6 +2653,7 @@ nil, the subsection is omitted."
     "** Interlinear Gloss"
     "** Claude Translation"
     "** Claude Translation (Sanskrit)"
+    "** Claude Divergence"
     "** Grammar"
     "** Sentence Structure"
     "** Verb Classification (Hill 2010)")
@@ -2678,6 +2679,13 @@ Sanskrit primary source, a sibling of the Tibetan-side
 `** Claude Translation'.  Same byte-identical-when-absent
 guarantee: the reorder pass only positions sections present in
 the buffer, so non-parallel files render unchanged.
+
+`** Claude Divergence' (Phase C of multi-translator-parallel-
+reading, 2026-04-30) is Claude's optional flagged-divergence
+note — Claude emits it only when there is a serious Sanskrit-
+Tibetan difference (collapse, expansion, substitution, doctrinal
+shift); faithful renderings and non-parallel files leave the
+heading absent.
 
 Pass 6b (2026-04-22) redesign: the four redundant particle sections
 — Particle Map, Particle Overview, Grammatical Markers, and the

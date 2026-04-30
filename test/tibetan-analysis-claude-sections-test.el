@@ -1380,5 +1380,173 @@ the heading.  Non-parallel files stay byte-clean."
                    "^\\*\\* Claude Translation (Sanskrit)$"
                    (buffer-string))))))
 
+;; ============================================================================
+;; Phase C of multi-translator-parallel-reading (2026-04-30):
+;; `## Divergence` is Claude's optional flagged-divergence section
+;; — emitted only when there is a serious Sanskrit-Tibetan
+;; difference.  Routes to a `:divergence' plist key, scaffolded
+;; on demand into `** Claude Divergence' at level 2 (between
+;; `** Claude Translation (Sanskrit)' and `** Grammar').
+;; ============================================================================
+
+(ert-deftest tibetan-claude-sections-parse-divergence ()
+  "A response containing `## Divergence' routes the body to the
+`:divergence' plist key.  The other slots are untouched."
+  (let* ((response (concat "## Translation\n"
+                           "Tibetan body.\n\n"
+                           "## Translation (Sanskrit)\n"
+                           "Sanskrit body.\n\n"
+                           "## Divergence\n"
+                           "- Skt `prakṛtyā' (innately) → Tib "
+                           "rang bzhin gyis (emphasises essence): "
+                           "doctrinal weight differs.\n"))
+         (parsed (tibetan-analysis--parse-claude-sections response)))
+    (should (equal (plist-get parsed :translation)          "Tibetan body."))
+    (should (equal (plist-get parsed :translation-sanskrit) "Sanskrit body."))
+    (should (string-match-p "prakṛtyā" (plist-get parsed :divergence)))
+    (should (string-match-p "rang bzhin" (plist-get parsed :divergence)))))
+
+(ert-deftest tibetan-claude-sections-parse-no-divergence-leaves-nil ()
+  "A response without `## Divergence' (the common case — most
+segments are faithful renderings) leaves `:divergence' nil."
+  (let* ((response (concat "## Translation\nT body.\n\n"
+                           "## Translation (Sanskrit)\nS body.\n"))
+         (parsed (tibetan-analysis--parse-claude-sections response)))
+    (should (null (plist-get parsed :divergence)))))
+
+(ert-deftest tibetan-claude-sections-section-order-includes-divergence ()
+  "The canonical Claude section-order defconst lists Divergence at
+level 2, immediately after the Sanskrit translation."
+  (let* ((order tibetan-analysis--claude-section-order)
+         (entry (assq :divergence order)))
+    (should entry)
+    (should (equal (nth 1 entry) "Claude Divergence"))
+    (should (equal (nth 2 entry) 2))
+    ;; Position immediately after :translation-sanskrit.
+    (let ((pos-skt (cl-position :translation-sanskrit order :key #'car))
+          (pos-div (cl-position :divergence           order :key #'car)))
+      (should pos-skt)
+      (should pos-div)
+      (should (= pos-div (1+ pos-skt))))))
+
+(ert-deftest tibetan-claude-sections-priority-order-includes-divergence ()
+  "The level-2 priority-section-order positions
+`** Claude Divergence' immediately after
+`** Claude Translation (Sanskrit)'.  Reader flow:
+Tibetan translation → Sanskrit translation → divergence note."
+  (let* ((order tibetan-analysis--priority-section-order)
+         (pos-skt (cl-position "** Claude Translation (Sanskrit)"
+                               order :test #'equal))
+         (pos-div (cl-position "** Claude Divergence"
+                               order :test #'equal)))
+    (should pos-skt)
+    (should pos-div)
+    (should (= pos-div (1+ pos-skt)))))
+
+(ert-deftest tibetan-claude-sections-insert-creates-divergence-heading ()
+  "Inserting a response with `## Divergence' scaffolds
+`** Claude Divergence' at level 2 (after the Sanskrit
+translation when present) and writes the body."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
+    (let ((response (concat "## Translation\n"
+                            "Tibetan body.\n\n"
+                            "## Translation (Sanskrit)\n"
+                            "Sanskrit body.\n\n"
+                            "## Divergence\n"
+                            "- Critical doctrinal shift here.\n")))
+      (tibetan-analysis--insert-claude-sections response analysis-file)
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf (kill-buffer buf)))
+      (with-temp-buffer
+        (insert-file-contents analysis-file)
+        (let ((content (buffer-string)))
+          (should (string-match-p "^\\*\\* Claude Divergence$" content))
+          (should (string-match-p "Critical doctrinal shift" content))
+          ;; Divergence appears AFTER the Sanskrit translation
+          ;; heading.
+          (let ((pos-skt (string-match
+                          "^\\*\\* Claude Translation (Sanskrit)$" content))
+                (pos-div (string-match
+                          "^\\*\\* Claude Divergence$" content)))
+            (should pos-skt)
+            (should pos-div)
+            (should (< pos-skt pos-div))))))))
+
+(ert-deftest tibetan-claude-sections-insert-without-divergence-no-heading ()
+  "Inserting a response WITHOUT `## Divergence' (the common faithful-
+rendering case) leaves `** Claude Divergence' absent — the
+heading does not appear unless Claude actually flagged
+something."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
+    (let ((response (concat "## Translation\nT body.\n\n"
+                            "## Translation (Sanskrit)\nS body.\n")))
+      (tibetan-analysis--insert-claude-sections response analysis-file)
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf (kill-buffer buf)))
+      (with-temp-buffer
+        (insert-file-contents analysis-file)
+        (should-not (string-match-p
+                     "^\\*\\* Claude Divergence$"
+                     (buffer-string)))))))
+
+(ert-deftest tibetan-claude-sections-read-divergence ()
+  "Reading an analysis file with a populated `** Claude Divergence'
+returns the body in the `:divergence' plist slot."
+  (tibetan-sections-test--with-analysis
+      (concat (tibetan-sections-test--scaffold "T body" nil)
+              "\n** Claude Divergence\n"
+              "- Stored divergence note.\n\n")
+    (let ((p (tibetan-analysis--read-claude-sections analysis-file)))
+      (should (string-match-p "Stored divergence"
+                              (plist-get p :divergence))))))
+
+(ert-deftest tibetan-claude-sections-restore-round-trips-divergence ()
+  "`--restore-claude-sections' writes the `:divergence' slot back
+into the analysis file's `** Claude Divergence' section.  Read
+→ restore → re-read preserves the body."
+  (tibetan-sections-test--with-analysis
+      (concat (tibetan-sections-test--scaffold "T1" "G1")
+              "\n** Claude Divergence\n"
+              "ORIGINAL divergence\n\n")
+    (let ((before (tibetan-analysis--read-claude-sections analysis-file)))
+      (should (equal (plist-get before :divergence) "ORIGINAL divergence"))
+      (tibetan-analysis--restore-claude-sections
+       analysis-file
+       (list :translation (plist-get before :translation)
+             :divergence  "UPDATED divergence"
+             :grammar     (plist-get before :grammar)))
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf)))
+      (let ((after (tibetan-analysis--read-claude-sections analysis-file)))
+        (should (equal (plist-get after :divergence) "UPDATED divergence"))
+        ;; Other slots untouched.
+        (should (equal (plist-get after :translation) "T1"))
+        (should (equal (plist-get after :grammar)     "G1"))))))
+
+(ert-deftest tibetan-claude-sections-restore-without-divergence-no-heading ()
+  "Restoring a plist with `:divergence' nil into a file that lacks
+the heading does NOT scaffold one — faithful-rendering segments
+stay byte-clean."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "T1" "G1")
+    (tibetan-analysis--restore-claude-sections
+     analysis-file
+     (list :translation "T1-restored"
+           :divergence  nil
+           :grammar     "G1-restored"))
+    (let ((buf (find-buffer-visiting analysis-file)))
+      (when buf
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf)))
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (should-not (string-match-p
+                   "^\\*\\* Claude Divergence$"
+                   (buffer-string))))))
+
 (provide 'tibetan-analysis-claude-sections-test)
 ;;; tibetan-analysis-claude-sections-test.el ends here

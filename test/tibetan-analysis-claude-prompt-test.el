@@ -609,7 +609,11 @@ parenthetical explanation on first mention of fixed Buddhist terms
   "Source with `#+SOURCE_MODE: parallel-sanskrit' → system prompt
 includes the parallel-reading directive (Phase B of multi-
 translator-parallel-reading, 2026-04-30: instructs Claude to
-emit TWO translation sections, one per source language)."
+emit TWO translation sections, one per source language).
+
+Phase C (2026-04-30) extends the directive with an optional
+`## Divergence' section gated on serious Sanskrit-Tibetan
+differences."
   (tibetan-test--with-source
       "#+TITLE: YBh\n#+SOURCE_MODE: parallel-sanskrit\n"
     (let* ((prompts (tibetan-analysis--build-claude-prompts
@@ -619,7 +623,12 @@ emit TWO translation sections, one per source language)."
       (should (string-match-p "parallel Sanskrit-Tibetan reading" system))
       (should (string-match-p "TWO translation sections" system))
       ;; New schema heading appears verbatim so Claude knows to emit it.
-      (should (string-match-p "## Translation (Sanskrit)" system)))))
+      (should (string-match-p "## Translation (Sanskrit)" system))
+      ;; Phase C — divergence directive present and gated on
+      ;; "serious" differences (faithful renderings should not
+      ;; trigger).
+      (should (string-match-p "## Divergence" system))
+      (should (string-match-p "ONLY WHEN" system)))))
 
 (ert-deftest tibetan-claude-prompt-no-parallel-block-without-header ()
   "Without `#+SOURCE_MODE:' header the system prompt has no
@@ -631,7 +640,10 @@ parallel-reading directive — today's behaviour preserved."
            (system (car prompts)))
       (should-not (string-match-p "parallel Sanskrit-Tibetan reading" system))
       (should-not (string-match-p "TWO translation sections" system))
-      (should-not (string-match-p "## Translation (Sanskrit)" system)))))
+      (should-not (string-match-p "## Translation (Sanskrit)" system))
+      ;; Phase C — divergence directive must also be gated on the
+      ;; parallel-mode header.
+      (should-not (string-match-p "## Divergence" system)))))
 
 (ert-deftest tibetan-claude-prompt-rejects-other-source-modes ()
   "Hypothetical `#+SOURCE_MODE: parallel-pali' (or any non-
@@ -729,7 +741,11 @@ in isolation (without building a full prompt)."
     (should (stringp block))
     (should (string-match-p "parallel Sanskrit-Tibetan reading" block))
     (should (string-match-p "TWO translation sections" block))
-    (should (string-match-p "## Translation (Sanskrit)" block))))
+    (should (string-match-p "## Translation (Sanskrit)" block))
+    ;; Phase C — divergence directive is part of the same constant
+    ;; block (so it caches with the rest).
+    (should (string-match-p "## Divergence" block))
+    (should (string-match-p "ONLY WHEN" block))))
 
 (ert-deftest tibetan-claude-prompt-parallel-mode-user-block-helper ()
   "The user-block helper accepts a sanskrit-plist and returns the
