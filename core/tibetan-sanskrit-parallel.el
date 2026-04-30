@@ -97,7 +97,8 @@ Returns nil for nil, non-string, or empty input."
 (defconst tibetan-sanskrit-parallel--placeholder-prefixes
   '("[Sanskrit alignment pending"
     "[Sanskrit alignment exhausted"
-    "[No Sanskrit counterpart")
+    "[No Sanskrit counterpart"
+    "[Continuation")
   "Recognised prefixes for `**** Sanskrit' placeholder bodies.
 
 A `**** Sanskrit' sibling whose body starts with any of these
@@ -107,23 +108,31 @@ the Claude parallel-mode user-prompt builder, and the
 `** Sanskrit Source' renderer all behave the same as for a
 segment that has no `**** Sanskrit' sibling at all.
 
-Three markers exist today:
+Four markers exist today:
 
   `[Sanskrit alignment pending …]' — universal pending marker.
     The current alignment is known-invalid (e.g.  daṇḍa-split
     that crossed a structural boundary between Tibetan and
     Sanskrit recensions); the editorial pass hasn't happened
-    yet.  Most segments of `gotrapatala.org' carry this after
-    2026-04-30's bulk-mark.
+    yet.
 
   `[Sanskrit alignment exhausted …]' — the daṇḍa-split prep
     ran out of Sanskrit clauses before reaching the end of the
     Tibetan segments (gotrapatala.org segs 70-97 originally).
 
   `[No Sanskrit counterpart …]' — explicit Tibetan-only
-    marker for translator's homages, uddāna verses, or other
-    canon-side editorial material with no Sanskrit equivalent
-    in any extant edition.  Reserved for class-time use.
+    marker for translator's homages or other canon-side
+    editorial material with no Sanskrit equivalent in any
+    extant edition.
+
+  `[Continuation — Sanskrit text is rendered at Segment N;
+    see there.]' — the Tibetan splits across multiple segments
+    a Sanskrit phrase that the source carries as one
+    daṇḍa-bounded unit (uddāna pādas, embedded if/then
+    sentences).  The full Sanskrit lives at the named
+    segment; this segment has no Sanskrit body of its own to
+    feed Claude.  Introduced 2026-04-30 with the gotrapaṭala
+    alignment against DSBC.
 
 Adding a new prefix here is the only change required to teach
 the whole parallel-mode pipeline about a new marker shape.")

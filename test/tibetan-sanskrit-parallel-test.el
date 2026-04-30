@@ -341,6 +341,21 @@ homages, uddāna verses)."
   (should (tibetan-sanskrit-parallel--placeholder-text-p
            "[No Sanskrit counterpart]")))
 
+(ert-deftest tibetan-sanskrit-parallel-placeholder-text-p-recognises-continuation ()
+  "`--placeholder-text-p' returns t for `[Continuation — Sanskrit
+text is rendered at Segment N; see there.]' markers introduced
+by the 2026-04-30 gotrapaṭala alignment.  These mark Tibetan
+segments whose Sanskrit content is fully captured by an
+adjacent segment (uddāna pādas, embedded if/then sentences):
+the analysis pipeline should treat them like other placeholders
+\(no Sanskrit Analysis or Combined Analysis section fires)."
+  (should (tibetan-sanskrit-parallel--placeholder-text-p
+           "[Continuation — Sanskrit text is rendered at Segment 5; see there.]"))
+  (should (tibetan-sanskrit-parallel--placeholder-text-p
+           "[Continuation of uddāna verse]"))
+  (should (tibetan-sanskrit-parallel--placeholder-text-p
+           "[Continuation]")))
+
 (ert-deftest tibetan-sanskrit-parallel-placeholder-text-p-rejects-real-sanskrit ()
   "`--placeholder-text-p' returns nil for genuine IAST text — the
 predicate must NOT swallow real Sanskrit that happens to start
