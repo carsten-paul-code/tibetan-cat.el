@@ -4048,6 +4048,17 @@ without touching the file.  Otherwise return a plist:
                 (error (message "Claude re-request failed for %s: %s"
                                 (file-name-nondirectory filepath)
                                 (error-message-string e2)))))
+            ;; Phase A.3 of multi-translator-parallel-reading (2026-04-30):
+            ;; when the caller explicitly asks for re-request (`C-u C-c u r'),
+            ;; also refresh DharmaMitra translations.  Same gate as Claude.
+            (when (and re-request-claude
+                       (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
+              (condition-case e3
+                  (tibetan-dharmamitra-translation-fire-for-segment
+                   tibetan-text filepath source-file seg-id)
+                (error (message "DharmaMitra re-request failed for %s: %s"
+                                (file-name-nondirectory filepath)
+                                (error-message-string e3)))))
             `(:file ,filepath :seg-id ,seg-id :ok t
                     :claude-preserved ,(and has-any-section t)))
         (error

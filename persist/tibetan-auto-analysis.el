@@ -293,6 +293,26 @@ The fire is async and throttled by `tibetan-auto-claude-request-delay'
   :type 'boolean
   :group 'tibetan-cat)
 
+(defcustom tibetan-auto-fire-dm-on-create t
+  "When non-nil, `tibetan-auto-analyze-document' fires DharmaMitra
+translation for each newly-created segment file after Claude.
+
+Phase A.3 of multi-translator-parallel-reading (2026-04-30).
+Mirrors `tibetan-auto-fire-claude-on-create' for the DM
+translator.  Set to nil to opt out of automatic DM translation
+without disabling Claude."
+  :type 'boolean
+  :group 'tibetan-cat)
+
+(defcustom tibetan-auto-dm-request-delay 0.5
+  "Seconds between successive DharmaMitra translation requests
+during batch fire.  DM's chat-translate is synchronous (~1-2 sec
+per call), so 97 new segments take roughly 97 × (1.5 + 0.5) =
+~3 min of queue time.  The 0.5-sec gap reduces the chance of
+DM rate-limiting compared to back-to-back firing."
+  :type 'number
+  :group 'tibetan-cat)
+
 (defun tibetan-auto-analyze-document (&optional force)
   "Automatically generate analysis files for all segments and sentences.
 
@@ -406,7 +426,70 @@ Progress is shown in the echo area."
                newly-created-files
                (fboundp 'tibetan-analysis--request-claude-translation))
       (tibetan-auto--fire-claude-on-new-files
+       (nreverse (copy-sequence newly-created-files))))
+    ;; Phase A.3 of multi-translator-parallel-reading (2026-04-30):
+    ;; Also fire DharmaMitra translations for the same set of new
+    ;; files.  The two loops run in parallel — each timer fires
+    ;; independently per `run-at-time'.  Tibetan + Sanskrit (in
+    ;; parallel-mode docs) are handled by the umbrella
+    ;; `fire-for-segment' function.
+    (when (and tibetan-auto-fire-dm-on-create
+               newly-created-files
+               (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
+      (tibetan-auto--fire-dm-on-new-files
        (nreverse newly-created-files)))))
+
+(defun tibetan-auto--fire-dm-on-new-files (filepath-and-text-pairs)
+  "Queue DharmaMitra translation requests for FILEPATH-AND-TEXT-PAIRS.
+
+PAIRS is a list of (filepath . tibetan-text) cons cells — same
+shape as `tibetan-auto--fire-claude-on-new-files'.  Each pair's
+filepath is mapped to its source-file (via
+`tibetan-analysis--source-file-from-analysis') and seg-id (via
+`tibetan-analysis--seg-id-from-filename') so the umbrella
+`tibetan-dharmamitra-translation-fire-for-segment' can fire
+both Tibetan AND Sanskrit (parallel-mode) variants.
+
+Each request fires via `run-at-time' with an offset of
+`tibetan-auto-dm-request-delay' × index.  Individual failures
+are swallowed to `message' and do not abort the batch.
+
+Phase A.3 of multi-translator-parallel-reading (2026-04-30)."
+  (let ((delay 0.0)
+        (count (length filepath-and-text-pairs)))
+    (message "Queueing DharmaMitra translation requests for %d newly-created file%s \
+(one every %.1fs)..."
+             count (if (= count 1) "" "s")
+             (or tibetan-auto-dm-request-delay 0.5))
+    (dolist (pair filepath-and-text-pairs)
+      (let ((filepath (car pair))
+            (text     (cdr pair))
+            (this-delay delay))
+        (when (and text (stringp text)
+                   (not (string-empty-p (string-trim text))))
+          (let* ((source-file
+                  (and (fboundp 'tibetan-analysis--source-file-from-analysis)
+                       (condition-case nil
+                           (tibetan-analysis--source-file-from-analysis filepath)
+                         (error nil))))
+                 (seg-id
+                  (and (fboundp 'tibetan-analysis--seg-id-from-filename)
+                       (condition-case nil
+                           (tibetan-analysis--seg-id-from-filename filepath)
+                         (error nil)))))
+            (run-at-time
+             this-delay nil
+             (lambda ()
+               (condition-case err
+                   (when (fboundp 'tibetan-dharmamitra-translation-fire-for-segment)
+                     (tibetan-dharmamitra-translation-fire-for-segment
+                      text filepath source-file seg-id))
+                 (error
+                  (message "DharmaMitra request failed for %s: %s"
+                           (file-name-nondirectory filepath)
+                           (error-message-string err))))))
+            (setq delay (+ delay
+                           (or tibetan-auto-dm-request-delay 0.5)))))))))
 
 (defun tibetan-auto--fire-claude-on-new-files (filepath-and-text-pairs)
   "Queue Claude translation requests for FILEPATH-AND-TEXT-PAIRS.

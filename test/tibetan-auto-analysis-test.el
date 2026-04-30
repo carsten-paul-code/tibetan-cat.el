@@ -401,6 +401,87 @@ segment collector, at `^\\*\\* Sentence' instead of `^\\*+ Sentence'."
     (should (string-match-p "tigress" filename))))
 
 ;; ============================================================================
+;; PHASE A.3 — DharmaMitra batch fire on newly-created segments
+;; ============================================================================
+;;
+;; Mirrors the existing `tibetan-auto--fire-claude-on-new-files'
+;; pattern.  After `tibetan-auto-analyze-document' creates the
+;; structural analysis files, fire DM translations for each
+;; (Tibetan + optional Sanskrit) via the umbrella
+;; `tibetan-dharmamitra-translation-fire-for-segment'.
+;;
+;; Gated by `tibetan-auto-fire-dm-on-create' (defcustom, default t)
+;; so users who don't want DM translations can opt out without
+;; disabling Claude.
+
+(ert-deftest tibetan-auto-fire-dm-on-create-defcustom-exists ()
+  "`tibetan-auto-fire-dm-on-create' exists and defaults to t.
+Mirrors `tibetan-auto-fire-claude-on-create'."
+  (should (boundp 'tibetan-auto-fire-dm-on-create))
+  (should (eq t (default-value 'tibetan-auto-fire-dm-on-create))))
+
+(ert-deftest tibetan-auto--fire-dm-on-new-files-stubbed ()
+  "`tibetan-auto--fire-dm-on-new-files' calls `fire-for-segment'
+once per pair, with each pair's filepath + text."
+  (skip-unless (fboundp 'tibetan-auto--fire-dm-on-new-files))
+  (let ((captured '()))
+    (cl-letf (((symbol-function 'run-at-time)
+               (lambda (_delay _repeat fn) (funcall fn)))
+              ((symbol-function 'tibetan-dharmamitra-translation-fire-for-segment)
+               (lambda (text filepath &rest _)
+                 (push (cons filepath text) captured))))
+      (tibetan-auto--fire-dm-on-new-files
+       '(("/tmp/seg-001.org" . "tibetan-one")
+         ("/tmp/seg-002.org" . "tibetan-two")
+         ("/tmp/seg-003.org" . "tibetan-three"))))
+    (setq captured (nreverse captured))
+    (should (= 3 (length captured)))
+    (should (equal "/tmp/seg-001.org" (car (nth 0 captured))))
+    (should (equal "tibetan-one"      (cdr (nth 0 captured))))
+    (should (equal "/tmp/seg-003.org" (car (nth 2 captured))))
+    (should (equal "tibetan-three"    (cdr (nth 2 captured))))))
+
+(ert-deftest tibetan-auto--fire-dm-skips-empty-text ()
+  "Pairs whose Tibetan text is nil or empty don't trigger
+`fire-for-segment'."
+  (skip-unless (fboundp 'tibetan-auto--fire-dm-on-new-files))
+  (let ((count 0))
+    (cl-letf (((symbol-function 'run-at-time)
+               (lambda (_delay _repeat fn) (funcall fn)))
+              ((symbol-function 'tibetan-dharmamitra-translation-fire-for-segment)
+               (lambda (&rest _) (cl-incf count))))
+      (tibetan-auto--fire-dm-on-new-files
+       '(("/tmp/seg-001.org" . "real text")
+         ("/tmp/seg-002.org" . "")
+         ("/tmp/seg-003.org" . nil)
+         ("/tmp/seg-004.org" . "more text"))))
+    (should (= count 2))))
+
+(ert-deftest tibetan-auto--fire-dm-passes-source-and-seg-id ()
+  "When the analysis file has a `#+SOURCE:' header, the umbrella
+function gets called with the resolved source-file + seg-id so
+parallel-mode Sanskrit firing works."
+  (skip-unless (fboundp 'tibetan-auto--fire-dm-on-new-files))
+  (let ((captured-source nil)
+        (captured-seg-id nil))
+    (cl-letf (((symbol-function 'run-at-time)
+               (lambda (_delay _repeat fn) (funcall fn)))
+              ((symbol-function 'tibetan-analysis--source-file-from-analysis)
+               (lambda (_file) "/tmp/source.org"))
+              ((symbol-function 'tibetan-analysis--seg-id-from-filename)
+               (lambda (file)
+                 (when (string-match "seg-\\([0-9]+\\)" file)
+                   (string-to-number (match-string 1 file)))))
+              ((symbol-function 'tibetan-dharmamitra-translation-fire-for-segment)
+               (lambda (_text _file source-file seg-id)
+                 (setq captured-source source-file
+                       captured-seg-id seg-id))))
+      (tibetan-auto--fire-dm-on-new-files
+       '(("/tmp/seg-005.org" . "text"))))
+    (should (equal captured-source "/tmp/source.org"))
+    (should (= captured-seg-id 5))))
+
+;; ============================================================================
 ;; HELPER FUNCTION
 ;; ============================================================================
 
