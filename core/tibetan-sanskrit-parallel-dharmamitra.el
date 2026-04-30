@@ -268,5 +268,195 @@ calling Claude (no disambiguation needed)."
               :chosen-rank (plist-get chosen :rank)
               :reason (or reason "")))))))
 
+;; ============================================================================
+;; PHASE 4 — Proposal builder + document walker + preview renderer (read-only)
+;; ============================================================================
+;;
+;; The realign command's three-stage pipeline:
+;;
+;;   1. Read (Tibetan, current Sanskrit) for each segment via
+;;      `tibetan-sanskrit-parallel-segment-data-for-id'.
+;;   2. Run Phase-2 candidates → Phase-3 claude-pick to identify
+;;      the best Sanskrit parallel.
+;;   3. Compare current vs proposed; build a proposal plist.
+;;
+;; The document walker iterates segment IDs and aggregates
+;; proposals.  The preview renderer formats the result list into
+;; a `*Sanskrit Realign Preview*' buffer the user reviews before
+;; applying (Phase 5).
+
+(declare-function tibetan-sanskrit-parallel-segment-data-for-id
+                  "tibetan-sanskrit-parallel" (source-file seg-id))
+
+(defun tibetan-sanskrit-parallel-dm--normalise-whitespace (s)
+  "Normalise whitespace in S for proposal-comparison purposes.
+Trims leading/trailing whitespace and collapses runs of
+whitespace into single spaces.  Empty / nil → empty string."
+  (if (and s (stringp s))
+      (string-trim
+       (replace-regexp-in-string "[ \t\n]+" " " s))
+    ""))
+
+(defun tibetan-sanskrit-parallel-dm--build-proposal
+    (seg-id tibetan-text current-sanskrit pick)
+  "Build a realign proposal plist for SEG-ID.
+
+PICK is the plist returned by
+`tibetan-sanskrit-parallel-dm-claude-pick' (or nil when no
+candidates were found).  CURRENT-SANSKRIT is the body of the
+segment's existing `**** Sanskrit' sibling (or nil / empty when
+the segment has none yet).
+
+Returns:
+  (:seg-id N :tibetan-text TIB :current-sanskrit CUR
+   :proposed-sanskrit PROP :proposed-rank R :proposed-segmentnr SN
+   :reason STR :status SYM)
+
+Status values:
+  `change'         — current and proposed differ (after whitespace
+                     normalisation)
+  `unchanged'      — current ≈ proposed; no edit needed
+  `no-candidates'  — PICK was nil (DM returned no hits, translate
+                     failed, or no DM_SANSKRIT_SOURCE configured)
+
+Pure function — no I/O.  The caller (the document walker)
+handles I/O around it."
+  (let* ((proposed (and pick (plist-get pick :chosen-text)))
+         (cur-norm (tibetan-sanskrit-parallel-dm--normalise-whitespace
+                    current-sanskrit))
+         (prop-norm (tibetan-sanskrit-parallel-dm--normalise-whitespace
+                     proposed))
+         (status (cond
+                  ((null pick) 'no-candidates)
+                  ((string= cur-norm prop-norm) 'unchanged)
+                  (t 'change))))
+    (list :seg-id seg-id
+          :tibetan-text tibetan-text
+          :current-sanskrit current-sanskrit
+          :proposed-sanskrit proposed
+          :proposed-rank (and pick (plist-get pick :chosen-rank))
+          :proposed-segmentnr (and pick (plist-get pick :chosen-id))
+          :reason (or (and pick (plist-get pick :reason)) "")
+          :status status)))
+
+(defun tibetan-sanskrit-parallel-dm--collect-segment-ids (source-file)
+  "Return sorted list of segment IDs found in SOURCE-FILE.
+Walks every `**** Segment N' heading."
+  (let (ids)
+    (when (and source-file (file-exists-p source-file))
+      (with-temp-buffer
+        (insert-file-contents source-file)
+        (goto-char (point-min))
+        (while (re-search-forward
+                "^\\*\\*\\*\\* Segment \\([0-9]+\\)[ \t]*$" nil t)
+          (push (string-to-number (match-string 1)) ids))))
+    (sort (delete-dups ids) #'<)))
+
+;;;###autoload
+(defun tibetan-sanskrit-parallel-dm-realign-document-proposals (source-file)
+  "Return a list of realign proposals for every segment in SOURCE-FILE.
+
+For each `**** Segment N' heading, runs the three-stage pipeline
+(read segment data → DM candidates → Claude pick → build proposal)
+and collects the result.  Order matches the source file's
+segment IDs (sorted ascending).
+
+Returns nil when SOURCE-FILE is missing / unreadable.  On per-
+segment failures (translate / search failure, no candidates),
+the proposal carries `:status' `no-candidates' so the preview
+buffer can list it; the walker continues to the next segment.
+
+This is the orchestrator for `realign-document'.  Phase 5 will
+wrap it in an interactive command that calls this, hands the
+result to the preview renderer, and (with `C-u') applies the
+changes."
+  (when (and source-file (file-exists-p source-file))
+    (let ((seg-ids (tibetan-sanskrit-parallel-dm--collect-segment-ids
+                    source-file))
+          (out '()))
+      (dolist (seg-id seg-ids)
+        (let* ((data (tibetan-sanskrit-parallel-segment-data-for-id
+                      source-file seg-id))
+               (tibetan (and data (plist-get data :tibetan)))
+               (current (and data (plist-get data :current-sanskrit))))
+          (when tibetan
+            (let* ((cands (tibetan-sanskrit-parallel-dm-candidates-for-tibetan
+                           tibetan source-file))
+                   (pick (and cands
+                              (tibetan-sanskrit-parallel-dm-claude-pick
+                               tibetan cands))))
+              (push (tibetan-sanskrit-parallel-dm--build-proposal
+                     seg-id tibetan current pick)
+                    out)))))
+      (nreverse out))))
+
+(defun tibetan-sanskrit-parallel-dm--count-status (proposals status)
+  "Count proposals in PROPOSALS with `:status' equal to STATUS."
+  (cl-count-if (lambda (p) (eq (plist-get p :status) status))
+               proposals))
+
+(defun tibetan-sanskrit-parallel-dm--render-preview-buffer
+    (source-file proposals)
+  "Render a `*Sanskrit Realign Preview*' buffer for PROPOSALS.
+
+SOURCE-FILE is the path of the source document being aligned;
+displayed in the buffer header for context.  PROPOSALS is the
+list returned by
+`tibetan-sanskrit-parallel-dm-realign-document-proposals'.
+
+The buffer shows:
+  - a summary line with counts (changes / unchanged /
+    no-candidates)
+  - per-proposal blocks with seg-id, Tibetan, current Sanskrit,
+    proposed Sanskrit, Claude reason, status
+
+Returns the buffer.  Caller decides whether to display, kill, or
+read from it; the renderer does not display the buffer itself."
+  (let ((buf (get-buffer-create "*Sanskrit Realign Preview*"))
+        (n-change (tibetan-sanskrit-parallel-dm--count-status
+                   proposals 'change))
+        (n-unchanged (tibetan-sanskrit-parallel-dm--count-status
+                      proposals 'unchanged))
+        (n-no-cand (tibetan-sanskrit-parallel-dm--count-status
+                    proposals 'no-candidates)))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert "Sanskrit Realign Preview\n")
+        (insert "========================\n\n")
+        (insert (format "Source: %s\n" source-file))
+        (insert (format "Total segments scanned: %d\n" (length proposals)))
+        (insert (format "  change:        %d\n" n-change))
+        (insert (format "  unchanged:     %d\n" n-unchanged))
+        (insert (format "  no-candidates: %d\n" n-no-cand))
+        (insert "\n")
+        (insert "----------------------------------------\n\n")
+        (dolist (p proposals)
+          (let ((seg (plist-get p :seg-id))
+                (tib (plist-get p :tibetan-text))
+                (cur (plist-get p :current-sanskrit))
+                (prop (plist-get p :proposed-sanskrit))
+                (segnr (plist-get p :proposed-segmentnr))
+                (rank (plist-get p :proposed-rank))
+                (reason (plist-get p :reason))
+                (status (plist-get p :status)))
+            (insert (format "Segment %d  [%s]\n" seg
+                            (upcase (symbol-name status))))
+            (when tib
+              (insert (format "  Tibetan:   %s\n" tib)))
+            (insert (format "  Current:   %s\n"
+                            (or cur "[no Sanskrit sibling]")))
+            (insert (format "  Proposed:  %s\n"
+                            (or prop "[no candidates]")))
+            (when segnr
+              (insert (format "  DM ID:     %s (rank %s)\n"
+                              segnr (or rank "?"))))
+            (when (and reason (not (string-empty-p reason)))
+              (insert (format "  Reason:    %s\n" reason)))
+            (insert "\n")))
+        (goto-char (point-min)))
+      (setq buffer-read-only t))
+    buf))
+
 (provide 'tibetan-sanskrit-parallel-dharmamitra)
 ;;; tibetan-sanskrit-parallel-dharmamitra.el ends here

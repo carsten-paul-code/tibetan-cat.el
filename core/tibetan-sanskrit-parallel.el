@@ -443,5 +443,48 @@ Safe when SOURCE-FILE is nil, empty, or missing — returns nil."
                (equal (string-trim (match-string 1)) "parallel-sanskrit")))
          (error nil))))
 
+;; ----------------------------------------------------------------------------
+;; By-ID segment data reader (Phase 4 of dharmamitra-realign, 2026-04-27)
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-sanskrit-parallel-segment-data-for-id (source-file seg-id)
+  "Return `(:tibetan STR :current-sanskrit STR)' for SEG-ID in SOURCE-FILE.
+
+Walks SOURCE-FILE's `**** Segment N' headings, narrows to the
+matching one, extracts the Tibetan body via
+`tibetan-org-get-segment-text' and the current `**** Sanskrit'
+sibling's body via `tibetan-sanskrit-parallel-text-for-segment'.
+
+Returns nil when:
+  - SOURCE-FILE is nil / unreadable
+  - SEG-ID has no matching `**** Segment SEG-ID' heading
+
+The `:current-sanskrit' value is nil when the segment has no
+`**** Sanskrit' sibling yet (legacy or fresh document).  The
+realign workflow treats nil current-sanskrit as a fill, not a
+change."
+  (when (and source-file
+             (stringp source-file)
+             (file-exists-p source-file)
+             (integerp seg-id))
+    (with-temp-buffer
+      (insert-file-contents source-file)
+      (org-mode)
+      (goto-char (point-min))
+      (when (re-search-forward
+             (format "^\\*\\*\\*\\* Segment %d[ \t]*$" seg-id) nil t)
+        (let* ((tibetan (tibetan-org-get-segment-text))
+               (sanskrit-plist
+                (condition-case nil
+                    (tibetan-sanskrit-parallel-text-for-segment)
+                  (error nil)))
+               (current-sanskrit
+                (and sanskrit-plist
+                     (or (plist-get sanskrit-plist :iast)
+                         (plist-get sanskrit-plist :devanagari)))))
+          (when tibetan
+            (list :tibetan tibetan
+                  :current-sanskrit current-sanskrit)))))))
+
 (provide 'tibetan-sanskrit-parallel)
 ;;; tibetan-sanskrit-parallel.el ends here
