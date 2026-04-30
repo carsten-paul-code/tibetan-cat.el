@@ -127,6 +127,12 @@
 ;; Three-section Claude integration (Translation / Grammar / Context)
 (condition-case nil (require 'tibetan-analysis-claude-sections-test) (error nil))
 
+;; Sanskrit-side Claude pipeline (Phase 2 of two-language-parallel-analysis)
+(condition-case nil (require 'tibetan-analysis-sanskrit-test) (error nil))
+
+;; Combined-synthesis Claude pipeline (Phase 4 of two-language-parallel-analysis)
+(condition-case nil (require 'tibetan-analysis-combined-test) (error nil))
+
 ;; Inline segment → Org heading migration
 (condition-case nil (require 'tibetan-segment-migrate-test) (error nil))
 

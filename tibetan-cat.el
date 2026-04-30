@@ -157,6 +157,8 @@
 
 (require 'tibetan-claude-queue)        ; Throttled Claude request queue (concurrency cap + 429 retry)
 (require 'tibetan-analysis-persist)    ; Persistent segment analysis (C-c u A / C-c u R)
+(require 'tibetan-analysis-sanskrit nil t)  ; Sanskrit-side Claude pipeline (Phase 2)
+(require 'tibetan-analysis-combined nil t)  ; Combined-synthesis Claude pipeline (Phase 4)
 (require 'tibetan-analysis-combine)    ; Combined per-document analysis (C-c u C)
 (require 'tibetan-sentence-persist)    ; Persistent sentence analysis (C-c s A / C-c s R / C-c s r)
 (require 'tibetan-compound-analysis)   ; Persistent compound analysis (C-c v A / C-c v R)
