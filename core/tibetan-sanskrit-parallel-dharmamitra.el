@@ -157,6 +157,14 @@ Reason' schema parsed by
    "remarks):\n\n"
    "## Choice\n"
    "<single integer: the rank number of the correct candidate>\n\n"
+   "## Clause\n"
+   "<EXACT VERBATIM text of the clause(s) within the chosen "
+   "candidate that parallel the Tibetan — copy character-for-"
+   "character from the candidate, do not paraphrase, do not "
+   "include surrounding context.  When the candidate is a multi-"
+   "line śāstric chunk containing title / table of contents / "
+   "headings unrelated to the Tibetan segment, output ONLY the "
+   "lines that translate the Tibetan>\n\n"
    "## Reason\n"
    "<one or two sentences explaining the lexical / grammatical "
    "match>\n"))
@@ -174,11 +182,17 @@ When parsing succeeds, returns the plist; the calling
 `claude-pick' uses it to look up the matching candidate."
   (when (and (stringp response)
              (not (string-empty-p response)))
-    (let (rank reason)
+    (let (rank clause reason)
       (when (string-match
              "## Choice[ \t]*\n[ \t]*\\([0-9]+\\)[ \t]*"
              response)
         (setq rank (string-to-number (match-string 1 response))))
+      (when (string-match
+             "## Clause[ \t]*\n\\(\\(?:.\\|\n\\)+?\\)\\(?:\n##\\|\\'\\)"
+             response)
+        (let ((extracted (string-trim (match-string 1 response))))
+          (unless (string-empty-p extracted)
+            (setq clause extracted))))
       (when (string-match
              "## Reason[ \t]*\n\\(\\(?:.\\|\n\\)+?\\)\\(?:\n##\\|\\'\\)"
              response)
@@ -187,6 +201,7 @@ When parsing succeeds, returns the plist; the calling
                  (>= rank 1)
                  (<= rank (length candidates)))
         (list :chosen-rank rank
+              :chosen-clause clause
               :reason (or reason ""))))))
 
 (defun tibetan-sanskrit-parallel-dm--ask-claude-sync (prompt)
@@ -254,6 +269,7 @@ calling Claude (no disambiguation needed)."
                         (tibetan-sanskrit-parallel-dm--parse-claude-pick-response
                          response candidates)))
            (chosen-rank (or (plist-get parsed :chosen-rank) 1))
+           (clause (and parsed (plist-get parsed :chosen-clause)))
            (reason
             (cond
              (parsed (plist-get parsed :reason))
@@ -265,6 +281,7 @@ calling Claude (no disambiguation needed)."
       (when chosen
         (list :chosen-id (plist-get chosen :id)
               :chosen-text (plist-get chosen :text)
+              :chosen-clause clause
               :chosen-rank (plist-get chosen :rank)
               :reason (or reason "")))))))
 
@@ -320,8 +337,22 @@ Status values:
                      failed, or no DM_SANSKRIT_SOURCE configured)
 
 Pure function — no I/O.  The caller (the document walker)
-handles I/O around it."
-  (let* ((proposed (and pick (plist-get pick :chosen-text)))
+handles I/O around it.
+
+Phase 8 (2026-04-30):  the `:proposed-sanskrit' value is the
+extracted matching clause from `:chosen-clause' when present
+and non-empty;  otherwise it falls back to the full candidate
+text from `:chosen-text'.  This fixes the granularity issue
+where DM corpus segments are coarser than Tibetan segments —
+Claude extracts just the line(s) that parallel the Tibetan
+instead of the whole multi-line corpus chunk."
+  (let* ((clause (and pick (plist-get pick :chosen-clause)))
+         (proposed (cond
+                    ((and pick clause (stringp clause)
+                          (not (string-empty-p (string-trim clause))))
+                     clause)
+                    (pick (plist-get pick :chosen-text))
+                    (t nil)))
          (cur-norm (tibetan-sanskrit-parallel-dm--normalise-whitespace
                     current-sanskrit))
          (prop-norm (tibetan-sanskrit-parallel-dm--normalise-whitespace

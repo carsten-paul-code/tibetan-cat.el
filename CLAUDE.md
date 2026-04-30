@@ -218,7 +218,7 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-04-30): **1696 tests, 1695 expected, 0 unexpected
+Current state (2026-04-30): **1706 tests, 1705 expected, 0 unexpected
 failures, 1 intentional skip (compound-analysis-callable).**  Carsten
 runs this after every change and expects it to stay green.
 
@@ -666,22 +666,36 @@ Phases:
 6. `31ad7dd` — First design doc + CLAUDE.md + first live test
    on three gotrapatala segments.
 
-7. `(this commit)` — **Architectural correction.**  The
-   source-side writer was retired.  Live test on segment 5
-   showed that DM segment granularity is coarser than Tibetan
-   segment granularity (a 1-line uddāna verse line received a
-   10-line full-chapter-opening replacement).  More
-   fundamentally, modifying the user's source from an analysis
-   command violates CLAUDE.md §6.  New behaviour: apply mode
-   writes to the per-segment analysis file (seg-NNN.org) as a
-   top-level `* Sanskrit (DharmaMitra)` section.  Source file
-   is NEVER touched (regression-tested).  The new section
-   carries DM_SEGMENTNR / DM_RANK / CLAUDE_REASON /
-   LAST_REALIGN in its property drawer + the proposed Sanskrit
-   in its body.  Top-level placement means it survives
-   reanalysis naturally without preserve-list changes.
+7. `9c12060` — **Architectural correction.**  The source-side
+   writer was retired.  Live test on segment 5 showed that DM
+   segment granularity is coarser than Tibetan segment
+   granularity (a 1-line uddāna verse line received a 10-line
+   full-chapter-opening replacement).  More fundamentally,
+   modifying the user's source from an analysis command
+   violates CLAUDE.md §6.  New behaviour: apply mode writes to
+   the per-segment analysis file (seg-NNN.org) as a top-level
+   `* Sanskrit (DharmaMitra)` section.  Source file is NEVER
+   touched (regression-tested).  The new section carries
+   DM_SEGMENTNR / DM_RANK / CLAUDE_REASON / LAST_REALIGN in
+   its property drawer + the proposed Sanskrit in its body.
+   Top-level placement means it survives reanalysis naturally
+   without preserve-list changes.
 
-Tests: 79 ERT specs across
+8. `(this commit)` — **Clause extraction polish.**  Phase 7
+   wrote the FULL multi-line DM candidate text to the analysis
+   file, addressing the source-write violation but leaving the
+   granularity mismatch unfixed.  Phase 8 closes the gap:
+   Claude's pick prompt schema gains a `## Clause' section;
+   parser captures `:chosen-clause' alongside `:chosen-rank' /
+   `:reason';  pick output plist carries `:chosen-clause'
+   (full `:chosen-text' retained for provenance);
+   `--build-proposal' uses `:chosen-clause' for
+   `:proposed-sanskrit' when present + non-empty, falls back
+   to full text otherwise.  Result: the analysis file's
+   `* Sanskrit (DharmaMitra)' body contains just the matching
+   line(s), not the full corpus chunk.
+
+Tests: 89 ERT specs across
 `test/tibetan-dharmamitra-api-test.el` (19) and
 `test/tibetan-sanskrit-parallel-dharmamitra-test.el` (53).
 
@@ -931,7 +945,7 @@ folio alongside the text so the caller can thread it through.
 ## 9. First thing to do in a new session
 
 1. `make test` (or the batch command in §4). Confirm baseline green
-   (expect 1696 / 1695 expected / 0 unexpected / 1 skipped at 2026-04-30).
+   (expect 1706 / 1705 expected / 0 unexpected / 1 skipped at 2026-04-30).
 2. Skim `MEMORY.md` (auto-memory) — `working_discipline.md` is the
    baseline rule set; this file refines it for tibetan-cat.el.
 3. Skim `git log --oneline -20` for anything newer than §5.13 (this

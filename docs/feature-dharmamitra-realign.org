@@ -594,9 +594,39 @@ correct rank.
 | 4     | =4b54f7b= | Proposals + document walker + preview renderer                 |
 | 5     | =41689ac= | Writer + apply + interactive commands (source-write — retired) |
 | 6     | =31ad7dd= | Initial design doc + CLAUDE.md + first live test               |
-| 7     | (this commit) | Source writer retired; apply targets analysis files only |
+| 7     | =9c12060= | Source writer retired; apply targets analysis files only        |
+| 8     | (this commit) | Claude extracts matching clause from chosen DM candidate     |
 
-Suite: 1696 / 1695 expected / 0 unexpected / 1 intentional skip.
+Suite: 1706 / 1705 expected / 0 unexpected / 1 intentional skip.
+
+** Phase 8 — Clause extraction (2026-04-30)
+
+DM corpus segments are coarser than Tibetan segments;  a 1-line
+uddāna verse line on the Tibetan side maps to a 10-line corpus
+segment containing title / table-of-contents / verse.  Phase 7
+fixed WHERE the realign output lands;  Phase 8 fixes WHAT
+lands.
+
+Pipeline change is local and targeted:
+
+  - Prompt builder: schema gains a `## Clause' section asking
+    Claude to emit the EXACT verbatim text of the matching
+    clause(s) from the chosen candidate.
+  - Parser: extracts `:chosen-clause' alongside `:chosen-rank'
+    / `:reason'.  Backward compatible — when Claude omits
+    `## Clause' (legacy / quirky responses), `:chosen-clause'
+    is nil.
+  - `claude-pick' output plist gains `:chosen-clause'
+    (`:chosen-text' still carried for provenance).
+  - `--build-proposal' uses `:chosen-clause' for
+    `:proposed-sanskrit' when present + non-empty;  falls back
+    to full `:chosen-text' otherwise.
+
+Single-candidate fast path unchanged:  no Claude call, full
+candidate text used as the proposal.  This is the path most
+likely to retain a multi-line candidate, but in practice the
+single-candidate case is rare for our corpus (DM typically
+returns 2-5 hits per query).
 
 ---
 

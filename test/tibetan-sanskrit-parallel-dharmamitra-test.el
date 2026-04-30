@@ -1060,5 +1060,179 @@ unchanged before vs after."
   (should (fboundp 'tibetan-sanskrit-parallel-dm-realign-segment))
   (should (commandp 'tibetan-sanskrit-parallel-dm-realign-segment)))
 
+;; ============================================================================
+;; PHASE 8 — Claude extracts matching clause from chosen DM candidate
+;; ============================================================================
+;;
+;; Phase 7 fixed WHERE the realign output lands.  Phase 8 fixes
+;; WHAT lands.
+;;
+;; DM corpus segments are coarser than Tibetan segments.  A
+;; 1-line uddāna verse line on the Tibetan side may semantically
+;; match a multi-line corpus segment containing title + ToC +
+;; verse.  Phase 7's apply mode wrote that whole multi-line chunk;
+;; Phase 8 asks Claude not just "which candidate?" but also
+;; "which exact clause within that candidate parallels the
+;; Tibetan?".  Claude's verbatim clause becomes the
+;; `:proposed-sanskrit'; the full candidate text remains in
+;; `:chosen-text' for provenance.
+;;
+;; The pick prompt schema gains a `## Clause' section.  The
+;; parser captures it as `:chosen-clause' on the pick plist.
+;; `--build-proposal' uses `:chosen-clause' if present, else
+;; falls back to the full `:chosen-text' (preserves backward
+;; compatibility with the single-candidate fast path which
+;; doesn't call Claude).
+
+;; ----------------------------------------------------------------------------
+;; Prompt schema
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-skt-dm-build-pick-prompt-asks-for-clause ()
+  "Prompt instructs Claude to emit a `## Clause' section with the
+verbatim matching clause from the chosen candidate."
+  (let ((prompt (tibetan-sanskrit-parallel-dm--build-claude-pick-prompt
+                 "བདག་" (tibetan-skt-dm-test--three-candidates))))
+    (should (string-match-p "## Clause" prompt))
+    ;; Existing schema sections still present.
+    (should (string-match-p "## Choice" prompt))
+    (should (string-match-p "## Reason" prompt))))
+
+(ert-deftest tibetan-skt-dm-build-pick-prompt-instructs-verbatim ()
+  "Prompt makes clear the clause must be VERBATIM (not paraphrased)
+so the writer can reliably write it back."
+  (let ((prompt (tibetan-sanskrit-parallel-dm--build-claude-pick-prompt
+                 "བདག་" (tibetan-skt-dm-test--three-candidates))))
+    (should (string-match-p "verbatim\\|exact\\|EXACT" prompt))))
+
+;; ----------------------------------------------------------------------------
+;; Parser updates
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-skt-dm-parse-pick-response-extracts-chosen-clause ()
+  "Parser returns `:chosen-clause' alongside `:chosen-rank' / `:reason'."
+  (let* ((cands (tibetan-skt-dm-test--three-candidates))
+         (response (concat
+                    "## Choice\n2\n\n"
+                    "## Clause\n"
+                    "evamayaṃ prathamaścittotpādaḥ\n\n"
+                    "## Reason\n"
+                    "Matches the Tibetan focus on cittotpāda.\n"))
+         (parsed (tibetan-sanskrit-parallel-dm--parse-claude-pick-response
+                  response cands)))
+    (should parsed)
+    (should (= (plist-get parsed :chosen-rank) 2))
+    (should (equal (plist-get parsed :chosen-clause)
+                   "evamayaṃ prathamaścittotpādaḥ"))
+    (should (string-match-p "cittotpāda" (plist-get parsed :reason)))))
+
+(ert-deftest tibetan-skt-dm-parse-pick-response-clause-multi-line ()
+  "Multi-line `## Clause' body is captured intact (verse-form
+Sanskrit may legitimately span multiple lines)."
+  (let* ((cands (tibetan-skt-dm-test--three-candidates))
+         (response (concat
+                    "## Choice\n1\n\n"
+                    "## Clause\n"
+                    "line one\nline two\n\n"
+                    "## Reason\nfoo\n"))
+         (parsed (tibetan-sanskrit-parallel-dm--parse-claude-pick-response
+                  response cands)))
+    (should (equal (plist-get parsed :chosen-clause)
+                   "line one\nline two"))))
+
+(ert-deftest tibetan-skt-dm-parse-pick-response-handles-missing-clause ()
+  "Backward compatibility:  responses without `## Clause' still
+parse, with `:chosen-clause' as nil so callers can fall back to
+full candidate text."
+  (let* ((cands (tibetan-skt-dm-test--three-candidates))
+         (response "## Choice\n2\n\n## Reason\nVerb match.\n")
+         (parsed (tibetan-sanskrit-parallel-dm--parse-claude-pick-response
+                  response cands)))
+    (should parsed)
+    (should (= (plist-get parsed :chosen-rank) 2))
+    (should (null (plist-get parsed :chosen-clause)))))
+
+;; ----------------------------------------------------------------------------
+;; claude-pick output plist
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-skt-dm-claude-pick-includes-chosen-clause-when-extracted ()
+  "When Claude returns a `## Clause' section, the pick output's
+`:chosen-clause' is the extracted text."
+  (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-dm--ask-claude-sync)
+             (lambda (_p)
+               (concat "## Choice\n2\n\n"
+                       "## Clause\nevamayaṃ prathamaścittotpādaḥ\n\n"
+                       "## Reason\nx\n"))))
+    (let* ((cands (tibetan-skt-dm-test--three-candidates))
+           (out (tibetan-sanskrit-parallel-dm-claude-pick "བདག་" cands)))
+      (should (equal (plist-get out :chosen-clause)
+                     "evamayaṃ prathamaścittotpādaḥ"))
+      ;; Full :chosen-text still carried for provenance.
+      (should (equal (plist-get out :chosen-text)
+                     "evamayaṃ prathamaścittotpādaḥ"))
+      (should (= (plist-get out :chosen-rank) 2)))))
+
+(ert-deftest tibetan-skt-dm-claude-pick-clause-nil-when-claude-omits-it ()
+  "When Claude returns no `## Clause' (legacy / quirky responses),
+pick output's `:chosen-clause' is nil; callers fall back to
+full text."
+  (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-dm--ask-claude-sync)
+             (lambda (_p) "## Choice\n2\n\n## Reason\nx\n")))
+    (let* ((cands (tibetan-skt-dm-test--three-candidates))
+           (out (tibetan-sanskrit-parallel-dm-claude-pick "བདག་" cands)))
+      (should (null (plist-get out :chosen-clause)))
+      ;; Full text still present.
+      (should (equal (plist-get out :chosen-text)
+                     "evamayaṃ prathamaścittotpādaḥ")))))
+
+;; ----------------------------------------------------------------------------
+;; build-proposal uses :chosen-clause when present
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-skt-dm-build-proposal-uses-chosen-clause-when-present ()
+  "Phase 8: when pick plist carries `:chosen-clause', the
+proposal's `:proposed-sanskrit' is that clause — NOT the full
+multi-line `:chosen-text'.  This is how the granularity issue
+is fixed:  big DM chunk in `:chosen-text' for provenance,
+extracted clause in `:proposed-sanskrit' for the analysis-file
+write."
+  (let* ((pick (list :chosen-id "SA:64"
+                     :chosen-text "FULL multi-line\nchunk text"
+                     :chosen-clause "extracted matching clause"
+                     :chosen-rank 1
+                     :reason "x"))
+         (p (tibetan-sanskrit-parallel-dm--build-proposal
+             5 "བདག་" "old" pick)))
+    (should (equal (plist-get p :proposed-sanskrit)
+                   "extracted matching clause"))))
+
+(ert-deftest tibetan-skt-dm-build-proposal-falls-back-to-text-when-clause-missing ()
+  "Backward compat:  when `:chosen-clause' is nil (legacy
+single-candidate path, parser miss), use the full
+`:chosen-text'."
+  (let* ((pick (list :chosen-id "SA:64"
+                     :chosen-text "fallback full text"
+                     :chosen-clause nil
+                     :chosen-rank 1
+                     :reason "single-candidate"))
+         (p (tibetan-sanskrit-parallel-dm--build-proposal
+             5 "བདག་" "old" pick)))
+    (should (equal (plist-get p :proposed-sanskrit)
+                   "fallback full text"))))
+
+(ert-deftest tibetan-skt-dm-build-proposal-falls-back-when-clause-empty ()
+  "Empty-string `:chosen-clause' (Claude returned `## Clause'
+with no body) also falls back to full text."
+  (let* ((pick (list :chosen-id "SA:64"
+                     :chosen-text "fallback full text"
+                     :chosen-clause ""
+                     :chosen-rank 1
+                     :reason "x"))
+         (p (tibetan-sanskrit-parallel-dm--build-proposal
+             5 "བདག་" "old" pick)))
+    (should (equal (plist-get p :proposed-sanskrit)
+                   "fallback full text"))))
+
 (provide 'tibetan-sanskrit-parallel-dharmamitra-test)
 ;;; tibetan-sanskrit-parallel-dharmamitra-test.el ends here
