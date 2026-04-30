@@ -4111,28 +4111,77 @@ Works for top-level (* …) sections."
 ;; Three-call dispatcher (Phase 5 of two-language-parallel-analysis, 2026-04-30)
 ;; ----------------------------------------------------------------------------
 
-(defun tibetan-analysis--fire-parallel-mode-claude-calls
-    (tibetan-text source-file analysis-file)
-  "Fire the Sanskrit + Combined Claude calls for ANALYSIS-FILE.
+(defun tibetan-analysis--fire-parallel-claude-with-plist
+    (tibetan-text sanskrit-plist source-file analysis-file)
+  "Fire Sanskrit + Combined Claude calls with a PRE-RESOLVED plist.
 
-Fires when the source file is in parallel-mode AND the segment's
-`**** Sanskrit' sibling has non-placeholder content.  No-op
-otherwise (degrades to today's Tibetan-only behaviour gracefully).
+SANSKRIT-PLIST must already be the walker output (or a
+sentence-level aggregation thereof) for the relevant segment
+or sentence.  The Tibetan call is fired SEPARATELY by the
+caller; this helper only dispatches the parallel-mode-specific
+Sanskrit call (and chains Combined off its callback).
 
-Sanskrit call fires async; its callback chains the Combined call
-when both translations (Tibetan + Sanskrit) are present.  The
-Tibetan call is fired SEPARATELY by the caller — this helper
-handles only the parallel-mode-specific calls.
-
-Soft-coded: when
-`tibetan-analysis-sanskrit--request-translation' or
-`tibetan-analysis-combined--request-synthesis' is missing
-\(modules unloaded), the call is silently skipped.
+Soft-coded: when the Sanskrit / Combined modules aren't
+loaded, the call is a clean no-op.  When SANSKRIT-PLIST is
+nil — which the walker returns for non-parallel sources, no-
+sibling segments, OR placeholder bodies — also a no-op.
 
 Returns t when the Sanskrit call was dispatched, nil otherwise."
-  (when (and tibetan-text source-file analysis-file
-             (fboundp 'tibetan-sanskrit-parallel-text-for-segment-id)
+  (when (and tibetan-text sanskrit-plist analysis-file
              (fboundp 'tibetan-analysis-sanskrit--request-translation))
+    (condition-case err
+        (let ((tib tibetan-text)
+              (src source-file)
+              (ana analysis-file)
+              (skt sanskrit-plist))
+          (tibetan-analysis-sanskrit--request-translation
+           skt src ana
+           (lambda (skt-parsed)
+             ;; Sanskrit response landed.  Find the Tibetan
+             ;; translation body (either preserved from a prior run
+             ;; or freshly arrived from the parallel Tibetan call)
+             ;; and fire Combined when both are present.  Try the
+             ;; segment layout first (level-2 `** Claude Translation'
+             ;; under `* Auto-Analysis'), then sentence layout
+             ;; (level-3 `*** Claude Translation' under `* Provided
+             ;; Translations').
+             (when (fboundp 'tibetan-analysis-combined--request-synthesis)
+               (let* ((skt-trans
+                       (plist-get skt-parsed :translation))
+                      (tib-trans
+                       (and (fboundp 'tibetan-analysis--read-claude-section-body)
+                            (or
+                             (tibetan-analysis--read-claude-section-body
+                              ana "Claude Translation" 2)
+                             (tibetan-analysis--read-claude-section-body
+                              ana "Claude Translation" 3)))))
+                 (when (and skt-trans tib-trans)
+                   (condition-case e2
+                       (tibetan-analysis-combined--request-synthesis
+                        tib skt tib-trans skt-trans src ana)
+                     (error
+                      (message "Combined re-request failed for %s: %s"
+                               (file-name-nondirectory ana)
+                               (error-message-string e2)))))))))
+          t)
+      (error
+       (message "Sanskrit re-request failed for %s: %s"
+                (file-name-nondirectory analysis-file)
+                (error-message-string err))
+       nil))))
+
+(defun tibetan-analysis--fire-parallel-mode-claude-calls
+    (tibetan-text source-file analysis-file)
+  "Fire the Sanskrit + Combined Claude calls for ANALYSIS-FILE
+\(SEGMENT-level analysis file — looks up the segment walker
+plist by seg-id parsed from the filename).
+
+Thin wrapper around
+`tibetan-analysis--fire-parallel-claude-with-plist'.  Returns
+nil when the source isn't parallel-mode or the segment's
+Sanskrit sibling is a placeholder."
+  (when (and tibetan-text source-file analysis-file
+             (fboundp 'tibetan-sanskrit-parallel-text-for-segment-id))
     (let* ((seg-id (tibetan-analysis--seg-id-from-filename analysis-file))
            (skt-plist (and seg-id
                            (condition-case nil
@@ -4140,40 +4189,8 @@ Returns t when the Sanskrit call was dispatched, nil otherwise."
                                 source-file seg-id)
                              (error nil)))))
       (when skt-plist
-        (condition-case err
-            (let ((tib tibetan-text)
-                  (src source-file)
-                  (ana analysis-file)
-                  (skt skt-plist))
-              (tibetan-analysis-sanskrit--request-translation
-               skt src ana
-               (lambda (skt-parsed)
-                 ;; Sanskrit response landed.  If the Tibetan
-                 ;; translation is also present in the file (either
-                 ;; from a prior run or the freshly-fired Tibetan
-                 ;; call has completed by now), fire the Combined
-                 ;; synthesis call.
-                 (when (fboundp 'tibetan-analysis-combined--request-synthesis)
-                   (let* ((skt-trans
-                           (plist-get skt-parsed :translation))
-                          (tib-trans
-                           (and (fboundp 'tibetan-analysis--read-claude-section-body)
-                                (tibetan-analysis--read-claude-section-body
-                                 ana "Claude Translation" 2))))
-                     (when (and skt-trans tib-trans)
-                       (condition-case e2
-                           (tibetan-analysis-combined--request-synthesis
-                            tib skt tib-trans skt-trans src ana)
-                         (error
-                          (message "Combined re-request failed for %s: %s"
-                                   (file-name-nondirectory ana)
-                                   (error-message-string e2)))))))))
-              t)
-          (error
-           (message "Sanskrit re-request failed for %s: %s"
-                    (file-name-nondirectory analysis-file)
-                    (error-message-string err))
-           nil))))))
+        (tibetan-analysis--fire-parallel-claude-with-plist
+         tibetan-text skt-plist source-file analysis-file)))))
 
 (cl-defun tibetan-analysis-reanalyze-file
     (filepath &key source-file re-request-claude dry-run)

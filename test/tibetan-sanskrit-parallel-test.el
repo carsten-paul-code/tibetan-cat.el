@@ -429,6 +429,223 @@ DM-fire path, both of which run by-id and not by-cursor."
                   filepath 1)))))
 
 ;; ============================================================================
+;; SENTENCE-LEVEL AGGREGATION WALKER (sentence-wiring, 2026-04-30)
+;;
+;; `tibetan-sanskrit-parallel-text-for-sentence' walks each child
+;; segment of a sentence, fetches its Sanskrit plist via the by-id
+;; walker (which already filters placeholders), and returns a
+;; concatenated plist.  Used by the sentence-level dispatch
+;; (`tibetan-sentence-open-analysis' / `…-reanalyze' / batch
+;; create-all / headless `…-reanalyze-file') so a sent-NNN.org file
+;; receives ONE Sanskrit + Combined Claude call covering the whole
+;; sentence — granularity matching the sentence-scoped Tibetan call.
+;;
+;; Fixtures below carry `#+SOURCE_MODE: parallel-sanskrit' (the
+;; header is the gate for this walker; segment-id walker doesn't
+;; require it but the sentence-aggregate one does — by design,
+;; sentence files only exist for documents that already opted in).
+;; ============================================================================
+
+(defconst tibetan-sanskrit-parallel-test--sentence-two-segs-iast-buffer
+  "#+TITLE: Sentence walker — two real Sanskrits
+#+SOURCE_MODE: parallel-sanskrit
+* Tibetan Text
+** Section 1
+*** Sentence 1
+**** Segment 1
+ཡང་གཞན་ཡང་འདི་ལྟ་སྟེ།
+
+**** Sanskrit
+yathā vā punaḥ kaścid evam āha
+
+**** Working Translation
+
+**** Segment 2
+ཁོ་ནས་སྨྲས་པ།
+
+**** Sanskrit
+sa āha
+
+**** Working Translation
+"
+  "Two segments belonging to the same sentence; both have non-
+placeholder IAST Sanskrit.  Aggregator must concatenate both
+IAST lines (newline-separated) and return :script-source as
+`iast-line' (no Devanagari present).")
+
+(defconst tibetan-sanskrit-parallel-test--sentence-mixed-real-and-placeholder-buffer
+  "#+TITLE: Sentence walker — mixed real/placeholder
+#+SOURCE_MODE: parallel-sanskrit
+* Tibetan Text
+** Section 1
+*** Sentence 1
+**** Segment 1
+སྡོམ་ལ།
+
+**** Sanskrit
+[Sanskrit alignment pending — awaiting class-time alignment]
+
+**** Working Translation
+
+**** Segment 2
+ཁོ་ནས་སྨྲས་པ།
+
+**** Sanskrit
+sa āha
+
+**** Working Translation
+"
+  "Two segments; first has placeholder Sanskrit, second has real.
+Aggregator must skip the placeholder and return only seg 2's
+IAST.")
+
+(defconst tibetan-sanskrit-parallel-test--sentence-all-placeholder-buffer
+  "#+TITLE: Sentence walker — all placeholder
+#+SOURCE_MODE: parallel-sanskrit
+* Tibetan Text
+** Section 1
+*** Sentence 1
+**** Segment 1
+སྡོམ་ལ།
+
+**** Sanskrit
+[Sanskrit alignment pending — awaiting alignment]
+
+**** Working Translation
+
+**** Segment 2
+གཞི་དང་རྟགས།
+
+**** Sanskrit
+[Sanskrit alignment pending — awaiting alignment]
+
+**** Working Translation
+"
+  "Two segments; both placeholder.  Aggregator must return nil so
+the sentence-level dispatcher fires no Sanskrit/Combined call.")
+
+(defconst tibetan-sanskrit-parallel-test--sentence-with-devanagari-buffer
+  "#+TITLE: Sentence walker — IAST + Devanagari
+#+SOURCE_MODE: parallel-sanskrit
+* Tibetan Text
+** Section 1
+*** Sentence 1
+**** Segment 1
+ཁྱོད་ཀྱིས་གསུངས།
+
+**** Sanskrit
+tvayā uktam
+त्वया उक्तम्
+
+**** Working Translation
+
+**** Segment 2
+དེ་ནི་བདེན་ནོ།
+
+**** Sanskrit
+tat satyam
+तत् सत्यम्
+
+**** Working Translation
+"
+  "Two segments, both with IAST + Devanagari.  Aggregator must
+concatenate both per script and report :script-source as
+`iast-and-devanagari'.")
+
+(defconst tibetan-sanskrit-parallel-test--sentence-non-parallel-buffer
+  "#+TITLE: Sentence walker — non-parallel doc
+* Tibetan Text
+** Section 1
+*** Sentence 1
+**** Segment 1
+ཡང་གཞན་ཡང་།
+
+**** Sanskrit
+yathā vā punaḥ
+
+**** Working Translation
+"
+  "Doc lacks `#+SOURCE_MODE: parallel-sanskrit'.  Even with a real
+Sanskrit sibling, the aggregator must return nil — sentence-
+level wiring is gated on the header just like every other
+parallel-mode entry point.")
+
+(ert-deftest tibetan-sanskrit-parallel-text-for-sentence-aggregates-two-iast ()
+  "Two child segments with non-placeholder IAST Sanskrit; aggregator
+returns plist with :iast = both lines newline-joined, :devanagari
+nil, :script-source `iast-line'."
+  (tibetan-sanskrit-parallel-test--with-temp-source-file
+   tibetan-sanskrit-parallel-test--sentence-two-segs-iast-buffer
+   (let ((p (tibetan-sanskrit-parallel-text-for-sentence
+             filepath '(1 2))))
+     (should p)
+     (should (string-match-p "yathā vā punaḥ kaścid evam āha"
+                             (plist-get p :iast)))
+     (should (string-match-p "sa āha" (plist-get p :iast)))
+     (should (null (plist-get p :devanagari)))
+     (should (eq (plist-get p :script-source) 'iast-line)))))
+
+(ert-deftest tibetan-sanskrit-parallel-text-for-sentence-skips-placeholder-children ()
+  "First child has placeholder Sanskrit, second has real.  Aggregator
+must skip the placeholder (relying on the by-id walker's existing
+placeholder filter) and return only seg 2's content."
+  (tibetan-sanskrit-parallel-test--with-temp-source-file
+   tibetan-sanskrit-parallel-test--sentence-mixed-real-and-placeholder-buffer
+   (let ((p (tibetan-sanskrit-parallel-text-for-sentence
+             filepath '(1 2))))
+     (should p)
+     (should (equal (plist-get p :iast) "sa āha"))
+     (should-not (string-match-p "alignment pending"
+                                 (plist-get p :iast))))))
+
+(ert-deftest tibetan-sanskrit-parallel-text-for-sentence-nil-when-all-placeholder ()
+  "Every child segment is placeholder; aggregator returns nil so
+the sentence dispatcher knows to skip Sanskrit + Combined calls
+entirely (mirrors segment-level placeholder behaviour)."
+  (tibetan-sanskrit-parallel-test--with-temp-source-file
+   tibetan-sanskrit-parallel-test--sentence-all-placeholder-buffer
+   (should (null (tibetan-sanskrit-parallel-text-for-sentence
+                  filepath '(1 2))))))
+
+(ert-deftest tibetan-sanskrit-parallel-text-for-sentence-nil-when-non-parallel ()
+  "Non-parallel doc (no `#+SOURCE_MODE: parallel-sanskrit' header):
+aggregator returns nil even when child segments have real
+Sanskrit content — the gate matches every other parallel-mode
+entry point."
+  (tibetan-sanskrit-parallel-test--with-temp-source-file
+   tibetan-sanskrit-parallel-test--sentence-non-parallel-buffer
+   (should (null (tibetan-sanskrit-parallel-text-for-sentence
+                  filepath '(1))))))
+
+(ert-deftest tibetan-sanskrit-parallel-text-for-sentence-nil-when-empty-seg-ids ()
+  "Empty SEG-IDS list (degenerate caller); aggregator returns nil
+without errors."
+  (tibetan-sanskrit-parallel-test--with-temp-source-file
+   tibetan-sanskrit-parallel-test--sentence-two-segs-iast-buffer
+   (should (null (tibetan-sanskrit-parallel-text-for-sentence
+                  filepath '())))))
+
+(ert-deftest tibetan-sanskrit-parallel-text-for-sentence-nil-when-nil-source-file ()
+  "Nil SOURCE-FILE; aggregator returns nil without errors."
+  (should (null (tibetan-sanskrit-parallel-text-for-sentence
+                 nil '(1 2)))))
+
+(ert-deftest tibetan-sanskrit-parallel-text-for-sentence-aggregates-devanagari ()
+  "Both child segments carry IAST + Devanagari.  Aggregator
+concatenates per script (not interleaved) and reports
+:script-source as `iast-and-devanagari'."
+  (tibetan-sanskrit-parallel-test--with-temp-source-file
+   tibetan-sanskrit-parallel-test--sentence-with-devanagari-buffer
+   (let ((p (tibetan-sanskrit-parallel-text-for-sentence
+             filepath '(1 2))))
+     (should p)
+     (should (string-match-p "tvayā uktam" (plist-get p :iast)))
+     (should (string-match-p "tat satyam" (plist-get p :iast)))
+     (should (string-match-p "त्वया उक्तम्" (plist-get p :devanagari)))
+     (should (string-match-p "तत् सत्यम्" (plist-get p :devanagari)))
+     (should (eq (plist-get p :script-source) 'iast-and-devanagari)))))
+
+;; ============================================================================
 ;; RESET SANSKRIT-SIDE SECTIONS (alignment-fix work, 2026-04-30)
 ;;
 ;; When the source file's Sanskrit alignment changes structurally

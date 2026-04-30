@@ -330,6 +330,73 @@ in `tibetan-analysis--render-sanskrit-source' (Phase 2)."
     (tibetan-sanskrit-parallel-text-for-segment-id source-file seg-id)))
 
 ;; ----------------------------------------------------------------------------
+;; Sentence-level aggregation walker (sentence wiring, 2026-04-30)
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-sanskrit-parallel-text-for-sentence (source-file seg-ids)
+  "Return an aggregated Sanskrit plist for a SENTENCE in SOURCE-FILE.
+
+SEG-IDS is a list of integer segment ids that constitute the
+sentence.  Walks each child segment, collects its Sanskrit
+plist via `tibetan-sanskrit-parallel-text-for-segment-id'
+\(which already filters out placeholder bodies — see
+`tibetan-sanskrit-parallel--placeholder-text-p').  Concatenates
+the surviving IAST lines (separated by blank lines) and the
+surviving Devanagari lines (same).
+
+Returns:
+  - `(:iast CONCAT-IAST :devanagari CONCAT-DEV-or-nil
+     :script-source SYM)'  when at least one child segment has
+    real (non-placeholder) Sanskrit content.
+  - nil when SOURCE-FILE is non-parallel, when SEG-IDS is empty,
+    or when every child segment's Sanskrit is missing /
+    placeholder.
+
+Used by the sentence-level dispatch (sent-NNN.org
+reanalyse paths) to fire ONE Sanskrit Claude call covering the
+whole sentence — granularity matching the sentence-scoped
+Tibetan analysis.
+
+Devanagari aggregation rule: if ANY child segment has
+Devanagari, the aggregated `:devanagari' is the concatenation
+of those that have it (segments without Devanagari contribute
+nothing).  When NO child has Devanagari, `:devanagari' is nil
+and `:script-source' is `iast-line'.
+
+Mode-gated:  returns nil when SOURCE-FILE lacks
+`#+SOURCE_MODE: parallel-sanskrit'.  Same gate as
+`tibetan-sanskrit-parallel-plist-for-segment-id'."
+  (when (and source-file
+             (listp seg-ids) seg-ids
+             (tibetan-cat--source-mode-parallel-p source-file))
+    (let (iast-lines dev-lines)
+      (dolist (seg-id seg-ids)
+        (when (integerp seg-id)
+          (let ((p (condition-case nil
+                       (tibetan-sanskrit-parallel-text-for-segment-id
+                        source-file seg-id)
+                     (error nil))))
+            (when p
+              (let ((iast (plist-get p :iast))
+                    (dev  (plist-get p :devanagari)))
+                (when (and iast (stringp iast)
+                           (not (string-empty-p (string-trim iast))))
+                  (push iast iast-lines))
+                (when (and dev (stringp dev)
+                           (not (string-empty-p (string-trim dev))))
+                  (push dev dev-lines)))))))
+      (when iast-lines
+        (let ((iast (mapconcat #'identity (nreverse iast-lines) "\n"))
+              (dev  (and dev-lines
+                         (mapconcat #'identity (nreverse dev-lines)
+                                    "\n"))))
+          (list :iast iast
+                :devanagari dev
+                :script-source (if dev
+                                   'iast-and-devanagari
+                                 'iast-line)))))))
+
+;; ----------------------------------------------------------------------------
 ;; Source-mode header management (Phase 5, 2026-04-27)
 ;; ----------------------------------------------------------------------------
 ;;

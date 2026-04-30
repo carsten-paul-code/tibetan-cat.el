@@ -1098,7 +1098,25 @@ source buffer must visit a file"))
               (tibetan-sentence--request-claude
                tib-text seg-nums newpath source-file)
             (error (message "Sentence Claude skipped: %s"
-                            (error-message-string err))))))))))
+                            (error-message-string err))))
+          ;; Sentence-level wiring of two-language-parallel-analysis
+          ;; (2026-04-30): in parallel mode, also fire Sanskrit +
+          ;; Combined for the new sentence file.  No-op when the
+          ;; sentence's child segments lack real Sanskrit content.
+          (when (and (fboundp 'tibetan-sanskrit-parallel-text-for-sentence)
+                     (fboundp 'tibetan-analysis--fire-parallel-claude-with-plist))
+            (let ((skt-plist
+                   (condition-case nil
+                       (tibetan-sanskrit-parallel-text-for-sentence
+                        source-file seg-nums)
+                     (error nil))))
+              (when skt-plist
+                (condition-case e2
+                    (tibetan-analysis--fire-parallel-claude-with-plist
+                     tib-text skt-plist source-file newpath)
+                  (error (message
+                          "Sentence Sanskrit/Combined fire skipped: %s"
+                          (error-message-string e2)))))))))))))
 
 ;;;###autoload
 (defun tibetan-sentence-reanalyze ()
@@ -1133,7 +1151,25 @@ called with a prefix argument."
               (tibetan-sentence--request-claude
                tib-text seg-nums filepath source-file)
             (error (message "Sentence Claude skipped: %s"
-                            (error-message-string err)))))))))
+                            (error-message-string err))))
+          ;; Sentence-level wiring of two-language-parallel-analysis
+          ;; (2026-04-30): also fire Sanskrit + Combined when in
+          ;; parallel mode AND the sentence aggregates real (non-
+          ;; placeholder) Sanskrit from at least one child segment.
+          (when (and (fboundp 'tibetan-sanskrit-parallel-text-for-sentence)
+                     (fboundp 'tibetan-analysis--fire-parallel-claude-with-plist))
+            (let ((skt-plist
+                   (condition-case nil
+                       (tibetan-sanskrit-parallel-text-for-sentence
+                        source-file seg-nums)
+                     (error nil))))
+              (when skt-plist
+                (condition-case e2
+                    (tibetan-analysis--fire-parallel-claude-with-plist
+                     tib-text skt-plist source-file filepath)
+                  (error (message
+                          "Sentence Sanskrit/Combined fire skipped: %s"
+                          (error-message-string e2))))))))))))
 
 (cl-defun tibetan-sentence-reanalyze-file
     (filepath &key source-file re-request-claude dry-run)
@@ -1180,6 +1216,29 @@ Returns plist:
                 (error (message "Sentence Claude re-request failed for %s: %s"
                                 (file-name-nondirectory filepath)
                                 (error-message-string e2)))))
+            ;; Sentence-level wiring of two-language-parallel-
+            ;; analysis (2026-04-30):  in parallel mode, also fire
+            ;; the sentence-level Sanskrit + (chained) Combined
+            ;; Claude calls.  Aggregates child-segment Sanskrit via
+            ;; `tibetan-sanskrit-parallel-text-for-sentence' (skips
+            ;; placeholders); no-op when no child has real Sanskrit
+            ;; or the source isn't parallel-mode.
+            (when (and re-request-claude
+                       (fboundp 'tibetan-sanskrit-parallel-text-for-sentence)
+                       (fboundp 'tibetan-analysis--fire-parallel-claude-with-plist))
+              (let ((skt-plist
+                     (condition-case nil
+                         (tibetan-sanskrit-parallel-text-for-sentence
+                          src seg-nums)
+                       (error nil))))
+                (when skt-plist
+                  (condition-case e3
+                      (tibetan-analysis--fire-parallel-claude-with-plist
+                       tib-text skt-plist src filepath)
+                    (error (message
+                            "Sentence Sanskrit/Combined fire failed for %s: %s"
+                            (file-name-nondirectory filepath)
+                            (error-message-string e3)))))))
             `(:file ,filepath :sent-id ,sent-id :ok t
                     :seg-nums ,seg-nums))
         (error
@@ -1441,7 +1500,28 @@ failures are swallowed to `message'."
                (error
                 (message "Sentence Claude request failed for %s: %s"
                          (file-name-nondirectory filepath)
-                         (error-message-string err))))))
+                         (error-message-string err))))
+             ;; Sentence-level wiring of two-language-parallel-
+             ;; analysis (2026-04-30): also fire Sanskrit + Combined
+             ;; in parallel mode.  Same dispatcher as segment-level
+             ;; reanalyse, but uses the sentence-level walker
+             ;; aggregator (`text-for-sentence') across the
+             ;; sentence's child segments.
+             (when (and (fboundp 'tibetan-sanskrit-parallel-text-for-sentence)
+                        (fboundp 'tibetan-analysis--fire-parallel-claude-with-plist))
+               (let ((skt-plist
+                      (condition-case nil
+                          (tibetan-sanskrit-parallel-text-for-sentence
+                           source-file seg-nums)
+                        (error nil))))
+                 (when skt-plist
+                   (condition-case e2
+                       (tibetan-analysis--fire-parallel-claude-with-plist
+                        tibetan skt-plist source-file filepath)
+                     (error (message
+                             "Sentence Sanskrit/Combined fire failed for %s: %s"
+                             (file-name-nondirectory filepath)
+                             (error-message-string e2)))))))))
           (setq delay (+ delay delay-step)))))))
 
 ;;;###autoload
