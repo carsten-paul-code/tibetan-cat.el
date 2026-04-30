@@ -67,9 +67,20 @@ srid=be-possible, \\='os=be-appropriate.")
 Entries produced from this set lack full case-frame data; they are
 rendered as minimal verb entries so Sentence Structure still shows them.")
 
-(defun tibetan-verb-detect--minimal-entry (word &optional meaning)
+(defun tibetan-verb-detect--minimal-entry (word &optional meaning source)
   "Minimal verb-entry alist for WORD when the Hill DB has no full record.
-Compatible with the `alist-get' consumers used throughout the analyzer."
+Compatible with the `alist-get' consumers used throughout the analyzer.
+
+SOURCE (a symbol) tags the classification path that produced this
+entry — `closed-set' for the curated minor-verb / modal /
+reporting sets, `vocab-fallback' for dictionary-gloss heuristic
+hits.  Renderers use this tag to filter low-confidence
+vocab-fallback entries (e.g. uddāna-verse `རྣམས' / `སྡོམ' that
+look verbal in Bialek but are actually non-verbs in context)
+from clause segmentation while keeping curated closed-set verbs
+that legitimately drive clauses (`གསོལ', `མཛད', `བྱུང', …).
+Defaults to `closed-set' for backward compatibility with callers
+that don't pass the arg yet."
   `((lemma . ,word)
     (meaning . ,(or meaning ""))
     (present_stem . ,word)
@@ -80,32 +91,78 @@ Compatible with the `alist-get' consumers used throughout the analyzer."
     (volitionality . "?")
     (case_frame . "?")
     (indigenous_class . "?")
-    (minimal . t)))
+    (minimal . t)
+    (source . ,(or source 'closed-set))))
+
+(defconst tibetan-verb-detect--non-verb-gloss-tokens-re
+  (concat "\\b\\("
+          "particle"
+          "\\|marker"
+          "\\|postposition"
+          "\\|nominali[sz]er"
+          "\\|enclitic"
+          "\\)\\b")
+  "Regexp matching tokens in a dictionary gloss that flag the entry as
+a non-verb regardless of any leading `to X' polysemy hit.
+
+Live test on gotrapatala.org seg-005 (the uddāna verse `སྡོམ་ལ་
+། གཞི་དང་རྟགས་དང་ཕྱོགས་རྣམས་དང་༎') showed the Bialek
+dictionary entries
+
+  rnams   → `to choke | plural marker'
+  dag     → `to bind; plural particle'
+
+driving false-positive verb classifications even though the
+SAME gloss labels the word a `marker' / `particle'.  When this
+regexp matches the gloss, `--vocab-says-verb-p' returns nil —
+the dictionary's own non-verb classification overrides the
+leading `to X' polysemy flattening.")
 
 (defun tibetan-verb-detect--vocab-says-verb-p (word)
   "Return the gloss string if `tibetan-vocab-lookup-detailed' for WORD
 looks like a verb (primary gloss starts with `to ', `pf.', `pres.',
-`fut.', `imp.', or contains the word `verb')."
+`fut.', `imp.', or contains the word `verb').
+
+Returns nil — overriding any leading `to X' hit — when the gloss
+also contains `particle' / `marker' / `postposition' /
+`nominaliser' / `enclitic' tokens.  In that case the dictionary
+itself is flagging the word as a non-verb and the leading `to X'
+is misleading polysemy-flattening from a multilingual TSV
+source (see
+`tibetan-verb-detect--non-verb-gloss-tokens-re')."
   (when (and word (fboundp 'tibetan-vocab-lookup-detailed))
     (let* ((entry (ignore-errors (tibetan-vocab-lookup-detailed word)))
            (text (and entry (or (plist-get entry :primary)
                                 (plist-get entry :detailed)))))
       (when (and text (stringp text))
         (let ((case-fold-search t))
-          (when (or (string-match-p "\\`[ \t\n]*to[ \t]" text)
-                    (string-match-p "\\`[ \t\n]*\\(pf\\|pres\\|fut\\|ft\\|imp\\)\\."
-                                    text)
-                    (string-match-p "\\`[ \t\n]*verb:" text)
-                    (string-match-p "\\b[Vv]erb\\b" text)
-                    ;; Passive / resultative English glosses common in
-                    ;; Tibetan dictionaries: "be born", "be full",
-                    ;; "become X", "is/was V-ed".  Require a second word
-                    ;; after `be'/`become' so bare "be" adjectives like
-                    ;; "be good" still don't trip (conservative: also
-                    ;; require the second word to start lowercase, which
-                    ;; filters proper-noun glosses).
-                    (string-match-p
-                     "\\`[ \t\n]*be\\(come\\)?[ \t]+[a-z]" text))
+          (when (and
+                 ;; Looks verbal — leading `to X', `pf./pres./fut./imp.',
+                 ;; explicit `verb:' tag, or passive `be X' / `become X'.
+                 (or (string-match-p "\\`[ \t\n]*to[ \t]" text)
+                     (string-match-p
+                      "\\`[ \t\n]*\\(pf\\|pres\\|fut\\|ft\\|imp\\)\\."
+                      text)
+                     (string-match-p "\\`[ \t\n]*verb:" text)
+                     (string-match-p "\\b[Vv]erb\\b" text)
+                     ;; Passive / resultative English glosses common in
+                     ;; Tibetan dictionaries: "be born", "be full",
+                     ;; "become X", "is/was V-ed".  Require a second word
+                     ;; after `be'/`become' so bare "be" adjectives like
+                     ;; "be good" still don't trip (conservative: also
+                     ;; require the second word to start lowercase, which
+                     ;; filters proper-noun glosses).
+                     (string-match-p
+                      "\\`[ \t\n]*be\\(come\\)?[ \t]+[a-z]" text))
+                 ;; …AND the same gloss does NOT label the word a non-
+                 ;; verb (particle, marker, postposition, nominaliser,
+                 ;; enclitic).  This catches the rnams / dag false
+                 ;; positives where Bialek's TSV format collapses
+                 ;; multiple senses into a single `to X | NON-VERB'
+                 ;; line.
+                 (not (string-match-p
+                       tibetan-verb-detect--non-verb-gloss-tokens-re
+                       text)))
             text))))))
 
 (defconst tibetan-verb-detect--nominalizer-set
@@ -122,8 +179,13 @@ glosses (P1: seg-4 regression; see test file).")
 Search order:
  0. Reject if CANDIDATE is a bare nominaliser/enclitic particle.
  1. Hill 2010 DB (full record via `tibetan-verb-lookup').
- 2. Closed minor-verb / modal / reporting set (minimal record).
- 3. Vocabulary dictionary — only when the gloss looks verbal."
+ 2. Closed minor-verb / modal / reporting set (minimal record,
+    tagged `(source . closed-set)').
+ 3. Vocabulary dictionary — only when the gloss looks verbal AND
+    doesn't flag the word a non-verb via
+    `tibetan-verb-detect--non-verb-gloss-tokens-re'.  Tagged
+    `(source . vocab-fallback)' so renderers can filter low-
+    confidence hits from clause segmentation."
   (when (and candidate (stringp candidate) (not (string-empty-p candidate)))
     (let ((c (replace-regexp-in-string "[།༎༔ \t]+\\'" "" (string-trim candidate))))
       (and
@@ -144,9 +206,11 @@ Search order:
                    (gloss (and entry
                                (or (plist-get entry :primary)
                                    (plist-get entry :detailed)))))
-              (tibetan-verb-detect--minimal-entry c gloss)))
+              (tibetan-verb-detect--minimal-entry c gloss 'closed-set)))
        (let ((gloss (tibetan-verb-detect--vocab-says-verb-p c)))
-         (and gloss (tibetan-verb-detect--minimal-entry c gloss))))))))
+         (and gloss
+              (tibetan-verb-detect--minimal-entry
+               c gloss 'vocab-fallback))))))))
 
 (defun tibetan-verb-detect--strip-negation (word)
   "If WORD starts with `མ་' or `མི་' followed by at least one more syllable,

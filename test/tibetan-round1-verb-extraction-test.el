@@ -271,5 +271,141 @@ set so seg-14's `ཆང་གསོལ་ནས' resolves the converb head corre
     (should entry)
     (should (string= (alist-get 'lemma entry) "གསོལ"))))
 
+;; ============================================================================
+;; Marker / particle glosses with leading "to X" (uddāna-verse regression)
+;; ============================================================================
+;;
+;; Live test on gotrapatala.org seg-005 (the uddāna mnemonic verse
+;; `སྡོམ་ལ་། གཞི་དང་རྟགས་དང་ཕྱོགས་རྣམས་དང་༎') surfaced two false-
+;; positive verb classifications driving the Sentence Structure
+;; renderer:
+;;
+;;   `སྡོམ' [sdom]   — Bialek gloss `to fetter | bind; tie; fasten;
+;;                     vow; obligation; bring together; collect'
+;;   `རྣམས' [rnams]  — Bialek gloss `to choke | plural marker'
+;;
+;; Both fall through to `tibetan-verb-detect--vocab-says-verb-p',
+;; which fires on the leading `to X' without checking the rest of
+;; the gloss.  In the uddāna verse there is no finite verb at all
+;; (`Verb Classification (Hill 2010)' correctly says `[No Hill-DB
+;; verbs detected]'), so the user saw two analysis sections
+;; disagreeing about the same segment.
+;;
+;; Fix scope (this commit): tighten `--vocab-says-verb-p' to reject
+;; glosses that contain `particle' / `marker' / `postposition' /
+;; `nominali[sz]er' tokens — the dictionary itself is flagging the
+;; word as a non-verb, so the leading `to X' is misleading
+;; polysemy-flattening.  Tag minimal entries by source (`closed-set'
+;; vs `vocab-fallback') so the renderer can filter the latter from
+;; clause-segmentation input.
+
+(ert-deftest tibetan-round1-vocab-says-verb-p-rejects-plural-marker-gloss ()
+  "`--vocab-says-verb-p' rejects a gloss that contains `plural
+marker', `plural particle', or `plural postposition' anywhere —
+the dictionary's own non-verb classification overrides a
+leading `to X' polysemy hit."
+  (skip-unless (fboundp 'tibetan-verb-detect--vocab-says-verb-p))
+  (cl-letf (((symbol-function 'tibetan-vocab-lookup-detailed)
+             (lambda (_w) (list :primary "to choke | plural marker"
+                                :detailed nil))))
+    (should-not (tibetan-verb-detect--vocab-says-verb-p "རྣམས")))
+  (cl-letf (((symbol-function 'tibetan-vocab-lookup-detailed)
+             (lambda (_w) (list :primary "to bind; plural particle"
+                                :detailed nil))))
+    (should-not (tibetan-verb-detect--vocab-says-verb-p "དག")))
+  (cl-letf (((symbol-function 'tibetan-vocab-lookup-detailed)
+             (lambda (_w) (list :primary "to spread; plural postposition"
+                                :detailed nil))))
+    (should-not (tibetan-verb-detect--vocab-says-verb-p "ཚོ"))))
+
+(ert-deftest tibetan-round1-vocab-says-verb-p-rejects-nominaliser-gloss ()
+  "`--vocab-says-verb-p' rejects glosses that flag the word as a
+nominaliser — even a leading `to X' is no signal when the same
+gloss says `nominaliser'."
+  (skip-unless (fboundp 'tibetan-verb-detect--vocab-says-verb-p))
+  (cl-letf (((symbol-function 'tibetan-vocab-lookup-detailed)
+             (lambda (_w) (list :primary "to be; nominaliser"
+                                :detailed nil))))
+    (should-not (tibetan-verb-detect--vocab-says-verb-p "པ")))
+  (cl-letf (((symbol-function 'tibetan-vocab-lookup-detailed)
+             (lambda (_w) (list :primary "to be (vt.); nominalizer"
+                                :detailed nil))))
+    (should-not (tibetan-verb-detect--vocab-says-verb-p "བ"))))
+
+(ert-deftest tibetan-round1-vocab-says-verb-p-still-accepts-pure-verb ()
+  "Regression guard: the marker / nominaliser exclusion must NOT
+swallow glosses that are unambiguously verbal."
+  (skip-unless (fboundp 'tibetan-verb-detect--vocab-says-verb-p))
+  (cl-letf (((symbol-function 'tibetan-vocab-lookup-detailed)
+             (lambda (_w) (list :primary "to do, to make"
+                                :detailed nil))))
+    (should (tibetan-verb-detect--vocab-says-verb-p "བྱེད")))
+  (cl-letf (((symbol-function 'tibetan-vocab-lookup-detailed)
+             (lambda (_w) (list :primary "verb: to act volitionally"
+                                :detailed nil))))
+    (should (tibetan-verb-detect--vocab-says-verb-p "མཛད"))))
+
+(ert-deftest tibetan-round1-rnams-not-classified-as-verb ()
+  "`རྣམས' (plural particle) is never classified as a verb, even
+with the live tibetan-english.tsv Bialek gloss `to choke |
+plural marker'.  Live test: gotrapatala.org seg-005 uddāna
+verse showed `verb རྣམས` as a clause head — bug."
+  (skip-unless (fboundp 'tibetan-verb-detect--lookup))
+  (cl-letf (((symbol-function 'tibetan-vocab-lookup-detailed)
+             (lambda (_w) (list :primary "to choke | plural marker"
+                                :detailed nil))))
+    (should-not (tibetan-verb-detect--lookup "རྣམས"))))
+
+(ert-deftest tibetan-round1-uddana-verse-no-clause-structure ()
+  "End-to-end: the gotrapatala seg-005 uddāna mnemonic verse
+\(`སྡོམ་ལ་། གཞི་དང་རྟགས་དང་ཕྱོགས་རྣམས་དང་༎')) — which has no
+finite verb at all — produces NO `Clause N [main]' line in the
+rendered Sentence Structure.  Verb Classification's
+`[No Hill-DB verbs detected]' verdict and Sentence Structure's
+verdict are now consistent.
+
+Lock-down for the live-test bug spotted on 2026-04-30: the
+section disagreement (Verb Class said no verbs, Sentence
+Structure said `verb སྡོམ' / `verb རྣམས') is gone."
+  (skip-unless (fboundp 'tibetan-analysis--render-clause-structure))
+  (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
+  (skip-unless (fboundp 'tibetan-parse-enhanced))
+  (let* ((seg "སྡོམ་ལ་། གཞི་དང་རྟགས་དང་ཕྱོགས་རྣམས་དང་༎")
+         (parsed (tibetan-parse-enhanced seg))
+         (words (alist-get 'words parsed))
+         (mwu (alist-get 'multiword-units parsed))
+         (verbs (tibetan-extract-verbs-compound-aware seg words mwu))
+         (rendered (tibetan-analysis--render-clause-structure
+                    words verbs mwu)))
+    ;; Either no clauses at all (empty / `[No clause structure detected]')
+    ;; or — defensively — no clause lines mentioning sdom or rnams as
+    ;; the verb.  The looser check tolerates future tokenisation
+    ;; changes that might still find some clause but should never
+    ;; head one with sdom/rnams.
+    (should-not (string-match-p "verb སྡོམ"  rendered))
+    (should-not (string-match-p "verb རྣམས"  rendered))))
+
+(ert-deftest tibetan-round1-minimal-entry-tags-source ()
+  "`--minimal-entry' carries a `source' field identifying the
+classification path (`closed-set' for curated minor / modal /
+reporting verbs, `vocab-fallback' for dictionary-glossed
+fallback hits).  The renderer uses this tag to filter
+vocab-fallback hits from clause segmentation while keeping
+the curated closed-set verbs that drive real clauses."
+  (skip-unless (fboundp 'tibetan-verb-detect--minimal-entry))
+  ;; Closed-set path — `གསོལ' is in the curated minor-verb set.
+  (let ((entry (tibetan-verb-detect--lookup "གསོལ")))
+    (should entry)
+    (should (eq (alist-get 'source entry) 'closed-set)))
+  ;; Vocab-fallback path — stub a non-curated word with a verbal
+  ;; primary gloss.  The lookup should land in the vocab-fallback
+  ;; branch and tag the entry accordingly.
+  (cl-letf (((symbol-function 'tibetan-vocab-lookup-detailed)
+             (lambda (_w) (list :primary "to wander, to roam"
+                                :detailed nil))))
+    (let ((entry (tibetan-verb-detect--lookup "ཆོ")))
+      (when entry
+        (should (eq (alist-get 'source entry) 'vocab-fallback))))))
+
 (provide 'tibetan-round1-verb-extraction-test)
 ;;; tibetan-round1-verb-extraction-test.el ends here

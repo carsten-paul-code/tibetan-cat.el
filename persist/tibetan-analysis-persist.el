@@ -1251,8 +1251,23 @@ lock-step with the rest of the generated file."
   (if (not (and words verbs
                 (fboundp 'tibetan-analyze-round2)))
       ""
-    (let* ((r2 (condition-case nil
-                   (tibetan-analyze-round2 words verbs multiword-units)
+    ;; Uddāna-verse fix (2026-04-30): drop `vocab-fallback' minimal
+    ;; entries before clause segmentation.  These low-confidence
+    ;; hits — produced when Hill-DB has nothing and the dictionary
+    ;; gloss happens to start with `to X' — are how `སྡོམ' /
+    ;; `རྣམས' / similar non-verbs slipped in as clause heads while
+    ;; the user-visible Verb Classification block (which already
+    ;; filters minimal entries) correctly reported `[No Hill-DB
+    ;; verbs detected]'.  Curated closed-set minimal entries
+    ;; (`གསོལ', `མཛད', `བྱུང', …) are KEPT — they legitimately
+    ;; drive clauses.
+    (let* ((reliable-verbs
+            (cl-remove-if (lambda (v)
+                            (eq (alist-get 'source v) 'vocab-fallback))
+                          verbs))
+           (r2 (condition-case nil
+                   (tibetan-analyze-round2
+                    words reliable-verbs multiword-units)
                  (error nil)))
            (clauses (alist-get 'clauses r2))
            (nps     (alist-get 'nps r2))
