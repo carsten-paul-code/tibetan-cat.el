@@ -624,6 +624,10 @@ differences."
       (should (string-match-p "TWO translation sections" system))
       ;; New schema heading appears verbatim so Claude knows to emit it.
       (should (string-match-p "## Translation (Sanskrit)" system))
+      ;; Phase D — Combined-synthesis section heading + the third-
+      ;; translation directive ("third translation section").
+      (should (string-match-p "## Translation (Combined)" system))
+      (should (string-match-p "third translation section" system))
       ;; Phase C — divergence directive present and gated on
       ;; "serious" differences (faithful renderings should not
       ;; trigger).
@@ -643,7 +647,9 @@ parallel-reading directive — today's behaviour preserved."
       (should-not (string-match-p "## Translation (Sanskrit)" system))
       ;; Phase C — divergence directive must also be gated on the
       ;; parallel-mode header.
-      (should-not (string-match-p "## Divergence" system)))))
+      (should-not (string-match-p "## Divergence" system))
+      ;; Phase D — Combined-synthesis directive likewise gated.
+      (should-not (string-match-p "## Translation (Combined)" system)))))
 
 (ert-deftest tibetan-claude-prompt-rejects-other-source-modes ()
   "Hypothetical `#+SOURCE_MODE: parallel-pali' (or any non-
@@ -742,6 +748,9 @@ in isolation (without building a full prompt)."
     (should (string-match-p "parallel Sanskrit-Tibetan reading" block))
     (should (string-match-p "TWO translation sections" block))
     (should (string-match-p "## Translation (Sanskrit)" block))
+    ;; Phase D — Combined synthesis directive caches with the rest.
+    (should (string-match-p "## Translation (Combined)" block))
+    (should (string-match-p "third translation section" block))
     ;; Phase C — divergence directive is part of the same constant
     ;; block (so it caches with the rest).
     (should (string-match-p "## Divergence" block))

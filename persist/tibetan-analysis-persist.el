@@ -2653,6 +2653,7 @@ nil, the subsection is omitted."
     "** Interlinear Gloss"
     "** Claude Translation"
     "** Claude Translation (Sanskrit)"
+    "** Claude Translation (Combined)"
     "** Claude Divergence"
     "** Grammar"
     "** Sentence Structure"
@@ -2679,6 +2680,13 @@ Sanskrit primary source, a sibling of the Tibetan-side
 `** Claude Translation'.  Same byte-identical-when-absent
 guarantee: the reorder pass only positions sections present in
 the buffer, so non-parallel files render unchanged.
+
+`** Claude Translation (Combined)' (Phase D of multi-translator-
+parallel-reading, 2026-04-30) is Claude's synthesis translation
+— a single justified reading drawing on both Sanskrit and
+Tibetan with surrounding context.  Sits between the two raw
+translations and the optional divergence note: reading order is
+Tibetan → Sanskrit → Combined synthesis → Divergence.
 
 `** Claude Divergence' (Phase C of multi-translator-parallel-
 reading, 2026-04-30) is Claude's optional flagged-divergence

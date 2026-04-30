@@ -1049,6 +1049,21 @@ compare them side-by-side to identify Sanskrit-Tibetan \
 divergences;  do not embed comparison commentary inside either \
 translation.
 
+You will ALSO produce a third translation section:
+
+  `## Translation (Combined)' — your best synthetic reading of \
+  the passage that draws on BOTH the Sanskrit (the canonical \
+  primary) and the Tibetan (the canonical secondary), informed \
+  by the surrounding context provided in this prompt (neighbour \
+  segments, document genre, Resources vocabulary).  When the two \
+  sources agree, follow the agreed reading.  When they diverge, \
+  pick whichever reading is better supported by the philological \
+  evidence and the doctrinal context, and ALWAYS prefer the \
+  Sanskrit when there is no compelling reason otherwise.  This \
+  is the translation a careful classroom reader would settle on \
+  after weighing both sources — not a paraphrase, not a fusion, \
+  but a justified single rendering.
+
 When — AND ONLY WHEN — there is a SERIOUS difference between the \
 Sanskrit and the Tibetan (the Tibetan translators glossed, \
 collapsed, expanded, reordered, or substituted in a way that \
@@ -1479,12 +1494,14 @@ failures are reported via `message' and the placeholder."
 (defun tibetan-analysis--parse-claude-sections (response)
   "Split RESPONSE on `## …' markdown headings.
 Returns a plist with keys
-`:translation', `:translation-sanskrit', `:vocabulary',
-`:grammar', `:particles', `:context', `:divergence'.
+`:translation', `:translation-sanskrit', `:translation-combined',
+`:vocabulary', `:grammar', `:particles', `:context', `:divergence'.
 
 Recognised headings:
   `## Translation'             → :translation
   `## Translation (Sanskrit)'  → :translation-sanskrit  (Phase B,
+                                multi-translator-parallel-reading)
+  `## Translation (Combined)'  → :translation-combined  (Phase D,
                                 multi-translator-parallel-reading)
   `## Divergence'              → :divergence            (Phase C,
                                 multi-translator-parallel-reading)
@@ -1500,17 +1517,19 @@ legacy single-translation responses.
 label' lines; parsing into structured tuples is downstream's job
 (`tibetan-analysis--parse-claude-particles').
 
-The `## Translation (Sanskrit)' variant must be matched FIRST in the
-alternation — otherwise the bare `Translation' branch would swallow
-the heading line up to the suffix and the parser would miss the
-variant entirely."
+The `## Translation (Sanskrit)' / `## Translation (Combined)'
+variants must be matched FIRST in the alternation — otherwise the
+bare `Translation' branch would swallow the heading line up to the
+suffix and the parser would miss the variants entirely."
   (let ((result (list :translation nil :translation-sanskrit nil
+                      :translation-combined nil
                       :vocabulary nil :grammar nil
                       :particles nil :context nil
                       :divergence nil))
-        ;; Order matters: the suffixed variant must precede the bare one.
+        ;; Order matters: the suffixed variants must precede the bare one.
         (re (concat "^## \\("
                     "Translation (Sanskrit)"
+                    "\\|Translation (Combined)"
                     "\\|Translation"
                     "\\|Vocabulary"
                     "\\|Grammar"
@@ -1558,14 +1577,17 @@ variant entirely."
   "Map a parsed `## …' HEADING-TOKEN to its plist key.
 Used by `tibetan-analysis--parse-claude-sections' to translate
 heading-text into the canonical plist key, which differs from a
-naive downcase for the `Translation (Sanskrit)' variant."
+naive downcase for the `Translation (Sanskrit)' /
+`Translation (Combined)' variants."
   (cond
    ((string= heading-token "Translation (Sanskrit)") :translation-sanskrit)
+   ((string= heading-token "Translation (Combined)") :translation-combined)
    (t (intern (format ":%s" (downcase heading-token))))))
 
 (defconst tibetan-analysis--claude-section-order
   '((:translation          "Claude Translation"             2)
     (:translation-sanskrit "Claude Translation (Sanskrit)"  2)
+    (:translation-combined "Claude Translation (Combined)"  2)
     (:divergence           "Claude Divergence"              2)
     (:vocabulary           "Claude Vocabulary"              3)
     (:grammar              "Claude Grammar"                 3)
@@ -1840,17 +1862,84 @@ called otherwise — non-parallel files are left byte-identical."
           (goto-char (point-max))
           (insert "\n** Claude Translation (Sanskrit)\n\n")))))))
 
-(defun tibetan-analysis--ensure-claude-divergence-heading (buffer)
-  "Ensure `** Claude Divergence' exists in BUFFER.
+(defun tibetan-analysis--ensure-claude-combined-translation-heading (buffer)
+  "Ensure `** Claude Translation (Combined)' exists in BUFFER.
 Placement preference, falling through on first hit:
   1. Immediately AFTER `** Claude Translation (Sanskrit)' (and its
-     body) — the natural reading order in parallel mode is
-     Tibetan translation → Sanskrit translation → divergence note.
+     body) — natural reading order: Tibetan → Sanskrit →
+     Combined synthesis → optional Divergence note.
   2. Immediately AFTER `** Claude Translation' if the Sanskrit
-     variant heading isn't present yet.
+     variant heading isn't yet present (parallel-mode prompts
+     emit both, but a pre-Sanskrit-heading restore could land
+     here).
   3. After `** Wylie Transliteration'.
   4. After the first top-level heading.
   5. point-max.
+
+Idempotent — no-op when the heading is already present.
+
+Phase D of multi-translator-parallel-reading (2026-04-30).
+Called from `--insert-claude-sections' /
+`--restore-claude-sections' only when the parsed plist carries
+a non-nil `:translation-combined'; never called otherwise —
+non-parallel files stay byte-identical."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (unless (re-search-forward
+               "^\\*\\* Claude Translation (Combined)$" nil t)
+        (goto-char (point-min))
+        (cond
+         ;; Prefer: directly after `** Claude Translation (Sanskrit)' body.
+         ((re-search-forward
+           "^\\*\\* Claude Translation (Sanskrit)$" nil t)
+          (forward-line 1)
+          (if (re-search-forward
+               (tibetan-analysis--claude-stop-re 2) nil t)
+              (beginning-of-line)
+            (goto-char (point-max)))
+          (insert "** Claude Translation (Combined)\n\n\n"))
+         ;; Fallback: after the Tibetan-side `** Claude Translation' body.
+         ((progn (goto-char (point-min))
+                 (re-search-forward "^\\*\\* Claude Translation$" nil t))
+          (forward-line 1)
+          (if (re-search-forward
+               (tibetan-analysis--claude-stop-re 2) nil t)
+              (beginning-of-line)
+            (goto-char (point-max)))
+          (insert "** Claude Translation (Combined)\n\n\n"))
+         ;; Fallback: after `** Wylie Transliteration'.
+         ((progn (goto-char (point-min))
+                 (re-search-forward
+                  "^\\*\\* Wylie Transliteration$" nil t))
+          (forward-line 1)
+          (if (re-search-forward
+               (tibetan-analysis--claude-stop-re 2) nil t)
+              (beginning-of-line)
+            (goto-char (point-max)))
+          (insert "** Claude Translation (Combined)\n\n\n"))
+         ;; Fallback: after first top-level heading.
+         ((progn (goto-char (point-min))
+                 (re-search-forward "^\\* " nil t))
+          (forward-line 1)
+          (insert "** Claude Translation (Combined)\n\n\n"))
+         (t
+          (goto-char (point-max))
+          (insert "\n** Claude Translation (Combined)\n\n")))))))
+
+(defun tibetan-analysis--ensure-claude-divergence-heading (buffer)
+  "Ensure `** Claude Divergence' exists in BUFFER.
+Placement preference, falling through on first hit:
+  1. Immediately AFTER `** Claude Translation (Combined)' (Phase D
+     of multi-translator-parallel-reading, 2026-04-30) — natural
+     reading order: Tibetan → Sanskrit → Combined → Divergence.
+  2. Immediately AFTER `** Claude Translation (Sanskrit)' (Phase B
+     fallback when Combined isn't present yet — pre-D reanalyse).
+  3. Immediately AFTER `** Claude Translation' if neither of the
+     suffixed variants is present.
+  4. After `** Wylie Transliteration'.
+  5. After the first top-level heading.
+  6. point-max.
 
 Idempotent — no-op when the heading is already in the buffer.
 
@@ -1867,9 +1956,19 @@ unless Claude flagged something)."
                "^\\*\\* Claude Divergence$" nil t)
         (goto-char (point-min))
         (cond
-         ;; Prefer: directly after `** Claude Translation (Sanskrit)' body.
+         ;; Prefer: directly after `** Claude Translation (Combined)' body.
          ((re-search-forward
-           "^\\*\\* Claude Translation (Sanskrit)$" nil t)
+           "^\\*\\* Claude Translation (Combined)$" nil t)
+          (forward-line 1)
+          (if (re-search-forward
+               (tibetan-analysis--claude-stop-re 2) nil t)
+              (beginning-of-line)
+            (goto-char (point-max)))
+          (insert "** Claude Divergence\n\n\n"))
+         ;; Fallback: after the Sanskrit-side translation body.
+         ((progn (goto-char (point-min))
+                 (re-search-forward
+                  "^\\*\\* Claude Translation (Sanskrit)$" nil t))
           (forward-line 1)
           (if (re-search-forward
                (tibetan-analysis--claude-stop-re 2) nil t)
@@ -2395,11 +2494,19 @@ reanalyse."
         ;; section, so non-parallel files stay byte-identical.
         (when (plist-get sections :translation-sanskrit)
           (tibetan-analysis--ensure-claude-sanskrit-translation-heading buf))
+        ;; Phase D of multi-translator-parallel-reading (2026-04-30):
+        ;; scaffold `** Claude Translation (Combined)' on demand —
+        ;; the synthesis translation appears below the two raw
+        ;; renderings.  Order matters: scaffold AFTER the Sanskrit
+        ;; heading so the Combined helper finds it for placement.
+        (when (plist-get sections :translation-combined)
+          (tibetan-analysis--ensure-claude-combined-translation-heading buf))
         ;; Phase C of multi-translator-parallel-reading (2026-04-30):
         ;; scaffold `** Claude Divergence' on demand — Claude only
         ;; emits this section when there is a serious Sanskrit-Tibetan
         ;; difference, so faithful renderings (and non-parallel files)
-        ;; never grow this heading.
+        ;; never grow this heading.  Scaffolded LAST so it can land
+        ;; below Combined when present.
         (when (plist-get sections :divergence)
           (tibetan-analysis--ensure-claude-divergence-heading buf))
         (dolist (entry (tibetan-analysis--claude-effective-section-order buf))
@@ -2601,18 +2708,25 @@ and known error markers so we don't re-persist dead content."
 
 (defun tibetan-analysis--read-claude-sections (filepath)
   "Return preserved Claude content in FILEPATH as a plist.
-Keys:  `:translation', `:translation-sanskrit', `:divergence',
-`:vocabulary', `:grammar', `:particles', `:context'.  Each value
-is a non-empty string or nil.  Reads from the current layout
-(Translation and Grammar at level 2; Vocabulary at level 3 inside
-Provided Translations) and falls back to the legacy level-3
-placements so old analysis files do not lose their work on
-reanalysis.
+Keys:  `:translation', `:translation-sanskrit',
+`:translation-combined', `:divergence', `:vocabulary',
+`:grammar', `:particles', `:context'.  Each value is a
+non-empty string or nil.  Reads from the current layout
+(Translation and Grammar at level 2; Vocabulary at level 3
+inside Provided Translations) and falls back to the legacy
+level-3 placements so old analysis files do not lose their work
+on reanalysis.
 
 `:translation-sanskrit' (Phase B of multi-translator-parallel-
 reading, 2026-04-30) is the body of `** Claude Translation
 (Sanskrit)' at level 2; only populated for parallel-Sanskrit
 documents — nil otherwise.
+
+`:translation-combined' (Phase D of multi-translator-parallel-
+reading, 2026-04-30) is the body of `** Claude Translation
+(Combined)' at level 2 — Claude's synthetic best reading
+drawing on both Sanskrit and Tibetan with surrounding context.
+Parallel-mode only; nil otherwise.
 
 `:divergence' (Phase C of multi-translator-parallel-reading,
 2026-04-30) is the body of `** Claude Divergence' at level 2 —
@@ -2642,6 +2756,13 @@ written back."
         (translation-sanskrit
          (tibetan-analysis--read-claude-section-body
           filepath "Claude Translation (Sanskrit)" 2))
+        ;; Phase D of multi-translator-parallel-reading (2026-04-30):
+        ;; Combined synthesis — Claude's best reading drawing on both
+        ;; Sanskrit + Tibetan + surrounding context.  Parallel-mode
+        ;; only.
+        (translation-combined
+         (tibetan-analysis--read-claude-section-body
+          filepath "Claude Translation (Combined)" 2))
         ;; Phase C of multi-translator-parallel-reading (2026-04-30):
         ;; Optional `** Claude Divergence' carrying Claude's flagged
         ;; serious Sanskrit-Tibetan differences.  Nil when absent.
@@ -2668,6 +2789,7 @@ written back."
                   filepath "Claude Context" 3)))
     (list :translation          translation
           :translation-sanskrit translation-sanskrit
+          :translation-combined translation-combined
           :divergence           divergence
           :vocabulary           vocabulary
           :grammar              grammar
@@ -2723,6 +2845,12 @@ restore path will not create a new Context heading."
         ;; heading absent.
         (when (plist-get sections :translation-sanskrit)
           (tibetan-analysis--ensure-claude-sanskrit-translation-heading buf))
+        ;; Phase D of multi-translator-parallel-reading (2026-04-30):
+        ;; scaffold the Combined Translation heading on demand.  Goes
+        ;; BEFORE the divergence scaffolder so divergence can place
+        ;; itself below Combined when both are present.
+        (when (plist-get sections :translation-combined)
+          (tibetan-analysis--ensure-claude-combined-translation-heading buf))
         ;; Phase C of multi-translator-parallel-reading (2026-04-30):
         ;; scaffold `** Claude Divergence' only when SECTIONS carries a
         ;; non-nil divergence body — segments with a faithful Tibetan

@@ -1416,32 +1416,35 @@ segments are faithful renderings) leaves `:divergence' nil."
 
 (ert-deftest tibetan-claude-sections-section-order-includes-divergence ()
   "The canonical Claude section-order defconst lists Divergence at
-level 2, immediately after the Sanskrit translation."
+level 2.  Phase D (2026-04-30): Combined now sits between
+Sanskrit and Divergence, so the test asserts Divergence is
+ordered AFTER Combined (not directly after Sanskrit)."
   (let* ((order tibetan-analysis--claude-section-order)
          (entry (assq :divergence order)))
     (should entry)
     (should (equal (nth 1 entry) "Claude Divergence"))
     (should (equal (nth 2 entry) 2))
-    ;; Position immediately after :translation-sanskrit.
-    (let ((pos-skt (cl-position :translation-sanskrit order :key #'car))
+    ;; Phase D: position immediately after :translation-combined.
+    (let ((pos-com (cl-position :translation-combined order :key #'car))
           (pos-div (cl-position :divergence           order :key #'car)))
-      (should pos-skt)
+      (should pos-com)
       (should pos-div)
-      (should (= pos-div (1+ pos-skt))))))
+      (should (= pos-div (1+ pos-com))))))
 
 (ert-deftest tibetan-claude-sections-priority-order-includes-divergence ()
   "The level-2 priority-section-order positions
-`** Claude Divergence' immediately after
-`** Claude Translation (Sanskrit)'.  Reader flow:
-Tibetan translation → Sanskrit translation → divergence note."
+`** Claude Divergence' AFTER `** Claude Translation (Combined)'
+(Phase D, 2026-04-30: Combined sits between Sanskrit and
+Divergence).  Reader flow: Tibetan → Sanskrit → Combined →
+Divergence."
   (let* ((order tibetan-analysis--priority-section-order)
-         (pos-skt (cl-position "** Claude Translation (Sanskrit)"
+         (pos-com (cl-position "** Claude Translation (Combined)"
                                order :test #'equal))
          (pos-div (cl-position "** Claude Divergence"
                                order :test #'equal)))
-    (should pos-skt)
+    (should pos-com)
     (should pos-div)
-    (should (= pos-div (1+ pos-skt)))))
+    (should (= pos-div (1+ pos-com)))))
 
 (ert-deftest tibetan-claude-sections-insert-creates-divergence-heading ()
   "Inserting a response with `## Divergence' scaffolds
@@ -1546,6 +1549,226 @@ stay byte-clean."
       (insert-file-contents analysis-file)
       (should-not (string-match-p
                    "^\\*\\* Claude Divergence$"
+                   (buffer-string))))))
+
+;; ============================================================================
+;; Phase D of multi-translator-parallel-reading (2026-04-30):
+;; `## Translation (Combined)` is Claude's synthesis translation
+;; — a single justified reading drawing on both Sanskrit and
+;; Tibetan with surrounding context.  Routes to a
+;; `:translation-combined' plist key, scaffolded on demand into
+;; `** Claude Translation (Combined)' at level 2 (between the
+;; Sanskrit translation and the divergence note).
+;; ============================================================================
+
+(ert-deftest tibetan-claude-sections-parse-combined-translation ()
+  "A response with `## Translation (Combined)' routes the body to
+the `:translation-combined' plist key, distinct from the bare
+Translation (Tibetan) and Translation (Sanskrit) slots."
+  (let* ((response (concat "## Translation\n"
+                           "Tibetan body.\n\n"
+                           "## Translation (Sanskrit)\n"
+                           "Sanskrit body.\n\n"
+                           "## Translation (Combined)\n"
+                           "Combined synthesis body.\n"))
+         (parsed (tibetan-analysis--parse-claude-sections response)))
+    (should (equal (plist-get parsed :translation)          "Tibetan body."))
+    (should (equal (plist-get parsed :translation-sanskrit) "Sanskrit body."))
+    (should (equal (plist-get parsed :translation-combined)
+                   "Combined synthesis body."))))
+
+(ert-deftest tibetan-claude-sections-parse-no-combined-leaves-nil ()
+  "A response without `## Translation (Combined)' (legacy or non-
+parallel) leaves `:translation-combined' nil."
+  (let* ((response "## Translation\nT body.\n")
+         (parsed (tibetan-analysis--parse-claude-sections response)))
+    (should (null (plist-get parsed :translation-combined)))))
+
+(ert-deftest tibetan-claude-sections-parse-bare-translation-not-confused ()
+  "The bare `## Translation' must NOT swallow `## Translation
+(Combined)' or `## Translation (Sanskrit)' — order in the
+alternation regex matters.  This regression guards against a
+naive `Translation\\|Translation (Sanskrit)' ordering that would
+match the bare branch first and miss the suffixed variants."
+  (let* ((response (concat "## Translation (Combined)\n"
+                           "Combined first.\n\n"
+                           "## Translation\n"
+                           "Tibetan second.\n"))
+         (parsed (tibetan-analysis--parse-claude-sections response)))
+    (should (equal (plist-get parsed :translation-combined) "Combined first."))
+    (should (equal (plist-get parsed :translation)          "Tibetan second."))))
+
+(ert-deftest tibetan-claude-sections-section-order-includes-combined ()
+  "The canonical Claude section-order defconst lists Combined at
+level 2, immediately after `:translation-sanskrit' and before
+`:divergence'."
+  (let* ((order tibetan-analysis--claude-section-order)
+         (entry (assq :translation-combined order)))
+    (should entry)
+    (should (equal (nth 1 entry) "Claude Translation (Combined)"))
+    (should (equal (nth 2 entry) 2))
+    ;; Position: after :translation-sanskrit, before :divergence.
+    (let ((pos-skt (cl-position :translation-sanskrit order :key #'car))
+          (pos-com (cl-position :translation-combined order :key #'car))
+          (pos-div (cl-position :divergence           order :key #'car)))
+      (should pos-skt)
+      (should pos-com)
+      (should pos-div)
+      (should (= pos-com (1+ pos-skt)))
+      (should (= pos-div (1+ pos-com))))))
+
+(ert-deftest tibetan-claude-sections-priority-order-includes-combined ()
+  "`** Claude Translation (Combined)' sits between Sanskrit
+translation and Divergence in the level-2 priority order:
+Tibetan → Sanskrit → Combined → Divergence."
+  (let* ((order tibetan-analysis--priority-section-order)
+         (pos-skt (cl-position "** Claude Translation (Sanskrit)"
+                               order :test #'equal))
+         (pos-com (cl-position "** Claude Translation (Combined)"
+                               order :test #'equal))
+         (pos-div (cl-position "** Claude Divergence"
+                               order :test #'equal)))
+    (should pos-skt)
+    (should pos-com)
+    (should pos-div)
+    (should (= pos-com (1+ pos-skt)))
+    (should (= pos-div (1+ pos-com)))))
+
+(ert-deftest tibetan-claude-sections-insert-creates-combined-heading ()
+  "Inserting a response with all three Translation sections
+scaffolds `** Claude Translation (Combined)' at level 2 between
+the Sanskrit translation and any divergence note (the latter
+absent here).  Reading order in the buffer:
+Tibetan → Sanskrit → Combined."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
+    (let ((response (concat "## Translation\n"
+                            "Tibetan body.\n\n"
+                            "## Translation (Sanskrit)\n"
+                            "Sanskrit body.\n\n"
+                            "## Translation (Combined)\n"
+                            "Combined body.\n")))
+      (tibetan-analysis--insert-claude-sections response analysis-file)
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf (kill-buffer buf)))
+      (with-temp-buffer
+        (insert-file-contents analysis-file)
+        (let* ((content (buffer-string))
+               (pos-tib (string-match
+                         "^\\*\\* Claude Translation$" content))
+               (pos-skt (string-match
+                         "^\\*\\* Claude Translation (Sanskrit)$"
+                         content))
+               (pos-com (string-match
+                         "^\\*\\* Claude Translation (Combined)$"
+                         content)))
+          (should pos-tib)
+          (should pos-skt)
+          (should pos-com)
+          ;; Buffer order: Tibetan → Sanskrit → Combined.
+          (should (< pos-tib pos-skt))
+          (should (< pos-skt pos-com))
+          ;; Body landed under Combined.
+          (should (string-match-p "Combined body" content)))))))
+
+(ert-deftest tibetan-claude-sections-insert-without-combined-no-heading ()
+  "Inserting a response WITHOUT `## Translation (Combined)' (e.g.
+non-parallel mode) leaves the heading absent — byte-identical-
+when-absent guarantee."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
+    (let ((response "## Translation\nJust Tibetan.\n"))
+      (tibetan-analysis--insert-claude-sections response analysis-file)
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf (kill-buffer buf)))
+      (with-temp-buffer
+        (insert-file-contents analysis-file)
+        (should-not (string-match-p
+                     "^\\*\\* Claude Translation (Combined)$"
+                     (buffer-string)))))))
+
+(ert-deftest tibetan-claude-sections-insert-combined-then-divergence-ordered ()
+  "When BOTH `:translation-combined' and `:divergence' are present,
+Divergence lands AFTER Combined (the divergence scaffolder
+prefers the Combined heading as anchor).  Final reading order:
+Tibetan → Sanskrit → Combined → Divergence."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
+    (let ((response (concat "## Translation\nTib.\n\n"
+                            "## Translation (Sanskrit)\nSkt.\n\n"
+                            "## Translation (Combined)\nCom.\n\n"
+                            "## Divergence\n- Note.\n")))
+      (tibetan-analysis--insert-claude-sections response analysis-file)
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf (kill-buffer buf)))
+      (with-temp-buffer
+        (insert-file-contents analysis-file)
+        (let* ((content (buffer-string))
+               (pos-com (string-match
+                         "^\\*\\* Claude Translation (Combined)$"
+                         content))
+               (pos-div (string-match
+                         "^\\*\\* Claude Divergence$" content)))
+          (should pos-com)
+          (should pos-div)
+          (should (< pos-com pos-div)))))))
+
+(ert-deftest tibetan-claude-sections-read-combined-translation ()
+  "Reading an analysis file with a populated
+`** Claude Translation (Combined)' returns the body in the
+`:translation-combined' plist slot."
+  (tibetan-sections-test--with-analysis
+      (concat (tibetan-sections-test--scaffold "T body" nil)
+              "\n** Claude Translation (Combined)\n"
+              "Stored combined synthesis.\n\n")
+    (let ((p (tibetan-analysis--read-claude-sections analysis-file)))
+      (should (equal (plist-get p :translation-combined)
+                     "Stored combined synthesis."))
+      ;; Tibetan side untouched.
+      (should (equal (plist-get p :translation) "T body")))))
+
+(ert-deftest tibetan-claude-sections-restore-round-trips-combined ()
+  "Read → restore → re-read preserves `:translation-combined'."
+  (tibetan-sections-test--with-analysis
+      (concat (tibetan-sections-test--scaffold "T1" "G1")
+              "\n** Claude Translation (Combined)\n"
+              "ORIGINAL combined\n\n")
+    (let ((before (tibetan-analysis--read-claude-sections analysis-file)))
+      (should (equal (plist-get before :translation-combined)
+                     "ORIGINAL combined"))
+      (tibetan-analysis--restore-claude-sections
+       analysis-file
+       (list :translation          (plist-get before :translation)
+             :translation-combined "UPDATED combined"
+             :grammar              (plist-get before :grammar)))
+      (let ((buf (find-buffer-visiting analysis-file)))
+        (when buf
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf)))
+      (let ((after (tibetan-analysis--read-claude-sections analysis-file)))
+        (should (equal (plist-get after :translation-combined)
+                       "UPDATED combined"))
+        (should (equal (plist-get after :translation) "T1"))
+        (should (equal (plist-get after :grammar)     "G1"))))))
+
+(ert-deftest tibetan-claude-sections-restore-without-combined-no-heading ()
+  "Restoring a plist with `:translation-combined' nil into a file
+that lacks the heading does NOT scaffold one."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "T1" "G1")
+    (tibetan-analysis--restore-claude-sections
+     analysis-file
+     (list :translation          "T1-restored"
+           :translation-combined nil
+           :grammar              "G1-restored"))
+    (let ((buf (find-buffer-visiting analysis-file)))
+      (when buf
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf)))
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (should-not (string-match-p
+                   "^\\*\\* Claude Translation (Combined)$"
                    (buffer-string))))))
 
 (provide 'tibetan-analysis-claude-sections-test)
