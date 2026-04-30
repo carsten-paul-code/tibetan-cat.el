@@ -204,6 +204,9 @@ When parsing succeeds, returns the plist; the calling
               :chosen-clause clause
               :reason (or reason ""))))))
 
+(declare-function tibetan-analysis--ensure-gptel-ready
+                  "tibetan-analysis-claude" ())
+
 (defun tibetan-sanskrit-parallel-dm--ask-claude-sync (prompt)
   "Synchronously call Claude with PROMPT.  Returns response string or nil.
 
@@ -214,11 +217,25 @@ Uses gptel under the hood (same Claude infrastructure as
 elapse.  No queue — this runs outside `tibetan-claude-queue' so
 it doesn't compete with translation requests for slots.
 
+Phase 9 (2026-04-30):  calls `tibetan-analysis--ensure-gptel-ready'
+before `gptel-request' so the Anthropic API key is loaded from
+`~/.authinfo' into `gptel-api-key'.  Without this step every
+Claude call fails with `No \\='gptel-api-key\\=' found in the
+auth source' and the realign command silently falls back to the
+top hit on every multi-candidate segment.
+
 Returns nil for any failure (gptel not loaded, HTTP error,
 timeout, empty response).  Tests `cl-letf' this function so the
 caller orchestration can be exercised without network."
   (condition-case err
       (when (and (featurep 'gptel) (fboundp 'gptel-request))
+        ;; Load the API key from authinfo before the request fires.
+        ;; Same pattern as `--request-claude-translation' (the async
+        ;; claude path).  Soft-coded: if persist module isn't
+        ;; loaded, gptel-request will produce its own error which
+        ;; the outer condition-case catches.
+        (when (fboundp 'tibetan-analysis--ensure-gptel-ready)
+          (tibetan-analysis--ensure-gptel-ready))
         (let ((response nil)
               (done nil))
           (gptel-request prompt

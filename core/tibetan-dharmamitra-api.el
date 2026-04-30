@@ -260,9 +260,29 @@ without an HTTP call.  Use
                     (and sse-response
                          (tibetan-dharmamitra-api--parse-sse-stream
                           sse-response))))
-              (when (and translation (not (string-empty-p translation)))
+              (cond
+               ;; Happy path: non-empty translation.
+               ((and translation (not (string-empty-p translation)))
                 (puthash key translation tibetan-dharmamitra-api--cache)
-                translation))
+                translation)
+               ;; HTTP returned nothing — likely rate-limit or server
+               ;; error without a parseable body.  Phase 9 (2026-04-30):
+               ;; log explicitly so silent failures are visible in
+               ;; *Messages* during diagnosis.
+               ((or (null sse-response) (string-empty-p sse-response))
+                (message
+                 "DharmaMitra chat-translate: empty response (input %d chars) — likely rate-limit or server error"
+                 (length (or text "")))
+                nil)
+               ;; SSE stream had no content chunks.  Either format
+               ;; change or an error response masquerading as success.
+               (t
+                (message
+                 "DharmaMitra chat-translate: SSE stream yielded no content (response %d bytes; first 100 chars: %s)"
+                 (length sse-response)
+                 (substring sse-response 0
+                            (min 100 (length sse-response))))
+                nil)))
           (error
            (message "DharmaMitra chat-translate failed: %s"
                     (error-message-string err))
@@ -310,9 +330,31 @@ Cached by request body hash; clear with
                                                   :object-type 'alist
                                                   :array-type 'list)))
                    (results (and response (alist-get 'results response))))
-              (when results
+              (cond
+               (results
                 (puthash key results tibetan-dharmamitra-api--cache)
-                results))
+                results)
+               ;; Phase 9 (2026-04-30): explicit logging when search
+               ;; returns empty / no results, instead of silent nil.
+               ((or (null response-str) (string-empty-p response-str))
+                (message
+                 "DharmaMitra search: empty response (query %d chars, sources %s) — likely rate-limit"
+                 (length (or input ""))
+                 (or include-files "all"))
+                nil)
+               ((null response)
+                (message
+                 "DharmaMitra search: response unparseable as JSON (%d bytes); first 100 chars: %s"
+                 (length response-str)
+                 (substring response-str 0
+                            (min 100 (length response-str))))
+                nil)
+               (t
+                (message
+                 "DharmaMitra search: zero results (query %d chars, sources %s)"
+                 (length (or input ""))
+                 (or include-files "all"))
+                nil)))
           (error
            (message "DharmaMitra search failed: %s"
                     (error-message-string err))

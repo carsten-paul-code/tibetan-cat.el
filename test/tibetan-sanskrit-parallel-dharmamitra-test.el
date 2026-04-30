@@ -1234,5 +1234,53 @@ with no body) also falls back to full text."
     (should (equal (plist-get p :proposed-sanskrit)
                    "fallback full text"))))
 
+;; ============================================================================
+;; PHASE 9 — Bug fix: --ask-claude-sync must load gptel auth first
+;; ============================================================================
+;;
+;; Live test 2026-04-30:  every multi-candidate segment fell back
+;; to the top hit with `claude-unavailable-fallback-to-top'
+;; reason, even though gptel was loaded in the user's Emacs.
+;; *Messages* showed `No `gptel-api-key' found in the auth source'
+;; for every Claude call.
+;;
+;; Root cause:  `--ask-claude-sync' (Phase 3) calls `gptel-request'
+;; without first running `tibetan-analysis--ensure-gptel-ready' —
+;; the helper that pulls the Anthropic API key from `~/.authinfo'
+;; and stuffs it into `gptel-api-key'.  The async claude-translation
+;; flow calls it; we forgot.
+;;
+;; Regression test:  verifies `--ensure-gptel-ready' is called
+;; BEFORE `gptel-request'.  Order matters — calling after would
+;; race with the request firing.
+
+(ert-deftest tibetan-skt-dm-ask-claude-sync-loads-auth-before-request ()
+  "Phase 9 regression:  `--ask-claude-sync' must call
+`tibetan-analysis--ensure-gptel-ready' BEFORE `gptel-request'.
+Without this, gptel-request fails with
+\"No `gptel-api-key' found in the auth source\" on every Claude
+call, leaving the realign command stuck in top-hit fallback."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--ask-claude-sync))
+  (let ((order '()))
+    (cl-letf (((symbol-function 'featurep)
+               (lambda (sym &rest _) (eq sym 'gptel)))
+              ((symbol-function 'tibetan-analysis--ensure-gptel-ready)
+               (lambda () (push 'ensure order)))
+              ((symbol-function 'gptel-request)
+               (lambda (_prompt &rest args)
+                 (push 'request order)
+                 ;; Fire the callback synchronously so the
+                 ;; with-timeout loop exits immediately.
+                 (let ((cb (plist-get args :callback)))
+                   (when cb (funcall cb "## Choice\n1\n\n## Reason\nx\n" nil))))))
+      (tibetan-sanskrit-parallel-dm--ask-claude-sync "test prompt")
+      (let ((seq (nreverse order)))
+        ;; Both functions called.
+        (should (memq 'ensure seq))
+        (should (memq 'request seq))
+        ;; Order:  ensure before request.
+        (should (< (cl-position 'ensure seq)
+                   (cl-position 'request seq)))))))
+
 (provide 'tibetan-sanskrit-parallel-dharmamitra-test)
 ;;; tibetan-sanskrit-parallel-dharmamitra-test.el ends here
