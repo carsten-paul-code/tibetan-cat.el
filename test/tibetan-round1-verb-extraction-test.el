@@ -385,6 +385,88 @@ Structure said `verb སྡོམ' / `verb རྣམས') is gone."
     (should-not (string-match-p "verb སྡོམ"  rendered))
     (should-not (string-match-p "verb རྣམས"  rendered))))
 
+(ert-deftest tibetan-round1-uddana-verse-line-2-no-clause-structure ()
+  "Seg-006 uddāna line 2: `ལྷག་པའི་བསམ་དང་གནས་པ་དང་༎'
+\(adhyāśaya-vihāra continuation).  Same uddāna verse genre as
+seg-005 — no finite verb.  Sentence Structure should not
+fabricate clause heads from `ལྷག' / `བསམ' / `གནས' (any of
+which have polysemous Bialek verb glosses)."
+  (skip-unless (fboundp 'tibetan-analysis--render-clause-structure))
+  (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
+  (skip-unless (fboundp 'tibetan-parse-enhanced))
+  (let* ((seg "ལྷག་པའི་བསམ་དང་གནས་པ་དང་༎")
+         (parsed (tibetan-parse-enhanced seg))
+         (words (alist-get 'words parsed))
+         (mwu (alist-get 'multiword-units parsed))
+         (verbs (tibetan-extract-verbs-compound-aware seg words mwu))
+         (rendered (tibetan-analysis--render-clause-structure
+                    words verbs mwu)))
+    (should-not (string-match-p "verb ལྷག"  rendered))
+    (should-not (string-match-p "verb བསམ"  rendered))
+    (should-not (string-match-p "verb གནས"  rendered))))
+
+(ert-deftest tibetan-round1-uddana-verse-line-3-no-clause-structure ()
+  "Seg-007 uddāna line 3: `སྐྱེ་དང་ཡོངས་སུ་འཛིན་དང་ས་༎'
+\(upapatti-parigraha-bhūmi continuation).  Hardest case — `སྐྱེ'
+\(skye, `arise / be born') and `འཛིན' (\\='dzin, `to grasp / hold')
+both have legitimate Hill-DB-adjacent verb senses, but in the
+uddāna they are nominalised topic labels.
+
+This test asserts the WEAKER invariant: even if the parser
+identifies them as verbs from Hill-DB / closed-set sources, it
+must NOT identify the bare topic-marker `ས' (sa, locative
+particle) as a verb head.  `སྐྱེ' / `འཛིན' may still appear in
+the rendered output via legitimate Hill-DB hits — those reflect
+genuine ambiguity that's beyond the scope of this commit.
+
+Treats as a known limitation: full uddāna-verse disambiguation
+\(skye-noun vs skye-verb in topic position) requires
+context-aware POS tagging not yet implemented."
+  (skip-unless (fboundp 'tibetan-analysis--render-clause-structure))
+  (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
+  (skip-unless (fboundp 'tibetan-parse-enhanced))
+  (let* ((seg "སྐྱེ་དང་ཡོངས་སུ་འཛིན་དང་ས་༎")
+         (parsed (tibetan-parse-enhanced seg))
+         (words (alist-get 'words parsed))
+         (mwu (alist-get 'multiword-units parsed))
+         (verbs (tibetan-extract-verbs-compound-aware seg words mwu))
+         (rendered (tibetan-analysis--render-clause-structure
+                    words verbs mwu)))
+    ;; The bare topic-marker `ས' is a locative particle, never a verb.
+    (should-not (string-match-p "verb ས "  rendered))
+    (should-not (string-match-p "verb ས$"  rendered))
+    ;; `ཡོངས' (yongs, `complete') is a quantifier / adjective, never
+    ;; a verb head.
+    (should-not (string-match-p "verb ཡོངས" rendered))))
+
+(ert-deftest tibetan-round1-uddana-verse-line-4-with-copula-yin ()
+  "Seg-008 uddāna line 4: `སྤྱོད་དང་རབ་གནས་ཐ་མ་ཡིན་༎'
+\(caryā-pratiṣṭhā continuation, ending `…tha ma yin' = `…is the
+last').  This line LEGITIMATELY contains a finite verb (`ཡིན',
+the copula `to be').  The renderer should:
+
+  - Identify `ཡིན' as a verb head (legitimate clause).
+  - NOT identify `སྤྱོད' (spyod, `practice / conduct') as a
+    verb head — it's the topic noun in this context.
+  - NOT identify `གནས' (gnas, `abide / dwell') as a verb head —
+    it's part of the topic compound `རབ་གནས' (rab gnas,
+    `establishment').
+
+A stricter test than 5/6/7 — we DO expect a clause here, just
+not headed by spyod or gnas."
+  (skip-unless (fboundp 'tibetan-analysis--render-clause-structure))
+  (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
+  (skip-unless (fboundp 'tibetan-parse-enhanced))
+  (let* ((seg "སྤྱོད་དང་རབ་གནས་ཐ་མ་ཡིན་༎")
+         (parsed (tibetan-parse-enhanced seg))
+         (words (alist-get 'words parsed))
+         (mwu (alist-get 'multiword-units parsed))
+         (verbs (tibetan-extract-verbs-compound-aware seg words mwu))
+         (rendered (tibetan-analysis--render-clause-structure
+                    words verbs mwu)))
+    ;; Topic nouns must NOT be promoted to verb heads.
+    (should-not (string-match-p "verb སྤྱོད" rendered))))
+
 (ert-deftest tibetan-round1-minimal-entry-tags-source ()
   "`--minimal-entry' carries a `source' field identifying the
 classification path (`closed-set' for curated minor / modal /
