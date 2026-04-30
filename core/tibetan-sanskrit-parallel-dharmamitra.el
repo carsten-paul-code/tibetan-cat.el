@@ -459,36 +459,139 @@ read from it; the renderer does not display the buffer itself."
     buf))
 
 ;; ============================================================================
-;; PHASE 5 — Apply + interactive commands
+;; PHASE 7 — Apply writes to analysis files only (NEVER source)
 ;; ============================================================================
+;;
+;; Architectural rule:  analysis pipeline must never modify the
+;; source file.  Phase 5's source-side writer was deleted; this
+;; phase ships the replacement analysis-file writer.
+;;
+;; Output lands as a TOP-LEVEL `* Sanskrit (DharmaMitra)' section
+;; in each per-segment analysis file (seg-NNN.org).  Top-level
+;; placement (outside `* Auto-Analysis') means it survives
+;; reanalysis naturally — no preserve-list change needed.
 
-(declare-function tibetan-sanskrit-parallel-write-sanskrit-for-segment-id
-                  "tibetan-sanskrit-parallel" (source-file seg-id new-iast))
+(declare-function tibetan-analysis-get-filepath
+                  "tibetan-analysis-persist" (seg-id &optional source-file))
 
-(defun tibetan-sanskrit-parallel-dm--apply-proposal (source-file proposal)
-  "Apply PROPOSAL to SOURCE-FILE if its `:status' is `change'.
+(defun tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis
+    (analysis-file proposal)
+  "Write PROPOSAL's realign output to ANALYSIS-FILE.
+
+Creates or replaces a top-level `* Sanskrit (DharmaMitra)'
+section.  The section's property drawer carries:
+
+  :DM_SEGMENTNR:   the chosen DharmaMitra segment ID
+  :DM_RANK:        the rank within the candidates list
+  :CLAUDE_REASON:  the reason string from claude-pick (or
+                   fallback marker)
+  :LAST_REALIGN:   today's date stamp (YYYY-MM-DD)
+
+The body is the proposed Sanskrit text.
+
+Top-level placement (outside `* Auto-Analysis') ensures the
+section survives reanalysis without changes to the existing
+preserve-list machinery — `regenerate-auto' only rebuilds the
+`* Auto-Analysis' subtree.
+
+Returns t on success, nil when ANALYSIS-FILE is missing or
+unwritable."
+  (when (and analysis-file
+             (stringp analysis-file)
+             (file-exists-p analysis-file)
+             (file-writable-p analysis-file))
+    (let ((buf (find-file-noselect analysis-file)))
+      (with-current-buffer buf
+        (org-mode)
+        (save-excursion
+          (goto-char (point-min))
+          ;; Locate or create the section.
+          (let ((existing-section
+                 (re-search-forward
+                  "^\\* Sanskrit (DharmaMitra)[ \t]*$" nil t)))
+            (cond
+             (existing-section
+              ;; Replace from heading through end of subtree.
+              (beginning-of-line)
+              (let ((start (point))
+                    (end (save-excursion
+                           (org-end-of-subtree t t)
+                           (point))))
+                (delete-region start end)))
+             (t
+              ;; Append at end of buffer (after a blank line if needed).
+              (goto-char (point-max))
+              (unless (bolp) (insert "\n"))
+              (unless (looking-back "\n\n" 2) (insert "\n")))))
+          ;; Write the new section.
+          (insert
+           (tibetan-sanskrit-parallel-dm--render-dharmamitra-section
+            proposal))))
+      (with-current-buffer buf
+        (save-buffer))
+      t)))
+
+(defun tibetan-sanskrit-parallel-dm--render-dharmamitra-section (proposal)
+  "Render PROPOSAL as the body text of a `* Sanskrit (DharmaMitra)'
+section.  Pure function — no I/O.  Used by the analysis-file
+writer; also useful for tests that want to inspect the output
+shape without going through file I/O."
+  (let ((segnr (or (plist-get proposal :proposed-segmentnr) ""))
+        (rank (or (plist-get proposal :proposed-rank) ""))
+        (reason (or (plist-get proposal :reason) ""))
+        (sanskrit (or (plist-get proposal :proposed-sanskrit) "")))
+    (concat
+     "* Sanskrit (DharmaMitra)\n"
+     ":PROPERTIES:\n"
+     (format ":DM_SEGMENTNR: %s\n" segnr)
+     (format ":DM_RANK: %s\n" rank)
+     (format ":CLAUDE_REASON: %s\n" reason)
+     (format ":LAST_REALIGN: %s\n" (format-time-string "%Y-%m-%d"))
+     ":END:\n\n"
+     sanskrit
+     "\n")))
+
+(defun tibetan-sanskrit-parallel-dm--apply-proposal (analysis-file proposal)
+  "Apply PROPOSAL to ANALYSIS-FILE if its `:status' is `change'.
 
 Skips proposals with status `unchanged' (no edit needed) or
 `no-candidates' (DM had nothing to propose; we don't blank the
-existing sibling).  Skipping is by design — we never
-overwrite without a positive proposal.
+existing section).  Phase 7 (2026-04-30):  ANALYSIS-FILE is
+the per-segment seg-NNN.org analysis file, NOT the source.
 
 Returns the writer's return value (t / nil) on `change',
 otherwise nil."
   (when (eq (plist-get proposal :status) 'change)
-    (let ((seg-id (plist-get proposal :seg-id))
-          (proposed (plist-get proposal :proposed-sanskrit)))
-      (when (and seg-id proposed (not (string-empty-p proposed)))
-        (tibetan-sanskrit-parallel-write-sanskrit-for-segment-id
-         source-file seg-id proposed)))))
+    (let ((proposed (plist-get proposal :proposed-sanskrit)))
+      (when (and proposed (not (string-empty-p proposed)))
+        (tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis
+         analysis-file proposal)))))
 
 (defun tibetan-sanskrit-parallel-dm--apply-proposals (source-file proposals)
   "Apply every PROPOSAL in PROPOSALS whose `:status' is `change'.
-Returns the count of successfully applied proposals."
+
+Resolves each proposal's analysis file via
+`tibetan-analysis-get-filepath' (which uses
+`tibetan-analysis-folder' / current buffer's directory).
+SOURCE-FILE is visited in a buffer first so the path resolver
+gets the right context.
+
+Returns count of successfully applied proposals.  SOURCE-FILE
+itself is NEVER modified — verified by regression test."
   (let ((count 0))
-    (dolist (p proposals)
-      (when (tibetan-sanskrit-parallel-dm--apply-proposal source-file p)
-        (cl-incf count)))
+    (when (and source-file (file-exists-p source-file))
+      (with-current-buffer (find-file-noselect source-file)
+        (dolist (p proposals)
+          (let* ((seg-id (plist-get p :seg-id))
+                 (analysis-file (and seg-id
+                                     (fboundp 'tibetan-analysis-get-filepath)
+                                     (condition-case nil
+                                         (tibetan-analysis-get-filepath seg-id)
+                                       (error nil)))))
+            (when (and analysis-file
+                       (tibetan-sanskrit-parallel-dm--apply-proposal
+                        analysis-file p))
+              (cl-incf count))))))
     count))
 
 ;; ----------------------------------------------------------------------------

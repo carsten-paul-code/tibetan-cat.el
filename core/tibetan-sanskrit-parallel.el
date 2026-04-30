@@ -487,104 +487,19 @@ change."
                   :current-sanskrit current-sanskrit)))))))
 
 ;; ----------------------------------------------------------------------------
-;; By-ID Sanskrit writer (Phase 5 of dharmamitra-realign, 2026-04-27)
+;; (REMOVED 2026-04-30) `--write-sanskrit-for-segment-id'
 ;; ----------------------------------------------------------------------------
-
-(defun tibetan-sanskrit-parallel-write-sanskrit-for-segment-id
-    (source-file seg-id new-iast)
-  "Write NEW-IAST as the body of `**** Sanskrit' for SEG-ID in SOURCE-FILE.
-
-Locates the `**** Segment SEG-ID' heading; walks forward at the
-same level (skipping over intervening siblings like `**** Working
-Translation') until it finds an existing `**** Sanskrit' sibling
-within the same Sentence subtree.  When found, replaces the
-sibling's body with NEW-IAST.  When absent, creates a new
-`**** Sanskrit' sibling immediately at the position the walker
-stopped (just before the next Sentence / Segment heading or end
-of buffer).
-
-Returns t on success, nil when SEG-ID is not found in
-SOURCE-FILE or the file is not writable.  Saves the buffer.
-
-Mirror of `tibetan-sanskrit-parallel-text-for-segment' for the
-write side — same walking semantics, opposite direction."
-  (when (and source-file (stringp source-file)
-             (file-exists-p source-file)
-             (file-writable-p source-file)
-             (integerp seg-id)
-             (stringp new-iast))
-    (let ((buf (find-file-noselect source-file))
-          (success nil))
-      (with-current-buffer buf
-        (org-mode)
-        (save-excursion
-          (goto-char (point-min))
-          (when (re-search-forward
-                 (format "^\\*\\*\\*\\* Segment %d[ \t]*$" seg-id) nil t)
-            (let ((seg-level 4))
-              ;; Skip past the segment's own subtree to land on the
-              ;; line of the next heading (or point-max).
-              (org-end-of-subtree t t)
-              ;; Walk same-level siblings looking for **** Sanskrit.
-              (let ((found-pos nil)
-                    (insertion-pos nil)
-                    (stopped nil))
-                (while (and (not found-pos) (not stopped)
-                            (looking-at "^\\*+ "))
-                  (let ((heading-level (org-current-level))
-                        (heading-text (org-get-heading t t t t)))
-                    (cond
-                     ;; Walked out of the parent Sentence subtree.
-                     ((< heading-level seg-level)
-                      (setq insertion-pos (point))
-                      (setq stopped t))
-                     ;; Next Segment sibling — insert here, before it.
-                     ((and (= heading-level seg-level)
-                           heading-text
-                           (string-prefix-p "Segment" heading-text))
-                      (setq insertion-pos (point))
-                      (setq stopped t))
-                     ;; Found existing Sanskrit sibling — replace its body.
-                     ((and (= heading-level seg-level)
-                           heading-text
-                           (string-prefix-p "Sanskrit" heading-text))
-                      (setq found-pos (point)))
-                     ;; Other sibling (e.g. Working Translation) — skip past.
-                     (t
-                      (org-end-of-subtree t t)))))
-                ;; Reached point-max with no boundary — that's an
-                ;; insertion at end-of-buffer.
-                (unless (or found-pos insertion-pos)
-                  (setq insertion-pos (point)))
-                (cond
-                 (found-pos
-                  ;; Replace existing sibling's body in place.
-                  (goto-char found-pos)
-                  (forward-line 1)
-                  (let* ((body-start (point))
-                         (body-end (save-excursion
-                                     (org-end-of-subtree t t)
-                                     (point))))
-                    ;; If org-end-of-subtree advanced past trailing
-                    ;; blank lines onto the NEXT heading, back up.
-                    (save-excursion
-                      (goto-char body-end)
-                      (when (and (not (eobp))
-                                 (looking-at "^\\*+ "))
-                        ;; Already at next heading — body-end is fine.
-                        nil))
-                    (delete-region body-start body-end)
-                    (goto-char body-start)
-                    (insert new-iast "\n\n")
-                    (setq success t)))
-                 (t
-                  ;; Insert new Sanskrit sibling at the boundary.
-                  (goto-char insertion-pos)
-                  (insert (format "**** Sanskrit\n%s\n\n" new-iast))
-                  (setq success t)))))))
-        (when success
-          (save-buffer)))
-      success)))
+;;
+;; Phase 7 of dharmamitra-realign retired the source-side Sanskrit
+;; writer.  Architectural rule:  the analysis pipeline must never
+;; modify the user's source file (CLAUDE.md §6 — preserve user
+;; content; the source is the user's curated input).
+;;
+;; The realign command's apply mode now writes its output to the
+;; per-segment analysis file (seg-NNN.org) as a top-level
+;; `* Sanskrit (DharmaMitra)' section instead.  See
+;; `core/tibetan-sanskrit-parallel-dharmamitra.el' for the
+;; analysis-file writer that replaces this function.
 
 (provide 'tibetan-sanskrit-parallel)
 ;;; tibetan-sanskrit-parallel.el ends here

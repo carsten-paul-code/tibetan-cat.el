@@ -304,19 +304,21 @@
 
 (define-key tibetan-thesaurus-prefix-map (kbd "d")
   'tibetan-sanskrit-parallel-dm-realign-segment)
-  ;; Phase 5 of dharmamitra-realign workflow (2026-04-27):
   ;; DharmaMitra-driven Sanskrit re-alignment for the segment under
   ;; cursor.  Without prefix → preview buffer; `C-u' → apply.
-  ;; Requires `#+DM_SANSKRIT_SOURCE:' and `#+DM_TIBETAN_SOURCE:'
-  ;; headers on the source file.
+  ;; APPLY WRITES TO THE ANALYSIS FILE (seg-NNN.org) as a top-level
+  ;; `* Sanskrit (DharmaMitra)' section.  Source file is NEVER
+  ;; modified (Phase 7 architectural rule, 2026-04-30).  Requires
+  ;; `#+DM_SANSKRIT_SOURCE:' header on the source file.
 
 (define-key tibetan-thesaurus-prefix-map (kbd "D")
   'tibetan-sanskrit-parallel-dm-realign-document)
-  ;; Phase 5 of dharmamitra-realign workflow (2026-04-27):
   ;; DharmaMitra-driven Sanskrit re-alignment for every segment in
   ;; the document.  Without prefix → preview buffer; `C-u' → apply.
-  ;; Calls DM + Claude per segment; ~5 minutes wallclock for a
-  ;; 97-segment file like gotrapatala.org.
+  ;; APPLY WRITES TO THE ANALYSIS FILES (seg-NNN.org) as top-level
+  ;; `* Sanskrit (DharmaMitra)' sections.  Source file is NEVER
+  ;; modified.  Calls DM + Claude per segment; ~5 minutes wallclock
+  ;; for a 97-segment file like gotrapatala.org.
 
 (define-key tibetan-thesaurus-prefix-map (kbd "R")
   'tibetan-thesaurus-rerun-affected-by-zettel)

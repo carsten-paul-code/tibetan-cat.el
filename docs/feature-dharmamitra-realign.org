@@ -1,16 +1,22 @@
 #+TITLE: DharmaMitra-Driven Sanskrit Re-Alignment — Feature Design
 #+DATE: 2026-04-30
 #+AUTHOR: Carsten Paul + Claude
-#+STATUS: v1 — ALL PHASES SHIPPED (1–5); Phase 6 = this doc + live test
+#+STATUS: v2 — ALL PHASES SHIPPED (1–7); Phase 7 reframed apply target
+          from source file to per-segment analysis files
 
 * TL;DR
 
-Re-align the =**** Sanskrit= sibling of every =**** Segment N= in
-a parallel-Sanskrit document by:  translating the Tibetan to
-English via DharmaMitra, semantic-searching the configured
-Sanskrit corpus, asking Claude to pick the right parallel,
-showing a preview, applying on =C-u=.  Fixes the rough daṇḍa-
-split alignment that ships with =gotrapatala.org=.
+For each Tibetan segment in a parallel-Sanskrit document:
+translate to English via DharmaMitra, semantic-search the
+configured Sanskrit corpus, ask Claude to pick the right
+parallel, show a preview.  On =C-u= apply, write the chosen
+Sanskrit (with full DM metadata) to the per-segment analysis
+file's new top-level =* Sanskrit (DharmaMitra)= section.
+
+The source file is NEVER modified.  The user's curated
+=**** Sanskrit= siblings stay as the canonical, hand-edited
+copy; the realign output sits alongside in the analysis files
+as the machine's best guess for cross-reference.
 
 * Quickstart
 
@@ -22,8 +28,8 @@ split alignment that ships with =gotrapatala.org=.
 
 2. C-c u z D                  ; preview every segment (~5 min for 97)
 3. (eyeball the *Sanskrit Realign Preview* buffer)
-4. C-u C-c u z D              ; apply the `change' proposals
-5. C-c u r                    ; reanalyse so seg-NNN.org files pick up the new Sanskrit
+4. C-u C-c u z D              ; write `* Sanskrit (DharmaMitra)' to each seg-NNN.org
+                               ; (source file untouched)
 
 Single-segment variants:
    C-c u z d                  ; preview the segment under cursor
@@ -324,23 +330,55 @@ Status values:
 - =unchanged= — current ≈ proposed; no edit needed
 - =no-candidates= — DM/Claude pipeline returned nothing
 
-** Phase 5 — Writer + apply + interactive commands
+** Phase 5 — Writer + apply + interactive commands (initial; superseded by Phase 7)
 
-| Function                                                 | Purpose                |
-|----------------------------------------------------------|------------------------|
-| =tibetan-sanskrit-parallel-write-sanskrit-for-segment-id=  | Replace / insert Sanskrit body |
-| =--apply-proposal=                                        | Status-aware apply (no-op for unchanged / no-candidates) |
-| =--apply-proposals=                                       | Batch apply, returns count |
-| =tibetan-sanskrit-parallel-dm-realign-segment=             | Interactive single-segment |
-| =tibetan-sanskrit-parallel-dm-realign-document=            | Interactive batch          |
+Phase 5 originally shipped a source-side writer
+(=tibetan-sanskrit-parallel-write-sanskrit-for-segment-id=)
+that replaced the source file's =**** Sanskrit= sibling body.
+Carsten flagged this as an architectural violation on 2026-04-30
+after a live `C-u C-c u z d` test on segment 5 produced a
+multi-line replacement (DM segment granularity > Tibetan segment
+granularity).  Phase 7 retires the source writer and reframes
+the apply target.
+
+** Phase 7 — Apply writes to ANALYSIS files only (2026-04-30)
+
+Architectural rule:  the analysis pipeline must NEVER modify
+the source file.
+
+  - DELETED: =tibetan-sanskrit-parallel-write-sanskrit-for-segment-id=
+    (and its 4 tests).
+  - NEW: =--write-dharmamitra-sanskrit-to-analysis ANALYSIS-FILE
+    PROPOSAL=.  Writes a top-level =* Sanskrit (DharmaMitra)=
+    section to the per-segment analysis file (seg-NNN.org).
+    Top-level placement (outside =* Auto-Analysis=) means the
+    section survives reanalysis without changes to the existing
+    preserve-list machinery.
+  - =--apply-proposal ANALYSIS-FILE PROPOSAL= now calls the
+    analysis-file writer (signature changed from source-file).
+  - =--apply-proposals SOURCE-FILE PROPOSALS= visits the source
+    buffer to give =tibetan-analysis-get-filepath= the right
+    context, resolves each proposal's analysis path, and
+    dispatches.  SOURCE-FILE itself is NEVER modified —
+    verified by an explicit regression test
+    (=apply-proposals-leaves-source-byte-identical=).
+
+Section shape on disk:
+
+#+begin_example
+* Sanskrit (DharmaMitra)
+:PROPERTIES:
+:DM_SEGMENTNR: SA_T06_bsa034:64
+:DM_RANK: 2
+:CLAUDE_REASON: Verb prakṛtyaiva matches rang bzhin gyis
+:LAST_REALIGN: 2026-04-30
+:END:
+
+iha bodhisattvaḥ prakṛtyaiva dānarucirbhavati
+#+end_example
 
 Plus =C-c u z d= / =C-c u z D= keybindings and two menu entries
 under =Zettelkasten / Thesaurus=.
-
-The writer is symmetric to the Phase-1 walker (Sanskrit-parallel
-feature): same sibling navigation, opposite direction.  Replaces
-existing Sanskrit body or inserts new sibling at the Sentence
-boundary when absent.
 
 * Design decisions (confirmed by user 2026-04-30)
 
@@ -548,16 +586,17 @@ correct rank.
 
 * Status
 
-| Phase | Commit  | What                                                      |
-|-------|---------|-----------------------------------------------------------|
-| 1     | =307183f= | HTTP client (chat-translate + search), SSE parser, cache |
-| 2     | =88385cd= | Metadata reader + per-segment candidates orchestrator    |
-| 3     | =4e881d1= | Claude disambiguation among candidates                   |
-| 4     | =4b54f7b= | Proposals + document walker + preview renderer           |
-| 5     | =41689ac= | Writer + apply + interactive commands + keybindings      |
-| 6     | (this commit) | Design doc + CLAUDE.md update + live test           |
+| Phase | Commit  | What                                                            |
+|-------|---------|-----------------------------------------------------------------|
+| 1     | =307183f= | HTTP client (chat-translate + search), SSE parser, cache       |
+| 2     | =88385cd= | Metadata reader + per-segment candidates orchestrator          |
+| 3     | =4e881d1= | Claude disambiguation among candidates                         |
+| 4     | =4b54f7b= | Proposals + document walker + preview renderer                 |
+| 5     | =41689ac= | Writer + apply + interactive commands (source-write — retired) |
+| 6     | =31ad7dd= | Initial design doc + CLAUDE.md + first live test               |
+| 7     | (this commit) | Source writer retired; apply targets analysis files only |
 
-Suite: 1694 / 1693 expected / 0 unexpected / 1 intentional skip.
+Suite: 1696 / 1695 expected / 0 unexpected / 1 intentional skip.
 
 ---
 

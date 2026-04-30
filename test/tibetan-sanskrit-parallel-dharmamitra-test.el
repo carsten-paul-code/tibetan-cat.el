@@ -780,161 +780,188 @@ and reason are visible in the buffer."
     (with-current-buffer buf (kill-buffer))))
 
 ;; ============================================================================
-;; PHASE 5 — Writer + apply + interactive commands
+;; PHASE 7 — Apply writes to ANALYSIS files, never the source
 ;; ============================================================================
 ;;
-;; Phase 4 shipped the read-only preview engine.  Phase 5 adds the
-;; write side: the generic Sanskrit writer (in
-;; core/tibetan-sanskrit-parallel.el), the DM-specific apply
-;; functions that wrap it, and the two interactive commands
-;; `M-x tibetan-sanskrit-parallel-dm-realign-segment' /
-;; `M-x ...realign-document'.
+;; Architectural correction (2026-04-30):  Phase 5's apply mode
+;; wrote the realign output back to the source file's
+;; `**** Sanskrit' siblings.  That violated the principle that the
+;; analysis pipeline must never modify the user's source file
+;; (CLAUDE.md §6 — preserve user content; the source is the user's
+;; curated input).
 ;;
-;; Tests stub the DM API + claude-pick so no network or Claude
-;; calls happen.  The writer is exercised against a real temp
-;; org-mode file (no stubs needed — it's pure file I/O) so we
-;; verify that the segment + Sanskrit sibling navigation lands
-;; in the right buffer position and that surrounding content is
-;; preserved.
+;; Phase 7 refactors the apply path:
+;;   - DELETED: `tibetan-sanskrit-parallel-write-sanskrit-for-segment-id'
+;;     (the source writer) and its 4 tests.
+;;   - NEW: `--write-dharmamitra-sanskrit-to-analysis ANALYSIS-FILE
+;;     PROPOSAL' writes a top-level `* Sanskrit (DharmaMitra)'
+;;     section into the per-segment analysis file (seg-NNN.org).
+;;     Top-level placement (outside `* Auto-Analysis') means it
+;;     survives reanalysis naturally — no preserve-list change
+;;     needed.
+;;   - `--apply-proposal' now takes (ANALYSIS-FILE PROPOSAL) and
+;;     calls the analysis-file writer.
+;;   - `--apply-proposals' takes (SOURCE-FILE PROPOSALS), resolves
+;;     analysis paths via `tibetan-analysis-get-filepath' (visiting
+;;     the source buffer), and dispatches.
+;;
+;; The source file remains untouched on every apply — verified by
+;; an explicit regression test below.
 
 ;; ----------------------------------------------------------------------------
-;; Generic Sanskrit writer (in core/tibetan-sanskrit-parallel.el)
+;; Analysis-file writer (in core/tibetan-sanskrit-parallel-dharmamitra.el)
 ;; ----------------------------------------------------------------------------
 
-(ert-deftest tibetan-skt-write-sanskrit-replaces-existing-sibling-body ()
-  "When the segment has an existing `**** Sanskrit' sibling,
-the writer replaces its body with the new IAST string.  Body
-of the **** Segment heading and the next Sentence sibling are
-untouched."
-  (skip-unless (fboundp 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id))
-  (tibetan-skt-dm-test--with-source-file-multi-segment
-   (let ((ok (tibetan-sanskrit-parallel-write-sanskrit-for-segment-id
-              source-file 1 "iha bodhisattvaḥ replaced")))
+(defmacro tibetan-skt-dm-test--with-analysis-file (initial-content &rest body)
+  "Write INITIAL-CONTENT to a temp seg-005.org and bind ANALYSIS-FILE."
+  (declare (indent 1))
+  `(let* ((dir (make-temp-file "tibetan-skt-dm-write-analysis-" t))
+          (analysis-file (expand-file-name "seg-005.org" dir)))
+     (unwind-protect
+         (progn
+           (with-temp-file analysis-file (insert ,initial-content))
+           ,@body)
+       (delete-directory dir t))))
+
+(defun tibetan-skt-dm-test--proposal-fixture ()
+  "Standard proposal plist for Phase 7 writer tests."
+  (list :seg-id 5
+        :tibetan-text "བདག་"
+        :current-sanskrit "old"
+        :proposed-sanskrit "iha bodhisattvaḥ prakṛtyaiva dānarucirbhavati"
+        :proposed-rank 2
+        :proposed-segmentnr "SA_T06_bsa034:64"
+        :reason "verb prakṛtyaiva matches"
+        :status 'change))
+
+(ert-deftest tibetan-skt-dm-write-analysis-creates-section-when-absent ()
+  "Writer adds a top-level `* Sanskrit (DharmaMitra)' section to
+the analysis file when none exists yet."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis))
+  (tibetan-skt-dm-test--with-analysis-file
+   (concat "#+TITLE: Segment 5 Analysis\n\n"
+           "* Tibetan Text\nསྡོམ་ལ་\n\n"
+           "* Auto-Analysis\n** Wylie\n[stub]\n\n"
+           "* My Notes\n\n* Working Translation\n\n* Footnotes\n")
+   (let ((ok (tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis
+              analysis-file (tibetan-skt-dm-test--proposal-fixture))))
      (should ok)
      (with-temp-buffer
-       (insert-file-contents source-file)
+       (insert-file-contents analysis-file)
        (let ((s (buffer-string)))
-         ;; New text is present.
-         (should (string-match-p "iha bodhisattvaḥ replaced" s))
-         ;; Old text is gone.
-         (should-not (string-match-p "current sanskrit one" s))
-         ;; Tibetan body of segment 1 is still there.
-         (should (string-match-p "བདག་གིས་ལས་བྱས" s))
-         ;; Segment 2 + its Sanskrit are untouched.
-         (should (string-match-p "ཁྱོད་ཀྱིས་ཤེས" s))
-         (should (string-match-p "current sanskrit two" s)))))))
+         (should (string-match-p "^\\* Sanskrit (DharmaMitra)$" s))
+         (should (string-match-p "iha bodhisattvaḥ prakṛtyaiva" s)))))))
 
-(ert-deftest tibetan-skt-write-sanskrit-creates-sibling-when-missing ()
-  "When the segment has no `**** Sanskrit' sibling, the writer
-creates one with the given body."
-  (skip-unless (fboundp 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id))
-  (let* ((dir (make-temp-file "tibetan-skt-write-" t))
-         (f (expand-file-name "src.org" dir)))
-    (unwind-protect
-        (progn
-          (with-temp-file f
-            (insert "#+TITLE: T\n\n"
-                    "* Tibetan Text\n"
-                    "*** Sentence 1\n"
-                    "**** Segment 1\n"
-                    "བདག་\n\n"
-                    "*** Sentence 2\n"
-                    "**** Segment 2\n"
-                    "ཁྱོད་\n"))
-          (let ((ok (tibetan-sanskrit-parallel-write-sanskrit-for-segment-id
-                     f 1 "fresh sanskrit")))
-            (should ok)
-            (with-temp-buffer
-              (insert-file-contents f)
-              (let ((s (buffer-string)))
-                (should (string-match-p "^\\*\\*\\*\\* Sanskrit$" s))
-                (should (string-match-p "fresh sanskrit" s))
-                ;; Tibetan body still present.
-                (should (string-match-p "བདག་" s))
-                ;; Other segment untouched.
-                (should (string-match-p "ཁྱོད་" s))))))
-      (delete-directory dir t))))
+(ert-deftest tibetan-skt-dm-write-analysis-replaces-existing-section ()
+  "When `* Sanskrit (DharmaMitra)' already exists, writer replaces
+its body and property drawer."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis))
+  (tibetan-skt-dm-test--with-analysis-file
+   (concat "#+TITLE: Segment 5 Analysis\n\n"
+           "* Tibetan Text\nསྡོམ་ལ་\n\n"
+           "* Sanskrit (DharmaMitra)\n"
+           ":PROPERTIES:\n:DM_SEGMENTNR: OLD-ID:99\n:END:\n"
+           "OLD STALE TEXT\n\n"
+           "* My Notes\nuser-content-keep\n")
+   (let ((ok (tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis
+              analysis-file (tibetan-skt-dm-test--proposal-fixture))))
+     (should ok)
+     (with-temp-buffer
+       (insert-file-contents analysis-file)
+       (let ((s (buffer-string)))
+         (should (string-match-p "iha bodhisattvaḥ prakṛtyaiva" s))
+         (should-not (string-match-p "OLD STALE TEXT" s))
+         (should-not (string-match-p "OLD-ID:99" s))
+         ;; My Notes preserved.
+         (should (string-match-p "user-content-keep" s)))))))
 
-(ert-deftest tibetan-skt-write-sanskrit-nil-when-segment-missing ()
-  "Out-of-range SEG-ID returns nil; file unchanged."
-  (skip-unless (fboundp 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id))
-  (tibetan-skt-dm-test--with-source-file-multi-segment
-   (let ((before (with-temp-buffer
-                   (insert-file-contents source-file)
-                   (buffer-string))))
-     (should-not (tibetan-sanskrit-parallel-write-sanskrit-for-segment-id
-                  source-file 99 "nope"))
-     (let ((after (with-temp-buffer
-                    (insert-file-contents source-file)
-                    (buffer-string))))
-       (should (equal before after))))))
-
-(ert-deftest tibetan-skt-write-sanskrit-writes-only-targeted-segment ()
-  "Writing to segment 1 doesn't disturb segment 2's Sanskrit
-body — the writer locates the right sibling within the right
-sentence parent."
-  (skip-unless (fboundp 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id))
-  (tibetan-skt-dm-test--with-source-file-multi-segment
-   (tibetan-sanskrit-parallel-write-sanskrit-for-segment-id
-    source-file 1 "NEW_FOR_ONE")
+(ert-deftest tibetan-skt-dm-write-analysis-property-drawer-carries-metadata ()
+  "Section's property drawer includes DM_SEGMENTNR / DM_RANK /
+CLAUDE_REASON / LAST_REALIGN — all useful for the user
+auditing how the alignment was reached."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis))
+  (tibetan-skt-dm-test--with-analysis-file
+   "#+TITLE: T\n\n* Tibetan Text\n\n"
+   (tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis
+    analysis-file (tibetan-skt-dm-test--proposal-fixture))
    (with-temp-buffer
-     (insert-file-contents source-file)
+     (insert-file-contents analysis-file)
      (let ((s (buffer-string)))
-       (should (string-match-p "NEW_FOR_ONE" s))
-       ;; Segment 2's Sanskrit body remains the original.
-       (should (string-match-p "current sanskrit two" s))
-       ;; Segment 1's old Sanskrit is gone.
-       (should-not (string-match-p "current sanskrit one" s))))))
+       (should (string-match-p ":DM_SEGMENTNR: SA_T06_bsa034:64" s))
+       (should (string-match-p ":DM_RANK: 2" s))
+       (should (string-match-p ":CLAUDE_REASON: verb prakṛtyaiva matches" s))
+       ;; LAST_REALIGN is a date stamp — just verify the key is there.
+       (should (string-match-p ":LAST_REALIGN:" s))))))
+
+(ert-deftest tibetan-skt-dm-write-analysis-preserves-other-sections ()
+  "Tibetan Text, Auto-Analysis, My Notes, Working Translation,
+Footnotes — none touched by the writer."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis))
+  (tibetan-skt-dm-test--with-analysis-file
+   (concat "#+TITLE: T\n\n"
+           "* Tibetan Text\nTIBETAN_BODY\n\n"
+           "* Auto-Analysis\nAUTO_BODY\n** Wylie\nWYLIE_BODY\n\n"
+           "* My Notes\nNOTES_BODY\n\n"
+           "* Working Translation\nWT_BODY\n\n"
+           "* Footnotes\nFOOTNOTES_BODY\n")
+   (tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis
+    analysis-file (tibetan-skt-dm-test--proposal-fixture))
+   (with-temp-buffer
+     (insert-file-contents analysis-file)
+     (let ((s (buffer-string)))
+       (should (string-match-p "TIBETAN_BODY" s))
+       (should (string-match-p "AUTO_BODY" s))
+       (should (string-match-p "WYLIE_BODY" s))
+       (should (string-match-p "NOTES_BODY" s))
+       (should (string-match-p "WT_BODY" s))
+       (should (string-match-p "FOOTNOTES_BODY" s))))))
+
+(ert-deftest tibetan-skt-dm-write-analysis-nil-when-file-missing ()
+  "Non-existent ANALYSIS-FILE returns nil without crashing."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis))
+  (should-not (tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis
+               "/nonexistent/path/seg-005.org"
+               (tibetan-skt-dm-test--proposal-fixture))))
 
 ;; ----------------------------------------------------------------------------
-;; DM apply-proposal (status-aware)
+;; DM apply-proposal (status-aware) — refactored to call analysis writer
 ;; ----------------------------------------------------------------------------
 
 (ert-deftest tibetan-skt-dm-apply-proposal-applies-change-status ()
-  "Proposal with `:status' `change' calls the writer with the
-proposed text."
+  "Proposal with `:status' `change' calls the analysis-file writer
+(NOT a source writer).  Phase 7 architecture: source is never
+touched."
   (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--apply-proposal))
-  (let (write-calls)
-    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id)
-               (lambda (file seg text)
-                 (push (list file seg text) write-calls)
+  (let (analysis-write-calls)
+    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis)
+               (lambda (file proposal)
+                 (push (list file proposal) analysis-write-calls)
                  t)))
-      (let ((p (list :seg-id 5
-                     :tibetan-text "བདག་"
-                     :current-sanskrit "old"
-                     :proposed-sanskrit "new"
-                     :status 'change
-                     :reason "ok")))
-        (tibetan-sanskrit-parallel-dm--apply-proposal "/tmp/x.org" p)
-        (should (= (length write-calls) 1))
-        (let ((call (car write-calls)))
-          (should (equal (nth 0 call) "/tmp/x.org"))
-          (should (= (nth 1 call) 5))
-          (should (equal (nth 2 call) "new")))))))
+      (let ((p (tibetan-skt-dm-test--proposal-fixture)))
+        (tibetan-sanskrit-parallel-dm--apply-proposal "/tmp/seg-005.org" p)
+        (should (= (length analysis-write-calls) 1))
+        (let ((call (car analysis-write-calls)))
+          (should (equal (nth 0 call) "/tmp/seg-005.org"))
+          (should (equal (plist-get (nth 1 call) :proposed-sanskrit)
+                         "iha bodhisattvaḥ prakṛtyaiva dānarucirbhavati")))))))
 
 (ert-deftest tibetan-skt-dm-apply-proposal-skips-unchanged-status ()
-  "Proposal with `:status' `unchanged' is a no-op — no write call."
+  "Proposal with `:status' `unchanged' is a no-op."
   (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--apply-proposal))
   (let (write-calls)
-    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id)
-               (lambda (&rest args)
-                 (push args write-calls)
-                 t)))
+    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis)
+               (lambda (&rest args) (push args write-calls) t)))
       (let ((p (list :seg-id 5 :status 'unchanged
                      :proposed-sanskrit "x")))
         (tibetan-sanskrit-parallel-dm--apply-proposal "/tmp/x.org" p)
         (should (= (length write-calls) 0))))))
 
 (ert-deftest tibetan-skt-dm-apply-proposal-skips-no-candidates-status ()
-  "Proposal with `:status' `no-candidates' is a no-op — no write call.
-DM had nothing to propose; we don't blank out the existing
-sibling."
+  "Proposal with `:status' `no-candidates' is a no-op."
   (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--apply-proposal))
   (let (write-calls)
-    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id)
-               (lambda (&rest args)
-                 (push args write-calls)
-                 t)))
+    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-dm--write-dharmamitra-sanskrit-to-analysis)
+               (lambda (&rest args) (push args write-calls) t)))
       (let ((p (list :seg-id 5 :status 'no-candidates
                      :proposed-sanskrit nil)))
         (tibetan-sanskrit-parallel-dm--apply-proposal "/tmp/x.org" p)
@@ -946,38 +973,78 @@ sibling."
 
 (ert-deftest tibetan-skt-dm-apply-proposals-touches-only-change-status ()
   "Apply-all writes ONLY proposals with `change' status; returns
-count of writes."
+the count of successful writes.  Each write goes to the
+proposal's resolved analysis file (seg-NNN.org), NOT to the
+source."
   (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--apply-proposals))
-  (let (write-calls)
-    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id)
-               (lambda (_file seg _text)
-                 (push seg write-calls)
-                 t)))
-      (let* ((proposals
-              (list (list :seg-id 1 :status 'change
-                          :proposed-sanskrit "a")
-                    (list :seg-id 2 :status 'unchanged
-                          :proposed-sanskrit "b")
-                    (list :seg-id 3 :status 'no-candidates
-                          :proposed-sanskrit nil)
-                    (list :seg-id 4 :status 'change
-                          :proposed-sanskrit "d")))
-             (n (tibetan-sanskrit-parallel-dm--apply-proposals
-                 "/tmp/x.org" proposals)))
-        (should (= n 2))
-        (should (equal (sort write-calls #'<) '(1 4)))))))
+  (tibetan-skt-dm-test--with-source-file-multi-segment
+   (let (write-calls)
+     (cl-letf (((symbol-function 'tibetan-analysis-get-filepath)
+                (lambda (seg-id &optional _src)
+                  (format "/tmp/seg-%03d.org" seg-id)))
+               ((symbol-function 'tibetan-sanskrit-parallel-dm--apply-proposal)
+                (lambda (file p)
+                  ;; Mimic real apply-proposal's status gate.
+                  (when (eq (plist-get p :status) 'change)
+                    (push (cons (plist-get p :seg-id) file) write-calls)
+                    t))))
+       (let* ((proposals
+               (list (list :seg-id 1 :status 'change :proposed-sanskrit "a")
+                     (list :seg-id 2 :status 'unchanged :proposed-sanskrit "b")
+                     (list :seg-id 3 :status 'no-candidates
+                           :proposed-sanskrit nil)
+                     (list :seg-id 4 :status 'change :proposed-sanskrit "d")))
+              (n (tibetan-sanskrit-parallel-dm--apply-proposals
+                  source-file proposals)))
+         (should (= n 2))
+         (should (= (length write-calls) 2))
+         ;; Each call resolved to the right analysis file.
+         (should (member (cons 1 "/tmp/seg-001.org") write-calls))
+         (should (member (cons 4 "/tmp/seg-004.org") write-calls)))))))
 
 (ert-deftest tibetan-skt-dm-apply-proposals-empty-returns-zero ()
-  "Empty proposal list returns 0; writer not called."
+  "Empty proposal list returns 0; no writers called."
   (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--apply-proposals))
-  (let ((write-calls 0))
-    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-write-sanskrit-for-segment-id)
-               (lambda (&rest _) (cl-incf write-calls) t)))
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'tibetan-sanskrit-parallel-dm--apply-proposal)
+               (lambda (&rest _) (cl-incf calls) t)))
       (should (= 0 (tibetan-sanskrit-parallel-dm--apply-proposals
                     "/tmp/x.org" nil)))
       (should (= 0 (tibetan-sanskrit-parallel-dm--apply-proposals
                     "/tmp/x.org" '())))
-      (should (= write-calls 0)))))
+      (should (= calls 0)))))
+
+;; ----------------------------------------------------------------------------
+;; REGRESSION: source file is NEVER modified by apply (Phase 7 invariant)
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-skt-dm-apply-proposals-leaves-source-byte-identical ()
+  "The Phase 7 architectural invariant: `--apply-proposals' MUST NOT
+modify the source file under any circumstances.  Verified by
+running the function on a real source file with multiple
+`change'-status proposals and asserting the source's bytes are
+unchanged before vs after."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--apply-proposals))
+  (tibetan-skt-dm-test--with-source-file-multi-segment
+   (let* ((src-before
+           (with-temp-buffer (insert-file-contents source-file) (buffer-string)))
+          (proposals
+           (list (list :seg-id 1 :status 'change
+                       :proposed-sanskrit "would-be-change-1"
+                       :proposed-rank 1 :proposed-segmentnr "X:1"
+                       :reason "test")
+                 (list :seg-id 2 :status 'change
+                       :proposed-sanskrit "would-be-change-2"
+                       :proposed-rank 1 :proposed-segmentnr "X:2"
+                       :reason "test"))))
+     (cl-letf (((symbol-function 'tibetan-analysis-get-filepath)
+                (lambda (seg-id &optional _src)
+                  (format "/tmp/no-such-analysis-%d.org" seg-id))))
+       (tibetan-sanskrit-parallel-dm--apply-proposals
+        source-file proposals))
+     (let ((src-after
+            (with-temp-buffer (insert-file-contents source-file) (buffer-string))))
+       (should (equal src-before src-after))))))
 
 ;; ----------------------------------------------------------------------------
 ;; Interactive commands

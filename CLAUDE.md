@@ -218,7 +218,7 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-04-30): **1694 tests, 1693 expected, 0 unexpected
+Current state (2026-04-30): **1696 tests, 1695 expected, 0 unexpected
 failures, 1 intentional skip (compound-analysis-callable).**  Carsten
 runs this after every change and expects it to stay green.
 
@@ -656,16 +656,32 @@ Phases:
    summarises change / unchanged / no-candidates counts and
    shows per-segment current vs proposed Sanskrit + Claude
    reason.
-5. `41689ac` — Writer + apply + interactive commands.
+5. `41689ac` — Writer + apply + interactive commands (initial).
+   Source-side writer
    `tibetan-sanskrit-parallel-write-sanskrit-for-segment-id`
-   (generic, in `core/tibetan-sanskrit-parallel.el`) replaces
-   existing Sanskrit body or inserts new sibling.  Status-
-   aware apply skips `unchanged` / `no-candidates` (CLAUDE.md
-   §6 — preserve user content).  `C-c u z d` segment,
-   `C-c u z D` document; both default to preview, `C-u`
-   applies.
+   that replaced segment's `**** Sanskrit` sibling body.
+   `C-c u z d` segment, `C-c u z D` document; both default to
+   preview, `C-u` applies.
 
-Tests: 72 ERT specs across
+6. `31ad7dd` — First design doc + CLAUDE.md + first live test
+   on three gotrapatala segments.
+
+7. `(this commit)` — **Architectural correction.**  The
+   source-side writer was retired.  Live test on segment 5
+   showed that DM segment granularity is coarser than Tibetan
+   segment granularity (a 1-line uddāna verse line received a
+   10-line full-chapter-opening replacement).  More
+   fundamentally, modifying the user's source from an analysis
+   command violates CLAUDE.md §6.  New behaviour: apply mode
+   writes to the per-segment analysis file (seg-NNN.org) as a
+   top-level `* Sanskrit (DharmaMitra)` section.  Source file
+   is NEVER touched (regression-tested).  The new section
+   carries DM_SEGMENTNR / DM_RANK / CLAUDE_REASON /
+   LAST_REALIGN in its property drawer + the proposed Sanskrit
+   in its body.  Top-level placement means it survives
+   reanalysis naturally without preserve-list changes.
+
+Tests: 79 ERT specs across
 `test/tibetan-dharmamitra-api-test.el` (19) and
 `test/tibetan-sanskrit-parallel-dharmamitra-test.el` (53).
 
@@ -915,7 +931,7 @@ folio alongside the text so the caller can thread it through.
 ## 9. First thing to do in a new session
 
 1. `make test` (or the batch command in §4). Confirm baseline green
-   (expect 1694 / 1693 expected / 0 unexpected / 1 skipped at 2026-04-30).
+   (expect 1696 / 1695 expected / 0 unexpected / 1 skipped at 2026-04-30).
 2. Skim `MEMORY.md` (auto-memory) — `working_discipline.md` is the
    baseline rule set; this file refines it for tibetan-cat.el.
 3. Skim `git log --oneline -20` for anything newer than §5.13 (this

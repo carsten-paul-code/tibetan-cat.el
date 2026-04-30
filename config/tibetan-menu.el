@@ -138,11 +138,11 @@
       :active (fboundp 'tibetan-cat-toggle-source-mode-parallel)]
      ["DharmaMitra Realign Segment (C-c u z d)"
       tibetan-sanskrit-parallel-dm-realign-segment
-      :help "Re-align the **** Sanskrit sibling for the segment under cursor via DharmaMitra search + Claude disambiguation.  Without prefix: preview.  C-u: apply.  Requires #+DM_SANSKRIT_SOURCE: header on the source file."
+      :help "DM-search + Claude-pick the matching Sanskrit for the segment under cursor.  Without prefix: preview.  C-u: write a `* Sanskrit (DharmaMitra)' section to the analysis file (source file untouched).  Requires #+DM_SANSKRIT_SOURCE: header on the source."
       :active (fboundp 'tibetan-sanskrit-parallel-dm-realign-segment)]
      ["DharmaMitra Realign Document (C-c u z D)"
       tibetan-sanskrit-parallel-dm-realign-document
-      :help "Re-align every **** Sanskrit sibling in the document via DharmaMitra search + Claude disambiguation.  Without prefix: preview only.  C-u: apply.  Calls DM + Claude per segment; gotrapatala (97 segments) takes ~5 minutes wallclock."
+      :help "DM-search + Claude-pick the matching Sanskrit for every segment.  Without prefix: preview.  C-u: write `* Sanskrit (DharmaMitra)' to each seg-NNN.org analysis file (source untouched).  ~5 minutes wallclock for a 97-segment file."
       :active (fboundp 'tibetan-sanskrit-parallel-dm-realign-document)]
      "---"
      ["Auto-Create Zettels for Buddhist Terms (C-c u z B)"
