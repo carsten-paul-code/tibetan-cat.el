@@ -353,5 +353,58 @@ at level 2."
         (should entry)
         (should (= (nth 2 entry) 2))))))
 
+;; ============================================================================
+;; Queue integration (concurrency optimization, 2026-04-30)
+;;
+;; Sanskrit + Combined calls used to bypass `tibetan-claude-queue'
+;; entirely, which meant a batch of N parallel-mode segments fired
+;; N simultaneous Sanskrit requests with no rate-limit safety + no
+;; 429 retry.  These tests assert that `--request-translation' now
+;; routes through the queue.
+;; ============================================================================
+
+(ert-deftest tibetan-skt-request-translation-uses-queue ()
+  "`--request-translation' submits via `tibetan-claude-queue-submit'
+\(parity with the Tibetan call's queue use)."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--request-translation))
+  (let ((submitted nil))
+    ;; Stub the queue-submit so we don't hit the network.
+    (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+               (lambda (_thunk &rest args)
+                 (setq submitted (list :label (plist-get args :label)
+                                       :on-fail (plist-get args :on-fail)))
+                 nil))
+              ((symbol-function 'tibetan-analysis--ensure-gptel-ready)
+               (lambda () nil))
+              ;; Make `gptel-request' fboundp so the early guard passes.
+              ((symbol-function 'gptel-request)
+               (lambda (&rest _) nil)))
+      (tibetan-analysis-sanskrit--request-translation
+       (list :iast "ahaṃ" :devanagari nil :script-source 'iast-line)
+       nil "/tmp/seg-001.org"))
+    (should submitted)
+    ;; Label carries the analysis-file basename + a `skt:' tag so
+    ;; queue diagnostics distinguish Sanskrit jobs from Tibetan.
+    (should (string-match-p "\\`skt:" (plist-get submitted :label)))
+    (should (string-match-p "seg-001" (plist-get submitted :label)))
+    (should (functionp (plist-get submitted :on-fail)))))
+
+(ert-deftest tibetan-skt-request-translation-no-queue-submit-when-args-missing ()
+  "`--request-translation' must not submit anything to the queue
+when SANSKRIT-PLIST is nil / lacks IAST."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--request-translation))
+  (let ((submitted nil))
+    (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+               (lambda (&rest _) (setq submitted t) nil))
+              ((symbol-function 'tibetan-analysis--ensure-gptel-ready)
+               (lambda () nil))
+              ((symbol-function 'gptel-request)
+               (lambda (&rest _) nil)))
+      (tibetan-analysis-sanskrit--request-translation nil nil "/tmp/x.org")
+      (tibetan-analysis-sanskrit--request-translation
+       (list :iast "" :devanagari nil :script-source 'iast-line)
+       nil "/tmp/x.org"))
+    (should-not submitted)))
+
 (provide 'tibetan-analysis-sanskrit-test)
 ;;; tibetan-analysis-sanskrit-test.el ends here

@@ -61,6 +61,8 @@
                   "tibetan-analysis-claude" ())
 (declare-function tibetan-analysis--read-source-metadata
                   "tibetan-analysis-claude" (source-file))
+(declare-function tibetan-analysis--claude-status-rate-limited-p
+                  "tibetan-analysis-claude" (info))
 (declare-function tibetan-claude-queue-submit
                   "tibetan-claude-queue" (&rest args))
 
@@ -435,30 +437,80 @@ under `* Sanskrit Analysis'.  CALLBACK (if non-nil) is called
 with one arg — the parsed plist — after the write.  Phase 5's
 Combined dispatcher uses CALLBACK to chain.
 
+Goes through `tibetan-claude-queue' so the request shares the
+rate-limit budget + retry-on-429 logic with Tibetan calls
+\(concurrency optimization, 2026-04-30:  before this commit
+the Sanskrit call bypassed the queue entirely, which meant a
+batch of N segments fired N simultaneous Sanskrit requests
+with no throttle and no 429 retry).  Per-segment
+concurrency is preserved: with default concurrency cap of 3,
+one segment's Tibetan + Sanskrit calls run in parallel, and
+the chained Combined call follows once both finish.
+
 No-op when:
   - SANSKRIT-PLIST is nil / lacks IAST.
   - `gptel' or `tibetan-claude-queue' is missing (soft-required).
   - Build prompts returns nil."
   (when (and sanskrit-plist
              (fboundp 'gptel-request)
-             (fboundp 'tibetan-analysis--ensure-gptel-ready))
-    (tibetan-analysis--ensure-gptel-ready)
-    (let ((prompts (tibetan-analysis-sanskrit--build-prompts
-                    sanskrit-plist source-file analysis-file)))
+             (fboundp 'tibetan-analysis--ensure-gptel-ready)
+             (fboundp 'tibetan-claude-queue-submit))
+    (require 'tibetan-claude-queue)
+    (let* ((label (and analysis-file
+                       (concat "skt:"
+                               (file-name-nondirectory analysis-file))))
+           (prompts (tibetan-analysis-sanskrit--build-prompts
+                     sanskrit-plist source-file analysis-file)))
       (when prompts
-        (let ((gptel-cache '(system)))
-          (gptel-request
-           (cdr prompts)
-           :system (car prompts)
-           :callback
-           (lambda (response _info)
-             (when (and response (stringp response))
-               (let ((parsed
-                      (tibetan-analysis-sanskrit--parse-claude-sections
-                       response)))
-                 (tibetan-analysis-sanskrit--insert-sections
-                  response analysis-file)
-                 (when callback (funcall callback parsed)))))))))))
+        (tibetan-claude-queue-submit
+         (lambda (done)
+           (condition-case err
+               (progn
+                 (tibetan-analysis--ensure-gptel-ready)
+                 (let ((gptel-cache '(system)))
+                   (gptel-request
+                    (cdr prompts)
+                    :system (car prompts)
+                    :callback
+                    (lambda (response info)
+                      (cond
+                       ((and response (stringp response)
+                             (not (string-empty-p response)))
+                        (condition-case e
+                            (let ((parsed
+                                   (tibetan-analysis-sanskrit--parse-claude-sections
+                                    response)))
+                              (tibetan-analysis-sanskrit--insert-sections
+                               response analysis-file)
+                              (when callback (funcall callback parsed)))
+                          (error
+                           (message "Sanskrit insert failed for %s: %s"
+                                    (or label "<file>")
+                                    (error-message-string e))))
+                        (funcall done '(:status ok)))
+                       ((and (fboundp 'tibetan-analysis--claude-status-rate-limited-p)
+                             (tibetan-analysis--claude-status-rate-limited-p info))
+                        (funcall done '(:status rate-limited)))
+                       (t
+                        (funcall done
+                                 (list :status 'error
+                                       :error (format "%s"
+                                                      (or (and (listp info)
+                                                               (plist-get info :status))
+                                                          "no response"))))))))))
+             (error
+              (funcall done (list :status 'error
+                                  :error (error-message-string err))))))
+         :label label
+         :on-fail
+         (lambda (status)
+           (let ((kind (plist-get status :status)))
+             (message "Sanskrit Claude request failed for %s: %s"
+                      (or label "<file>")
+                      (cond
+                       ((eq kind 'rate-limited)
+                        "rate-limited (HTTP 429) after retries")
+                       (t (or (plist-get status :error) "unknown")))))))))))
 
 (provide 'tibetan-analysis-sanskrit)
 ;;; tibetan-analysis-sanskrit.el ends here

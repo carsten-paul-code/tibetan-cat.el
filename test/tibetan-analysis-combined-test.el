@@ -274,5 +274,56 @@ appears, Divergence does NOT."
       (should (equal (plist-get p :translation) "UPDATED translation"))
       (should (equal (plist-get p :divergence)  "UPDATED divergence")))))
 
+;; ============================================================================
+;; Queue integration (concurrency optimization, 2026-04-30)
+;; ============================================================================
+
+(ert-deftest tibetan-com-request-synthesis-uses-queue ()
+  "`--request-synthesis' submits via `tibetan-claude-queue-submit'."
+  (skip-unless (fboundp 'tibetan-analysis-combined--request-synthesis))
+  (let ((submitted nil))
+    (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+               (lambda (_thunk &rest args)
+                 (setq submitted (list :label (plist-get args :label)
+                                       :on-fail (plist-get args :on-fail)))
+                 nil))
+              ((symbol-function 'tibetan-analysis--ensure-gptel-ready)
+               (lambda () nil))
+              ((symbol-function 'gptel-request)
+               (lambda (&rest _) nil)))
+      (tibetan-analysis-combined--request-synthesis
+       "བདག"
+       (list :iast "ahaṃ" :devanagari nil :script-source 'iast-line)
+       "Tib trans" "Skt trans"
+       nil "/tmp/seg-007.org"))
+    (should submitted)
+    (should (string-match-p "\\`com:" (plist-get submitted :label)))
+    (should (string-match-p "seg-007" (plist-get submitted :label)))
+    (should (functionp (plist-get submitted :on-fail)))))
+
+(ert-deftest tibetan-com-request-synthesis-no-submit-when-needs-fire-false ()
+  "`--request-synthesis' must not touch the queue when
+`--needs-fire-p' returns nil (any required input missing)."
+  (skip-unless (fboundp 'tibetan-analysis-combined--request-synthesis))
+  (let ((submitted nil))
+    (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+               (lambda (&rest _) (setq submitted t) nil))
+              ((symbol-function 'tibetan-analysis--ensure-gptel-ready)
+               (lambda () nil))
+              ((symbol-function 'gptel-request)
+               (lambda (&rest _) nil)))
+      ;; All four args required.  Try with each missing.
+      (tibetan-analysis-combined--request-synthesis
+       nil
+       (list :iast "ahaṃ" :devanagari nil :script-source 'iast-line)
+       "T" "S" nil "/tmp/x.org")
+      (tibetan-analysis-combined--request-synthesis
+       "བདག" nil "T" "S" nil "/tmp/x.org")
+      (tibetan-analysis-combined--request-synthesis
+       "བདག"
+       (list :iast "ahaṃ" :devanagari nil :script-source 'iast-line)
+       "" "S" nil "/tmp/x.org"))
+    (should-not submitted)))
+
 (provide 'tibetan-analysis-combined-test)
 ;;; tibetan-analysis-combined-test.el ends here

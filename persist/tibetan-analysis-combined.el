@@ -62,6 +62,10 @@
                   "tibetan-analysis-claude" ())
 (declare-function tibetan-analysis--read-source-metadata
                   "tibetan-analysis-claude" (source-file))
+(declare-function tibetan-analysis--claude-status-rate-limited-p
+                  "tibetan-analysis-claude" (info))
+(declare-function tibetan-claude-queue-submit
+                  "tibetan-claude-queue" (&rest args))
 
 ;; ============================================================================
 ;; PROMPT
@@ -412,31 +416,81 @@ On response, parses sections + writes them under `* Combined
 Analysis' in ANALYSIS-FILE.  CALLBACK (if non-nil) is called
 with one arg — the parsed plist — after the write.
 
-No-op when `--needs-fire-p' returns nil or gptel is missing."
+Goes through `tibetan-claude-queue' so the request shares the
+rate-limit budget + retry-on-429 logic with the Tibetan and
+Sanskrit calls (concurrency optimization, 2026-04-30:  before
+this commit the Combined call bypassed the queue entirely).
+The Combined call is naturally serial relative to Tibetan +
+Sanskrit (it chains off the Sanskrit callback, runs only when
+both translations are present), so queueing it adds rate-limit
+safety without changing the per-segment latency profile.
+
+No-op when `--needs-fire-p' returns nil or gptel /
+tibetan-claude-queue are missing."
   (when (and (tibetan-analysis-combined--needs-fire-p
               tibetan-text sanskrit-plist
               tibetan-translation sanskrit-translation)
              (fboundp 'gptel-request)
-             (fboundp 'tibetan-analysis--ensure-gptel-ready))
-    (tibetan-analysis--ensure-gptel-ready)
-    (let ((prompts (tibetan-analysis-combined--build-prompts
-                    tibetan-text sanskrit-plist
-                    tibetan-translation sanskrit-translation
-                    source-file analysis-file)))
+             (fboundp 'tibetan-analysis--ensure-gptel-ready)
+             (fboundp 'tibetan-claude-queue-submit))
+    (require 'tibetan-claude-queue)
+    (let* ((label (and analysis-file
+                       (concat "com:"
+                               (file-name-nondirectory analysis-file))))
+           (prompts (tibetan-analysis-combined--build-prompts
+                     tibetan-text sanskrit-plist
+                     tibetan-translation sanskrit-translation
+                     source-file analysis-file)))
       (when prompts
-        (let ((gptel-cache '(system)))
-          (gptel-request
-           (cdr prompts)
-           :system (car prompts)
-           :callback
-           (lambda (response _info)
-             (when (and response (stringp response))
-               (let ((parsed
-                      (tibetan-analysis-combined--parse-claude-sections
-                       response)))
-                 (tibetan-analysis-combined--insert-sections
-                  response analysis-file)
-                 (when callback (funcall callback parsed)))))))))))
+        (tibetan-claude-queue-submit
+         (lambda (done)
+           (condition-case err
+               (progn
+                 (tibetan-analysis--ensure-gptel-ready)
+                 (let ((gptel-cache '(system)))
+                   (gptel-request
+                    (cdr prompts)
+                    :system (car prompts)
+                    :callback
+                    (lambda (response info)
+                      (cond
+                       ((and response (stringp response)
+                             (not (string-empty-p response)))
+                        (condition-case e
+                            (let ((parsed
+                                   (tibetan-analysis-combined--parse-claude-sections
+                                    response)))
+                              (tibetan-analysis-combined--insert-sections
+                               response analysis-file)
+                              (when callback (funcall callback parsed)))
+                          (error
+                           (message "Combined insert failed for %s: %s"
+                                    (or label "<file>")
+                                    (error-message-string e))))
+                        (funcall done '(:status ok)))
+                       ((and (fboundp 'tibetan-analysis--claude-status-rate-limited-p)
+                             (tibetan-analysis--claude-status-rate-limited-p info))
+                        (funcall done '(:status rate-limited)))
+                       (t
+                        (funcall done
+                                 (list :status 'error
+                                       :error (format "%s"
+                                                      (or (and (listp info)
+                                                               (plist-get info :status))
+                                                          "no response"))))))))))
+             (error
+              (funcall done (list :status 'error
+                                  :error (error-message-string err))))))
+         :label label
+         :on-fail
+         (lambda (status)
+           (let ((kind (plist-get status :status)))
+             (message "Combined Claude request failed for %s: %s"
+                      (or label "<file>")
+                      (cond
+                       ((eq kind 'rate-limited)
+                        "rate-limited (HTTP 429) after retries")
+                       (t (or (plist-get status :error) "unknown")))))))))))
 
 (provide 'tibetan-analysis-combined)
 ;;; tibetan-analysis-combined.el ends here
