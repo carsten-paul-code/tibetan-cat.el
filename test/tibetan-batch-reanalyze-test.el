@@ -399,5 +399,164 @@ canonical order (user sections ABOVE Auto-Analysis, Footnotes last)."
               (should (< auto foot)))))
       (when (file-exists-p tmp) (delete-directory tmp t)))))
 
+;; ============================================================================
+;; Phase 5 of two-language-parallel-analysis (2026-04-30):
+;; reanalyse preserves all six new top-level sections without
+;; re-firing Claude / DM:
+;;   * Sanskrit Text
+;;   * Sanskrit Analysis
+;;   * Combined Analysis
+;;   * DharmaMitra Translation (Tibetan)
+;;   * DharmaMitra Translation (Sanskrit)
+;;   * Sanskrit (DharmaMitra)
+;; ============================================================================
+
+(defun tibetan-batch-test--write-with-top-level-sections (path)
+  "Write a sample analysis file containing every top-level section
+that Phase 5 must preserve across reanalyse-without-refire."
+  (tibetan-batch-test--write-file
+   path
+   (concat
+    "#+TITLE: Segment 9 Analysis\n"
+    "#+TIBETAN_HASH: cafebabe\n"
+    "#+ANALYSIS_VERSION: 1.0\n"
+    "#+CREATED: 2026-04-30\n"
+    "#+LAST_ANALYZED: 2026-04-30\n\n"
+    "* Tibetan Text\nbdag\n\n"
+    "* My Notes\nUSER NOTE\n\n"
+    "* Working Translation\nWT BODY\n\n"
+    "* Sanskrit Text\n\nIAST: ahaṃ\nDevanagari: अहम्\n\n"
+    "* Auto-Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+    "** Word List\n- old entry\n\n"
+    "** Provided Translations\n*** Claude\n[old]\n\n*** Reference Translations\n[none]\n\n"
+    "* Sanskrit Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+    "** Claude Translation\nSANSKRIT-TRANS-BODY\n\n"
+    "** Sandhi Decomposition\nSANDHI-BODY\n\n"
+    "* Combined Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+    "** Combined Translation\nCOMBINED-BODY\n\n"
+    "** Divergence\nDIVERGENCE-BODY\n\n"
+    "* Footnotes\nFOOTNOTE BODY\n\n"
+    "* DharmaMitra Translation (Tibetan)\n:PROPERTIES:\n:LAST_TRANSLATED: 2026-04-30\n:END:\n\n"
+    "DM-TIB-BODY\n\n"
+    "* DharmaMitra Translation (Sanskrit)\n:PROPERTIES:\n:LAST_TRANSLATED: 2026-04-30\n:END:\n\n"
+    "DM-SKT-BODY\n\n"
+    "* Sanskrit (DharmaMitra)\n:PROPERTIES:\n:DM_RANK: 1\n:END:\n\n"
+    "REALIGN-BODY\n")))
+
+(ert-deftest tibetan-reanalyze-preserves-top-level-sections-without-refire ()
+  "Phase 5 of two-language-parallel-analysis (2026-04-30):
+reanalyse-without-refire (`:re-request-claude nil', the
+default) preserves ALL six new top-level sections verbatim."
+  (let* ((tmp (make-temp-file "tibetan-toplevel-" t))
+         (file (expand-file-name "seg-009.org" tmp)))
+    (unwind-protect
+        (progn
+          (tibetan-batch-test--write-with-top-level-sections file)
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (tibetan-batch-test--stub-generate "regen-stub")))
+            (let ((result (tibetan-analysis-reanalyze-file file)))
+              (should (plist-get result :ok))))
+          (let ((s (with-temp-buffer
+                     (insert-file-contents file)
+                     (buffer-string))))
+            ;; All six top-level sections still present.
+            (should (string-match-p "^\\* Sanskrit Text$" s))
+            (should (string-match-p "^\\* Sanskrit Analysis$" s))
+            (should (string-match-p "^\\* Combined Analysis$" s))
+            (should (string-match-p
+                     "^\\* DharmaMitra Translation (Tibetan)$" s))
+            (should (string-match-p
+                     "^\\* DharmaMitra Translation (Sanskrit)$" s))
+            (should (string-match-p "^\\* Sanskrit (DharmaMitra)$" s))
+            ;; Bodies preserved verbatim.
+            (should (string-match-p "IAST: ahaṃ" s))
+            (should (string-match-p "Devanagari: अहम्" s))
+            (should (string-match-p "SANSKRIT-TRANS-BODY" s))
+            (should (string-match-p "SANDHI-BODY" s))
+            (should (string-match-p "COMBINED-BODY" s))
+            (should (string-match-p "DIVERGENCE-BODY" s))
+            (should (string-match-p "DM-TIB-BODY" s))
+            (should (string-match-p "DM-SKT-BODY" s))
+            (should (string-match-p "REALIGN-BODY" s))
+            ;; And the stub regen ran on Auto-Analysis.
+            (should (string-match-p "STUB regen-stub" s))))
+      (when (file-exists-p tmp) (delete-directory tmp t)))))
+
+(ert-deftest tibetan-reanalyze-canonical-section-order ()
+  "Reanalyse rebuild emits sections in canonical order:
+  Tibetan Text → My Notes → Working Translation → Sanskrit Text →
+  Auto-Analysis → Sanskrit Analysis → Combined Analysis →
+  Footnotes → DharmaMitra Translation (Tibetan) →
+  DharmaMitra Translation (Sanskrit) → Sanskrit (DharmaMitra)."
+  (let* ((tmp (make-temp-file "tibetan-toplevel-order-" t))
+         (file (expand-file-name "seg-009.org" tmp)))
+    (unwind-protect
+        (progn
+          (tibetan-batch-test--write-with-top-level-sections file)
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (tibetan-batch-test--stub-generate "order")))
+            (tibetan-analysis-reanalyze-file file))
+          (let* ((s (with-temp-buffer
+                      (insert-file-contents file)
+                      (buffer-string)))
+                 (positions
+                  (mapcar (lambda (n)
+                            (cons n (tibetan-batch-test--section-position s n)))
+                          '("Tibetan Text"
+                            "My Notes"
+                            "Working Translation"
+                            "Sanskrit Text"
+                            "Auto-Analysis"
+                            "Sanskrit Analysis"
+                            "Combined Analysis"
+                            "Footnotes"
+                            "DharmaMitra Translation (Tibetan)"
+                            "DharmaMitra Translation (Sanskrit)"
+                            "Sanskrit (DharmaMitra)"))))
+            ;; Each section is present.
+            (dolist (p positions)
+              (should (cdr p)))
+            ;; Strictly ascending positions.
+            (let ((prev -1))
+              (dolist (p positions)
+                (should (> (cdr p) prev))
+                (setq prev (cdr p))))))
+      (when (file-exists-p tmp) (delete-directory tmp t)))))
+
+;; ============================================================================
+;; Phase 5 dispatcher: --fire-parallel-mode-claude-calls
+;; ============================================================================
+
+(ert-deftest tibetan-fire-parallel-mode-claude-calls-no-op-when-non-parallel ()
+  "When the source file is non-parallel-mode (no
+`#+SOURCE_MODE: parallel-sanskrit'), the dispatcher returns
+nil — no Sanskrit / Combined call fired."
+  (skip-unless (fboundp 'tibetan-analysis--fire-parallel-mode-claude-calls))
+  (let* ((tmp (make-temp-file "tibetan-fire-" t))
+         (src (expand-file-name "doc.org" tmp))
+         (ana (expand-file-name "seg-001.org" tmp)))
+    (unwind-protect
+        (progn
+          (with-temp-file src (insert "#+TITLE: T\n"))
+          (with-temp-file ana (insert "* Tibetan Text\nbdag\n"))
+          ;; Walker returns nil for non-parallel source → dispatcher
+          ;; returns nil without firing.
+          (should-not
+           (tibetan-analysis--fire-parallel-mode-claude-calls
+            "བདག" src ana)))
+      (when (file-exists-p tmp) (delete-directory tmp t)))))
+
+(ert-deftest tibetan-fire-parallel-mode-claude-calls-no-op-when-args-missing ()
+  "When any required arg is nil, the dispatcher returns nil cleanly
+— no error and no Claude call attempt."
+  (skip-unless (fboundp 'tibetan-analysis--fire-parallel-mode-claude-calls))
+  (should-not
+   (tibetan-analysis--fire-parallel-mode-claude-calls nil nil nil))
+  (should-not
+   (tibetan-analysis--fire-parallel-mode-claude-calls "བདག" nil nil))
+  (should-not
+   (tibetan-analysis--fire-parallel-mode-claude-calls
+    "བདག" "/some/source.org" nil)))
+
 (provide 'tibetan-batch-reanalyze-test)
 ;;; tibetan-batch-reanalyze-test.el ends here

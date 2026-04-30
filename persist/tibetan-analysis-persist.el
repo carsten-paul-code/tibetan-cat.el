@@ -718,11 +718,28 @@ Returns (START . END) or nil if not found."
           (cons start end))))))
 
 (defun tibetan-analysis-get-user-sections (filepath)
-  "Extract user sections from analysis file at FILEPATH.
-Returns alist of (section-name . content) for My Notes,
-Working Translation, Reference Translations, Footnotes.
-`Reference Translations' is a paragraph-only section (par-NNN.org);
-when absent (e.g. seg-NNN.org), it's simply omitted from the alist."
+  "Extract user-content + machine-generated top-level sections from
+analysis file at FILEPATH.
+
+Returns alist of (section-name . content) for sections present.
+Sections that don't exist in the file are simply omitted.
+
+Sections collected:
+  - User-edited:  My Notes, Working Translation, Reference
+    Translations, Translation Comparison, Apparatus, Footnotes.
+  - Machine-generated, top-level (preserved across reanalyse
+    when not re-firing the underlying Claude / DM call):
+    * Sanskrit Text                    (Phase 3 of two-language-
+                                       parallel-analysis, 2026-04-30)
+    * Sanskrit Analysis                (Phase 2)
+    * Combined Analysis                (Phase 4)
+    * DharmaMitra Translation (Tibetan)   (Phase A.1)
+    * DharmaMitra Translation (Sanskrit)  (Phase A.2)
+    * Sanskrit (DharmaMitra)           (realign feature, 2026-04-30)
+
+Caller (typically `tibetan-analysis-regenerate-auto') re-emits
+these in canonical order; preservation prevents reanalyse from
+silently destroying the upstream-Claude / DM artefacts."
   (when (file-exists-p filepath)
     (with-temp-buffer
       (insert-file-contents filepath)
@@ -732,7 +749,17 @@ when absent (e.g. seg-NNN.org), it's simply omitted from the alist."
                                 "Reference Translations"
                                 "Translation Comparison"
                                 "Apparatus"
-                                "Footnotes"))
+                                "Footnotes"
+                                ;; Phase 5 of two-language-parallel-
+                                ;; analysis (2026-04-30): top-level
+                                ;; analysis sections that must
+                                ;; survive reanalyse-without-refire.
+                                "Sanskrit Text"
+                                "Sanskrit Analysis"
+                                "Combined Analysis"
+                                "DharmaMitra Translation (Tibetan)"
+                                "DharmaMitra Translation (Sanskrit)"
+                                "Sanskrit (DharmaMitra)"))
           (let ((bounds (tibetan-analysis-find-section-bounds (current-buffer) section-name)))
             (when bounds
               (let* ((start (car bounds))
@@ -777,6 +804,37 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
           (cdr (assoc "Apparatus" user-sections)))
          (footnotes
           (cdr (assoc "Footnotes" user-sections)))
+         ;; Phase 5 of two-language-parallel-analysis (2026-04-30):
+         ;; preserve the new top-level analysis sections.  The
+         ;; Sanskrit Text body is regenerable from the walker, but
+         ;; we read the existing one as a fallback; Sanskrit /
+         ;; Combined Analysis are Claude-authored and must round-
+         ;; trip verbatim when not re-firing.  DM sections
+         ;; similarly preserved (latent regression — DM previously
+         ;; got dropped on every reanalyse without `:re-request-
+         ;; claude t').
+         (existing-sanskrit-text
+          (cdr (assoc "Sanskrit Text" user-sections)))
+         (sanskrit-text-fresh
+          (and (boundp 'tibetan-analysis--sanskrit-text-for-render)
+               tibetan-analysis--sanskrit-text-for-render
+               (tibetan-analysis--render-sanskrit-source
+                tibetan-analysis--sanskrit-text-for-render)))
+         (sanskrit-text
+          (or (and sanskrit-text-fresh
+                   (not (string-empty-p sanskrit-text-fresh))
+                   sanskrit-text-fresh)
+              existing-sanskrit-text))
+         (sanskrit-analysis
+          (cdr (assoc "Sanskrit Analysis" user-sections)))
+         (combined-analysis
+          (cdr (assoc "Combined Analysis" user-sections)))
+         (dm-tibetan
+          (cdr (assoc "DharmaMitra Translation (Tibetan)" user-sections)))
+         (dm-sanskrit
+          (cdr (assoc "DharmaMitra Translation (Sanskrit)" user-sections)))
+         (sanskrit-dharmamitra
+          (cdr (assoc "Sanskrit (DharmaMitra)" user-sections)))
          (hash (tibetan-analysis-compute-hash tibetan-text))
          (date (format-time-string "%Y-%m-%d"))
          ;; Capture the existing file header (everything before the
@@ -830,6 +888,17 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
       (insert (or working-translation "* Working Translation\n\n\n"))
       (unless (string-suffix-p "\n\n" (or working-translation ""))
         (insert "\n"))
+      ;; Phase 3 of two-language-parallel-analysis (2026-04-30):
+      ;; emit `* Sanskrit Text' top-level when present (either
+      ;; freshly rendered from the walker plist this regen, or
+      ;; preserved from the previous file state).  Sits between
+      ;; `* Working Translation' and `* Reference Translations' /
+      ;; `* Auto-Analysis' so the raw Sanskrit reads next to the
+      ;; raw Tibetan.
+      (when (and sanskrit-text (not (string-empty-p sanskrit-text)))
+        (insert sanskrit-text)
+        (unless (string-suffix-p "\n\n" sanskrit-text)
+          (insert "\n")))
       ;; Reference Translations — paragraph-only, preserved verbatim
       ;; if present.  Only emitted when the original file had it
       ;; (avoids polluting seg-NNN.org with an empty section).
@@ -851,6 +920,22 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
       (insert ":END:\n\n")
       (insert auto-content)
       (insert "\n\n")
+      ;; Phase 2 of two-language-parallel-analysis (2026-04-30):
+      ;; preserve `* Sanskrit Analysis' verbatim when not re-firing
+      ;; the Sanskrit Claude call.  Phase 5 dispatcher will re-fire
+      ;; via `tibetan-analysis-sanskrit--insert-sections' when
+      ;; `:re-request-claude t' — that path overwrites the section
+      ;; bodies after this rebuild lands.
+      (when sanskrit-analysis
+        (insert sanskrit-analysis)
+        (unless (string-suffix-p "\n\n" sanskrit-analysis)
+          (insert "\n")))
+      ;; Phase 4 of two-language-parallel-analysis (2026-04-30):
+      ;; preserve `* Combined Analysis' verbatim when not re-firing.
+      (when combined-analysis
+        (insert combined-analysis)
+        (unless (string-suffix-p "\n\n" combined-analysis)
+          (insert "\n")))
       ;; Apparatus — paragraph-only section, preserved verbatim if
       ;; present.  Created by `tibetan-analysis-create-paragraph-file'
       ;; for new par-NNN.org files; absent from seg-NNN.org and from
@@ -862,6 +947,26 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
         (unless (string-suffix-p "\n\n" apparatus)
           (insert "\n")))
       (insert (or footnotes "* Footnotes\n\n"))
+      (unless (string-suffix-p "\n\n" (or footnotes ""))
+        (insert "\n"))
+      ;; Phase A.1 / A.2 of multi-translator-parallel-reading
+      ;; (2026-04-30) + realign feature — preserve the three
+      ;; DharmaMitra-authored top-level sections at the bottom of
+      ;; the file.  Latent regression fix:  before this commit,
+      ;; reanalyse-without-refire silently dropped these because
+      ;; `--get-user-sections' didn't list them.
+      (when dm-tibetan
+        (insert dm-tibetan)
+        (unless (string-suffix-p "\n\n" dm-tibetan)
+          (insert "\n")))
+      (when dm-sanskrit
+        (insert dm-sanskrit)
+        (unless (string-suffix-p "\n\n" dm-sanskrit)
+          (insert "\n")))
+      (when sanskrit-dharmamitra
+        (insert sanskrit-dharmamitra)
+        (unless (string-suffix-p "\n\n" sanskrit-dharmamitra)
+          (insert "\n")))
       (save-buffer)
       (message "Re-analyzed segment. User notes preserved and reshaped."))))
 
@@ -4002,6 +4107,74 @@ Works for top-level (* …) sections."
     (when (string-match "seg-\\([0-9]+\\)" base)
       (string-to-number (match-string 1 base)))))
 
+;; ----------------------------------------------------------------------------
+;; Three-call dispatcher (Phase 5 of two-language-parallel-analysis, 2026-04-30)
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-analysis--fire-parallel-mode-claude-calls
+    (tibetan-text source-file analysis-file)
+  "Fire the Sanskrit + Combined Claude calls for ANALYSIS-FILE.
+
+Fires when the source file is in parallel-mode AND the segment's
+`**** Sanskrit' sibling has non-placeholder content.  No-op
+otherwise (degrades to today's Tibetan-only behaviour gracefully).
+
+Sanskrit call fires async; its callback chains the Combined call
+when both translations (Tibetan + Sanskrit) are present.  The
+Tibetan call is fired SEPARATELY by the caller — this helper
+handles only the parallel-mode-specific calls.
+
+Soft-coded: when
+`tibetan-analysis-sanskrit--request-translation' or
+`tibetan-analysis-combined--request-synthesis' is missing
+\(modules unloaded), the call is silently skipped.
+
+Returns t when the Sanskrit call was dispatched, nil otherwise."
+  (when (and tibetan-text source-file analysis-file
+             (fboundp 'tibetan-sanskrit-parallel-text-for-segment-id)
+             (fboundp 'tibetan-analysis-sanskrit--request-translation))
+    (let* ((seg-id (tibetan-analysis--seg-id-from-filename analysis-file))
+           (skt-plist (and seg-id
+                           (condition-case nil
+                               (tibetan-sanskrit-parallel-text-for-segment-id
+                                source-file seg-id)
+                             (error nil)))))
+      (when skt-plist
+        (condition-case err
+            (let ((tib tibetan-text)
+                  (src source-file)
+                  (ana analysis-file)
+                  (skt skt-plist))
+              (tibetan-analysis-sanskrit--request-translation
+               skt src ana
+               (lambda (skt-parsed)
+                 ;; Sanskrit response landed.  If the Tibetan
+                 ;; translation is also present in the file (either
+                 ;; from a prior run or the freshly-fired Tibetan
+                 ;; call has completed by now), fire the Combined
+                 ;; synthesis call.
+                 (when (fboundp 'tibetan-analysis-combined--request-synthesis)
+                   (let* ((skt-trans
+                           (plist-get skt-parsed :translation))
+                          (tib-trans
+                           (and (fboundp 'tibetan-analysis--read-claude-section-body)
+                                (tibetan-analysis--read-claude-section-body
+                                 ana "Claude Translation" 2))))
+                     (when (and skt-trans tib-trans)
+                       (condition-case e2
+                           (tibetan-analysis-combined--request-synthesis
+                            tib skt tib-trans skt-trans src ana)
+                         (error
+                          (message "Combined re-request failed for %s: %s"
+                                   (file-name-nondirectory ana)
+                                   (error-message-string e2)))))))))
+              t)
+          (error
+           (message "Sanskrit re-request failed for %s: %s"
+                    (file-name-nondirectory analysis-file)
+                    (error-message-string err))
+           nil))))))
+
 (cl-defun tibetan-analysis-reanalyze-file
     (filepath &key source-file re-request-claude dry-run)
   "Re-run auto-analysis on an existing analysis FILEPATH.
@@ -4117,6 +4290,14 @@ without touching the file.  Otherwise return a plist:
                 (error (message "DharmaMitra re-request failed for %s: %s"
                                 (file-name-nondirectory filepath)
                                 (error-message-string e3)))))
+            ;; Phase 5 of two-language-parallel-analysis (2026-04-30):
+            ;; when re-firing in parallel-mode, also fire Sanskrit +
+            ;; (chained) Combined Claude calls via the dispatcher.
+            ;; No-op when source isn't parallel-mode or the segment's
+            ;; Sanskrit sibling is a placeholder.
+            (when re-request-claude
+              (tibetan-analysis--fire-parallel-mode-claude-calls
+               tibetan-text source-file filepath))
             `(:file ,filepath :seg-id ,seg-id :ok t
                     :claude-preserved ,(and has-any-section t)))
         (error

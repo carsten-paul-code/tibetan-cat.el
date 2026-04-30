@@ -518,7 +518,23 @@ swallowed to `message' and do not abort the batch."
                (error
                 (message "Claude request failed for %s: %s"
                          (file-name-nondirectory filepath)
-                         (error-message-string err))))))
+                         (error-message-string err))))
+             ;; Phase 5 of two-language-parallel-analysis (2026-04-30):
+             ;; in parallel-Sanskrit mode, also fire Sanskrit +
+             ;; (chained) Combined Claude calls.  Dispatcher gates
+             ;; itself on parallel-mode + non-placeholder Sanskrit;
+             ;; degrades to no-op for Tibetan-only segments / docs.
+             (when (fboundp 'tibetan-analysis--fire-parallel-mode-claude-calls)
+               (let ((src (and (fboundp 'tibetan-analysis--source-file-from-analysis)
+                               (tibetan-analysis--source-file-from-analysis
+                                filepath))))
+                 (condition-case e2
+                     (tibetan-analysis--fire-parallel-mode-claude-calls
+                      text src filepath)
+                   (error
+                    (message "Sanskrit/Combined fire failed for %s: %s"
+                             (file-name-nondirectory filepath)
+                             (error-message-string e2))))))))
           (setq delay (+ delay
                          (or tibetan-auto-claude-request-delay 1.5))))))))
 
@@ -645,7 +661,20 @@ this after you've changed the system prompt or switched model."
                  (error
                   (message "Claude request failed for %s: %s"
                            (file-name-nondirectory file)
-                           (error-message-string err))))))
+                           (error-message-string err))))
+               ;; Phase 5 of two-language-parallel-analysis (2026-04-30):
+               ;; also fire Sanskrit + Combined in parallel-mode.
+               (when (fboundp 'tibetan-analysis--fire-parallel-mode-claude-calls)
+                 (let ((src (and (fboundp 'tibetan-analysis--source-file-from-analysis)
+                                 (tibetan-analysis--source-file-from-analysis
+                                  file))))
+                   (condition-case e2
+                       (tibetan-analysis--fire-parallel-mode-claude-calls
+                        tibetan-text src file)
+                     (error
+                      (message "Sanskrit/Combined fire failed for %s: %s"
+                               (file-name-nondirectory file)
+                               (error-message-string e2))))))))
             (setq queued (1+ queued))
             (setq delay (+ delay
                            (or tibetan-auto-claude-request-delay 1.5))))))
