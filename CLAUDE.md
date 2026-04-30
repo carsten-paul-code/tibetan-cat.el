@@ -220,7 +220,7 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-04-30): **1784 tests, 1783 expected, 0 unexpected
+Current state (2026-04-30): **1792 tests, 1791 expected, 0 unexpected
 failures, 1 intentional skip (compound-analysis-callable).**  Carsten
 runs this after every change and expects it to stay green.
 
@@ -982,25 +982,36 @@ Only start when Carsten says so. When that time comes:
 A `.pptx` / walkthrough for the workshop. Don't start without
 explicit instruction.
 
-### P5 — Root-cause the `gyur pa'o' parser crash (flagged 2026-04-21)
-Five YBh segments (Gotrapaṭala seg-030..034) trip
-`(wrong-type-argument listp "གྱུར")` from `cl-remove(nil
-("གྱུར" "པའོ") :if-not ...)` inside `tibetan-analysis-generate-
-content`.  Minimal reproducer is just the text `གྱུར་པའོ་༎`.
-The immediate symptom is dodged by §5.9.3's richer fallback —
-affected files render with Tibetan + Wylie + Claude but no
-parser-side sections — but the underlying path where a verbs-list
-gets replaced by a words-list needs a focused bisect.  Advice-based
-tracing didn't find it (outer condition-case absorbs before any
-wrapper fires); will need to temporarily disable the outer
-condition-case or instrument each inner `cl-remove-if-not` call
-site explicitly.
+### P5 — Root-cause the `gyur pa'o' parser crash ✓ DONE 2026-04-30
+Bisect via instrumented checkpoints found the signal site: the
+Section 2 vocab-pairs loop's first `short-meaning' binding.
 
-Repro:
-```elisp
-(tibetan-analysis-generate-content "གྱུར་པའོ་༎")
-;; Returns the fallback template (starts "** Wylie Transliteration\ngyur pa'o //").
-```
+Root cause: `tibetan-vocab-multisource-entries' returned a
+detailed-entry whose `:primary' field was an empty string `""'.
+`raw-meaning' became `""' (truthy in elisp), `(when raw-meaning
+…)' entered the body, `(car (split-string "" ";" t))' returned
+nil, and `(string-trim nil)' raised `Wrong type argument:
+stringp, nil'.
+
+The outer condition-case caught it and emitted the
+`[Analysis error — partial file only]' fallback for these
+segments (note: the original CLAUDE.md report cited
+`(wrong-type-argument listp "གྱུར")' from `cl-remove' — likely
+a different earlier symptom; the current crash is the
+stringp-on-nil one above).
+
+Fix: empty-string guard at the top of the FIRST short-meaning
+let — short-circuit empty raw-meaning to nil so the binding
+becomes nil and the downstream chain follows the same path as
+a missing dictionary entry.  Patch in
+`persist/tibetan-analysis-persist.el` Section 2 vocab-loop.
+
+Tests: `tibetan-analysis-generate-content-gyur-pao-no-fallback'
+asserts (a) full Section 1..8 layout is generated, (b)
+fallback template's `[Analysis error]' marker is absent, (c)
+all 8 user-facing section headings are present.
+
+Suite total at fix: 1791 → 1792, 0 unexpected, 1 skipped.
 
 ### P6 — Preserve `:FOLIO:' drawer on analysis-file `* Tibetan Text' (low priority, 2026-04-21)
 The drawer-aware extractor (§5.8.2) correctly strips the
@@ -1053,7 +1064,7 @@ folio alongside the text so the caller can thread it through.
 ## 9. First thing to do in a new session
 
 1. `make test` (or the batch command in §4). Confirm baseline green
-   (expect 1784 / 1783 expected / 0 unexpected / 1 skipped at 2026-04-30).
+   (expect 1792 / 1791 expected / 0 unexpected / 1 skipped at 2026-04-30).
 2. Skim `MEMORY.md` (auto-memory) — `working_discipline.md` is the
    baseline rule set; this file refines it for tibetan-cat.el.
 3. Skim `git log --oneline -20` for anything newer than §5.13 (this

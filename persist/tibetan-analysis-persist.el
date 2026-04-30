@@ -3196,8 +3196,28 @@ it with `let' around the call when Claude data is available."
                                                                      "[not found]")))
                                               fallback-meaning)))
                            ;; Tidy the gloss without over-truncating.
+                           ;;
+                           ;; Empty-string guard (P5 fix, 2026-04-30):
+                           ;; `raw-meaning' can be an empty string when
+                           ;; `tibetan-vocab-multisource-entries' returned a
+                           ;; detailed-entry whose `:primary' / `:detailed'
+                           ;; field is `""' (e.g.  `གྱུར་པའོ' /
+                           ;; gotrapaṭala seg-030..034 corner case).
+                           ;; `(when raw-meaning …)' enters the body for
+                           ;; `""' (truthy in elisp), then `(car
+                           ;; (split-string "" ";" t))' returns nil and
+                           ;; downstream `(string-trim nil)' raises
+                           ;; `Wrong type argument: stringp, nil', tripping
+                           ;; the outer condition-case fallback that
+                           ;; emits `[Analysis error — partial file
+                           ;; only]'.  Treat empty-after-trim as `no
+                           ;; gloss' so the binding becomes nil and the
+                           ;; downstream short-meaning chain follows the
+                           ;; same path as a missing dictionary entry.
                            (short-meaning
-                            (when raw-meaning
+                            (when (and raw-meaning
+                                       (not (string-empty-p
+                                             (string-trim raw-meaning))))
                               (let ((m (string-trim raw-meaning)))
                                 ;; Strip leading numbering like "1) " or "1. "
                                 (setq m (replace-regexp-in-string

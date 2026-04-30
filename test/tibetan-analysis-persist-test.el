@@ -216,6 +216,42 @@
         (should (or (null result) (stringp result))))
     (error nil)))  ; Allow errors if dependencies not loaded
 
+(ert-deftest tibetan-analysis-generate-content-gyur-pao-no-fallback ()
+  "P5 regression (CLAUDE.md §6, 2026-04-30): the YBh seg-030..034
+corner case `གྱུར་པའོ་༎' (verb `gyur' + nominaliser+declarative
+particle `པའོ' + closing daṇḍa) used to trip the outer error
+fallback with `(wrong-type-argument stringp nil)' because the
+vocab-multisource entry's `:primary' field came back as the
+empty string `\"\"' — `(when raw-meaning …)' entered for `\"\"',
+then `(car (split-string \"\" \";\" t))' returned nil and
+`(string-trim nil)' raised stringp,nil.
+
+After the fix, the empty-string raw-meaning is short-circuited
+to nil (treated the same as a missing dictionary entry) so the
+short-meaning chain falls through cleanly.  The full Section
+1..8 layout is generated, NOT the `[Analysis error — partial
+file only]' fallback template."
+  (skip-unless (fboundp 'tibetan-analysis-generate-content))
+  (skip-unless (fboundp 'tibetan-parse-enhanced))
+  (skip-unless (fboundp 'tibetan-vocab-multisource-entries))
+  (let ((out (tibetan-analysis-generate-content "གྱུར་པའོ་༎")))
+    (should (stringp out))
+    (should (not (string-empty-p out)))
+    ;; Fallback template's distinctive marker MUST NOT appear.
+    (should-not (string-match-p "\\[Analysis error — partial file only\\]"
+                                out))
+    (should-not (string-match-p "Parser failure for this segment"
+                                out))
+    ;; Full layout sections present.
+    (should (string-match-p "^\\*\\* Wylie Transliteration$" out))
+    (should (string-match-p "^\\*\\* Interlinear Gloss" out))
+    (should (string-match-p "^\\*\\* Claude Translation$" out))
+    (should (string-match-p "^\\*\\* Grammar" out))
+    (should (string-match-p "^\\*\\* Sentence Structure" out))
+    (should (string-match-p "^\\*\\* Verb Classification" out))
+    (should (string-match-p "^\\*\\* Detailed Dictionary" out))
+    (should (string-match-p "^\\*\\* Provided Translations" out))))
+
 ;; ============================================================================
 ;; MAIN INTERFACE TESTS
 ;; ============================================================================
