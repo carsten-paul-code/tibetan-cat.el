@@ -3649,6 +3649,21 @@ sentence."
                    tibetan-text filepath source-file)
                 (error
                  (message "Claude auto-fire skipped for seg-%s: %s"
+                          seg-id (error-message-string err)))))
+            ;; Phase A.1.5 of multi-translator-parallel-reading
+            ;; (2026-04-30): also auto-fire DharmaMitra translation
+            ;; when the existing analysis file lacks a populated DM
+            ;; section.  Idempotent — re-running `C-c u A' on a file
+            ;; that already has a DM section does NOT re-fire the API.
+            (when (and (fboundp 'tibetan-dharmamitra-translation-needs-request-p)
+                       (fboundp 'tibetan-dharmamitra-translation-fire-tibetan)
+                       (tibetan-dharmamitra-translation-needs-request-p
+                        filepath "Tibetan"))
+              (condition-case err
+                  (tibetan-dharmamitra-translation-fire-tibetan
+                   tibetan-text filepath)
+                (error
+                 (message "DharmaMitra auto-fire skipped for seg-%s: %s"
                           seg-id (error-message-string err))))))
         ;; Create new file.  Phase 6 of sanskrit-parallel-workflow
         ;; (2026-04-27): in parallel-Sanskrit mode, thread the
@@ -3761,7 +3776,17 @@ segment > sentence > paragraph > legacy, most-specific-wins."
           ;; Request Claude translation asynchronously (never break on failure)
           (condition-case err
               (tibetan-analysis--request-claude-translation tibetan-text filepath)
-            (error (message "Claude translation skipped: %s" (error-message-string err)))))))))
+            (error (message "Claude translation skipped: %s" (error-message-string err))))
+          ;; Phase A.1.5 of multi-translator-parallel-reading (2026-04-30):
+          ;; on explicit reanalyse (`C-c u R'), refresh the DM
+          ;; translation unconditionally — the user asked for a re-
+          ;; analysis, they want fresh translations from every engine.
+          (when (fboundp 'tibetan-dharmamitra-translation-fire-tibetan)
+            (condition-case err
+                (tibetan-dharmamitra-translation-fire-tibetan
+                 tibetan-text filepath)
+              (error (message "DharmaMitra translation skipped: %s"
+                              (error-message-string err))))))))))
 
 ;; ============================================================================
 ;; PARAGRAPH-LEVEL COMMANDS (C-c p A / C-c p R)

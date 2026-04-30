@@ -84,6 +84,57 @@ input is invalid."
 ;; Fire function (orchestrates API call + writer)
 ;; ----------------------------------------------------------------------------
 
+;; ----------------------------------------------------------------------------
+;; Predicate (Phase A.1.5, 2026-04-30)
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-dharmamitra-translation-needs-request-p
+    (analysis-file &optional source-lang)
+  "Return t when ANALYSIS-FILE lacks a populated DM translation section.
+
+SOURCE-LANG defaults to `\"Tibetan\"'.
+
+Returns:
+  t   when the section `* DharmaMitra Translation (SOURCE-LANG)' is
+      absent OR exists with empty / whitespace-only body
+  nil when the section is present and populated, OR ANALYSIS-FILE
+      is missing (caller can't write anyway)
+
+Used by the existing-file open path so re-running `C-c u A' on a
+file that already has a DM translation doesn't re-fire the API
+unnecessarily.  Reanalysis (`C-c u R') bypasses this and always
+refreshes."
+  (let ((source-lang (or source-lang "Tibetan")))
+    (when (and analysis-file
+               (stringp analysis-file)
+               (file-exists-p analysis-file))
+      (with-temp-buffer
+        (insert-file-contents analysis-file)
+        (goto-char (point-min))
+        (let ((heading-re (format "^\\* DharmaMitra Translation (%s)[ \t]*$"
+                                  (regexp-quote source-lang))))
+          (cond
+           ;; Section absent → needs request.
+           ((not (re-search-forward heading-re nil t))
+            t)
+           ;; Section present — check body.
+           (t
+            (forward-line 1)
+            ;; Skip leading property drawer if any.
+            (when (looking-at-p "[ \t]*:PROPERTIES:[ \t]*$")
+              (when (re-search-forward "^[ \t]*:END:[ \t]*$" nil t)
+                (forward-line 1)))
+            (let* ((body-start (point))
+                   (body-end
+                    (or (save-excursion
+                          (when (re-search-forward "^\\*+ " nil t)
+                            (line-beginning-position)))
+                        (point-max)))
+                   (body (string-trim
+                          (buffer-substring-no-properties
+                           body-start body-end))))
+              (string-empty-p body)))))))))
+
 ;;;###autoload
 (defun tibetan-dharmamitra-translation-fire-tibetan (tibetan-text analysis-file)
   "Translate TIBETAN-TEXT via DharmaMitra; write to ANALYSIS-FILE.

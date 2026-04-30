@@ -216,5 +216,58 @@ overwriting a previous good translation with a failed one."
         (insert-file-contents analysis-file)
         (should (string-match-p "PRIOR GOOD TRANSLATION" (buffer-string)))))))
 
+;; ============================================================================
+;; PHASE A.1.5 — Predicate to gate auto-fire on existing-file open path
+;; ============================================================================
+;;
+;; Phase A.1 wired DM into the create-new-file branch only.  When
+;; the user runs `C-c u A' on an existing seg-NNN.org, the
+;; existing-file branch ran instead and DM was skipped — leaving
+;; the analysis file without a DM section.  Phase A.1.5 adds a
+;; predicate so the existing-file branch can fire DM only when
+;; the section is actually missing (idempotent re-runs).
+
+(ert-deftest tibetan-dm-trans-needs-request-p-when-section-missing ()
+  "Predicate returns t when the DM section is absent."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-needs-request-p))
+  (tibetan-dm-trans-test--with-analysis-file
+      (tibetan-dm-trans-test--baseline-analysis)
+    (should (tibetan-dharmamitra-translation-needs-request-p
+             analysis-file "Tibetan"))))
+
+(ert-deftest tibetan-dm-trans-needs-request-p-when-section-populated ()
+  "Predicate returns nil when the DM section has non-empty body."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-needs-request-p))
+  (tibetan-dm-trans-test--with-analysis-file
+      (concat (tibetan-dm-trans-test--baseline-analysis)
+              "\n* DharmaMitra Translation (Tibetan)\nA real translation.\n")
+    (should-not (tibetan-dharmamitra-translation-needs-request-p
+                 analysis-file "Tibetan"))))
+
+(ert-deftest tibetan-dm-trans-needs-request-p-when-section-empty-body ()
+  "Predicate returns t when the DM section exists but its body is
+empty / whitespace — the section was created but never populated
+with a real translation."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-needs-request-p))
+  (tibetan-dm-trans-test--with-analysis-file
+      (concat (tibetan-dm-trans-test--baseline-analysis)
+              "\n* DharmaMitra Translation (Tibetan)\n   \n")
+    (should (tibetan-dharmamitra-translation-needs-request-p
+             analysis-file "Tibetan"))))
+
+(ert-deftest tibetan-dm-trans-needs-request-p-defaults-to-tibetan ()
+  "SOURCE-LANG defaults to `Tibetan' when omitted."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-needs-request-p))
+  (tibetan-dm-trans-test--with-analysis-file
+      (tibetan-dm-trans-test--baseline-analysis)
+    (should (tibetan-dharmamitra-translation-needs-request-p analysis-file))))
+
+(ert-deftest tibetan-dm-trans-needs-request-p-handles-missing-file ()
+  "Non-existent ANALYSIS-FILE returns nil (no point firing into
+a file that doesn't exist)."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-needs-request-p))
+  (should-not (tibetan-dharmamitra-translation-needs-request-p
+               "/nonexistent/path/seg-005.org")))
+
 (provide 'tibetan-dharmamitra-translation-test)
 ;;; tibetan-dharmamitra-translation-test.el ends here
