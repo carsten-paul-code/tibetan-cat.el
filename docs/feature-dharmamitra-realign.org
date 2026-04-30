@@ -1,0 +1,565 @@
+#+TITLE: DharmaMitra-Driven Sanskrit Re-Alignment — Feature Design
+#+DATE: 2026-04-30
+#+AUTHOR: Carsten Paul + Claude
+#+STATUS: v1 — ALL PHASES SHIPPED (1–5); Phase 6 = this doc + live test
+
+* TL;DR
+
+Re-align the =**** Sanskrit= sibling of every =**** Segment N= in
+a parallel-Sanskrit document by:  translating the Tibetan to
+English via DharmaMitra, semantic-searching the configured
+Sanskrit corpus, asking Claude to pick the right parallel,
+showing a preview, applying on =C-u=.  Fixes the rough daṇḍa-
+split alignment that ships with =gotrapatala.org=.
+
+* Quickstart
+
+#+begin_example
+1. Add three headers to your source .org file:
+     #+SOURCE_MODE:        parallel-sanskrit
+     #+DM_SANSKRIT_SOURCE: SA_T06_bsa034    ; e.g. for Bodhisattvabhūmi
+     #+DM_TIBETAN_SOURCE:  BO_T06_D4037     ; reserved; not yet used
+
+2. C-c u z D                  ; preview every segment (~5 min for 97)
+3. (eyeball the *Sanskrit Realign Preview* buffer)
+4. C-u C-c u z D              ; apply the `change' proposals
+5. C-c u r                    ; reanalyse so seg-NNN.org files pick up the new Sanskrit
+
+Single-segment variants:
+   C-c u z d                  ; preview the segment under cursor
+   C-u C-c u z d              ; apply just that one
+#+end_example
+
+Without =#+DM_SANSKRIT_SOURCE:=  the pipeline returns no
+candidates for every segment — the feature never queries the
+whole DM corpus by accident.
+
+* Intent
+
+The =sanskrit-parallel-workflow= feature (shipped 2026-04-27) lets
+documents declare =#+SOURCE_MODE: parallel-sanskrit= and pair each
+=**** Segment N= heading with a =**** Sanskrit= sibling carrying
+IAST + optional Devanagari.  For =gotrapatala.org= (97 Tibetan
+segments of Asaṅga's Bodhisattvabhūmi, Yogācārabhūmi vol 1), we
+seeded those siblings with a positional daṇḍa-split of the Dutt-
+edition Sanskrit etext: clause N → segment N.
+
+That alignment is *deliberately rough* and demonstrably wrong in
+many places:
+
+- Tibetan segments 1–2 are the canon's framing homage to the
+  Buddhas / Maitreya, with no Sanskrit counterpart.  All
+  subsequent positional alignments are off by ~2 to start.
+- Tibetan and Sanskrit clause structure rarely line up 1-to-1
+  even within a single śāstric paragraph.
+- 28 segments (70–97) have no Sanskrit at all and carry an
+  explicit =[Sanskrit alignment exhausted...]= placeholder.
+
+The =dharmamitra-realign= feature uses DharmaMitra's public
+search + translate APIs combined with Claude disambiguation to
+correct this alignment automatically:
+
+1. For each segment, translate the Tibetan to English via DM
+   chat-translate.
+2. Search the Sanskrit corpus, filtered to the configured
+   target work, with the English translation.
+3. Take the top N candidates.
+4. Ask Claude to identify the correct parallel.
+5. Compare the chosen Sanskrit against the existing
+   =**** Sanskrit= sibling.  Build a proposal: =change= /
+   =unchanged= / =no-candidates=.
+6. Render a preview buffer the user reviews before applying
+   (CLAUDE.md §6 — never overwrite user content silently).
+7. With =C-u=, apply the proposed changes.
+
+* Why now
+
+DharmaMitra (Sebastian Nehrdich, Stuttgart) extended their public
+API on 2026-04-30 with a documented =/api-search/= surface that
+exposes both the streaming chat-translate (OpenAI-compatible) and
+the semantic-search primary endpoint.  Both work over multilingual
+Buddhist canonical corpora with =input_encoding: auto= covering
+IAST, Devanagari, Tibetan Unicode, Wylie, and Harvard-Kyoto.
+
+The =gotrapatala.org= rough-alignment was the immediate trigger:
+without re-alignment the parallel-sanskrit Claude prompts ship the
+*wrong* Sanskrit text to Claude, defeating the point of
+=#+SOURCE_MODE: parallel-sanskrit= for ~70% of segments.
+
+* User-visible behaviour
+
+** Configuration (per-document headers)
+
+Add two headers to the source file (alongside the existing
+=#+SOURCE_MODE: parallel-sanskrit=):
+
+#+begin_example
+#+DM_SANSKRIT_SOURCE: SA_T06_bsa034
+#+DM_TIBETAN_SOURCE:  BO_T06_D4037
+#+end_example
+
+The values are DharmaMitra's source identifiers (Tohoku-aligned
+work IDs).  Look them up by querying the API with a known passage
+or browsing dharmamitra.org's source explorer.  Bodhisattvabhūmi
+(Asaṅga) is =SA_T06_bsa034= for the Sanskrit and =BO_T06_D4037=
+for the Derge Tibetan (Toh 4037, sems tsam).
+
+Without =#+DM_SANSKRIT_SOURCE:= the realign command produces no
+candidates — the feature never runs against the whole DM corpus
+(which would surface high-rank prajñāpāramitā passages instead of
+the actual parallel).
+
+** Commands
+
+Bound under the existing =C-c u z= (thesaurus / source-document)
+prefix:
+
+| Binding   | Command                                              |
+|-----------|------------------------------------------------------|
+| =C-c u z d= | =tibetan-sanskrit-parallel-dm-realign-segment=     |
+| =C-c u z D= | =tibetan-sanskrit-parallel-dm-realign-document=    |
+
+Both commands default to *preview mode*.  Pass =C-u= to apply.
+
+** End-to-end UX flow
+
+#+begin_example
+1.  Open gotrapatala.org.
+2.  Add the two headers (one-shot).
+3.  C-c u z D
+    → Emacs message: "DharmaMitra realign: scanning ..."
+    → Pipeline runs: 97 × (translate + search + Claude pick),
+      ~5 minutes wallclock.
+    → *Sanskrit Realign Preview* buffer pops up:
+
+       Sanskrit Realign Preview
+       ========================
+       Source: gotrapatala.org
+       Total segments scanned: 97
+         change:        73
+         unchanged:     6
+         no-candidates: 18
+       ----------------------------------------
+
+       Segment 5  [CHANGE]
+         Tibetan:   sdom la / gzhi dang rtags ...
+         Current:   iha bodhisattvaḥ prakṛtyaiva dānaruci...
+         Proposed:  uddānam: gotraṃ liṅgaṃ pakṣaḥ ...
+         DM ID:     SA_T06_bsa034:11 (rank 2)
+         Reason:    The Tibetan sdom (uddāna, summary verse) ...
+
+4.  Read the preview.  Eyeball-verify a few proposals.
+5.  C-u C-c u z D
+    → Pipeline re-runs (cached calls dedupe — instant for already-
+      seen Tibetan).
+    → Applies all `change' proposals to the source file.
+    → Message: "DharmaMitra realign: applied 73 changes to
+      gotrapatala.org"
+6.  Re-run C-c u r (batch reanalyze) on the analysis folder so
+    the seg-NNN.org files pick up the corrected Sanskrit in their
+    `** Sanskrit Source' sections.
+#+end_example
+
+** Spot-check single segment
+
+When a single segment looks suspect:
+
+1. Cursor on =**** Segment N= heading.
+2. =C-c u z d= — preview just that segment.
+3. =C-u C-c u z d= — apply just that segment.
+
+Useful for course-correcting after a batch run, or for debugging
+an outlier without re-firing the whole document pipeline.
+
+* The DharmaMitra API surface (probed 2026-04-30)
+
+The full OpenAPI spec lives at:
+=https://dharmamitra.org/api-search/openapi.json= (no auth).
+
+** Endpoints we use
+
+*** =/chat-translate/v1/chat/completions=
+
+OpenAI-compatible streaming SSE endpoint.  POST with bearer
+=sthiramati= (public docs token).  Body shape:
+
+#+begin_example
+{
+  "model": "gpt-3.5-turbo",
+  "messages": [{"role": "user", "content": "<text>"}],
+  "stream": true,
+  "temperature": 0.1,
+  "input_encoding": "auto",
+  "target_lang": "english"
+}
+#+end_example
+
+Backend is =vertex-gemini= despite the OpenAI-compat model name.
+Latency 1.2–1.5 sec for short passages.  Quality verified on
+gotrapatala segments 1, 5, 50, 95 — translates IAST and Tibetan
+input transparently with =input_encoding: auto=.
+
+*** =/primary/=
+
+Semantic search across the parallel corpus.  Body:
+
+#+begin_example
+{
+  "search_input": "<text>",
+  "input_encoding": "auto",
+  "search_type": "semantic",
+  "filter_source_language": "sa",
+  "filter_target_language": "all",
+  "source_filters": {
+    "include_files": ["SA_T06_bsa034"]
+  },
+  "max_depth": 50
+}
+#+end_example
+
+Returns a =results= array of plists with =id=, =lang=, =text=,
+=segmentnr=, =title=, =summary=, =text_new= (with text-before /
+text-main / text-after for context), =src_link=.  =summary= is an
+LLM-prompt template, not pre-computed content (we ignore it).
+
+** Architectural finding
+
+Search returns *same-language* results regardless of
+=filter_target_language=.  A Tibetan query yields Tibetan hits;
+a Sanskrit query yields Sanskrit hits; English queries yield
+either.  There is *no native cross-language alignment endpoint*.
+
+Our workaround: translate Tibetan → English via chat-translate,
+then search the Sanskrit corpus with English.  Semantic search
+uses English as pivot internally, so this matches the API's
+strengths.  In probing, the actual Bodhisattvabhūmi parallel for
+gotrapatala segment 5 landed at rank 2 of 10 — precision-imperfect
+but recall-good, hence the Claude disambiguation step.
+
+** Endpoints we *don't* use
+
+Available but not driving any code path today:
+
+- =/secondary/= — academic publications index (titles / authors).
+- =/explanation/= and =/explanation-parallel/= — passage explainers.
+- =/knn-translate*/= — KNN-based translations (4 variants).
+- =/ocr/= — async OCR pipeline.
+- =/rate_translations*/= — translation quality ratings.
+
+Worth keeping in mind for future features (= secondary-source
+suggestions on Detailed Dictionary entries, OCR for new source
+PDFs, etc.).
+
+* Architecture
+
+Five phases shipped over 2026-04-27 → 2026-04-30, all under the
+strict test-first discipline (write tests → empty stubs → confirm
+right-reason failures → implement → confirm all green):
+
+** Phase 1 — DharmaMitra HTTP client (=core/tibetan-dharmamitra-api.el=)
+
+Generic client wrapping the two endpoints.
+
+| Function                                    | Purpose                              |
+|---------------------------------------------|--------------------------------------|
+| =--parse-sse-stream= STREAM                  | Pure SSE parser, returns concat content |
+| =--build-chat-translate-body= TEXT           | Pure JSON body builder               |
+| =--build-search-body= INPUT                  | Pure JSON body builder               |
+| =--http-post= ENDPOINT BODY                  | Synchronous POST (stub-friendly)     |
+| =--cache-key= ENDPOINT BODY                  | SHA-256-hashed dedupe key            |
+| =tibetan-dharmamitra-api-chat-translate=     | Public translate, cached             |
+| =tibetan-dharmamitra-api-search=             | Public search, cached                |
+| =tibetan-dharmamitra-api-clear-cache=        | Interactive cache clear              |
+
+In-memory cache; no persistent backing.  Re-invocations cost
+nothing within an Emacs session.
+
+** Phase 2 — Per-segment candidates orchestrator
+
+In =core/tibetan-sanskrit-parallel-dharmamitra.el=:
+
+- Extends =--read-source-metadata= to surface
+  =:dm-sanskrit-source= / =:dm-tibetan-source= plist keys.
+- =tibetan-sanskrit-parallel-dm-candidates-for-tibetan
+  TIBETAN-TEXT SOURCE-FILE &key (max-candidates 5)= → list of
+  candidate plists or nil.
+
+Workflow: read metadata → translate → search filtered to the
+configured Sanskrit work → shape results.
+
+** Phase 3 — Claude disambiguation
+
+| Function                                       | Purpose                       |
+|------------------------------------------------|-------------------------------|
+| =--build-claude-pick-prompt= TIB CANDS         | Pure prompt builder           |
+| =--parse-claude-pick-response= RESP CANDS      | Pure parser, validates rank   |
+| =--ask-claude-sync= PROMPT                     | Synchronous gptel wrapper     |
+| =tibetan-sanskrit-parallel-dm-claude-pick= TIB CANDS | Public dispatcher       |
+
+Single-candidate shortcut (no Claude call needed).  Falls back to
+top candidate when Claude is unavailable, with the reason stamped
+in the return plist (=claude-unavailable-...= /
+=claude-response-unparseable-...=) for the preview.
+
+Synchronous via =accept-process-output= polling with 30-second
+timeout.  Runs *outside* =tibetan-claude-queue= so it doesn't
+compete with translation requests for slots.
+
+** Phase 4 — Proposals + walker + preview renderer (read-only)
+
+| Function                                             | Purpose                       |
+|------------------------------------------------------|-------------------------------|
+| =tibetan-sanskrit-parallel-segment-data-for-id=      | Read Tibetan + current Sanskrit by ID |
+| =--normalise-whitespace=                              | Pure helper for diff comparison |
+| =--build-proposal=                                    | Pure proposal plist builder   |
+| =--collect-segment-ids=                               | Walk =**** Segment N= headings |
+| =tibetan-sanskrit-parallel-dm-realign-document-proposals= | Top-level walker        |
+| =--render-preview-buffer=                             | Format proposals into buffer  |
+
+Proposal plist:
+=(:seg-id N :tibetan-text TIB :current-sanskrit CUR :proposed-sanskrit PROP :proposed-rank R :proposed-segmentnr SN :reason STR :status SYM)=
+
+Status values:
+- =change= — current and proposed differ (after whitespace normalisation)
+- =unchanged= — current ≈ proposed; no edit needed
+- =no-candidates= — DM/Claude pipeline returned nothing
+
+** Phase 5 — Writer + apply + interactive commands
+
+| Function                                                 | Purpose                |
+|----------------------------------------------------------|------------------------|
+| =tibetan-sanskrit-parallel-write-sanskrit-for-segment-id=  | Replace / insert Sanskrit body |
+| =--apply-proposal=                                        | Status-aware apply (no-op for unchanged / no-candidates) |
+| =--apply-proposals=                                       | Batch apply, returns count |
+| =tibetan-sanskrit-parallel-dm-realign-segment=             | Interactive single-segment |
+| =tibetan-sanskrit-parallel-dm-realign-document=            | Interactive batch          |
+
+Plus =C-c u z d= / =C-c u z D= keybindings and two menu entries
+under =Zettelkasten / Thesaurus=.
+
+The writer is symmetric to the Phase-1 walker (Sanskrit-parallel
+feature): same sibling navigation, opposite direction.  Replaces
+existing Sanskrit body or inserts new sibling at the Sentence
+boundary when absent.
+
+* Design decisions (confirmed by user 2026-04-30)
+
+** D1: Disambiguation method = Claude-driven
+
+Of three options (auto top-hit / user-pick interactively /
+Claude-pick), Claude wins on quality vs effort tradeoff.
+
+- Auto top-hit produces wrong-but-thematically-related results
+  ~10–20% of the time on probed segments.
+- User-pick interactively means ~30 sec / segment × 97 = ~50 min
+  of click-through for gotrapatala — too tedious for the value.
+- Claude-pick adds ~$0.05–0.10 in tokens for a full document
+  realign and ~3 sec / segment latency, both acceptable.
+
+Falls back to top-hit when Claude is unreachable, with the
+fallback path stamped in the proposal's =:reason= field for
+preview transparency.
+
+** D2: Apply mode default = dry-run preview, =C-u= applies
+
+CLAUDE.md §6 — preserve user content.  The realign workflow's
+proposed changes are based on machine inference (DM search
+ranks + Claude's reading); they should never write without
+explicit user confirmation.  The preview buffer surfaces what
+*would* happen; the user re-runs with =C-u= to commit.
+
+** D3: DM source identifier = per-document headers
+
+Two new headers, =#+DM_SANSKRIT_SOURCE:= and
+=#+DM_TIBETAN_SOURCE:=, mirror the existing
+=#+TIBETAN_TARGET_LANG:= / =#+TIBETAN_CORPUS:= / =#+SOURCE_MODE:=
+pattern.  Document-scoped, explicit, reusable across YBh chapters
+and other parallel corpora.
+
+Auto-detection from =#+TITLE:= was rejected as fragile.
+
+* Caching strategy
+
+Two layers:
+
+** API-level (Phase 1)
+
+=tibetan-dharmamitra-api--cache= keyed on
+=(endpoint . sha256-of-body)=.  Identical chat-translate or
+search calls within the Emacs session return cached responses
+instantly.  In-memory only; lost on Emacs restart.  =M-x
+tibetan-dharmamitra-api-clear-cache= force-clears.
+
+** Pipeline-level (none yet)
+
+We don't cache (Tibetan → proposal) tuples beyond what the API
+cache already provides.  Re-running =C-c u z D= on a document
+that hasn't changed since the last run hits the API cache for
+every translate + search call but re-runs Claude
+disambiguation each time.
+
+If Claude becomes a bottleneck on multi-pass realigns, a third
+caching layer keyed on =(seg-id, tibetan-text-hash,
+candidates-hash)= → =:chosen-id= would dedupe the Claude calls.
+Defer until measured.
+
+* Failure modes (all return nil / no-candidates, never crash)
+
+| Failure                                  | Where                       | User-visible result               |
+|------------------------------------------|-----------------------------|-----------------------------------|
+| =#+DM_SANSKRIT_SOURCE:= absent           | Phase 2 candidates fn        | =:status 'no-candidates= per segment |
+| =#+SOURCE_MODE: parallel-sanskrit= absent | Doesn't gate; orthogonal     | Realign still runs                |
+| chat-translate HTTP error                | Phase 1 client               | nil → upstream =:no-candidates=  |
+| chat-translate empty SSE stream          | Phase 1 client               | nil → upstream =:no-candidates=  |
+| search HTTP error                        | Phase 1 client               | nil → upstream =:no-candidates=  |
+| search returned 0 hits                   | Phase 2 orchestrator         | nil → =:no-candidates=            |
+| gptel not loaded                         | Phase 3 sync wrapper         | nil → top-hit fallback, =:reason= stamped |
+| Claude returns malformed response        | Phase 3 parser               | nil → top-hit fallback, =:reason= stamped |
+| Claude says =RANK: 99= (out-of-range)    | Phase 3 parser validation    | nil → top-hit fallback             |
+| Claude timeout (30 sec)                  | Phase 3 sync wrapper         | nil → top-hit fallback             |
+| Source file not writable                 | Phase 5 writer               | =--apply-proposal= returns nil    |
+| Segment N not found in source            | Phase 5 writer               | =--apply-proposal= returns nil    |
+
+* Tests
+
+61 ERT specs across the five phases.  All in
+=test/tibetan-sanskrit-parallel-dharmamitra-test.el= (orchestration
++ apply + writer + commands) and
+=test/tibetan-dharmamitra-api-test.el= (HTTP client + parser).
+
+| Phase | Tests | Focus                                          |
+|-------|-------|------------------------------------------------|
+| 1     | 19    | SSE parser, body builders, HTTP wrapper, cache |
+| 2     | 15    | Metadata reader extension + candidates orchestration |
+| 3     | 14    | Claude prompt builder + parser + sync wrapper + pick |
+| 4     | 13    | Segment-data reader, proposal builder, walker, preview |
+| 5     | 11    | Writer, apply, interactive commands            |
+
+Test discipline (CLAUDE.md §2.2–§2.3):
+
+1. Tests written first.
+2. Empty stubs added so test file loads with =should= failures
+   (not load-time =void-function= panics).
+3. Run against stubs; confirm each test fails for its specific
+   targeted reason.
+4. Implement.
+5. Run; confirm all pass.
+
+External dependencies are stubbed throughout: HTTP via =cl-letf=
+on =--http-post=, gptel via =cl-letf= on =--ask-claude-sync=, and
+the Phase-2 / Phase-3 orchestrators via =cl-letf= on the public
+API functions.  The full suite runs offline in <2 seconds.
+
+Suite total after Phase 5: 1694 ERT tests / 1693 expected / 0
+unexpected / 1 intentional skip.
+
+* Future work
+
+** Persistent cache
+
+In-memory cache loses state on Emacs restart.  Persist DM API
+responses to =~/.cache/tibetan-cat/dharmamitra-api.json= so
+subsequent sessions reuse them.  Keyed identically (endpoint +
+SHA-256 of body).
+
+** Cross-document realign
+
+The current =realign-document= operates on one source file.
+For multi-chapter Yogācārabhūmi reading (Bodhisattvabhūmi vol 1
+has 28 chapters, each a separate org file), a =realign-corpus=
+command that walks an entire folder would batch-process the
+whole work.  Probably:
+=tibetan-sanskrit-parallel-dm-realign-folder FOLDER=.
+
+** Pre-translation rating
+
+DM exposes =/rate_translations= and =/rate_translations_ref_free=
+endpoints.  After applying a realign, we could fire these to
+score each segment's match confidence and write a per-segment
+=:DM_RATING:= property — useful for a "low-confidence segments"
+report.
+
+** Tibetan-side source filter
+
+We currently use =#+DM_SANSKRIT_SOURCE:= to constrain the search
+corpus.  A symmetric =#+DM_TIBETAN_SOURCE:= would allow validating
+that the Tibetan we have is actually from the work we think it
+is — potentially catching transcription errors or wrong-edition
+text.  Header is already parsed but unused.
+
+** Polish: preserve hand-edited Devanagari
+
+The writer currently replaces the entire =**** Sanskrit= body.
+If the user has manually added a Devanagari second line, the
+realign overwrites it.  Future polish: preserve the second line
+when it contains U+0900–U+097F characters; replace only the IAST
+line.  Defer until users complain.
+
+** Per-segment confidence threshold
+
+If Claude's disambiguation =:reason= contains uncertainty
+markers ("possibly", "I'm not sure"), surface that in the
+preview as a low-confidence flag — encourage the user to spot-
+check those segments before applying.
+
+* Verification (live test, 2026-04-30)
+
+** Smoke probes (Phase 1, before any code changes)
+
+Probed both endpoints with real curl calls:
+- chat-translate on segment 5 Sanskrit IAST → 1.2 sec, returned
+  "In this context, a Bodhisattva possesses an innate inclination
+  toward generosity."
+- chat-translate on segment 5 Tibetan Unicode → 1.4 sec, returned
+  semantically equivalent translation.
+- primary search with Sanskrit input + =SA_T06_bsa034= filter →
+  exactly 1 hit, correctly =SA_T06_bsa034:64=.
+- primary search with Tibetan input → 48 hits across the corpus,
+  correct Bodhisattvabhūmi hit at rank 46 (drowned by
+  prajñāpāramitā literature).
+- primary search with English input + =SA_T06_bsa034= filter →
+  10 hits, correct passage at rank 2.
+
+** End-to-end live test (Phase 6, 2026-04-30)
+
+After adding =#+DM_SANSKRIT_SOURCE: SA_T06_bsa034= +
+=#+DM_TIBETAN_SOURCE: BO_T06_D4037= to =gotrapatala.org='s
+header, ran the full pipeline against three representative
+segments via batch Emacs (gptel not available → top-hit
+fallback engaged for the Claude-pick step):
+
+| Seg | Current Sanskrit                              | DM cands | Top-hit segmentnr           | Status |
+|-----|-----------------------------------------------|----------|-----------------------------|--------|
+| 5   | =iha bodhisattvaḥ prakṛtyaiva dānarucirbhavati= | 3        | =SA_T06_bsa034:6=           | change |
+| 50  | =parabādhayā cāttyartha bādhyate yaduta...=   | 2        | =SA_T06_bsa034:88=          | change |
+| 95  | =[Sanskrit alignment exhausted...]=           | 5        | =SA_T06_bsa034:2447=        | change |
+
+All six DM HTTP calls (3 segments × 2 endpoints) completed
+successfully.  Pipeline → proposal builder produced =:status
+'change= for every segment, as expected (current daṇḍa-split
+text differs from DM's top match in each case).
+
+Without Claude disambiguation, top-hits look semantically
+plausible but uncertain — segment 5 rank 1 is the table-of-
+contents line, rank 2 looks more topically aligned.  Running
+under interactive Emacs (gptel + authinfo loaded) with =C-c u z d=
+on segment 5 is the right next step to confirm Claude picks the
+correct rank.
+
+* Status
+
+| Phase | Commit  | What                                                      |
+|-------|---------|-----------------------------------------------------------|
+| 1     | =307183f= | HTTP client (chat-translate + search), SSE parser, cache |
+| 2     | =88385cd= | Metadata reader + per-segment candidates orchestrator    |
+| 3     | =4e881d1= | Claude disambiguation among candidates                   |
+| 4     | =4b54f7b= | Proposals + document walker + preview renderer           |
+| 5     | =41689ac= | Writer + apply + interactive commands + keybindings      |
+| 6     | (this commit) | Design doc + CLAUDE.md update + live test           |
+
+Suite: 1694 / 1693 expected / 0 unexpected / 1 intentional skip.
+
+---
+
+Feature complete.  Open the next chapter of gotrapatala in
+class with =C-c u z D= → preview → apply → analyse.

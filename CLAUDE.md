@@ -218,9 +218,9 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-04-24): **1452 tests, 1449 expected, 0 unexpected
-failures, 3 intentional skips (text-scale / compound-analysis-callable).**
-Carsten runs this after every change and expects it to stay green.
+Current state (2026-04-30): **1694 tests, 1693 expected, 0 unexpected
+failures, 1 intentional skip (compound-analysis-callable).**  Carsten
+runs this after every change and expects it to stay green.
 
 When adding a test, always wire it into `test/run-all-tests.el` via
 `condition-case`. Otherwise the suite silently doesn't pick it up and
@@ -576,6 +576,112 @@ paragraph if under `** §N` or similar.  Added via three commits:
 Also in this window: `19a95f6` (specs/tigress + document-prep
 updated to the current reading-file layout from §2.12).
 
+### 5.14 Sanskrit-parallel reading workflow (done, tested, 2026-04-27)
+
+Per-document opt-in parallel-Sanskrit reading mode for the
+Yogācārabhūmi class.  Sanskrit is treated as the primary source;
+the Tibetan canonical translation is the secondary.  The
+analysis pipeline emits a `** Sanskrit Source` section above
+Wylie, the Claude prompt becomes Sanskrit-primary with optional
+`### Tibetan Divergence` notes, and a toggle command manages the
+opt-in header.
+
+Six phases shipped (1 commit each):
+
+1. `cf8b635` — Walker + source-mode predicate
+   (`core/tibetan-sanskrit-parallel.el`).  `**** Sanskrit`
+   sibling lookup at-cursor and by-id; `--source-mode-parallel-p`
+   reads `#+SOURCE_MODE: parallel-sanskrit`.
+2. `4e27bdf` — `** Sanskrit Source` rendering, prepended to
+   `tibetan-analysis--priority-section-order`.  Emitted only
+   when the dynamic var `--sanskrit-text-for-render` is bound
+   (caller-controlled gate).
+3. `d68f37d` — Claude prompt directive: when `:source-mode` is
+   `parallel-sanskrit`, system prompt gains a Sanskrit-primary
+   block; user prompt prepends the IAST + Devanagari above the
+   Tibetan passage.  Cache-warm: system block constant per doc.
+4. `6b84d17` — Markdown `### Tibetan Divergence` →
+   `(parent-level + 1)`-star org sub-heading via
+   `--claude-body-md-h3-to-org` in
+   `--replace-claude-section-body`.  Foldable, navigable.
+5. `75eb837` — `tibetan-cat-toggle-source-mode-parallel`
+   (`C-c u z P`) + menu.
+6. `b33e864` — End-to-end wiring: dynamic var bound from the
+   walker on the four real call paths
+   (`tibetan-auto-analyze-document`,
+   `--open-segment-analysis-impl`,
+   `--reanalyze-segment-impl`,
+   `tibetan-analysis-reanalyze-file`).
+
+Tests: 61 ERT specs across
+`test/tibetan-sanskrit-parallel-test.el` and the existing
+prompt / sections test files.
+
+Source files using the workflow: `gotrapatala.org` (97 segments
+of Bodhisattvabhūmi) currently.  Other YBh chapters or the
+Hausarbeit Tibetisch IV Milarepa work could opt in via
+`#+SOURCE_MODE: parallel-sanskrit`.
+
+Design doc: `docs/feature-sanskrit-parallel.org` (not yet
+written; see this section for the summary).
+
+### 5.15 DharmaMitra-driven Sanskrit re-alignment (done, tested, 2026-04-30)
+
+Five-phase feature that uses DharmaMitra's public search +
+chat-translate APIs to correct the rough daṇḍa-split alignment
+of `**** Sanskrit` siblings in parallel-mode documents.
+Workflow per segment:  translate Tibetan → English (DM) →
+search Sanskrit corpus (DM) → ask Claude to disambiguate
+candidates → build proposal (current vs proposed + status) →
+preview / apply.
+
+Phases:
+
+1. `307183f` — DharmaMitra HTTP client
+   (`core/tibetan-dharmamitra-api.el`): SSE parser, request
+   builders, sha256-keyed in-memory cache, error handling.
+2. `88385cd` — Per-segment candidates orchestrator
+   (`core/tibetan-sanskrit-parallel-dharmamitra.el`):
+   `--read-source-metadata` extended with
+   `:dm-sanskrit-source` / `:dm-tibetan-source` plist keys
+   from `#+DM_SANSKRIT_SOURCE:` / `#+DM_TIBETAN_SOURCE:`
+   headers.
+3. `4e881d1` — Claude disambiguation: prompt builder, response
+   parser (`## Choice` + `## Reason` schema), synchronous
+   gptel wrapper outside `tibetan-claude-queue`, top-hit
+   fallback with stamped `:reason`.
+4. `4b54f7b` — Proposals + walker + preview renderer.
+   `tibetan-sanskrit-parallel-dm-realign-document-proposals`
+   walks every `**** Segment N` heading; preview buffer
+   summarises change / unchanged / no-candidates counts and
+   shows per-segment current vs proposed Sanskrit + Claude
+   reason.
+5. `41689ac` — Writer + apply + interactive commands.
+   `tibetan-sanskrit-parallel-write-sanskrit-for-segment-id`
+   (generic, in `core/tibetan-sanskrit-parallel.el`) replaces
+   existing Sanskrit body or inserts new sibling.  Status-
+   aware apply skips `unchanged` / `no-candidates` (CLAUDE.md
+   §6 — preserve user content).  `C-c u z d` segment,
+   `C-c u z D` document; both default to preview, `C-u`
+   applies.
+
+Tests: 72 ERT specs across
+`test/tibetan-dharmamitra-api-test.el` (19) and
+`test/tibetan-sanskrit-parallel-dharmamitra-test.el` (53).
+
+Strict test-first discipline applied throughout: empty stubs
+before implementation, run-against-stub to confirm each test
+fails with a `should` assertion (not `void-function`),
+implement, run-against-implementation to confirm pass.
+
+Design doc: `docs/feature-dharmamitra-realign.org` — quickstart
++ architecture + design decisions + DM API surface findings.
+
+DM endpoint base URL `https://dharmamitra.org/api-search/`,
+public bearer `sthiramati` (default — overridable via
+`tibetan-dharmamitra-api-token`).  Full OpenAPI spec at
+`/api-search/openapi.json` (no auth).
+
 ### 5.8 Claude integration hardening + Anthropic prompt caching (done, 2026-04-20)
 
 Five cumulative improvements to the Claude request path, all
@@ -809,7 +915,7 @@ folio alongside the text so the caller can thread it through.
 ## 9. First thing to do in a new session
 
 1. `make test` (or the batch command in §4). Confirm baseline green
-   (expect 1452 / 1449 expected / 0 unexpected / 3 skipped at 2026-04-24).
+   (expect 1694 / 1693 expected / 0 unexpected / 1 skipped at 2026-04-30).
 2. Skim `MEMORY.md` (auto-memory) — `working_discipline.md` is the
    baseline rule set; this file refines it for tibetan-cat.el.
 3. Skim `git log --oneline -20` for anything newer than §5.13 (this
