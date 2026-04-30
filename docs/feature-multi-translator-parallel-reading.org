@@ -1,0 +1,370 @@
+#+TITLE: Multi-Translator Parallel-Reading — Feature Design
+#+DATE: 2026-04-30
+#+AUTHOR: Carsten Paul + Claude
+#+STATUS: SHIPPED (Phases A, B, C, D + alignment-fix work + verb-detect uddāna fix)
+
+* TL;DR
+
+In parallel-Sanskrit documents (=#+SOURCE_MODE: parallel-sanskrit=),
+each per-segment analysis file now carries up to *six* translation
+artefacts plus an optional divergence note:
+
+| Section                                | Engine    | Source   | Phase |
+|----------------------------------------+-----------+----------+-------|
+| =* DharmaMitra Translation (Tibetan)=  | DM        | Tibetan  | A     |
+| =* DharmaMitra Translation (Sanskrit)= | DM        | Sanskrit | A.2   |
+| =** Claude Translation=                | Claude    | Tibetan  | (pre) |
+| =** Claude Translation (Sanskrit)=     | Claude    | Sanskrit | B     |
+| =** Claude Translation (Combined)=     | Claude    | Both     | D     |
+| =** Claude Divergence=                 | Claude    | Both     | C     |
+
+The reader sees Tibetan and Sanskrit translated independently
+(both sides on their own terms), then a synthesis (Claude's best
+single rendering drawing on both sources + surrounding context),
+and finally — only when there is a SERIOUS Sanskrit-Tibetan
+divergence — a flagged commentary section.  Non-parallel
+documents render identically to before: only the Tibetan-side
+artefacts appear.
+
+* Reader flow inside =* Auto-Analysis=
+
+Per-segment, the level-2 ordering is:
+
+#+begin_example
+** Sanskrit Source              ← raw IAST + optional Devanagari
+** Wylie Transliteration
+** Interlinear Gloss
+** Claude Translation           ← Tibetan side
+** Claude Translation (Sanskrit)← Sanskrit side
+** Claude Translation (Combined)← synthesis
+** Claude Divergence            ← optional, only when flagged
+** Grammar
+** Sentence Structure
+** Verb Classification (Hill 2010)
+…
+#+end_example
+
+The two top-level DharmaMitra sections sit OUTSIDE
+=* Auto-Analysis= as siblings of =* My Notes= / =* Working
+Translation= / =* Footnotes=.  Top-level placement (single
+asterisk) means they survive reanalysis without touching the
+existing preserve-list machinery — same pattern as the realign
+feature's =* Sanskrit (DharmaMitra)=.
+
+* Phase walkthrough
+
+** Phase A — DharmaMitra as a translator alongside Claude (SHIPPED)
+
+DM translates the Tibetan and (in parallel mode) the Sanskrit
+synchronously via DM's =/chat-translate= endpoint.  Two
+top-level sections appear in each analysis file with a
+=:LAST_TRANSLATED:= property-drawer stamp.
+
+Sub-phases:
+
+- A.1 — Tibetan-only fire on file create.  =tibetan-auto-fire-dm-on-
+  create= defcustom (default =t=) gates the behaviour.
+- A.1.5 — Existing-file open path also fires when the section is
+  missing or empty.  Predicate
+  =tibetan-dharmamitra-translation-needs-request-p= avoids redoing
+  good translations.
+- A.2 — Sanskrit fire when source-mode parallel-Sanskrit AND the
+  segment has a non-placeholder =**** Sanskrit= sibling.  Umbrella
+  function =fire-for-segment= dispatches to both languages.
+- A.3 — Batch fire on =C-c u B= (auto-analyze-document) and on
+  =C-u C-c u r= (batch reanalyze with re-request-claude).  Stagger
+  delay =tibetan-auto-dm-request-delay= (default =0.5s=) avoids
+  hammering DM.
+
+** Phase B — Claude Translation (Sanskrit) (SHIPPED)
+
+Parallel-mode prompt instructs Claude to emit TWO translation
+sections: =## Translation= for the Tibetan, =## Translation
+(Sanskrit)= for the Sanskrit.  Both stand on their own.  The
+Claude pipeline gets:
+
+- Parser regex extended to match =Translation (Sanskrit)= BEFORE
+  bare =Translation= in the alternation (else the bare branch
+  swallows the suffix).
+- =--claude-section-key= helper maps suffixed tokens to plist keys.
+- Section-order defconst gains =(:translation-sanskrit "Claude
+  Translation (Sanskrit)" 2)= entry.
+- New scaffolder
+  =--ensure-claude-sanskrit-translation-heading= places the
+  heading immediately AFTER =** Claude Translation= when the
+  parser sees a non-nil =:translation-sanskrit=.  Idempotent;
+  non-parallel responses leave the file byte-identical.
+- Reader returns =:translation-sanskrit=; restorer round-trips.
+
+** Phase C — Claude Divergence (SHIPPED)
+
+Strictly opt-in commentary.  The parallel-mode prompt's third
+paragraph instructs Claude to emit =## Divergence= ONLY WHEN
+there is a serious Sanskrit-Tibetan difference (collapse,
+expansion, substitution, doctrinal shift), with 1–3 short
+bullets naming the specific divergence(s).  Faithful renderings
+omit the section entirely.
+
+Implementation mirrors Phase B:
+- Parser regex grows =Divergence= alternative.
+- Section-order defconst gains =(:divergence "Claude Divergence"
+  2)= entry.
+- Scaffolder =--ensure-claude-divergence-heading= places the
+  heading immediately AFTER =** Claude Translation (Combined)=
+  when present (or Sanskrit / Tibetan / Wylie fallback chain
+  otherwise).
+
+** Phase D — Claude Translation (Combined) (SHIPPED)
+
+The synthesis translation Carsten asked for: "additionally a
+translation combining the sanskrit and tibetan source based on
+the context".
+
+Prompt directive: produce a third translation that is the best
+synthetic reading drawing on BOTH the Sanskrit (the canonical
+primary) and the Tibetan (the canonical secondary), informed by
+the surrounding context (neighbour segments, document genre,
+Resources vocabulary).  When the two sources agree, follow the
+agreed reading.  When they diverge, pick whichever is better
+supported by the philological evidence and the doctrinal
+context, defaulting to the Sanskrit when there is no compelling
+reason otherwise.  This is the translation that lands in
+=** Working Translation= workflows by default.
+
+Same scaffolding pattern as Phases B, C.  Buffer order:
+Tibetan → Sanskrit → Combined → Divergence (last).
+
+* Anthropic prompt-cache invariance
+
+The parallel-mode directive
+(=tibetan-analysis--claude-parallel-mode-system-block-text=) is a
+constant defconst.  It's appended to the system prompt AFTER the
+target-lang block but BEFORE any per-segment context.  All
+segments in a parallel-Sanskrit document therefore share a
+byte-identical system prefix → Anthropic prompt cache stays warm
+from request 2 onward.  Verified by
+=tibetan-claude-prompt-system-block-stable-across-segments= test.
+
+* Source-side: =**** Sanskrit= sibling + placeholder markers
+
+The walker in =core/tibetan-sanskrit-parallel.el= drives
+everything Sanskrit-side.  Per-segment, it reads the =****
+Sanskrit= sibling under each =**** Segment N= heading, parses the
+body into =(:iast STR :devanagari STR :script-source SYM)=, and
+returns the plist (or nil if no sibling / placeholder body).
+
+** Placeholder markers (alignment-fix work, 2026-04-30)
+
+Three marker shapes are recognised by
+=tibetan-sanskrit-parallel--placeholder-text-p=:
+
+| Prefix                          | Meaning                                                          |
+|---------------------------------+------------------------------------------------------------------|
+| =[Sanskrit alignment pending=   | Universal: alignment known-invalid, awaiting class-time edit     |
+| =[Sanskrit alignment exhausted= | Legacy: daṇḍa-split prep ran out of clauses                      |
+| =[No Sanskrit counterpart=      | Reserved: explicit Tibetan-only (homages, uddāna verses, etc.)   |
+
+When the body matches any prefix, =--parse-body= returns nil.
+Single chokepoint — the walker, the DM Sanskrit fire path, the
+Claude parallel-mode user-block builder, and the =** Sanskrit
+Source= renderer all consume the walker's plist; nil propagates
+through every one of them as "no Sanskrit available".  Adding a
+new marker shape is a one-line edit to
+=tibetan-sanskrit-parallel--placeholder-prefixes=.
+
+** Reset Sanskrit-side sections command
+
+When a parallel-Sanskrit source's =**** Sanskrit= alignment
+changes structurally (e.g. bulk re-marked as
+=[Sanskrit alignment pending …]= for class-time editorial
+verification), existing analysis files in the folder still
+carry Sanskrit-side sections generated against the OLD
+alignment.
+
+=M-x tibetan-sanskrit-parallel-reset-sanskrit-sections-in-folder=
+walks every =seg-NNN.org= / =sent-NNN.org= file in the folder
+and removes the four level-2 + one level-1 Sanskrit-side
+sections.  The next reanalyse regenerates them — or omits them
+when the source is now pending.
+
+Tibetan-side sections (=** Claude Translation=, =* DharmaMitra
+Translation (Tibetan)=) and user content (=* My Notes=,
+=* Working Translation=, =* Footnotes=) are preserved per
+CLAUDE.md §6.
+
+Menu entry: =Tibetan → Persistent Analysis → Translation
+Workshop → Reset Sanskrit-Side Sections in Folder…=  No default
+key binding — this is rare structural cleanup.
+
+* gotrapatala.org alignment status (2026-04-30)
+
+All 97 =**** Sanskrit= bodies are currently marked
+=[Sanskrit alignment pending …]=.  The 2026-04-27 daṇḍa-split
+alignment was retired after the live test on segment 5
+surfaced a structural recension divergence: the Tibetan canon's
+chapter 1 opens with translator's homages (segs 1–2) and a
+10-dharma framework intro + uddāna verse (segs 3–8) that has NO
+direct counterpart in the Dutt-edition Sanskrit, which begins
+directly with chapter 1 proper (=ṣaḍ imāni bodhisattvasya...=).
+
+The 10 dharmas that the uddāna verse lists ARE the canonical
+Sanskrit =mahāyānasaṃgraha= framework
+(=ādhāra=/=lakṣaṇa=/=pakṣa=/=adhyāśaya=/=vihāra=/=upapatti=/
+=parigraha=/=bhūmi=/=caryā=/=pratiṣṭhā= = =gzhi=/=rtags=/
+=phyogs=/=lhag-bsam=/=gnas-pa=/=skye=/=yongs-'dzin=/=sa=/
+=spyod=/=rab-gnas=) — confirmed by p. 4 of the instructor's
+Readings PDF.  The Tibetan front matter is faithful to a
+Sanskrit framework, just not one that appears in the Dutt-
+edition opening prose we have.  It may live in the BBh prologue
+or the Anukrama summary chapter, neither of which is in the
+local etext.
+
+Workflow: as the class reads each segment, replace the pending
+marker with the correct Sanskrit chunk, or with =[No Sanskrit
+counterpart …]= for canon-side material with no Sanskrit
+equivalent.  No batch realign — segment-by-segment editorial.
+
+* Why automated realign couldn't fix it
+
+The =dharmamitra-realign= feature was built for off-by-N
+positional misalignment within a single recension.  Here we
+have a structural divergence between *recensions* — the Tibetan
+front matter doesn't exist in the Sanskrit edition we have, so
+DM searching its corpus would keep returning per-pāramitā
+gotraliṅga material because that's what's there.  No amount of
+clause extraction or claude-pick can conjure 10-dharma prologue
+Sanskrit from a corpus that doesn't contain it.
+
+The realign feature still works for its niche use case: an
+off-by-N positional shift WITHIN A RECENSION.  We did NOT
+retire it.  But the correct response to gotrapatala's structural
+divergence was placeholder-marking + class-time editorial fill-
+in, not an automated re-fit.
+
+* Bug fix: uddāna-verse verb misclassification (2026-04-30)
+
+Live test on seg-005 also surfaced a parser inconsistency:
+
+#+begin_example
+** Verb Classification (Hill 2010)
+[No Hill-DB verbs detected]
+
+** Sentence Structure
+Clause 1 [main]: verb སྡོམ [sdom] — to fetter | bind
+Clause 2 [main]: verb རྣམས [rnams] — to choke | plural marker
+#+end_example
+
+Both blocks read the same Tibetan and the same verb-detection
+output, but Verb Classification correctly reported no verbs
+while Sentence Structure invented two clause-heads from non-verb
+tokens.
+
+** Root cause
+
+`tibetan-verb-detect--lookup` falls through to a vocab-fallback
+when Hill-DB has nothing.  The fallback fires on glosses that
+START with `to X' / `pf.' / `verb:' / etc.  The Bialek-derived
+=tibetan-english.tsv= has
+
+#+begin_example
+sdom    to fetter | bind; tie; fasten; vow; obligation; …
+rnams   to choke | plural marker
+#+end_example
+
+Both glosses begin with `to X' but ALSO list non-verb senses
+(`vow' / `obligation' / `plural marker').  The fallback fired
+on the leading `to X' without checking the rest.  The minimal
+entry produced was tagged =(minimal . t)= but otherwise
+indistinguishable from a closed-set minor-verb entry.  The Verb
+Classification renderer filters all minimal entries; the
+clause-structure renderer ingested them all.  Hence the
+asymmetry.
+
+** Fix (two-layer defence)
+
+1. =tibetan-verb-detect--vocab-says-verb-p= now AND's the
+   leading `to X' / `verb:' / `be X' verbal-pattern check with a
+   NOT-match against
+   =tibetan-verb-detect--non-verb-gloss-tokens-re=:
+   =\b(particle|marker|postposition|nominali[sz]er|enclitic)\b=.
+   When the same gloss labels the word a particle / marker /
+   nominaliser, the leading `to X' is misleading polysemy-
+   flattening from a multilingual TSV source and the fallback
+   returns nil.
+
+2. =--minimal-entry= now takes a SOURCE arg (=closed-set= /
+   =vocab-fallback=).  =tibetan-analysis--render-clause-
+   structure= filters out vocab-fallback entries before calling
+   =tibetan-analyze-round2=, restoring symmetry with Verb
+   Classification.  Curated closed-set verbs (=གསོལ=, =མཛད=,
+   =བྱུང=, …) are kept — they legitimately drive clauses.
+
+* Future Sanskrit CAT compatibility (preserved)
+
+- =**** Sanskrit= in source files remains the canonical, tool-
+  agnostic store.  A future Sanskrit CAT reads it directly.
+- The placeholder-marker convention is a stable contract.  Future
+  Sanskrit CAT can recognise the same prefixes via the same
+  predicate.
+- =#+SOURCE_MODE:= still enumerates a token; future modes
+  (=parallel-pali=, =commentary-with-base=, …) extend cleanly.
+- No Sanskrit grammar / parsing / vocab / zettel logic is added in
+  this MVP — those live in the future Sanskrit CAT.
+
+* Live test status
+
+Tibetan-only reanalysis on seg-005 after the alignment fix +
+verb-detect fix:
+
+- =** Sanskrit Source= absent (walker returns nil for placeholder)
+- =** Claude Translation (Sanskrit)= absent (parallel-mode
+  prompt has no Sanskrit input)
+- =** Claude Translation (Combined)= absent (parallel-mode
+  prompt has no Sanskrit input)
+- =** Claude Divergence= absent
+- =* DharmaMitra Translation (Sanskrit)= absent (DM fire skips
+  placeholders)
+- =* DharmaMitra Translation (Tibetan)= regenerates if missing
+- =** Claude Translation= regenerates fresh, no Sanskrit
+  context contamination
+- =** Sentence Structure= correctly says =[No clause structure
+  detected]= or omits the spurious sdom/rnams clause heads
+- =** Verb Classification (Hill 2010)= correctly says
+  =[No Hill-DB verbs detected]=
+
+The two analysis sections that previously disagreed about the
+uddāna verse now agree.
+
+* Test inventory
+
+Total ERT specs added across this work series: 51
+
+| Suite                                          | Specs | Coverage                                    |
+|------------------------------------------------+-------+---------------------------------------------|
+| Phase A.1 (DM Tibetan fire)                    |    14 | Writer / predicate / fire / regression      |
+| Phase A.2 (DM Sanskrit fire)                   |     8 | Sanskrit fire + umbrella dispatch           |
+| Phase A.3 (batch DM fire)                      |     6 | Auto-analyze + reanalyze wiring             |
+| Phase B (Claude Translation Sanskrit)          |    10 | Parser / scaffolder / reader / restore      |
+| Phase C (Claude Divergence)                    |     9 | Same matrix; gated on serious differences   |
+| Phase D (Claude Translation Combined)          |    10 | Parser / ordering / round-trip              |
+| Placeholder marker generalization              |     8 | Predicate + walker integration              |
+| Reset Sanskrit-sections command                |     6 | Buffer / file / folder / idempotency        |
+| Verb-detect uddāna-verse fix                   |     6 | Predicate + source tag + end-to-end         |
+
+Suite total at end of work: *1784 / 1783 expected / 0 unexpected /
+1 skipped*.
+
+* Commit trail
+
+| Commit   | Description                                                              |
+|----------+--------------------------------------------------------------------------|
+| 09cba65  | multi-translator: DharmaMitra as Tibetan translator (Phase A.1)          |
+| a90e6e4  | multi-translator: DM auto-fire on existing files + reanalyse (A.1.5)     |
+| b5d5b43  | multi-translator: DharmaMitra Sanskrit variant + umbrella (A.2)          |
+| 59b2f5e  | multi-translator: DM batch fire on C-c u B / C-u C-c u r (A.3)           |
+| c6e4d59  | multi-translator: Claude Translation (Sanskrit) section (Phase B)        |
+| de1fba0  | multi-translator: Claude Divergence section (Phase C)                    |
+| 77e23b4  | multi-translator: Claude Translation (Combined) section (Phase D)        |
+| 0b19f34  | sanskrit-parallel: generalize placeholder marker recognition             |
+| 52454ad  | sanskrit-parallel: reset-sanskrit-sections-in-folder command             |
+| 897235c  | verb-detect: filter vocab-fallback minimal entries from clause segm.     |

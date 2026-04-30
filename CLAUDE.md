@@ -3,7 +3,9 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-04-24 (added §5.10–§5.13: dictionary polish,
+editing. Last updated 2026-04-30 (§5.16 added: multi-translator parallel
+reading + placeholder-marker generalization + reset-Sanskrit-sections
+command + verb-detect uddāna-verse fix; previous: §5.10–§5.13: dictionary polish,
 grammar unification, thesaurus + target-language pipeline, three-level
 dispatch).
 
@@ -218,7 +220,7 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-04-30): **1706 tests, 1705 expected, 0 unexpected
+Current state (2026-04-30): **1784 tests, 1783 expected, 0 unexpected
 failures, 1 intentional skip (compound-analysis-callable).**  Carsten
 runs this after every change and expects it to stay green.
 
@@ -712,6 +714,112 @@ public bearer `sthiramati` (default — overridable via
 `tibetan-dharmamitra-api-token`).  Full OpenAPI spec at
 `/api-search/openapi.json` (no auth).
 
+### 5.16 Multi-translator parallel reading (done, tested, 2026-04-30)
+
+Major feature pivot from §5.15's realign work: DharmaMitra is
+added as a *translator* alongside Claude in the analysis files,
+and Claude in parallel-Sanskrit mode now produces THREE
+translation sections (Tibetan / Sanskrit / Combined synthesis)
+plus an optional flagged-divergence note.  Per-segment analysis
+files in parallel mode now carry up to seven translation-related
+artefacts:
+
+| Section                                | Engine | Source   |
+|----------------------------------------|--------|----------|
+| `* DharmaMitra Translation (Tibetan)`  | DM     | Tibetan  |
+| `* DharmaMitra Translation (Sanskrit)` | DM     | Sanskrit |
+| `** Sanskrit Source` (raw IAST + Devan)| —      | source   |
+| `** Claude Translation`                | Claude | Tibetan  |
+| `** Claude Translation (Sanskrit)`     | Claude | Sanskrit |
+| `** Claude Translation (Combined)`     | Claude | Both     |
+| `** Claude Divergence` (when flagged)  | Claude | Both     |
+
+Non-parallel documents render identically to before — only the
+Tibetan-side artefacts appear.  The two top-level DM sections sit
+OUTSIDE `* Auto-Analysis` so they survive reanalysis without
+preserve-list machinery.
+
+Phases (6 commits, all green):
+
+1. `09cba65` — Phase A.1: DM as Tibetan translator.  New module
+   `core/tibetan-dharmamitra-translation.el` with synchronous
+   `chat-translate` calls + section writer.  Fires on file
+   create via `tibetan-auto-fire-dm-on-create` defcustom
+   (default `t`).
+2. `a90e6e4` — Phase A.1.5: existing-file open path also fires
+   DM when section is missing (predicate
+   `--needs-request-p` avoids redoing good translations).
+3. `b5d5b43` — Phase A.2: Sanskrit DM fire when source-mode
+   parallel-Sanskrit AND segment has a non-placeholder
+   `**** Sanskrit` sibling.  Umbrella `fire-for-segment`
+   dispatches both languages.
+4. `59b2f5e` — Phase A.3: batch DM fire on `C-c u B` and
+   `C-u C-c u r`.  Stagger via `tibetan-auto-dm-request-delay`
+   (default 0.5s).
+5. `c6e4d59` — Phase B: parallel-mode prompt directive +
+   `## Translation (Sanskrit)` schema.  Parser, section-order,
+   reader, scaffolder.
+6. `de1fba0` — Phase C: `## Divergence` opt-in commentary,
+   only when Claude flags serious differences.
+7. `77e23b4` — Phase D: `## Translation (Combined)` synthesis.
+   Reading order: Tibetan → Sanskrit → Combined → Divergence.
+
+Live test on gotrapatala.org seg-005 surfaced two follow-up
+concerns:
+
+- **Source alignment was structurally invalid.**  The 2026-04-27
+  daṇḍa-split positionally aligned chapter-1 Sanskrit clauses
+  with Tibetan segments, but the Tibetan canon's chapter 1 opens
+  with translator's homages (segs 1-2) and a 10-dharma framework
+  intro + uddāna verse (segs 3-8) that has no counterpart in the
+  Dutt-edition Sanskrit (which begins directly with `ṣaḍ
+  imāni...`).  The 10 dharmas are the canonical
+  *mahāyānasaṃgraha* framework (ādhāra/lakṣaṇa/pakṣa/adhyāśaya/
+  vihāra/upapatti/parigraha/bhūmi/caryā/pratiṣṭhā = gzhi/rtags/
+  phyogs/lhag-bsam/gnas-pa/skye/yongs-'dzin/sa/spyod/rab-gnas) —
+  faithful to a Sanskrit framework, just not one that appears
+  in the Dutt etext.
+
+  Fix: `0b19f34` generalized placeholder-marker recognition
+  (new `tibetan-sanskrit-parallel--placeholder-text-p`
+  predicate; recognises `[Sanskrit alignment pending`, `[Sanskrit
+  alignment exhausted`, `[No Sanskrit counterpart`).  Source
+  file's all 97 `**** Sanskrit` bodies bulk-marked with
+  `[Sanskrit alignment pending …]`.  `52454ad` added
+  `M-x tibetan-sanskrit-parallel-reset-sanskrit-sections-in-
+  folder` so the wrongly-translated sections in existing
+  analysis files can be cleared idempotently.
+
+- **Verb-detect false positives in uddāna verses.**  `སྡོམ` and
+  `རྣམས` were classified as verbs in seg-005's Sentence
+  Structure block, contradicting Verb Classification's
+  `[No Hill-DB verbs detected]`.  Root cause: vocab-fallback
+  fired on Bialek glosses starting with `to X` (`to fetter |
+  bind...`, `to choke | plural marker`) without checking if
+  the rest of the gloss labels the word a particle / marker.
+
+  Fix: `897235c` tightened `--vocab-says-verb-p` to AND its
+  verbal-pattern check with a NOT-match against
+  `\b(particle|marker|postposition|nominali[sz]er|enclitic)\b`,
+  AND tagged minimal entries with `(source . closed-set)` vs
+  `(source . vocab-fallback)`.  The clause-structure renderer
+  now filters vocab-fallback entries before clause segmentation,
+  restoring symmetry with Verb Classification.  Curated closed-
+  set verbs (`གསོལ`, `མཛད`, `བྱུང`, …) still drive clauses.
+
+Tests: 51 new ERT specs across the work series (Phase A.1: 14;
+A.2: 8; A.3: 6; B: 10; C: 9; D: 10; placeholder: 8; reset: 6;
+verb-detect: 6).
+
+Suite progression today (all green): 1734 → 1744 (B) → 1753 (C)
+→ 1764 (D) → 1772 (placeholder) → 1778 (reset) → **1784**
+(verb-detect).
+
+Design doc: `docs/feature-multi-translator-parallel-reading.org` —
+phase walkthrough + reader-flow ordering + alignment workflow +
+why automated realign couldn't fix gotrapatala + verb-detect
+fix root-cause + commit trail.
+
 ### 5.8 Claude integration hardening + Anthropic prompt caching (done, 2026-04-20)
 
 Five cumulative improvements to the Claude request path, all
@@ -945,7 +1053,7 @@ folio alongside the text so the caller can thread it through.
 ## 9. First thing to do in a new session
 
 1. `make test` (or the batch command in §4). Confirm baseline green
-   (expect 1706 / 1705 expected / 0 unexpected / 1 skipped at 2026-04-30).
+   (expect 1784 / 1783 expected / 0 unexpected / 1 skipped at 2026-04-30).
 2. Skim `MEMORY.md` (auto-memory) — `working_discipline.md` is the
    baseline rule set; this file refines it for tibetan-cat.el.
 3. Skim `git log --oneline -20` for anything newer than §5.13 (this
