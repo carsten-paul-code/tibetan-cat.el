@@ -107,6 +107,11 @@
 ;; workflow (Sanskrit primary, Tibetan secondary).
 (condition-case nil (require 'tibetan-sanskrit-parallel-test) (error nil))
 
+;; DharmaMitra HTTP client (Phase 1 of dharmamitra-realign workflow,
+;; 2026-04-27): SSE parser, request builders, in-memory cache, error
+;; handling.  Stubs HTTP so tests run without network.
+(condition-case nil (require 'tibetan-dharmamitra-api-test) (error nil))
+
 ;; Source-aware Claude prompt (reads #+TIBETAN_CLAUDE_CONTEXT: and friends)
 (condition-case nil (require 'tibetan-analysis-claude-prompt-test) (error nil))
 

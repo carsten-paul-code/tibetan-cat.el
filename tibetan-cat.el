@@ -88,6 +88,14 @@
 (require 'tibetan-org-structure)  ; Org-mode structure support (new format)
 (require 'tibetan-text-classifier) ; Text type classification (NEW)
 
+;; DharmaMitra HTTP client (Phase 1 of dharmamitra-realign workflow,
+;; 2026-04-27).  Provides chat-translate (SSE-streaming) and primary
+;; semantic search.  Soft-required — missing module does not break
+;; loading.  Used by the upcoming realign command which corrects the
+;; rough daṇḍa-split alignment of Sanskrit-Tibetan parallels in
+;; gotrapatala.org and similar parallel-mode documents.
+(require 'tibetan-dharmamitra-api nil t)
+
 ;; Sanskrit-parallel reading bridge (Phase 1, 2026-04-27).  Read-only
 ;; primitives: walker for `**** Sanskrit' siblings + source-mode
 ;; predicate (`#+SOURCE_MODE: parallel-sanskrit').  Soft-required —
