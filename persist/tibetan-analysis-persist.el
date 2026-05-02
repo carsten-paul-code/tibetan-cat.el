@@ -3834,6 +3834,23 @@ sentence."
                    tibetan-text filepath source-file seg-id)
                 (error
                  (message "DharmaMitra auto-fire skipped for seg-%s: %s"
+                          seg-id (error-message-string err)))))
+            ;; Phase 5 of two-language-parallel-analysis (§5.17,
+            ;; 2026-04-30):  when the existing file lacks a
+            ;; populated `* Sanskrit Analysis' / `* Combined
+            ;; Analysis', auto-fire the dispatcher just like Claude
+            ;; / DM auto-fire above.  Bug fix 2026-05-02: this wire
+            ;; was missed when §5.17 shipped — interactive
+            ;; `C-c u A' on an existing pre-parallel-mode file would
+            ;; otherwise never grow the new sections even after
+            ;; source-side Sanskrit alignment landed.  No-op when
+            ;; source isn't parallel-mode or sibling is placeholder.
+            (when (fboundp 'tibetan-analysis--fire-parallel-mode-claude-calls)
+              (condition-case err
+                  (tibetan-analysis--fire-parallel-mode-claude-calls
+                   tibetan-text source-file filepath)
+                (error
+                 (message "Sanskrit/Combined auto-fire skipped for seg-%s: %s"
                           seg-id (error-message-string err))))))
         ;; Create new file.  Phase 6 of sanskrit-parallel-workflow
         ;; (2026-04-27): in parallel-Sanskrit mode, thread the
@@ -3874,6 +3891,20 @@ sentence."
                 (tibetan-dharmamitra-translation-fire-for-segment
                  tibetan-text new-filepath source-file seg-id)
               (error (message "DharmaMitra translation skipped: %s"
+                              (error-message-string err)))))
+          ;; Phase 5 of two-language-parallel-analysis (§5.17,
+          ;; 2026-04-30):  on first creation of a parallel-mode
+          ;; segment file, also fire Sanskrit + Combined Claude
+          ;; calls so all three top-level analyses land together.
+          ;; Bug fix 2026-05-02: this wire was missed when §5.17
+          ;; shipped — `C-c u A' on a fresh segment otherwise only
+          ;; produced the Tibetan side.  No-op when source isn't
+          ;; parallel-mode or sibling is placeholder.
+          (when (fboundp 'tibetan-analysis--fire-parallel-mode-claude-calls)
+            (condition-case err
+                (tibetan-analysis--fire-parallel-mode-claude-calls
+                 tibetan-text source-file new-filepath)
+              (error (message "Sanskrit/Combined first-fire skipped: %s"
                               (error-message-string err))))))))))
 
 ;;;###autoload
@@ -3960,6 +3991,21 @@ segment > sentence > paragraph > legacy, most-specific-wins."
                 (tibetan-dharmamitra-translation-fire-for-segment
                  tibetan-text filepath source-file seg-id)
               (error (message "DharmaMitra translation skipped: %s"
+                              (error-message-string err)))))
+          ;; Phase 5 of two-language-parallel-analysis (§5.17, 2026-04-30):
+          ;; on explicit reanalyse, also fire Sanskrit + (chained)
+          ;; Combined Claude calls.  Bug fix 2026-05-02: this wire
+          ;; was missed when §5.17 shipped (the dispatcher was wired
+          ;; into headless `reanalyze-file' / `auto-analyze-document'
+          ;; / sentence batch but not into the interactive `C-c u R'
+          ;; entry point).  No-op when source isn't parallel-mode or
+          ;; the segment's Sanskrit sibling is a placeholder /
+          ;; continuation marker.
+          (when (fboundp 'tibetan-analysis--fire-parallel-mode-claude-calls)
+            (condition-case err
+                (tibetan-analysis--fire-parallel-mode-claude-calls
+                 tibetan-text source-file filepath)
+              (error (message "Sanskrit/Combined fire skipped: %s"
                               (error-message-string err))))))))))
 
 ;; ============================================================================

@@ -558,5 +558,68 @@ nil — no Sanskrit / Combined call fired."
    (tibetan-analysis--fire-parallel-mode-claude-calls
     "བདག" "/some/source.org" nil)))
 
+;; ============================================================================
+;; Phase 5 dispatcher: wired into the INTERACTIVE entry points
+;; ============================================================================
+;;
+;; §5.17 Phase 5 wires the Sanskrit + Combined dispatcher into the headless
+;; reanalyse-file + auto-analyze-document + sentence batch paths.  But the
+;; two interactive entry points — `tibetan--reanalyze-segment-impl' (bound
+;; to `C-c u R') and `tibetan--open-segment-analysis-impl' (bound to
+;; `C-c u A') — were missed.  Symptom (live test 2026-05-02 on
+;; gotrapatala.org seg 9): hitting `C-c u R' with re-aligned Sanskrit in
+;; the source produced a refreshed Tibetan analysis + DM Tibetan section,
+;; but no `* Sanskrit Text', `* Sanskrit Analysis', or
+;; `* Combined Analysis'.  Walker, dispatcher, and Claude pipeline all
+;; functioning — the call site simply wasn't wired.
+;;
+;; Regression-test approach:  walk the symbol-function form of each impl
+;; defun looking for the dispatcher symbol.  An interpreted function (as
+;; loaded from .el during test runs) preserves the body as a walkable
+;; cons-tree; a missing call site would not contain the symbol, and the
+;; test would fail.
+
+(defun tibetan-batch-reanalyze-test--fn-references-symbol-p (fn-symbol target-symbol)
+  "Return non-nil iff FN-SYMBOL's source body references TARGET-SYMBOL.
+Uses the printed form of the function value as the search target —
+works for both `interpreted-function' record bodies (the format
+emacs 30+ uses for lexical-binding defuns) and the plain cons-tree
+`lambda' bodies older emacs versions produce.  Surrounds
+TARGET-SYMBOL with non-symbol-character delimiters so a substring
+match (e.g. `foo' inside `foo-bar') doesn't false-positive."
+  (let ((printed (format "%S" (symbol-function fn-symbol)))
+        (target (symbol-name target-symbol)))
+    (string-match-p
+     (concat "[^[:alnum:]_-]"
+             (regexp-quote target)
+             "[^[:alnum:]_-]")
+     printed)))
+
+(ert-deftest tibetan-reanalyze-segment-impl-wires-parallel-dispatcher ()
+  "`tibetan--reanalyze-segment-impl' (the `C-c u R' handler) must
+invoke `tibetan-analysis--fire-parallel-mode-claude-calls' so the
+Sanskrit and Combined analyses fire when in parallel-mode.  Without
+this wire, the §5.17 dispatcher fires only via headless batch +
+auto-analyze + sentence paths, never via interactive segment
+reanalyse — the most common everyday entry point."
+  (skip-unless (fboundp 'tibetan--reanalyze-segment-impl))
+  (skip-unless (fboundp 'tibetan-analysis--fire-parallel-mode-claude-calls))
+  (should (tibetan-batch-reanalyze-test--fn-references-symbol-p
+           'tibetan--reanalyze-segment-impl
+           'tibetan-analysis--fire-parallel-mode-claude-calls)))
+
+(ert-deftest tibetan-open-segment-analysis-impl-wires-parallel-dispatcher ()
+  "`tibetan--open-segment-analysis-impl' (the `C-c u A' handler) must
+also invoke `tibetan-analysis--fire-parallel-mode-claude-calls' so a
+fresh seg-NNN.org file gets its Sanskrit + Combined analyses on
+first creation.  Without this wire, new parallel-mode files start
+with only the Tibetan side filled in even when source has aligned
+Sanskrit."
+  (skip-unless (fboundp 'tibetan--open-segment-analysis-impl))
+  (skip-unless (fboundp 'tibetan-analysis--fire-parallel-mode-claude-calls))
+  (should (tibetan-batch-reanalyze-test--fn-references-symbol-p
+           'tibetan--open-segment-analysis-impl
+           'tibetan-analysis--fire-parallel-mode-claude-calls)))
+
 (provide 'tibetan-batch-reanalyze-test)
 ;;; tibetan-batch-reanalyze-test.el ends here
