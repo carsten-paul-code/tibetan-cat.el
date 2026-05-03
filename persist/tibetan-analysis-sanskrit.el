@@ -205,9 +205,25 @@ Pure function — no buffer / network I/O."
                            (format "\n\nSanskrit passage (Devanagari):\n\n%s"
                                    devanagari))
                          "\n\nProduce the Sanskrit-side analysis sections "
-                         "now.  Skip `## Devanagari' if the user prompt "
-                         "already provides it; skip `## Sandhi' if there "
-                         "are no sandhi joints in this segment.")))
+                         "now.\n\n"
+                         "ALWAYS emit (no exceptions, even for very short "
+                         "segments — these are required reference sections "
+                         "the reader expects in every analysis):\n"
+                         "  - `## Translation'  (your own translation)\n"
+                         "  - `## Word List'    (one bullet per content "
+                         "word, with case/number/gender)\n"
+                         "  - `## Grammar'      (prose case-frame + "
+                         "structure analysis; at minimum a sentence)\n\n"
+                         "Skip ONLY when the predicate holds:\n"
+                         "  - `## Devanagari'  skip if the user prompt "
+                         "already provides Devanagari above.\n"
+                         "  - `## Sandhi'      skip if there are no "
+                         "sandhi joints in this segment.\n\n"
+                         "Brevity-as-quality-judgment is wrong here: even "
+                         "a one-line Sanskrit clause needs Translation + "
+                         "Word List + Grammar so the reader can compare "
+                         "them to the parallel Tibetan analysis side-by-"
+                         "side.")))
       (cons system user))))
 
 ;; ============================================================================
