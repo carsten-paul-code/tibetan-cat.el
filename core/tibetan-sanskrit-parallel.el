@@ -876,5 +876,142 @@ Reports the summary in `*Messages*' on completion."
          (plist-get summary :sections-removed))))
       summary)))
 
+;; ============================================================================
+;; LEGACY * Sanskrit (DharmaMitra) CLEANUP (alignment-superseded, 2026-05-03)
+;;
+;; The §5.15 DM realign work (commit 9c12060) wrote DM-corpus search hits
+;; to a top-level `* Sanskrit (DharmaMitra)' section in each analysis
+;; file.  At the time, that section carried the canonical aligned
+;; Sanskrit for the segment.  Today's alignment work (2026-04-30,
+;; commit a5caeac+) supersedes that:  the canonical IAST is now in
+;; `* Sanskrit Text', driven by the source file's `**** Sanskrit'
+;; siblings via the walker.
+;;
+;; Existing analysis files still carry the legacy section as a no-op
+;; provenance trail.  This cleanup command removes it so the file shape
+;; matches the current §5.17 layout.
+;;
+;; Distinguished from the §5.16 reset command (above):  the reset
+;; command targets ALIGNMENT-SUPERSEDED Sanskrit-side sections (when
+;; the source's Sanskrit alignment changes) and removes a fixed list of
+;; level-1 + level-2 headings.  This command targets ONE specific
+;; legacy heading (`* Sanskrit (DharmaMitra)') and is intended as a
+;; one-time post-§5.17 cleanup.
+;; ============================================================================
+
+(defun tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-file (filepath)
+  "Remove the legacy `* Sanskrit (DharmaMitra)' section from FILEPATH.
+
+Returns the integer count of sections removed (0 when the file
+was already clean).  Idempotent — re-running on a clean file
+returns 0 and leaves the file byte-identical.
+
+The buffer is saved only when at least one section was removed,
+so a clean file's `mtime' isn't disturbed.
+
+Reuses `--reset-delete-section-in-buffer' for the actual deletion
+\(it already handles property drawer + body capture and stops at
+the next level-1 heading)."
+  (let ((touched 0)
+        (buf (find-file-noselect filepath)))
+    (unwind-protect
+        (with-current-buffer buf
+          (let ((was-modified (buffer-modified-p)))
+            (org-mode)
+            (when (tibetan-sanskrit-parallel--reset-delete-section-in-buffer
+                   "Sanskrit (DharmaMitra)" 1)
+              (cl-incf touched))
+            (when (> touched 0)
+              (tibetan-sanskrit-parallel--reset-squash-blank-runs)
+              (save-buffer))
+            (unless (or was-modified (> touched 0))
+              ;; If the file was unmodified before AND we made no
+              ;; changes, leave the buffer marker unmodified too.
+              (set-buffer-modified-p nil))))
+      ;; Don't kill an open buffer — Carsten may have it visible.
+      nil)
+    touched))
+
+(defun tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-folder
+    (folder)
+  "Run `--strip-legacy-dm-sanskrit-in-file' on every `seg-NNN.org'
+and `sent-NNN.org' file in FOLDER.
+
+Returns a plist summary:
+  (:files-touched     N
+   :files-clean       M
+   :sections-removed  K)
+
+When FOLDER is nil, missing, or not a directory, returns
+  (:error \"reason …\")
+so the interactive command can report the failure cleanly.
+
+Files outside the seg/sent naming convention are silently
+skipped — the cleanup target is a parallel-Sanskrit reading's
+analysis folder."
+  (cond
+   ((or (null folder)
+        (not (stringp folder))
+        (string-empty-p folder))
+    (list :error "FOLDER must be a non-empty string."))
+   ((not (file-directory-p folder))
+    (list :error (format "Not a directory: %s" folder)))
+   (t
+    (let ((files
+           (sort (directory-files
+                  folder t "^\\(seg\\|sent\\)-[0-9]+.*\\.org\\'")
+                 #'string-lessp))
+          (touched 0)
+          (clean 0)
+          (sections 0))
+      (dolist (f files)
+        (let ((n (tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-file
+                  f)))
+          (cl-incf sections n)
+          (if (> n 0) (cl-incf touched) (cl-incf clean))))
+      (list :files-touched touched
+            :files-clean   clean
+            :sections-removed sections)))))
+
+;;;###autoload
+(defun tibetan-sanskrit-parallel-strip-legacy-dm-sanskrit-in-folder
+    (folder)
+  "Interactive entry point — strip legacy `* Sanskrit (DharmaMitra)'.
+
+One-time post-§5.17 cleanup that removes the legacy
+`* Sanskrit (DharmaMitra)' section from every `seg-NNN.org' /
+`sent-NNN.org' file in FOLDER.  This section was the §5.15
+DM-realign output and is now superseded by `* Sanskrit Text'
+\(driven by the canonically-aligned source file).
+
+The Tibetan-side and Sanskrit-side DharmaMitra Translation
+sections (`* DharmaMitra Translation (Tibetan)' /
+`* DharmaMitra Translation (Sanskrit)') are NOT touched —
+those are translator outputs, not realign provenance.  The
+new `* Sanskrit Text' section is also NOT touched.
+
+Returns the summary plist from
+`--strip-legacy-dm-sanskrit-in-folder'.  Reports a friendly
+message; on error reports the `:error' string instead of
+throwing."
+  (interactive
+   (list (read-directory-name "Analysis folder to clean: "
+                              default-directory nil t)))
+  (let ((summary
+         (tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-folder
+          folder)))
+    (cond
+     ((plist-get summary :error)
+      (message "tibetan-sanskrit-parallel-strip-legacy-dm: %s"
+               (plist-get summary :error)))
+     (t
+      (message
+       "tibetan-sanskrit-parallel-strip-legacy-dm: folder=%s touched=%d clean=%d sections-removed=%d"
+       folder
+       (plist-get summary :files-touched)
+       (plist-get summary :files-clean)
+       (plist-get summary :sections-removed))))
+    summary))
+
 (provide 'tibetan-sanskrit-parallel)
 ;;; tibetan-sanskrit-parallel.el ends here

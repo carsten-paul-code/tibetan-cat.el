@@ -890,6 +890,185 @@ interactive command doesn't burn a stack trace."
     (should (plist-get summary :error))))
 
 ;; ============================================================================
+;; LEGACY * Sanskrit (DharmaMitra) CLEANUP (alignment-superseded, 2026-05-03)
+;;
+;; The §5.15 DM realign work (commit 9c12060) wrote DM-corpus search hits
+;; to a top-level `* Sanskrit (DharmaMitra)' section in each analysis file
+;; — at the time, that was the canonical aligned Sanskrit.  Today's
+;; alignment work (2026-04-30, commits a5caeac+) replaced this with the
+;; canonical DSBC text in `* Sanskrit Text', driven by the source file's
+;; `**** Sanskrit' siblings.
+;;
+;; Existing analysis files still carry the legacy `* Sanskrit
+;; (DharmaMitra)' section (with stale DM_SEGMENTNR / DM_RANK /
+;; CLAUDE_REASON properties).  This is now redundant — `* Sanskrit Text'
+;; carries the canonical IAST aligned to the segment.  The cleanup
+;; command removes the legacy section so the file shape matches the
+;; current §5.17 layout.  Tibetan-side DM (`* DharmaMitra Translation
+;; (Tibetan)') and Sanskrit-side DM (`* DharmaMitra Translation
+;; (Sanskrit)') stay — those are translator outputs, not realign
+;; provenance.
+;; ============================================================================
+
+(defconst tibetan-sanskrit-parallel-test--with-legacy-dm-sanskrit-buffer
+  "#+TITLE: Test
+* Tibetan Text
+བདག
+
+* My Notes
+USER NOTE — must survive
+
+* Sanskrit Text
+IAST: ahaṃ
+
+* Auto-Analysis
+:PROPERTIES:
+:GENERATED: t
+:END:
+
+** Wylie Transliteration
+bdag /
+
+** Claude Translation
+TIBETAN TRANSLATION — must survive
+
+* Footnotes
+USER FOOTNOTE — must survive
+
+* DharmaMitra Translation (Tibetan)
+DM TIBETAN — must survive
+
+* DharmaMitra Translation (Sanskrit)
+DM SANSKRIT — must survive
+
+* Sanskrit (DharmaMitra)
+:PROPERTIES:
+:DM_SEGMENTNR: SA_T06_bsa034:1992
+:DM_RANK: 1
+:CLAUDE_REASON: claude-unavailable-fallback-to-top
+:LAST_REALIGN: 2026-04-30
+:END:
+
+bodhisattvastīvraṃ gauravam — TO BE REMOVED
+"
+  "Analysis file carrying the legacy `* Sanskrit (DharmaMitra)'
+section from §5.15 DM-realign work.  All other top-level
+sections must survive cleanup intact.")
+
+(ert-deftest tibetan-sanskrit-parallel-strip-legacy-dm-sanskrit-removes-it ()
+  "The cleanup command deletes the top-level `* Sanskrit
+(DharmaMitra)' section, including its property drawer and body."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-file))
+  (let* ((dir (make-temp-file "tibetan-strip-legacy-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert tibetan-sanskrit-parallel-test--with-legacy-dm-sanskrit-buffer))
+          (let ((removed
+                 (tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-file
+                  file)))
+            (should (= removed 1)))
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-min))
+            (should-not (re-search-forward
+                         "^\\* Sanskrit (DharmaMitra)[ \t]*$" nil t))
+            (goto-char (point-min))
+            (should-not (re-search-forward "TO BE REMOVED" nil t))
+            (goto-char (point-min))
+            (should-not (re-search-forward "DM_SEGMENTNR:" nil t))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sanskrit-parallel-strip-legacy-dm-sanskrit-preserves-others ()
+  "All non-legacy sections survive intact:  My Notes, Tibetan
+Text, Sanskrit Text, Auto-Analysis (with Claude Translation
+body), Footnotes, both DharmaMitra Translation siblings."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-file))
+  (let* ((dir (make-temp-file "tibetan-strip-legacy-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert tibetan-sanskrit-parallel-test--with-legacy-dm-sanskrit-buffer))
+          (tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-file file)
+          (with-temp-buffer
+            (insert-file-contents file)
+            (dolist (must-survive
+                     '("USER NOTE — must survive"
+                       "USER FOOTNOTE — must survive"
+                       "TIBETAN TRANSLATION — must survive"
+                       "DM TIBETAN — must survive"
+                       "DM SANSKRIT — must survive"
+                       "IAST: ahaṃ"))
+              (goto-char (point-min))
+              (should (search-forward must-survive nil t)))
+            ;; And the surviving headings.
+            (dolist (heading
+                     '("* Tibetan Text"
+                       "* My Notes"
+                       "* Sanskrit Text"
+                       "* Auto-Analysis"
+                       "* Footnotes"
+                       "* DharmaMitra Translation (Tibetan)"
+                       "* DharmaMitra Translation (Sanskrit)"))
+              (goto-char (point-min))
+              (should (search-forward heading nil t)))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sanskrit-parallel-strip-legacy-dm-sanskrit-idempotent ()
+  "Re-running the cleanup on a clean file returns 0 — no error,
+no spurious modification."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-file))
+  (let* ((dir (make-temp-file "tibetan-strip-legacy-idempotent-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert tibetan-sanskrit-parallel-test--with-legacy-dm-sanskrit-buffer))
+          ;; First pass: removes one section.
+          (let ((removed
+                 (tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-file
+                  file)))
+            (should (= removed 1)))
+          ;; Second pass: clean file, returns 0.
+          (let ((removed
+                 (tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-file
+                  file)))
+            (should (= removed 0))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sanskrit-parallel-strip-legacy-dm-sanskrit-folder-walks ()
+  "Folder walker iterates seg-NNN.org and sent-NNN.org files,
+returning a summary plist with totals."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-folder))
+  (let ((folder (make-temp-file "tibetan-strip-legacy-folder-" t)))
+    (unwind-protect
+        (progn
+          ;; Three files: two with legacy section, one already clean.
+          (with-temp-file (expand-file-name "seg-001.org" folder)
+            (insert tibetan-sanskrit-parallel-test--with-legacy-dm-sanskrit-buffer))
+          (with-temp-file (expand-file-name "seg-002.org" folder)
+            (insert tibetan-sanskrit-parallel-test--with-legacy-dm-sanskrit-buffer))
+          (with-temp-file (expand-file-name "seg-003.org" folder)
+            (insert "* Tibetan Text\nbdag\n\n* Auto-Analysis\n** Wylie\n[stub]\n"))
+          (let ((summary
+                 (tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-folder
+                  folder)))
+            (should (= (plist-get summary :files-touched) 2))
+            (should (= (plist-get summary :files-clean) 1))
+            (should (= (plist-get summary :sections-removed) 2))))
+      (delete-directory folder t))))
+
+(ert-deftest tibetan-sanskrit-parallel-strip-legacy-dm-sanskrit-folder-handles-missing ()
+  "Missing folder returns `:error' summary instead of throwing."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-folder))
+  (let ((summary
+         (tibetan-sanskrit-parallel--strip-legacy-dm-sanskrit-in-folder
+          "/no/such/folder/exists")))
+    (should (plist-get summary :error))))
+
+;; ============================================================================
 ;; SEGMENT-ID LOOKUP TESTS (file-based, used by Phase 3 Claude path)
 ;; ============================================================================
 
