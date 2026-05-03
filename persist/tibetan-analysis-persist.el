@@ -4257,6 +4257,20 @@ without touching the file.  Otherwise return a plist:
   (let* ((seg-id (tibetan-analysis--seg-id-from-filename filepath))
          (tibetan-text (tibetan-analysis--read-section-body
                         filepath "Tibetan Text"))
+         ;; Fall back to resolving the source-file from the analysis
+         ;; file's own `#+SOURCE:' header when the caller didn't pass
+         ;; one.  Bug fix 2026-05-03:  the auto-regen-on-Claude-arrival
+         ;; path (`--insert-claude-sections' → reanalyze-file) calls
+         ;; this with no `:source-file', and previously the resulting
+         ;; nil source-file made `plist-for-segment-id' return nil for
+         ;; `* Sanskrit Text' rendering, erasing the section that the
+         ;; initial `C-c u R' regenerate-auto had emitted correctly.
+         ;; Mirrors the sentence-level fallback in
+         ;; `tibetan-sentence-reanalyze-file'.
+         (source-file
+          (or source-file
+              (and (fboundp 'tibetan-analysis--source-file-from-analysis)
+                   (tibetan-analysis--source-file-from-analysis filepath))))
          (source-text
           (when (and source-file (file-readable-p source-file))
             (condition-case nil

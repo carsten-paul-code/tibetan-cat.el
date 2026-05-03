@@ -621,5 +621,88 @@ Sanskrit."
            'tibetan--open-segment-analysis-impl
            'tibetan-analysis--fire-parallel-mode-claude-calls)))
 
+;; ============================================================================
+;; Regression: reanalyze-file falls back to #+SOURCE: header when
+;; :source-file isn't passed
+;; ============================================================================
+;;
+;; Live test 2026-05-03 on gotrapaṭala.org seg 9 surfaced an
+;; auto-regen interaction:  when Claude's response contains
+;; `## Particles', `--insert-claude-sections' fires
+;; `(tibetan-analysis-reanalyze-file analysis-file
+;;     :re-request-claude nil)' to refresh the Grammar section with
+;; the new Bialek Portfolio snippets.  This async callback runs
+;; AFTER the initial regenerate-auto from `C-c u R' has already
+;; emitted `* Sanskrit Text' correctly.  But the auto-regen call
+;; passes no `:source-file', so reanalyze-file's binding of
+;; `tibetan-analysis--sanskrit-text-for-render' calls
+;; `plist-for-segment-id' with `source-file=nil' → returns nil →
+;; the regenerate erases the `* Sanskrit Text' section that was
+;; correctly emitted minutes earlier.
+;;
+;; The sentence-level analogue, `tibetan-sentence-reanalyze-file',
+;; already falls back to `tibetan-sentence--source-file-from-analysis'
+;; when `source-file' isn't given.  This test asserts the segment-
+;; level path does the same:  reanalysing a parallel-mode file
+;; without `:source-file' should still preserve `* Sanskrit Text'
+;; (the function should resolve the source from the analysis
+;; file's own `#+SOURCE:' header).
+
+(ert-deftest tibetan-reanalyze-file-resolves-source-from-header-when-not-given ()
+  "When `tibetan-analysis-reanalyze-file' is called without
+`:source-file', it must fall back to resolving the source path
+from the analysis file's own `#+SOURCE:' header so parallel-mode
+features (the `* Sanskrit Text' renderer in particular) still
+fire on the auto-regen path used by Claude `## Particles' arrival."
+  (skip-unless (fboundp 'tibetan-analysis-reanalyze-file))
+  (skip-unless (fboundp 'tibetan-analysis--source-file-from-analysis))
+  (let* ((tmp (make-temp-file "tibetan-reanalyze-resolve-" t))
+         (src (expand-file-name "doc.org" tmp))
+         (analysis (expand-file-name "seg-001.org" tmp)))
+    (unwind-protect
+        (progn
+          ;; Source: parallel-mode + a `**** Segment 1' with non-
+          ;; placeholder Sanskrit sibling.
+          (with-temp-file src
+            (insert "#+TITLE: Doc\n"
+                    "#+SOURCE_MODE: parallel-sanskrit\n\n"
+                    "* Tibetan Text\n\n"
+                    "*** Sentence 1\n"
+                    "**** Segment 1\n"
+                    "བདག\n\n"
+                    "**** Sanskrit\n"
+                    "ahaṃ\n\n"))
+          ;; Analysis file with `#+SOURCE:' link pointing back.
+          (with-temp-file analysis
+            (insert "#+TITLE: Segment 1 Analysis\n"
+                    "#+SOURCE: [[file:doc.org::*Segment 1][doc.org / Segment 1]]\n"
+                    "#+TIBETAN_HASH: aaa\n"
+                    "#+ANALYSIS_VERSION: 1.0\n"
+                    "#+CREATED: 2026-05-03\n"
+                    "#+LAST_ANALYZED: 2026-05-03\n\n"
+                    "* Tibetan Text\nབདག\n\n"
+                    "* My Notes\n\n\n"
+                    "* Working Translation\n\n\n"
+                    "* Auto-Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nbdag\n\n"
+                    "* Footnotes\n\n"))
+          ;; Stub `generate-content' to avoid pulling the full vocab
+          ;; stack — we only care about whether `* Sanskrit Text'
+          ;; lands.
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (lambda (&rest _) "** Wylie Transliteration\nbdag\n\n")))
+            (tibetan-analysis-reanalyze-file analysis
+                                              :re-request-claude nil))
+          ;; The fix:  with no `:source-file' passed, reanalyze-file
+          ;; should resolve it from the `#+SOURCE:' header and fire
+          ;; the Sanskrit Text renderer.
+          (with-temp-buffer
+            (insert-file-contents analysis)
+            (goto-char (point-min))
+            (should (re-search-forward "^\\* Sanskrit Text$" nil t))
+            (goto-char (point-min))
+            (should (re-search-forward "^IAST: ahaṃ" nil t))))
+      (when (file-exists-p tmp) (delete-directory tmp t)))))
+
 (provide 'tibetan-batch-reanalyze-test)
 ;;; tibetan-batch-reanalyze-test.el ends here
