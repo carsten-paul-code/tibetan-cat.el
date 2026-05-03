@@ -108,6 +108,30 @@ carries both raw sources AND both upstream translations."
     (should (string-match-p "Upstream Tibetan translation:" user))
     (should (string-match-p "^I\\." user))))
 
+(ert-deftest tibetan-com-build-prompts-handles-multiple-claude-context-headers ()
+  "Regression (live test 2026-05-03 on gotrapaṭala.org seg 9):  same
+class of bug as the Sanskrit-side builder.  Source files routinely
+carry MULTIPLE `#+TIBETAN_CLAUDE_CONTEXT:' header lines (the
+gotrapaṭala has four).  The metadata reader returns
+`:claude-context' as a list of strings — the builder must iterate,
+not pass it to `concat' which crashes with `(wrong-type-argument
+characterp <STRING>)'."
+  (tibetan-com-test--with-source
+      (concat "#+TITLE: Doc\n"
+              "#+SOURCE_MODE: parallel-sanskrit\n"
+              "#+TIBETAN_CLAUDE_CONTEXT: Genre context one.\n"
+              "#+TIBETAN_CLAUDE_CONTEXT: Genre context two.\n")
+    (let ((prompt (tibetan-analysis-combined--build-prompts
+                   "བདག"
+                   (list :iast "ahaṃ" :devanagari nil
+                         :script-source 'iast-line)
+                   "I." "I am." source-file)))
+      (should prompt)
+      (should (consp prompt))
+      (should (stringp (car prompt)))
+      (should (string-match-p "Genre context one\\." (car prompt)))
+      (should (string-match-p "Genre context two\\." (car prompt))))))
+
 (ert-deftest tibetan-com-build-prompts-system-block-stable-across-segments ()
   "Cache invariant: two builds on the same source with different
 inputs produce byte-identical SYSTEM prompts."

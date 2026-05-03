@@ -166,11 +166,24 @@ Pure function — no buffer / network I/O."
             (and meta
                  (let ((claude-context
                         (plist-get meta :claude-context)))
-                   (and claude-context
-                        (concat
-                         "\nDocument context (genre / register / "
-                         "vocabulary):\n"
-                         claude-context)))))
+                   ;; `:claude-context' is a LIST of strings (one per
+                   ;; `#+TIBETAN_CLAUDE_CONTEXT:' header line, in
+                   ;; document order) — not a single concatenated
+                   ;; string.  Mirror the Tibetan-side builder's
+                   ;; per-line iteration:  prefix each line with a
+                   ;; bullet and join with newlines.  Bug fix
+                   ;; 2026-05-03:  earlier this passed the raw list
+                   ;; to `concat', which treats list elements as
+                   ;; characters and crashes with `(wrong-type-
+                   ;; argument characterp <STRING>)' on any source
+                   ;; that has at least one context header.
+                   (when (and claude-context (listp claude-context))
+                     (concat
+                      "\nDocument context (genre / register / "
+                      "vocabulary):\n"
+                      (mapconcat (lambda (line) (format "  - %s" line))
+                                 claude-context "\n")
+                      "\n")))))
            (system (concat tibetan-analysis-sanskrit--system-prompt-base
                            (or target-lang-block "")
                            (or genre-blocks "")))

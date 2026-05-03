@@ -157,6 +157,39 @@ German directive."
            (system (car prompts)))
       (should (string-match-p "GERMAN" system)))))
 
+(ert-deftest tibetan-skt-build-prompts-handles-multiple-claude-context-headers ()
+  "Regression (live test 2026-05-03 on gotrapaṭala.org seg 9):  the
+prompt builder must accept a source with MULTIPLE
+`#+TIBETAN_CLAUDE_CONTEXT:' header lines.  The metadata reader
+returns `:claude-context' as a LIST of strings, one per header
+line.  Earlier the builder passed that list directly to `concat',
+which interprets each list element as a character — producing
+`(error \"Wrong type argument: characterp <STRING>\")' the moment
+a real source with more than zero context headers reached the
+Sanskrit Claude call.  The Tibetan-side builder iterates with
+`dolist'; this test asserts the Sanskrit-side builder is
+similarly list-aware."
+  (tibetan-skt-test--with-source
+      (concat "#+TITLE: Doc\n"
+              "#+SOURCE_MODE: parallel-sanskrit\n"
+              "#+TIBETAN_CLAUDE_CONTEXT: First line of context.\n"
+              "#+TIBETAN_CLAUDE_CONTEXT: Second line of context.\n"
+              "#+TIBETAN_CLAUDE_CONTEXT: Third line of context.\n")
+    (let ((prompt (tibetan-analysis-sanskrit--build-prompts
+                   (list :iast "iha bodhisattvaḥ" :devanagari nil
+                         :script-source 'iast-line)
+                   source-file)))
+      (should prompt)
+      (should (consp prompt))
+      (should (stringp (car prompt)))
+      ;; All three context lines should appear in the system block.
+      (should (string-match-p "First line of context\\."
+                              (car prompt)))
+      (should (string-match-p "Second line of context\\."
+                              (car prompt)))
+      (should (string-match-p "Third line of context\\."
+                              (car prompt))))))
+
 (ert-deftest tibetan-skt-build-prompts-system-block-stable-across-segments ()
   "Cache invariant: two `--build-prompts' calls on the same
 source with DIFFERENT IAST produce byte-identical SYSTEM

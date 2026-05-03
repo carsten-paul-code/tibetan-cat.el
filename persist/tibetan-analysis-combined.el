@@ -160,11 +160,21 @@ is meaningful only when all four inputs are present."
               (and meta
                    (let ((claude-context
                           (plist-get meta :claude-context)))
-                     (and claude-context
-                          (concat
-                           "\nDocument context (genre / register / "
-                           "vocabulary):\n"
-                           claude-context)))))
+                     ;; `:claude-context' is a LIST of strings (one
+                     ;; per `#+TIBETAN_CLAUDE_CONTEXT:' header).
+                     ;; Bug fix 2026-05-03:  the previous `concat'
+                     ;; treated list elements as characters and
+                     ;; crashed with `(wrong-type-argument characterp
+                     ;; <STRING>)' on any source with at least one
+                     ;; context header.  Mirror the Tibetan-side
+                     ;; per-line iteration.
+                     (when (and claude-context (listp claude-context))
+                       (concat
+                        "\nDocument context (genre / register / "
+                        "vocabulary):\n"
+                        (mapconcat (lambda (line) (format "  - %s" line))
+                                   claude-context "\n")
+                        "\n")))))
              (system (concat tibetan-analysis-combined--system-prompt-base
                              (or target-lang-block "")
                              (or genre-blocks "")))
