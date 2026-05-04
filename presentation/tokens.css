@@ -1,0 +1,269 @@
+/* Tibetan-CAT-Tool — Design tokens */
+:root {
+  /* Thangka palette */
+  --maroon: #5C1A1B;
+  --maroon-deep: #3A0F10;
+  --saffron: #D97A1F;
+  --saffron-soft: #E69A4F;
+  --indigo: #1E2952;
+  --indigo-deep: #11163A;
+  --gold: #B8893E;
+  --gold-soft: #D4A85C;
+  --parchment: #F2E8D5;
+  --parchment-warm: #EADDC2;
+  --parchment-deep: #DCCBA8;
+  --ink: #1A1614;
+  --ink-soft: #2E2823;
+
+  /* Type */
+  --serif: "Cormorant Garamond", "EB Garamond", Georgia, serif;
+  --mono: "JetBrains Mono", "Berkeley Mono", ui-monospace, Menlo, monospace;
+  --tibetan: "Noto Serif Tibetan", "Jomolhari", "Microsoft Himalaya", serif;
+}
+
+/* TYPE_SCALE (px) — projection-appropriate
+   title: 88, subtitle: 56, body: 34, small: 28, micro: 22 (modeline only)
+   SPACING — paddingTop: 100, paddingBottom: 88, paddingX: 120, titleGap: 48, itemGap: 28
+*/
+
+html, body { margin: 0; padding: 0; background: #000; }
+body { font-family: var(--serif); color: var(--ink); }
+
+deck-stage > section {
+  background: var(--parchment);
+  color: var(--ink);
+  overflow: hidden;
+  position: relative;
+}
+
+/* Modeline footer — Emacs DNA, every slide */
+.modeline {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 56px;
+  background: var(--ink);
+  color: var(--parchment);
+  font-family: var(--mono);
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0 32px;
+  letter-spacing: 0.02em;
+}
+.modeline .ml-left { display: flex; gap: 24px; align-items: center; }
+.modeline .ml-spacer { flex: 1; }
+.modeline .ml-mark { color: var(--saffron); }
+.modeline .ml-buf { color: var(--parchment); }
+.modeline .ml-mode { color: var(--gold-soft); }
+.modeline .ml-pos { color: var(--parchment-deep); }
+
+/* Slide frame — common padding */
+.slide-frame {
+  position: absolute;
+  inset: 0;
+  padding: 100px 120px 144px 120px; /* bottom = 88 + 56 modeline */
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* Eyebrow — parallel marker on every slide */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 26px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--maroon);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.eyebrow .dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--saffron);
+  display: inline-block;
+}
+.eyebrow .num { color: var(--gold); }
+
+/* Title */
+.slide-title {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 88px;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 48px 0 0 0;
+}
+.slide-subtitle {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 44px;
+  line-height: 1.2;
+  color: var(--maroon);
+  margin: 24px 0 0 0;
+}
+
+.body-text {
+  font-family: var(--serif);
+  font-size: 34px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.small-text {
+  font-family: var(--mono);
+  font-size: 28px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* Pecha rule — thin double-line divider, manuscript echo */
+.pecha-rule {
+  height: 6px;
+  border-top: 1px solid var(--maroon);
+  border-bottom: 1px solid var(--maroon);
+  width: 180px;
+}
+
+/* Mandala mark — single geometric glyph */
+.mandala-mark {
+  width: 56px; height: 56px;
+  flex-shrink: 0;
+}
+
+/* Section divider slide */
+.section-slide {
+  background: var(--maroon-deep);
+  color: var(--parchment);
+}
+.section-slide .slide-title { color: var(--parchment); }
+.section-slide .eyebrow { color: var(--saffron-soft); }
+.section-slide .eyebrow .num { color: var(--gold-soft); }
+.section-slide .modeline { background: var(--ink); }
+
+/* Indigo variant */
+.indigo-slide { background: var(--indigo-deep); color: var(--parchment); }
+.indigo-slide .slide-title { color: var(--parchment); }
+.indigo-slide .body-text { color: var(--parchment-warm); }
+.indigo-slide .eyebrow { color: var(--saffron-soft); }
+
+/* Saffron variant */
+.saffron-slide { background: var(--saffron); color: var(--maroon-deep); }
+.saffron-slide .slide-title { color: var(--maroon-deep); }
+.saffron-slide .eyebrow { color: var(--maroon-deep); }
+.saffron-slide .eyebrow .num { color: var(--maroon); }
+
+/* Pecha-folio frame — long horizontal manuscript card */
+.pecha {
+  background: var(--parchment-warm);
+  border-top: 3px double var(--maroon);
+  border-bottom: 3px double var(--maroon);
+  padding: 32px 56px;
+  position: relative;
+}
+.pecha::before, .pecha::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 18px; height: 18px;
+  border: 2px solid var(--maroon);
+  background: var(--parchment);
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+.pecha::before { left: 16px; }
+.pecha::after { right: 16px; }
+
+/* Code / buffer block — Emacs buffer */
+.buffer {
+  background: var(--ink);
+  color: var(--parchment);
+  font-family: var(--mono);
+  font-size: 22px;
+  line-height: 1.55;
+  padding: 28px 32px;
+  border-radius: 4px;
+  position: relative;
+  box-shadow: 0 12px 0 -8px rgba(0,0,0,0.18);
+}
+  .buffer .buf-header {
+  font-size: 24px;
+  color: var(--gold-soft);
+  letter-spacing: 0.1em;
+  margin-bottom: 16px;
+  display: flex;
+  gap: 16px;
+  border-bottom: 1px solid #2a2520;
+  padding-bottom: 10px;
+}
+.buffer .kw  { color: var(--saffron-soft); }
+.buffer .str { color: var(--gold-soft); }
+.buffer .com { color: #6a6258; font-style: italic; }
+.buffer .var { color: #b6c4e8; }
+.buffer .hl  { background: rgba(217,122,31,0.18); }
+
+.tibetan {
+  font-family: var(--tibetan);
+  font-feature-settings: "kern" 1;
+}
+
+/* Placeholder image block */
+.placeholder {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      var(--parchment-warm) 0 14px,
+      var(--parchment-deep) 14px 15px
+    );
+  border: 1px solid var(--maroon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 26px;
+  color: var(--maroon);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Two-column generic */
+.cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: stretch; }
+.cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 48px; align-items: stretch; }
+
+/* Feature card */
+.feature-card {
+  background: var(--parchment-warm);
+  border-left: 4px solid var(--maroon);
+  padding: 28px 32px;
+}
+.feature-card .num {
+  font-family: var(--mono);
+  font-size: 22px;
+  color: var(--maroon);
+  letter-spacing: 0.18em;
+}
+.feature-card .name {
+  font-family: var(--serif);
+  font-size: 36px;
+  line-height: 1.2;
+  margin-top: 8px;
+  color: var(--ink);
+}
+.feature-card .desc {
+  font-family: var(--serif);
+  font-size: 24px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  margin-top: 12px;
+}
+
+/* Big metric */
+.metric-num {
+  font-family: var(--serif);
+  font-size: 220px;
+  line-height: 0.9;
+  font-weight: 500;
+  color: var(--maroon);
+  letter-spacing: -0.03em;
+}

@@ -1,0 +1,1022 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tibetan-CAT-Tool — A Translator's Environment for Emacs</title>
+<meta name="viewport" content="width=1920">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&family=Noto+Serif+Tibetan:wght@400;500;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="tokens.css">
+<script src="deck-stage.js"></script>
+<script src="marks.js"></script>
+
+<style>
+  /* Title slide */
+  .title-slide { background: var(--maroon-deep); color: var(--parchment); overflow: hidden; }
+  .title-slide .modeline { background: #000; }
+  .title-bg {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 85% 50%, rgba(217,122,31,0.18), transparent 60%),
+      radial-gradient(circle at 15% 80%, rgba(30,41,82,0.55), transparent 55%),
+      var(--maroon-deep);
+  }
+  .title-thread { position: absolute; left: 0; right: 0; height: 1px; background: var(--gold); opacity: 0.5; }
+  .title-thread.t1 { top: 220px; } .title-thread.t2 { top: 240px; }
+  .title-thread.b1 { bottom: 240px; } .title-thread.b2 { bottom: 260px; }
+
+  /* Stack diagram */
+  .stack-row {
+    display: flex; align-items: center; gap: 24px;
+    padding: 22px 28px; background: var(--parchment-warm);
+    border-left: 4px solid var(--maroon); margin-bottom: 14px;
+  }
+  .stack-row .layer { font-family: var(--mono); font-size: 26px; color: var(--maroon); letter-spacing: 0.14em; width: 220px; flex-shrink: 0; }
+  .stack-row .what { font-family: var(--serif); font-size: 30px; color: var(--ink); flex: 1; }
+  .stack-row .tag { font-family: var(--mono); font-size: 24px; color: var(--gold); letter-spacing: 0.1em; }
+
+  /* Workflow nodes */
+  .wf-node {
+    background: var(--parchment-warm); border: 1px solid var(--maroon);
+    padding: 18px 22px; font-family: var(--mono); font-size: 24px;
+    color: var(--ink); text-align: center; border-radius: 2px; line-height: 1.3;
+  }
+  .wf-node .lbl { color: var(--maroon); font-size: 22px; letter-spacing: 0.18em; display:block; margin-bottom: 4px; }
+  .wf-arrow { font-family: var(--mono); color: var(--saffron); font-size: 28px; display: flex; align-items: center; justify-content: center; }
+
+  /* Roadmap / timeline rows */
+  .roadmap-row {
+    display: grid; grid-template-columns: 220px 1fr;
+    gap: 32px; padding: 20px 0;
+    border-bottom: 1px solid rgba(92,26,27,0.22);
+  }
+  .roadmap-row:last-child { border-bottom: none; }
+  .roadmap-row .when { font-family: var(--mono); font-size: 24px; color: var(--maroon); letter-spacing: 0.14em; }
+  .roadmap-row .what { font-family: var(--serif); font-size: 28px; color: var(--ink); line-height: 1.3; }
+  .roadmap-row .what .meta { display: block; font-family: var(--mono); font-size: 20px; color: var(--gold); letter-spacing: 0.08em; margin-top: 4px; }
+  .roadmap-row.done .when { color: var(--gold); }
+
+  /* Origin slide — narrative quote */
+  .origin-quote {
+    font-family: var(--serif); font-style: italic;
+    font-size: 56px; line-height: 1.25; color: var(--gold-soft);
+    border-left: 3px solid var(--saffron); padding-left: 36px;
+    max-width: 1100px;
+  }
+  .origin-strike {
+    background: var(--parchment-warm);
+    border: 1px solid rgba(92,26,27,0.35);
+    padding: 18px 24px;
+    font-family: var(--mono); font-size: 24px;
+    color: var(--maroon); letter-spacing: 0.1em;
+    display: flex; justify-content: space-between; align-items: center;
+    text-decoration: line-through; text-decoration-color: rgba(92,26,27,0.55);
+  }
+  .origin-strike .why {
+    font-family: var(--serif); font-size: 22px;
+    font-style: italic; color: var(--ink-soft);
+    text-decoration: none; letter-spacing: 0;
+    margin-left: 24px;
+  }
+
+  /* Why Emacs cards */
+  .why-card {
+    background: var(--parchment-warm); border-left: 4px solid var(--maroon);
+    padding: 26px 32px; display: flex; gap: 28px; align-items: baseline;
+  }
+  .why-card .num {
+    font-family: var(--mono); font-size: 32px; color: var(--gold);
+    letter-spacing: 0.1em; flex-shrink: 0; min-width: 70px;
+  }
+  .why-card .name {
+    font-family: var(--mono); font-size: 22px; color: var(--maroon);
+    letter-spacing: 0.18em; min-width: 320px; flex-shrink: 0;
+  }
+  .why-card .desc {
+    font-family: var(--serif); font-size: 30px; color: var(--ink); line-height: 1.3;
+  }
+
+  /* Metric tiles */
+  .metric-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 18px; flex: 1;
+  }
+  .metric-tile {
+    background: rgba(242,232,213,0.06);
+    border: 1px solid rgba(184,137,62,0.45);
+    padding: 24px 28px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    min-height: 170px;
+  }
+  .metric-tile .num {
+    font-family: var(--serif); font-weight: 500;
+    font-size: 96px; line-height: 1; color: var(--saffron);
+    letter-spacing: -0.02em;
+  }
+  .metric-tile .lbl {
+    font-family: var(--mono); font-size: 22px;
+    color: var(--gold-soft); letter-spacing: 0.16em;
+    text-transform: uppercase; line-height: 1.3;
+  }
+
+  /* Discussion question rows */
+  .q-row {
+    display: grid; grid-template-columns: 64px 1fr;
+    gap: 20px; padding: 22px 0;
+    border-bottom: 1px solid rgba(184,137,62,0.25);
+  }
+  .q-row:last-child { border-bottom: none; }
+  .q-row .q-mark {
+    font-family: var(--serif); font-style: italic;
+    font-size: 56px; line-height: 0.9; color: var(--saffron);
+  }
+  .q-row .q-text {
+    font-family: var(--serif); font-size: 32px; line-height: 1.35;
+  }
+  .saffron-slide .q-row { border-bottom-color: rgba(58,15,16,0.25); }
+  .saffron-slide .q-row .q-mark { color: var(--maroon-deep); }
+  .saffron-slide .q-row .q-text { color: var(--maroon-deep); }
+  .section-slide .q-row .q-mark { color: var(--saffron); }
+  .section-slide .q-row .q-text { color: var(--parchment); }
+
+  /* Closing */
+  .closing-slide { background: var(--ink); color: var(--parchment); }
+  .closing-slide .slide-title { color: var(--parchment); }
+</style>
+</head>
+<body>
+
+<deck-stage width="1920" height="1080">
+
+  <!-- ═══════════ 01 — TITLE ═══════════ -->
+  <section data-label="01 Tibetan-CAT-Tool" class="title-slide">
+    <div class="title-bg"></div>
+    <div class="title-thread t1"></div>
+    <div class="title-thread t2"></div>
+    <div class="title-thread b1"></div>
+    <div class="title-thread b2"></div>
+
+    <div class="slide-frame" style="padding: 100px 120px 144px 120px; justify-content: space-between;">
+      <div style="display:flex; justify-content: space-between; align-items: flex-start;">
+        <div class="eyebrow" style="color: var(--saffron-soft); font-size: 26px;">
+          <span class="dot"></span><span>An Introduction · Pitch · 2026</span>
+        </div>
+        <div class="tibetan" style="font-size: 56px; color: var(--gold-soft); line-height: 1;">བོད་ཡིག་སྒྱུར་ཆས།</div>
+      </div>
+
+      <div>
+        <div style="margin-bottom: 32px;">
+          <svg viewBox="0 0 240 240" width="160" height="160" aria-label="Wheel cursor">
+            <circle cx="120" cy="120" r="86" fill="none" stroke="#F2E8D5" stroke-width="6"/>
+            <circle cx="120" cy="120" r="60" fill="none" stroke="#F2E8D5" stroke-width="3"/>
+            <circle cx="120" cy="120" r="14" fill="#F2E8D5"/>
+            <g stroke="#F2E8D5" stroke-width="6" stroke-linecap="butt">
+              <line x1="120" y1="34"  x2="120" y2="78"/>
+              <line x1="120" y1="162" x2="120" y2="206"/>
+              <line x1="34"  y1="120" x2="78"  y2="120"/>
+              <line x1="162" y1="120" x2="206" y2="120"/>
+              <line x1="59"  y1="59"  x2="91"  y2="91"/>
+              <line x1="149" y1="149" x2="181" y2="181"/>
+              <line x1="181" y1="59"  x2="149" y2="91"/>
+              <line x1="91"  y1="149" x2="59"  y2="181"/>
+            </g>
+            <rect x="113" y="216" width="14" height="20" fill="#D97A1F"/>
+          </svg>
+        </div>
+        <h1 style="font-family: var(--serif); font-weight: 500; font-size: 200px; line-height: 0.95; letter-spacing: -0.02em; color: var(--parchment); margin: 0;">
+          Tibetan<span style="color: var(--saffron);">·</span><br>
+          CAT<span style="color: var(--saffron);">·</span>Tool
+        </h1>
+        <div style="margin-top: 36px; font-family: var(--serif); font-style: italic; font-size: 48px; color: var(--gold-soft); max-width: 1100px; line-height: 1.25;">
+          A translator's environment for classical Tibetan &amp; Sanskrit, built on Emacs.
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; font-family: var(--mono); font-size: 26px; color: var(--parchment-deep); letter-spacing: 0.12em;">
+        <div>BUDDHIST STUDIES · COLLOQUIUM 2026</div>
+        <div>v0.1 · alpha</div>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">tibetan-cat.el</span>
+        <span class="ml-mode">(Emacs-Lisp · Org)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">L1  C1  Top</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 02 — ORIGIN ═══════════ -->
+  <section data-label="02 Origin" class="indigo-slide">
+    <div class="slide-frame">
+      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">02</span><span>Origin</span></div>
+      <h2 class="slide-title">Why this exists.</h2>
+
+      <div class="cols-2" style="margin-top: 56px; flex: 1; gap: 64px; align-items: flex-start;">
+        <div>
+          <div class="origin-quote">
+            "An exercise that should take an evening took a weekend."
+          </div>
+          <p class="body-text" style="color: var(--parchment-warm); margin-top: 36px;">
+            The first time the gap felt obvious was working through
+            the particle drills in <em>Joanna Bialek's textbook</em>
+            by hand &mdash; opening five tools at once, copying syllables
+            between them, losing the thread.
+          </p>
+          <p class="body-text" style="color: var(--parchment-warm); margin-top: 22px;">
+            Each tool was good. The seams between them were where the
+            time went.
+          </p>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 18px; padding-top: 24px;">
+          <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--saffron-soft);">EXISTING CAT TOOLS, TRIED</div>
+          <div class="origin-strike">
+            <span>Wordfast</span>
+            <span class="why">no Wylie, no Uchen.</span>
+          </div>
+          <div class="origin-strike">
+            <span>OmegaT</span>
+            <span class="why">no scholarly workflow.</span>
+          </div>
+          <div style="margin-top: 12px; padding: 24px; background: rgba(217,122,31,0.16); border-left: 4px solid var(--saffron); font-family: var(--serif); font-size: 32px; line-height: 1.3; color: var(--parchment);">
+            So I built one &mdash; native to Emacs, where the rest of the
+            scholarly work already lives.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">origin.org</span>
+        <span class="ml-mode">(Org · Notes)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">2 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 03 — WHY EMACS ═══════════ -->
+  <section data-label="03 Why Emacs">
+    <div class="slide-frame">
+      <div class="eyebrow"><span class="dot"></span><span class="num">03</span><span>Foundation</span></div>
+      <h2 class="slide-title">Why Emacs.</h2>
+      <div class="pecha-rule" style="margin-top: 32px;"></div>
+
+      <p class="body-text" style="margin-top: 40px; max-width: 1500px;">
+        I didn't pick Emacs for the CAT tool. The CAT tool came to Emacs
+        because the rest of the work was already there.
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 18px; margin-top: 40px; flex: 1;">
+        <div class="why-card">
+          <div class="num">01</div>
+          <div class="name">DAILY WORKFLOW</div>
+          <div class="desc">Beorg agenda &mdash; mobile-synced &mdash; and an Org-roam Zettelkasten of secondary literature.</div>
+        </div>
+        <div class="why-card">
+          <div class="num">02</div>
+          <div class="name">WRITING</div>
+          <div class="desc">Every paper, every Hausarbeit, every draft: <span style="font-family: var(--mono); font-size: 24px;">.org &rarr; LuaLaTeX &rarr; PDF</span>.</div>
+        </div>
+        <div class="why-card">
+          <div class="num">03</div>
+          <div class="name">AI WAS ALREADY HERE</div>
+          <div class="desc"><span style="font-family: var(--mono); font-size: 24px;">DharmaMitra.el</span> existed in the ecosystem before this project began.</div>
+        </div>
+        <div class="why-card">
+          <div class="num">04</div>
+          <div class="name">EXTENSIBLE</div>
+          <div class="desc">A few lines of Lisp away from your own dictionary, your own keybinding.</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 32px; font-family: var(--mono); font-size: 24px; color: var(--maroon); letter-spacing: 0.08em; padding-top: 24px; border-top: 1px solid rgba(92,26,27,0.22);">
+        ;; the CAT layer is the missing tile, not a new home.
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">why-emacs.el</span>
+        <span class="ml-mode">(Emacs-Lisp)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">3 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 04 — WYLIE ═══════════ -->
+  <section data-label="04 Feature 01 Wylie">
+    <div class="slide-frame">
+      <div class="eyebrow"><span class="dot"></span><span class="num">04</span><span>Feature 01 of 06</span></div>
+      <h2 class="slide-title">Wylie alongside Uchen.</h2>
+      <p class="body-text" style="margin-top: 24px; max-width: 1400px;">
+        For European learners, Wylie is far easier to recognise than Uchen at the start &mdash; you can read it without re-training your eye. Every section that touches a Tibetan token in this tool also renders the Wylie. One transcription, one notation, in every analysis file.
+      </p>
+
+      <div style="margin-top: 40px; flex: 1; display: grid; grid-template-columns: 1fr auto 1fr; gap: 32px; align-items: center;">
+        <div style="background: var(--parchment-warm); border: 1px solid var(--maroon); padding: 44px;">
+          <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon); margin-bottom: 24px;">UCHEN</div>
+          <div class="tibetan" style="font-size: 76px; line-height: 1.4; color: var(--ink);">
+            སངས་རྒྱས་<br>བཅོམ་ལྡན་འདས།
+          </div>
+        </div>
+
+        <div style="font-family: var(--mono); font-size: 56px; color: var(--saffron);">→</div>
+
+        <div style="background: var(--ink); color: var(--parchment); padding: 44px; border-radius: 4px;">
+          <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--gold-soft); margin-bottom: 24px;">WYLIE</div>
+          <div style="font-family: var(--mono); font-size: 52px; line-height: 1.35; color: var(--parchment);">
+            sangs rgyas<br>bcom ldan 'das/
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 28px; font-family: var(--mono); font-size: 22px; color: var(--maroon); letter-spacing: 0.08em;">
+        core/tibetan-wylie.el · implicit-'a' rule · EWTS · Sanskrit-derived stacks · single helper for every section
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">tibetan-wylie.el</span>
+        <span class="ml-mode">(Emacs-Lisp)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">4 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 05 — OCR ═══════════ -->
+  <section data-label="05 Feature 02 OCR">
+    <div class="slide-frame">
+      <div class="eyebrow"><span class="dot"></span><span class="num">05</span><span>Feature 02 of 06</span></div>
+      <h2 class="slide-title">OCR &amp; validation.</h2>
+      <p class="body-text" style="margin-top: 24px; max-width: 1300px;">
+        Buffer-side cleanup of scanned pecha pages. A local validator screens every syllable against three sources; only what fails goes to Claude, with a conservative prompt that says "only change syllables that are clearly erroneous".
+      </p>
+
+      <div class="cols-2" style="margin-top: 40px; flex: 1; gap: 40px;">
+        <div style="background: var(--parchment-warm); border: 1px solid var(--maroon); padding: 32px 36px; display: flex; flex-direction: column; gap: 18px;">
+          <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon);">VALIDATOR · 3 SOURCES</div>
+          <div style="font-family: var(--serif); font-size: 26px; color: var(--ink-soft); line-height: 1.4;">
+            <strong>~17.7k</strong> &nbsp;vocabulary entries (root + particle aware)<br>
+            <strong>~3k</strong> &nbsp;compound terms<br>
+            <strong>proper nouns</strong> &nbsp;(places, people, deities)
+          </div>
+          <div style="height: 1px; background: var(--maroon); opacity: 0.3; margin: 4px 0;"></div>
+          <div style="font-family: var(--mono); font-size: 22px; color: var(--maroon); letter-spacing: 0.06em;">FLAG · TWO LEVELS</div>
+          <div style="font-family: var(--serif); font-size: 24px; color: var(--ink-soft); line-height: 1.4;">
+            <span style="font-family: var(--mono); color: var(--gold);">:unknown</span> &mdash; valid Tibetan structure, not in dict.<br>
+            <span style="font-family: var(--mono); color: var(--saffron);">:suspicious</span> &mdash; violates syllable structure.
+          </div>
+        </div>
+
+        <div class="buffer">
+          <div class="buf-header" style="white-space: nowrap;">
+            <span class="ml-mark" style="color: var(--saffron);">●</span>
+            <span>kangyur-001.tib</span>
+            <span style="margin-left:auto; color: var(--gold-soft);">OCR</span>
+          </div>
+<div style="font-family: var(--mono); font-size: 22px; line-height: 1.9; color: var(--parchment); display: flex; flex-direction: column; gap: 12px;">
+  <div class="com">;; tibetan-ocr-validate flagged 1 syllable</div>
+  <div class="tibetan" style="font-size: 30px; line-height: 1.6; padding: 8px 0;"><span class="hl">སེམཀྱི</span></div>
+  <div class="com">;; Claude (conservative prompt) →</div>
+  <div class="tibetan" style="font-size: 30px; line-height: 1.6; padding: 8px 0; color: var(--saffron-soft);">སེམ་ཀྱི</div>
+  <div class="com">;; reason: missing tsheg</div>
+  <div style="height: 8px;"></div>
+  <div><span class="kw">M-x</span> <span class="var">tibetan-ocr-correct-buffer</span></div>
+  <div><span class="kw">M-x</span> <span class="var">tibetan-ocr-correct-region</span></div>
+  <div class="com">;; defcustom tibetan-ocr-correct-auto-accept</div>
+</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">tibetan-ocr-correct.el</span>
+        <span class="ml-mode">(Emacs-Lisp · OCR)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">5 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 06 — SEGMENTATION ═══════════ -->
+  <section data-label="06 Feature 03 Segmentation" class="saffron-slide">
+    <div class="slide-frame">
+      <div class="eyebrow"><span class="dot"></span><span class="num">06</span><span>Feature 03 of 06</span></div>
+      <h2 class="slide-title">Segmentation &amp; sentence recognition.</h2>
+      <p class="body-text" style="margin-top: 24px; color: var(--maroon-deep); max-width: 1400px;">
+        Tibetan has no spaces and no full stops in the Western sense. Tsheg, shad, and sometimes line breaks. The Round-2 clause segmenter reads them, finds verb / converb / final-particle boundaries, and assigns argument structure from Hill-2010 case frames.
+      </p>
+
+      <div style="margin-top: 36px; background: var(--parchment); padding: 32px 40px; border: 2px solid var(--maroon-deep); flex: 1; display: flex; flex-direction: column; justify-content: center;">
+        <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon-deep); margin-bottom: 16px;">INPUT · 6 WORDS</div>
+        <div class="tibetan" style="font-size: 38px; line-height: 1.5; color: var(--ink);">
+          དེ་ ལ་ མ་ ཉན་ པས་ ཁྲོས།
+        </div>
+        <div style="margin-top: 24px; font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon); margin-bottom: 12px;">SEGMENTED · 2 CLAUSES</div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-family: var(--mono); font-size: 22px; color: var(--ink-soft);">
+          <div><span style="color: var(--maroon); font-weight: 600;">[clause 1]</span> དེ་ལ་མ་ཉན་པས &nbsp;&nbsp; <span style="color: var(--gold);">type=causal</span> &nbsp; <span style="color: var(--gold);">converb=པས</span></div>
+          <div><span style="color: var(--maroon); font-weight: 600;">[clause 2]</span> ཁྲོས &nbsp;&nbsp; <span style="color: var(--gold);">main · verb=ཁྲོ</span></div>
+        </div>
+        <div style="margin-top: 24px; font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon); margin-bottom: 10px;">NP CHUNKS · CASE TAGS</div>
+        <div style="font-family: var(--mono); font-size: 22px; color: var(--ink-soft);">
+          ERG &nbsp;·&nbsp; GEN &nbsp;·&nbsp; DAT &nbsp;·&nbsp; LOC &nbsp;·&nbsp; TERM &nbsp;·&nbsp; ABL &nbsp;·&nbsp; COM
+        </div>
+        <div style="margin-top: 22px; font-family: var(--mono); font-size: 22px; color: var(--maroon-deep); letter-spacing: 0.08em; padding-top: 16px; border-top: 1px solid rgba(58,15,16,0.3);">
+          C-c u B  ·  auto-analyze-document &nbsp;&nbsp; C-c s N  ·  sentence-create-all &nbsp;&nbsp; C-c s Z  ·  resegment
+        </div>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">tibetan-clause-segmenter.el</span>
+        <span class="ml-mode">(Emacs-Lisp · Round-2)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">6 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 07 — PARTICLES ═══════════ -->
+  <section data-label="07 Feature 04 Particles" class="indigo-slide">
+    <div class="slide-frame">
+      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">07</span><span>Feature 04 of 06</span></div>
+      <h2 class="slide-title">Particle recognition &mdash; the hard case.</h2>
+      <p class="body-text" style="margin-top: 24px; color: var(--parchment-warm); max-width: 1400px;">
+        The easy case is a particle as its own syllable. The hard case is a particle <em>agglutinated</em> to the stem &mdash; one syllable, two morphemes, only context tells you which. The system disambiguates with a whitelist drawn from <em>Joanna Bialek's "A Textbook in Classical Tibetan"</em>.
+      </p>
+
+      <div style="margin-top: 40px; background: rgba(242,232,213,0.06); padding: 36px 44px; border: 1px solid rgba(184,137,62,0.45); flex: 1; display: flex; flex-direction: column; justify-content: center;">
+        <div style="display: flex; gap: 64px; align-items: center;">
+          <div class="tibetan" style="font-size: 96px; color: var(--parchment); line-height: 1;">
+            <span style="background: rgba(217,122,31,0.25); padding: 0 16px; border-bottom: 3px solid var(--saffron);">དེས</span>
+          </div>
+          <div style="font-family: var(--mono); font-size: 44px; color: var(--saffron);">=</div>
+          <div class="tibetan" style="font-size: 96px; color: var(--parchment); line-height: 1;">
+            དེ <span style="color: var(--gold-soft); font-size: 48px;">+</span> ས
+          </div>
+        </div>
+        <div style="margin-top: 28px; font-family: var(--serif); font-style: italic; font-size: 28px; color: var(--gold-soft); max-width: 1500px; line-height: 1.4;">
+          ergative particle on a vowel-final demonstrative &mdash; <strong>not</strong> the past stem of a verb.
+        </div>
+
+        <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(184,137,62,0.3); display: grid; grid-template-columns: 240px 1fr; gap: 32px; align-items: baseline;">
+          <div style="font-family: var(--mono); font-size: 22px; color: var(--saffron); letter-spacing: 0.18em;">SINGLE-ས WHITELIST</div>
+          <div class="tibetan" style="font-size: 36px; color: var(--parchment); letter-spacing: 0.05em;">
+            དེ &nbsp;·&nbsp; འདི &nbsp;·&nbsp; ཁོ &nbsp;·&nbsp; མོ &nbsp;·&nbsp; ང &nbsp;·&nbsp; སུ &nbsp;·&nbsp; བུ &nbsp;·&nbsp; མཐུ
+          </div>
+        </div>
+
+        <div style="margin-top: 28px; font-family: var(--mono); font-size: 22px; color: var(--gold-soft); letter-spacing: 0.08em;">
+          tibetan-analyze-grammar-bialek &nbsp;·&nbsp; Bialek Portfolio sections inlined into the Claude system prompt
+        </div>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">tibetan-particles-bialek.el</span>
+        <span class="ml-mode">(Tibetan · Grammar)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">7 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 08 — DICTIONARY ═══════════ -->
+  <section data-label="08 Feature 05 Dictionary">
+    <div class="slide-frame">
+      <div class="eyebrow"><span class="dot"></span><span class="num">08</span><span>Feature 05 of 06</span></div>
+      <h2 class="slide-title">Multi-source dictionary.</h2>
+      <p class="body-text" style="margin-top: 24px; max-width: 1400px;">
+        Six sources, ranked, deduplicated by gloss fingerprint. The hand-curated Resources for the specific text being read leads &mdash; everything else fills in around it.
+      </p>
+
+      <div class="cols-2" style="margin-top: 36px; flex: 1; gap: 36px;">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div class="stack-row" style="margin-bottom: 0;">
+            <div class="layer">01 RESOURCES</div>
+            <div class="what">Per-text, hand-curated. Bilingual DE//EN.</div>
+            <div class="tag">user</div>
+          </div>
+          <div class="stack-row" style="margin-bottom: 0;">
+            <div class="layer">02 CUSTOM</div>
+            <div class="what"><span style="font-family: var(--mono); font-size: 22px;">#+TIBETAN_VOCAB_FILE:</span> per document.</div>
+            <div class="tag">user</div>
+          </div>
+          <div class="stack-row" style="margin-bottom: 0;">
+            <div class="layer">03 STEINERT</div>
+            <div class="what">SQLite &mdash; Hopkins, Valby, Waldo, Bialek, 84000.</div>
+            <div class="tag">sql</div>
+          </div>
+          <div class="stack-row" style="margin-bottom: 0;">
+            <div class="layer">04 RANGJUNG YESHE</div>
+            <div class="what">162k entries, lazy-loaded.</div>
+            <div class="tag">file</div>
+          </div>
+          <div class="stack-row" style="margin-bottom: 0;">
+            <div class="layer">05 BUNDLED</div>
+            <div class="what">Hopkins, local glossary.</div>
+            <div class="tag">file</div>
+          </div>
+          <div class="stack-row" style="margin-bottom: 0;">
+            <div class="layer">06 DHARMAMITRA</div>
+            <div class="what">Online AI fallback.</div>
+            <div class="tag">http</div>
+          </div>
+        </div>
+
+        <div style="background: var(--parchment-warm); border: 1px solid var(--maroon); padding: 28px 32px; display: flex; flex-direction: column; gap: 14px; font-family: var(--serif);">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--maroon); padding-bottom: 12px;">
+            <div class="tibetan" style="font-size: 40px; color: var(--maroon-deep);">བྱང་ཆུབ་</div>
+            <div style="font-family: var(--mono); font-size: 22px; color: var(--gold); letter-spacing: 0.14em;">byang chub</div>
+          </div>
+          <div style="font-style: italic; font-size: 24px; color: var(--ink-soft);">n. — awakening, enlightenment.</div>
+          <div style="font-size: 22px; line-height: 1.55; color: var(--ink-soft);">
+            <strong>Resources</strong> — chap. 2, n. 14.<br>
+            <strong>Steinert</strong> — Hopkins agg. 5 senses.<br>
+            <strong>Rangjung Yeshe</strong> — perfect knowledge, supreme wisdom.<br>
+            <strong>DharmaMitra</strong> — bodhi (Skt.), awakened state.
+          </div>
+          <div style="height: 1px; background: var(--maroon); opacity: 0.3; margin: 6px 0;"></div>
+          <div style="font-family: var(--mono); font-size: 20px; color: var(--gold); letter-spacing: 0.08em;">
+            Sanskrit: <em>bodhi</em> &mdash; surfaced because Steinert entry carries it natively.
+          </div>
+          <div style="font-family: var(--mono); font-size: 20px; color: var(--maroon); letter-spacing: 0.06em;">
+            tibetan-vocab-multisource-entries · dedup by fingerprint
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">vocabulary-detailed.el</span>
+        <span class="ml-mode">(Emacs-Lisp · SQLite)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">8 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 09 — PER-SEGMENT ORG FILE ═══════════ -->
+  <section data-label="09 Per-segment Org file">
+    <div class="slide-frame">
+      <div class="eyebrow"><span class="dot"></span><span class="num">09</span><span>The central artifact</span></div>
+      <h2 class="slide-title">The per-segment Org file.</h2>
+      <p class="body-text" style="margin-top: 24px; max-width: 1400px;">
+        One file per shad-bounded clause. The user's hand-written content lives at top level and is preserved on every reanalyze; the auto-generated analysis lives under <span style="font-family: var(--mono); font-size: 24px;">* Tibetan Analysis</span> and is regenerated from scratch.
+      </p>
+
+      <div class="cols-2" style="margin-top: 36px; flex: 1; gap: 40px;">
+        <div class="buffer">
+          <div class="buf-header" style="white-space: nowrap;">
+            <span class="ml-mark" style="color: var(--saffron);">●</span>
+            <span>seg-014.org</span>
+            <span style="margin-left:auto; color: var(--gold-soft);">Org</span>
+          </div>
+<div style="font-family: var(--mono); font-size: 21px; line-height: 1.7; color: var(--parchment); display: flex; flex-direction: column;">
+  <div style="color: var(--saffron-soft);">* Tibetan Analysis</div>
+  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Wylie Transliteration</div>
+  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Interlinear Gloss</div>
+  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Translation        <span style="color: var(--gold);">; Claude</span></div>
+  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Grammar &mdash; Particle Map</div>
+  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Sentence Structure</div>
+  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Verb Classification</div>
+  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Detailed Dictionary</div>
+  <div style="height: 12px;"></div>
+  <div style="color: var(--saffron);">* My Notes              <span style="color: var(--gold-soft); font-size: 18px;">[preserved]</span></div>
+  <div style="color: var(--saffron);">* Working Translation   <span style="color: var(--gold-soft); font-size: 18px;">[preserved]</span></div>
+  <div style="color: var(--saffron);">* Footnotes             <span style="color: var(--gold-soft); font-size: 18px;">[preserved]</span></div>
+  <div style="height: 12px;"></div>
+  <div style="color: rgba(242,232,213,0.5); font-style: italic;">;; reanalyze regenerates the * Tibetan Analysis tree;</div>
+  <div style="color: rgba(242,232,213,0.5); font-style: italic;">;; the three sibling sections survive untouched.</div>
+</div>
+        </div>
+
+        <div style="background: var(--parchment-warm); border: 1px solid var(--maroon); padding: 28px 32px; display: flex; flex-direction: column; gap: 18px;">
+          <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon);">PRESERVATION CONTRACT</div>
+          <p style="font-family: var(--serif); font-size: 26px; color: var(--ink-soft); line-height: 1.4; margin: 0;">
+            Re-running analysis must <em>never</em> overwrite a sentence I wrote by hand. This is enforced in code &mdash; <span style="font-family: var(--mono); font-size: 22px;">tibetan-analysis-reanalyze-file</span> reads each user section, regenerates the auto tree, then restores the user content verbatim.
+          </p>
+          <div style="font-family: var(--mono); font-size: 20px; color: var(--maroon); letter-spacing: 0.06em; padding-top: 12px; border-top: 1px solid rgba(92,26,27,0.3);">
+            asserted by test/tibetan-batch-reanalyze-test.el
+          </div>
+          <div style="margin-top: 8px; font-family: var(--mono); font-size: 22px; color: var(--maroon); letter-spacing: 0.06em; line-height: 1.6;">
+            C-c u A &nbsp;·&nbsp; open / create<br>
+            C-c u R &nbsp;·&nbsp; reanalyze, preserve user content<br>
+            C-c u r &nbsp;·&nbsp; batch reanalyze folder<br>
+            C-c u F &nbsp;·&nbsp; fire pending Claude placeholders
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">seg-014.org</span>
+        <span class="ml-mode">(Org · Tibetan)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">9 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 10 — AI BRIDGES ═══════════ -->
+  <section data-label="10 Feature 06 AI Bridges" class="indigo-slide">
+    <div class="slide-frame">
+      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">10</span><span>Feature 06 of 06</span></div>
+      <h2 class="slide-title">DharmaMitra &amp; Claude.</h2>
+      <p class="body-text" style="margin-top: 24px; color: var(--parchment-warm); max-width: 1400px;">
+        Two AI bridges, both real on disk, both rate-aware. DharmaMitra arrived first &mdash; it was already in the Emacs ecosystem. Claude was wired afterwards through a queue + caching layer that keeps long sessions affordable.
+      </p>
+
+      <div class="cols-2" style="margin-top: 40px; flex: 1; gap: 48px;">
+        <div style="background: var(--parchment-warm); border-top: 4px solid var(--saffron); padding: 32px 36px; display: flex; flex-direction: column; gap: 14px;">
+          <span style="font-family: var(--mono); color: var(--maroon); font-size: 22px; letter-spacing: 0.18em;">BRIDGE 01 · DOMAIN-TRAINED</span>
+          <div style="font-family: var(--serif); font-size: 44px; color: var(--ink); line-height: 1.1;">DharmaMitra</div>
+          <div class="body-text" style="font-size: 24px; margin: 0; color: var(--ink-soft);">
+            HTTP + SSE client (<span style="font-family: var(--mono); font-size: 22px;">core/tibetan-dharmamitra-api.el</span>). Two parallel translation calls (Tibetan + Sanskrit). Search-API path proposes Sanskrit candidates; Claude picks the best fit with a <span style="font-family: var(--mono); font-size: 20px;">## Choice / ## Reason</span> schema. SHA-256 cache.
+          </div>
+          <div style="margin-top: auto; display: flex; flex-direction: column; gap: 4px; font-family: var(--mono); font-size: 21px; color: var(--gold); letter-spacing: 0.08em;">
+            <div>C-c u m &nbsp;·&nbsp; mitra-translate-dwim</div>
+            <div>C-c u D &nbsp;·&nbsp; refresh-dharmamitra-translation</div>
+            <div>C-c u z d / D &nbsp;·&nbsp; Sanskrit realignment</div>
+          </div>
+        </div>
+
+        <div style="background: var(--ink); color: var(--parchment); border-top: 4px solid var(--gold-soft); padding: 32px 36px; display: flex; flex-direction: column; gap: 14px; border-radius: 4px;">
+          <span style="font-family: var(--mono); color: var(--saffron); font-size: 22px; letter-spacing: 0.18em;">BRIDGE 02 · GENERAL REASONING</span>
+          <div style="font-family: var(--serif); font-size: 44px; color: var(--parchment); line-height: 1.1;">Claude</div>
+          <div class="body-text" style="font-size: 24px; margin: 0; color: var(--parchment-warm);">
+            Queued through <span style="font-family: var(--mono); font-size: 22px;">tibetan-claude-queue</span> (default 3 concurrent, exponential 429 backoff). System prompt cached at 10% input cost via <span style="font-family: var(--mono); font-size: 20px;">(let ((gptel-cache '(system))) ...)</span>. Bialek Portfolio inlined.
+          </div>
+          <div style="margin-top: auto; display: flex; flex-direction: column; gap: 4px; font-family: var(--mono); font-size: 21px; color: var(--gold-soft); letter-spacing: 0.08em;">
+            <div>C-c u A &nbsp;·&nbsp; open / create + auto-fire</div>
+            <div>C-c u R &nbsp;·&nbsp; reanalyze, preserve translation</div>
+            <div>C-c u F &nbsp;·&nbsp; fire all pending placeholders</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">claude-queue.el</span>
+        <span class="ml-mode">(Emacs-Lisp · async)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">10 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 11 — BILINGUAL ═══════════ -->
+  <section data-label="11 Bilingual Sanskrit and Tibetan" class="section-slide">
+    <div class="slide-frame">
+      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">11</span><span>Two-language parallel</span></div>
+      <h2 class="slide-title" style="font-size: 88px; max-width: 1500px;">Bilingual mode &mdash;<br>Sanskrit &amp; Tibetan.</h2>
+
+      <div style="margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 56px; flex: 1; align-items: center;">
+        <div>
+          <p class="body-text" style="color: var(--parchment-warm); margin: 0;">
+            Toggle <span style="font-family: var(--mono); color: var(--gold-soft); font-size: 28px;">#+SOURCE_MODE: parallel-sanskrit</span> on a document and every per-segment file emits <em>three concurrent Claude analyses</em> &mdash; Sanskrit, Tibetan, and a Combined synthesis with a Sanskrit-Tibetan Comparison &mdash; <em>plus three DharmaMitra sections</em> for translation and Sanskrit realignment.
+          </p>
+          <p class="body-text" style="color: var(--parchment-warm); margin-top: 22px;">
+            Six independent results land in one Org buffer. Sanskrit-first reading layout. User notes preserved on reanalyze.
+          </p>
+          <div style="margin-top: 28px; font-family: var(--mono); font-size: 22px; color: var(--gold-soft); letter-spacing: 0.08em;">
+            C-c u z P  ·  toggle parallel-sanskrit mode
+          </div>
+        </div>
+        <div style="background: rgba(242,232,213,0.05); border: 1px solid var(--gold-soft); padding: 28px;">
+          <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--gold-soft); margin-bottom: 18px;">PER-SEGMENT FILE · 6 SECTIONS</div>
+          <div style="font-family: var(--mono); font-size: 22px; color: var(--parchment); line-height: 1.7;">
+            <div><span style="color: var(--saffron);">*</span> Sanskrit Analysis <span style="color: rgba(212,168,92,0.55);">— Claude</span></div>
+            <div><span style="color: var(--saffron);">*</span> Tibetan Analysis <span style="color: rgba(212,168,92,0.55);">— Claude</span></div>
+            <div><span style="color: var(--saffron);">*</span> Combined Analysis <span style="color: rgba(212,168,92,0.55);">— Claude</span></div>
+            <div style="padding-left: 24px; color: var(--parchment-warm); font-size: 20px;">└ ** Sanskrit-Tibetan Comparison</div>
+            <div><span style="color: var(--saffron);">*</span> DharmaMitra Translation (Sanskrit)</div>
+            <div><span style="color: var(--saffron);">*</span> DharmaMitra Translation (Tibetan)</div>
+            <div><span style="color: var(--saffron);">*</span> Sanskrit (DharmaMitra realignment)</div>
+          </div>
+          <div style="height: 1px; background: rgba(212,168,92,0.4); margin: 18px 0;"></div>
+          <div style="font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--gold-soft);">
+            three Claude calls · three DM calls · all queued · cached system prompt
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">seg-001.skt-tib</span>
+        <span class="ml-mode">(Skt · Tibetan · parallel)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">11 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 12 — WORKFLOW ═══════════ -->
+  <section data-label="12 The Scholar's Workflow">
+    <div class="slide-frame">
+      <div class="eyebrow"><span class="dot"></span><span class="num">12</span><span>End-to-end</span></div>
+      <h2 class="slide-title">The scholar's workflow.</h2>
+
+      <div style="margin-top: 56px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; align-items: stretch;">
+        <div class="wf-node"><span class="lbl">SOURCE</span>Tibetan / Skt .org</div>
+        <div class="wf-arrow">→</div>
+        <div class="wf-node"><span class="lbl">DOC-PREP</span>C-c u P</div>
+        <div class="wf-arrow">→</div>
+        <div class="wf-node"><span class="lbl">ANALYZE</span>C-c u B<br>seg-*.org</div>
+        <div class="wf-arrow">→</div>
+        <div class="wf-node"><span class="lbl">READ</span>Uchen · Wylie · gloss · grammar · dict</div>
+      </div>
+
+      <div style="margin-top: 40px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; align-items: stretch;">
+        <div class="wf-node" style="background: var(--maroon); color: var(--parchment); border-color: var(--maroon);"><span class="lbl" style="color: var(--saffron-soft);">EXPORT</span>Org → LuaLaTeX</div>
+        <div class="wf-arrow">←</div>
+        <div class="wf-node"><span class="lbl">COMBINE</span>C-c u C<br>combined.org</div>
+        <div class="wf-arrow">←</div>
+        <div class="wf-node"><span class="lbl">REFINE</span>Working Translation<br>preserved on R</div>
+        <div class="wf-arrow">←</div>
+        <div class="wf-node"><span class="lbl">DRAFT</span>Claude + DM<br>async-queued</div>
+      </div>
+
+      <div style="margin-top: auto; padding-top: 36px;">
+        <p class="body-text" style="font-style: italic; color: var(--maroon); max-width: 1500px; margin: 0;">
+          Eight stages, one editor. Notes, footnotes, and a hand-written translation never get overwritten — re-running the analysis preserves them by design.
+        </p>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">workflow.org</span>
+        <span class="ml-mode">(Org)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">12 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 13 — BY THE NUMBERS ═══════════ -->
+  <section data-label="13 By the Numbers" class="indigo-slide">
+    <div class="slide-frame">
+      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">13</span><span>Live · 2026-05-04</span></div>
+      <h2 class="slide-title">By the numbers.</h2>
+
+      <div class="metric-grid" style="margin-top: 44px;">
+        <div class="metric-tile">
+          <div class="num">744</div>
+          <div class="lbl">Top-level<br>defuns</div>
+        </div>
+        <div class="metric-tile">
+          <div class="num">104</div>
+          <div class="lbl">Interactive<br>commands · M-x</div>
+        </div>
+        <div class="metric-tile">
+          <div class="num">51</div>
+          <div class="lbl">User<br>defcustoms</div>
+        </div>
+        <div class="metric-tile">
+          <div class="num">49</div>
+          <div class="lbl">Source<br>modules</div>
+        </div>
+
+        <div class="metric-tile">
+          <div class="num">~33K</div>
+          <div class="lbl">Production<br>elisp LOC</div>
+        </div>
+        <div class="metric-tile">
+          <div class="num">~29K</div>
+          <div class="lbl">Test suite<br>LOC</div>
+        </div>
+        <div class="metric-tile">
+          <div class="num">1839</div>
+          <div class="lbl">ERT tests<br>0 unexpected</div>
+        </div>
+        <div class="metric-tile">
+          <div class="num">217</div>
+          <div class="lbl">Commits ·<br>5 months</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 24px; padding: 18px 24px; background: var(--ink); border: 1px solid rgba(184,137,62,0.45); display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 22px; color: var(--parchment-warm); letter-spacing: 0.06em;">
+        <span>2025-12 &nbsp;Foundation</span>
+        <span style="color: var(--gold);">→</span>
+        <span>2026-01 &nbsp;Sentence + Vocab</span>
+        <span style="color: var(--gold);">→</span>
+        <span>2026-02 &nbsp;Doc-prep v2.2</span>
+        <span style="color: var(--gold);">→</span>
+        <span>2026-04 &nbsp;Round-2 + Steinert</span>
+        <span style="color: var(--gold);">→</span>
+        <span>2026-04 &nbsp;Zettel + Paragraph</span>
+        <span style="color: var(--gold);">→</span>
+        <span>2026-05 &nbsp;Sanskrit Parallel</span>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">git log --reverse</span>
+        <span class="ml-mode">(Magit · Stats)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">13 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 14 — ROADMAP ═══════════ -->
+  <section data-label="14 Roadmap and Status">
+    <div class="slide-frame">
+      <div class="eyebrow"><span class="dot"></span><span class="num">14</span><span>Status &amp; ship target</span></div>
+      <h2 class="slide-title">Shipping by end of semester.</h2>
+      <div class="pecha-rule" style="margin-top: 32px;"></div>
+
+      <div class="cols-2" style="margin-top: 40px; flex: 1; gap: 56px;">
+        <div>
+          <div style="font-family: var(--mono); font-size: 24px; letter-spacing: 0.18em; color: var(--gold); margin-bottom: 22px;">✓ SHIPPED</div>
+          <div style="display: flex; flex-direction: column; gap: 13px; font-family: var(--serif); font-size: 25px; line-height: 1.4; color: var(--ink-soft);">
+            <div><span style="color: var(--gold); font-family: var(--mono); margin-right: 14px;">✓</span>Round-2 clause segmenter with NP chunking + argument structure</div>
+            <div><span style="color: var(--gold); font-family: var(--mono); margin-right: 14px;">✓</span>Bialek terminology unified across word list, grammar, sentence structure</div>
+            <div><span style="color: var(--gold); font-family: var(--mono); margin-right: 14px;">✓</span>Multi-source dictionary &mdash; Resources · Steinert · RY · Bundled · DM</div>
+            <div><span style="color: var(--gold); font-family: var(--mono); margin-right: 14px;">✓</span>Async-queued Claude + DharmaMitra bridges with prompt caching</div>
+            <div><span style="color: var(--gold); font-family: var(--mono); margin-right: 14px;">✓</span>Sanskrit-Tibetan parallel architecture (3 Claude + 3 DM per segment)</div>
+            <div><span style="color: var(--gold); font-family: var(--mono); margin-right: 14px;">✓</span>Zettelkasten + thesaurus, translation comparison across siblings</div>
+            <div><span style="color: var(--gold); font-family: var(--mono); margin-right: 14px;">✓</span>1839 ERT tests, 0 unexpected failures</div>
+          </div>
+        </div>
+        <div>
+          <div style="font-family: var(--mono); font-size: 24px; letter-spacing: 0.18em; color: var(--maroon); margin-bottom: 22px;">→ NEXT · BY END OF SEMESTER</div>
+          <div style="display: flex; flex-direction: column; gap: 13px; font-family: var(--serif); font-size: 25px; line-height: 1.4; color: var(--ink-soft);">
+            <div><span style="color: var(--maroon); font-family: var(--mono); margin-right: 14px;">·</span>Clause segmenter MWU end-extension &mdash; trailing converbs after multi-position MWUs</div>
+            <div><span style="color: var(--maroon); font-family: var(--mono); margin-right: 14px;">·</span>Sub-source ranking polish for single-particle entries (e.g. པའི)</div>
+            <div><span style="color: var(--maroon); font-family: var(--mono); margin-right: 14px;">·</span>Public documentation &mdash; user guide + reference card</div>
+            <div><span style="color: var(--maroon); font-family: var(--mono); margin-right: 14px;">·</span>MELPA package metadata + autoloads &mdash; test on stock Emacs</div>
+            <div style="padding: 14px 18px; background: var(--parchment-warm); border-left: 4px solid var(--saffron); margin-top: 10px;">
+              <span style="color: var(--maroon); font-family: var(--mono); margin-right: 14px;">★</span><strong>Distribution bundle for students &amp; scholars</strong> &mdash; the primary ship target.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">CHANGELOG.md</span>
+        <span class="ml-mode">(Markdown · TODO)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">14 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 15 — DISCUSSION: PEDAGOGY ═══════════ -->
+  <section data-label="15 Discussion Pedagogy" class="saffron-slide">
+    <div class="slide-frame">
+      <div class="eyebrow"><span class="dot"></span><span class="num">15</span><span>Discussion · part 1</span></div>
+      <h2 class="slide-title">Education.</h2>
+      <p class="body-text" style="margin-top: 24px; color: var(--maroon-deep); font-style: italic; max-width: 1500px;">
+        Open questions for the room. The system is built; the conversation about <em>how</em> it should be used is just starting.
+      </p>
+
+      <div style="margin-top: 36px; flex: 1; display: flex; flex-direction: column;">
+        <div class="q-row">
+          <div class="q-mark">?</div>
+          <div class="q-text">Could a tool like this lower the barrier into Classical Tibetan or Sanskrit for first-year students &mdash; or does it skip the slow work that builds intuition?</div>
+        </div>
+        <div class="q-row">
+          <div class="q-mark">?</div>
+          <div class="q-text">Bialek-style exercise drilling <em>with</em> the tool: aid or crutch? Where is the line between scaffolding and shortcut?</div>
+        </div>
+        <div class="q-row">
+          <div class="q-mark">?</div>
+          <div class="q-text">Every analysis file shows its work &mdash; interlinear, particle map, grammar reasoning. Does seeing the reasoning matter to the learner, or only the answer?</div>
+        </div>
+        <div class="q-row">
+          <div class="q-mark">?</div>
+          <div class="q-text">A shared corpus of analysis files: what would a reading-group infrastructure look like, and who would maintain it?</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">discussion-pedagogy.org</span>
+        <span class="ml-mode">(Org · Q&amp;A)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">15 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 16 — DISCUSSION: SCHOLARSHIP ═══════════ -->
+  <section data-label="16 Discussion Scholarship" class="section-slide">
+    <div class="slide-frame">
+      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">16</span><span>Discussion · part 2</span></div>
+      <h2 class="slide-title">Scholarship &amp; translation.</h2>
+      <p class="body-text" style="margin-top: 24px; color: var(--parchment-warm); font-style: italic; max-width: 1500px;">
+        And for the working translator and the philologist &mdash; what does this change, and what should it not?
+      </p>
+
+      <div style="margin-top: 36px; flex: 1; display: flex; flex-direction: column;">
+        <div class="q-row">
+          <div class="q-mark">?</div>
+          <div class="q-text">Variant readings &amp; apparatus: where does this tool sit between the manuscript witnesses and a critical edition?</div>
+        </div>
+        <div class="q-row">
+          <div class="q-mark">?</div>
+          <div class="q-text">Translation memory across projects: useful continuity &mdash; or homogenisation of vocabulary that should stay text-specific?</div>
+        </div>
+        <div class="q-row">
+          <div class="q-mark">?</div>
+          <div class="q-text">Citation export to LaTeX is in the pipeline. What's the right format for shareable analysis files between scholars?</div>
+        </div>
+        <div class="q-row">
+          <div class="q-mark">?</div>
+          <div class="q-text">AI-assisted translation: methodological &amp; ethical implications for footnotes, accountability, and publication norms.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">discussion-scholarship.org</span>
+        <span class="ml-mode">(Org · Q&amp;A)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">16 / 17</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 17 — CLOSING ═══════════ -->
+  <section data-label="17 Closing" class="closing-slide">
+    <div class="slide-frame" style="justify-content: space-between;">
+      <div class="eyebrow" style="color: var(--saffron);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">17</span><span>Thank you</span></div>
+
+      <div>
+        <div class="tibetan" style="font-size: 200px; color: var(--saffron); line-height: 1; letter-spacing: 0.05em;">སྒྲོན་མེ།</div>
+        <div style="font-family: var(--serif); font-style: italic; font-size: 48px; color: var(--gold-soft); margin-top: 24px;">
+          <em>sgron-me</em> — a lamp.
+        </div>
+        <div style="font-family: var(--serif); font-size: 56px; color: var(--parchment); margin-top: 64px; max-width: 1500px; line-height: 1.3;">
+          Tibetan-CAT-Tool wants to be a lamp on the desk of anyone reading these texts &mdash; a small, steady light, in the editor where the work already happens.
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; font-family: var(--mono); font-size: 24px; color: var(--parchment-deep); letter-spacing: 0.12em;">
+        <div>
+          <div style="color: var(--saffron); margin-bottom: 8px;">CONTACT</div>
+          <div>tibetan-cat-tool · v0.1 · 2026</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="color: var(--saffron); margin-bottom: 8px;">QUESTIONS</div>
+          <div>—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modeline" style="background: #000;">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">*scratch*</span>
+        <span class="ml-mode">(Lisp Interaction)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">End</div>
+    </div>
+  </section>
+
+</deck-stage>
+
+</body>
+</html>
