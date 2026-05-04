@@ -304,13 +304,19 @@ naive downcase + intern."
   '((:devanagari "Devanagari"            2)
     (:sandhi     "Sandhi Decomposition"  2)
     (:word-list  "Word List"             2)
-    (:translation "Claude Translation"   2)
+    (:translation "Translation"          2)
     (:grammar    "Grammar"               2))
   "Canonical order, heading names, and org levels for Sanskrit
 Claude sections inside `* Sanskrit Analysis'.  Every entry is
 \(KEY HEADING LEVEL).  Devanagari is conditional (only when
 source lacks it); the others are always present when the
-Sanskrit pipeline fires.")
+Sanskrit pipeline fires.
+
+Phase 1.4 of layout-revision §5.18 (2026-05-04): the `:translation'
+slot's heading is `Translation' (was `Claude Translation').  Parent
+context (`* Sanskrit Analysis') makes the language-attribution
+clear so the redundant `Claude' qualifier on the level-2 heading
+drops.  Mirrors the Tibetan-side rename in Phase 1.3.")
 
 (defun tibetan-analysis-sanskrit--ensure-parent (buffer)
   "Ensure `* Sanskrit Analysis' top-level heading exists in BUFFER.
@@ -325,10 +331,35 @@ Inserts at end of buffer when absent.  Idempotent."
         (insert "* Sanskrit Analysis\n"
                 ":PROPERTIES:\n:GENERATED: t\n:END:\n\n")))))
 
+(defun tibetan-analysis-sanskrit--migrate-legacy-translation-heading (buffer)
+  "Rename any legacy `** Claude Translation' inside `* Sanskrit
+Analysis' → `** Translation' (Phase 1.4 of layout-revision §5.18,
+2026-05-04).  Idempotent — no-op when the file already uses the
+new heading name.
+
+This runs at the start of `--insert-sections' /
+`--restore-sections' so the existence checks downstream can search
+for the new name and find it on legacy files."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward "^\\* Sanskrit Analysis$" nil t)
+        (let ((bound (save-excursion
+                       (if (re-search-forward "^\\* " nil t)
+                           (line-beginning-position)
+                         (point-max)))))
+          (while (re-search-forward "^\\*\\* Claude Translation$" bound t)
+            (replace-match "** Translation" t t)))))))
+
 (defun tibetan-analysis-sanskrit--ensure-section (buffer heading)
   "Ensure HEADING (a level-2 string) exists inside `* Sanskrit Analysis'
 in BUFFER.  Appends at the end of the parent section if absent.
 Idempotent."
+  ;; Phase 1.4 of layout-revision §5.18 (2026-05-04): rename any
+  ;; legacy `** Claude Translation' before checking heading
+  ;; existence.  This avoids creating a NEW `** Translation' next
+  ;; to the legacy heading (would yield duplicate sections).
+  (tibetan-analysis-sanskrit--migrate-legacy-translation-heading buffer)
   (with-current-buffer buffer
     (save-excursion
       (goto-char (point-min))
@@ -433,10 +464,17 @@ is empty."
   "Return preserved Sanskrit-Claude content in FILEPATH as a plist
 with keys `:translation' / `:devanagari' / `:sandhi' /
 `:word-list' / `:grammar'.  Each value is a non-empty string or
-nil."
+nil.
+
+Phase 1.4 of layout-revision §5.18 (2026-05-04):  the
+`:translation' lookup tries the new heading `Translation' first
+and falls back to the legacy `Claude Translation' so files
+written with the old heading still resolve cleanly."
   (list :translation
-        (tibetan-analysis-sanskrit--read-section-body
-         filepath "Claude Translation")
+        (or (tibetan-analysis-sanskrit--read-section-body
+             filepath "Translation")
+            (tibetan-analysis-sanskrit--read-section-body
+             filepath "Claude Translation"))
         :devanagari
         (tibetan-analysis-sanskrit--read-section-body
          filepath "Devanagari")

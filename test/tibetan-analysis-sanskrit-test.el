@@ -256,7 +256,11 @@ the hyphen) — special-case in the heading-key helper."
 
 (ert-deftest tibetan-skt-insert-creates-parent-and-sections ()
   "Inserting into a file without `* Sanskrit Analysis' creates the
-parent + every parsed section."
+parent + every parsed section.
+
+Phase 1.4 of layout-revision §5.18 (2026-05-04): the level-2
+translation heading is `** Translation' (was `** Claude
+Translation')."
   (tibetan-skt-test--with-analysis
       "* Tibetan Text\nbdag\n\n* Auto-Analysis\n** Wylie\nbdag /\n\n* Footnotes\n"
     (tibetan-analysis-sanskrit--insert-sections
@@ -269,7 +273,8 @@ parent + every parsed section."
       (insert-file-contents analysis-file)
       (let ((s (buffer-string)))
         (should (string-match-p "^\\* Sanskrit Analysis$" s))
-        (should (string-match-p "^\\*\\* Claude Translation$" s))
+        (should (string-match-p "^\\*\\* Translation$" s))
+        (should-not (string-match-p "^\\*\\* Claude Translation$" s))
         (should (string-match-p "^\\*\\* Sandhi Decomposition$" s))
         (should (string-match-p "^\\*\\* Word List$" s))
         (should (string-match-p "^\\*\\* Grammar$" s))
@@ -385,6 +390,89 @@ at level 2."
       (let ((entry (assq key order)))
         (should entry)
         (should (= (nth 2 entry) 2))))))
+
+;; ============================================================================
+;; Phase 1.4 of layout-revision §5.18 (2026-05-04):
+;;
+;; Sanskrit-side `** Claude Translation' → `** Translation'.  Mirrors the
+;; Tibetan-side rename (Phase 1.3): parent context (`* Sanskrit Analysis')
+;; makes the language-attribution clear so the redundant `Claude'
+;; qualifier on the level-2 heading drops.
+;; ============================================================================
+
+(ert-deftest tibetan-skt-insert-emits-translation-not-claude-translation ()
+  "Phase 1.4 of layout-revision §5.18 (2026-05-04):  the Sanskrit-side
+writer emits the level-2 heading `** Translation' (was `** Claude
+Translation').  Section-order defconst's `:translation' slot
+remains the same key — only the rendered heading string changes."
+  (let* ((dir (make-temp-file "ttest-skt-1.4-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "* Tibetan Text\nbdag\n\n"))
+          (tibetan-analysis-sanskrit--insert-sections
+           "## Translation\nSanskrit-translation-body\n\n## Word List\n- iha — adv.\n"
+           file)
+          (with-temp-buffer
+            (insert-file-contents file)
+            (let ((content (buffer-string)))
+              (should (string-match-p "^\\*\\* Translation$" content))
+              (should-not (string-match-p "^\\*\\* Claude Translation$"
+                                          content))
+              (should (string-match-p "Sanskrit-translation-body"
+                                      content)))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-skt-read-sections-falls-back-to-claude-translation ()
+  "Phase 1.4 migration:  a fixture with the LEGACY `** Claude
+Translation' (level 2 inside `* Sanskrit Analysis') still resolves
+on `--read-sections' — the reader's `:translation' lookup chain
+tries the new name first and falls back to the legacy name."
+  (let* ((dir (make-temp-file "ttest-skt-1.4b-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "* Tibetan Text\nbdag\n\n"
+                    "* Sanskrit Analysis\n"
+                    ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Claude Translation\n"
+                    "LEGACY-SANSKRIT-BODY\n\n"
+                    "** Word List\n- iha — adv.\n\n"))
+          (let ((p (tibetan-analysis-sanskrit--read-sections file)))
+            (should (equal (plist-get p :translation)
+                           "LEGACY-SANSKRIT-BODY"))
+            (should (string-match-p "iha"
+                                    (plist-get p :word-list)))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-skt-restore-rewrites-claude-translation-as-translation ()
+  "Phase 1.4 round-trip:  a fixture with the legacy `** Claude
+Translation' heading is rewritten to `** Translation' on the next
+`--insert-sections' run, body bytes preserved verbatim."
+  (let* ((dir (make-temp-file "ttest-skt-1.4c-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "* Tibetan Text\nbdag\n\n"
+                    "* Sanskrit Analysis\n"
+                    ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Claude Translation\n"
+                    "LEGACY-PRE-REWRITE\n\n"
+                    "** Word List\n- old\n\n"))
+          (tibetan-analysis-sanskrit--insert-sections
+           "## Translation\nFRESH-TRANS\n\n## Word List\n- new\n"
+           file)
+          (with-temp-buffer
+            (insert-file-contents file)
+            (let ((content (buffer-string)))
+              (should (string-match-p "^\\*\\* Translation$" content))
+              (should-not (string-match-p "^\\*\\* Claude Translation$"
+                                          content))
+              (should (string-match-p "FRESH-TRANS" content)))))
+      (delete-directory dir t))))
 
 ;; ============================================================================
 ;; Queue integration (concurrency optimization, 2026-04-30)
