@@ -3843,21 +3843,27 @@ sentence."
                  (message "Claude auto-fire skipped for seg-%s: %s"
                           seg-id (error-message-string err)))))
             ;; Phase A.1.5 of multi-translator-parallel-reading
-            ;; (2026-04-30): also auto-fire DharmaMitra translation
-            ;; when the existing analysis file lacks a populated DM
-            ;; section.  Idempotent — re-running `C-c u A' on a file
-            ;; that already has a DM section does NOT re-fire the API.
-            ;; Phase A.2 (2026-04-30): uses `fire-for-segment' for
-            ;; Tibetan + Sanskrit;  the umbrella function gates each
-            ;; language internally.  Outer predicate gates only the
-            ;; Tibetan side — Sanskrit is fired unconditionally when
-            ;; applicable (the cache makes re-fires cheap, and
-            ;; per-language predicates would be over-engineered for
-            ;; this open-existing path).
-            (when (and (fboundp 'tibetan-dharmamitra-translation-needs-request-p)
+            ;; (2026-04-30) + bug fix 2026-05-04: also auto-fire
+            ;; DharmaMitra translation when the existing analysis file
+            ;; lacks EITHER a populated Tibetan DM section OR a
+            ;; populated Sanskrit DM section.
+            ;;
+            ;; Pre-fix:  the gate checked ONLY `--needs-request-p
+            ;; filepath "Tibetan"'.  When yesterday's run populated
+            ;; Tibetan-DM but Sanskrit-DM never landed (interrupted
+            ;; fire, etc.), the gate returned nil on every subsequent
+            ;; `C-c u A' — leaving `* DharmaMitra Translation
+            ;; (Sanskrit)' permanently absent.
+            ;;
+            ;; The umbrella `fire-for-segment' does internal per-
+            ;; language gating (parallel-mode + non-placeholder
+            ;; sibling), so calling it when EITHER side needs work
+            ;; correctly skips the populated side and fires only the
+            ;; missing one.
+            (when (and (fboundp 'tibetan-dharmamitra-translation-needs-fire-on-open-p)
                        (fboundp 'tibetan-dharmamitra-translation-fire-for-segment)
-                       (tibetan-dharmamitra-translation-needs-request-p
-                        filepath "Tibetan"))
+                       (tibetan-dharmamitra-translation-needs-fire-on-open-p
+                        filepath))
               (condition-case err
                   (tibetan-dharmamitra-translation-fire-for-segment
                    tibetan-text filepath source-file seg-id)

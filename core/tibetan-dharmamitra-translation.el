@@ -137,6 +137,30 @@ refreshes."
               (string-empty-p body)))))))))
 
 ;;;###autoload
+(defun tibetan-dharmamitra-translation-needs-fire-on-open-p (analysis-file)
+  "Return t when ANALYSIS-FILE needs ANY DharmaMitra section fired.
+
+Specifically:  t when EITHER `* DharmaMitra Translation (Tibetan)'
+OR `* DharmaMitra Translation (Sanskrit)' is missing or empty.
+
+The umbrella `tibetan-dharmamitra-translation-fire-for-segment'
+does internal per-language gating, so callers can fire the
+umbrella whenever this predicate returns t — the populated side
+is correctly skipped, the missing side is fired.
+
+Bug fix 2026-05-04 (post-§5.18 layout-revision):  the existing-
+file open path's DM auto-fire gate previously checked ONLY the
+Tibetan side via `--needs-request-p filepath \"Tibetan\"'.  When
+the Tibetan DM was populated (yesterday's run) but Sanskrit was
+absent (DM Sanskrit fire missed), the gate returned nil and
+`* DharmaMitra Translation (Sanskrit)' stayed permanently
+missing.  This predicate triggers when EITHER side needs work."
+  (or (tibetan-dharmamitra-translation-needs-request-p
+       analysis-file "Tibetan")
+      (tibetan-dharmamitra-translation-needs-request-p
+       analysis-file "Sanskrit")))
+
+;;;###autoload
 (defun tibetan-dharmamitra-translation-fire-tibetan (tibetan-text analysis-file)
   "Translate TIBETAN-TEXT via DharmaMitra; write to ANALYSIS-FILE.
 

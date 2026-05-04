@@ -722,6 +722,80 @@ Sanskrit."
            'tibetan--open-segment-analysis-impl
            'tibetan-analysis--fire-parallel-mode-claude-calls)))
 
+(ert-deftest tibetan-dharmamitra-needs-fire-on-open-p-true-when-only-tibetan-populated ()
+  "Bug fix 2026-05-04: the existing-file open path's DM auto-fire
+gate (`tibetan--open-segment-analysis-impl' lines 3857–3866)
+checked ONLY the Tibetan-side DM section.  When a file has the
+Tibetan DM populated (from yesterday's run) but lacks the
+Sanskrit DM section (DM Sanskrit fire missed for any reason),
+the gate returned nil and `fire-for-segment' never ran — leaving
+`* DharmaMitra Translation (Sanskrit)' permanently absent until
+the user ran an explicit `C-c u R'.
+
+Live observation: gotrapaṭala seg 9 after the layout-revision
+work — `* Sanskrit Text' present, Sanskrit Analysis present,
+Combined Analysis present, but `* DharmaMitra Translation
+\(Sanskrit)' absent because of this gating bug.
+
+The fix:  introduce a predicate `--needs-fire-on-open-p' that
+returns t when EITHER Tibetan OR Sanskrit DM section is missing.
+The umbrella `fire-for-segment' does internal per-language
+gating, so it correctly skips the populated side and fires only
+the missing one when called."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-needs-fire-on-open-p))
+  (let* ((dir (make-temp-file "ttest-dm-gate-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          ;; Fixture: Tibetan DM populated, Sanskrit DM absent.
+          (with-temp-file file
+            (insert "* Tibetan Text\nbdag\n\n"
+                    "* Footnotes\n\n"
+                    "* DharmaMitra Translation (Tibetan)\n"
+                    "Real Tibetan translation.\n\n"))
+          ;; Sanity:  Tibetan-only check returns nil (already populated).
+          (should-not (tibetan-dharmamitra-translation-needs-request-p
+                       file "Tibetan"))
+          ;; And Sanskrit-only check returns t (missing).
+          (should (tibetan-dharmamitra-translation-needs-request-p
+                   file "Sanskrit"))
+          ;; The new on-open predicate triggers when EITHER is missing.
+          (should (tibetan-dharmamitra-translation-needs-fire-on-open-p file)))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-dharmamitra-needs-fire-on-open-p-false-when-both-populated ()
+  "When BOTH Tibetan and Sanskrit DM sections are populated, the
+on-open predicate returns nil — re-running `C-c u A' on a
+fully-DM'd file does not re-fire the API."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-needs-fire-on-open-p))
+  (let* ((dir (make-temp-file "ttest-dm-gate-2-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "* Tibetan Text\nbdag\n\n"
+                    "* Footnotes\n\n"
+                    "* DharmaMitra Translation (Tibetan)\n"
+                    "Tib body.\n\n"
+                    "* DharmaMitra Translation (Sanskrit)\n"
+                    "Skt body.\n\n"))
+          (should-not
+           (tibetan-dharmamitra-translation-needs-fire-on-open-p file)))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-dharmamitra-needs-fire-on-open-p-true-when-both-missing ()
+  "Both sections missing → predicate returns t."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-needs-fire-on-open-p))
+  (let* ((dir (make-temp-file "ttest-dm-gate-3-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "* Tibetan Text\nbdag\n\n* Footnotes\n\n"))
+          (should
+           (tibetan-dharmamitra-translation-needs-fire-on-open-p file)))
+      (delete-directory dir t))))
+
 ;; ============================================================================
 ;; Regression: reanalyze-file falls back to #+SOURCE: header when
 ;; :source-file isn't passed
