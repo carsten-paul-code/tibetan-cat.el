@@ -71,6 +71,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (per-segment layout revision, 2026-05-04 — CLAUDE.md §5.18)
+- **Sanskrit-first section ordering** in segment files
+  (`seg-NNN.org`):  user content (My Notes / Working Translation)
+  emitted at the top, Sanskrit Text + Sanskrit Analysis emitted
+  ABOVE the Tibetan pair, DM Sanskrit emitted ABOVE DM Tibetan.
+  Matches the class workflow (read Sanskrit first, translate,
+  check Tibetan against it).
+- **Parent heading rename**: `* Auto-Analysis` → `* Tibetan
+  Analysis` for symmetry with `* Sanskrit Analysis`.  Sentence
+  files (`sent-NNN*.org`), paragraph files (`par-NNN.org`), and
+  compound-analysis files keep `* Auto-Analysis` (carve-outs).
+- **Level-2 translation heading rename**: `** Claude Translation`
+  → `** Translation` on both Tibetan and Sanskrit sides.  Parent
+  context disambiguates language; `Claude` qualifier is no longer
+  needed.  Level-3 `*** Claude Vocabulary` / `*** Claude
+  Particles` / `*** Claude Grammar` keep their prefix unchanged.
+- **`** Divergence` (opt-in) → `** Sanskrit-Tibetan Comparison`
+  (always emitted)** inside `* Combined Analysis`.  Faithful
+  renderings get a single-line `[Faithful — Tibetan closely
+  renders the Sanskrit; no significant differences.]` marker.
+  Reader can scan for the `[Faithful` prefix at a glance to see
+  whether comparison was performed.
+
+### Migration
+- Dual-name parsers + new-name-only writers.  Existing files in
+  the old shape migrate cleanly on first reanalyse — no manual
+  sweep required.  Every reader accepts both old and new heading
+  names; every writer emits only the new name.  `regenerate-auto`
+  rewrites the file using the new section names + Sanskrit-first
+  order.
+
 ### Added
 - **core/tibetan-steinert**: SQLite-backed lookup against Christian
   Steinert's aggregated dictionary (800k+ entries, 60+ sources).

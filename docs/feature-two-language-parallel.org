@@ -3,6 +3,29 @@
 #+AUTHOR: Carsten Paul + Claude
 #+STATUS: SHIPPED (Phases 1–5; Phase 6 deferred to pair with analysis-files refactor)
 
+* SUPERSEDED 2026-05-04 by CLAUDE.md §5.18
+
+The architecture (three Claude calls per parallel-Sanskrit
+segment, walker + queue + dispatcher) described below is
+unchanged.  The on-disk section names + ordering have been
+revised by the layout-revision work landed 2026-05-04:
+
+- =* Auto-Analysis= → =* Tibetan Analysis= (parent rename)
+- =** Claude Translation= → =** Translation= (level-2, both
+  Tibetan and Sanskrit sides; level-3 sub-headings under
+  =** Grammar= / =** Provided Translations= keep the =Claude=
+  prefix)
+- =** Divergence= (opt-in) → =** Sanskrit-Tibetan Comparison=
+  (always emitted, with =[Faithful — …]= marker for faithful
+  renderings)
+- File order is now Sanskrit-first:  user content → Sanskrit
+  pair → Tibetan pair → Combined → Footnotes → DM Sanskrit →
+  DM Tibetan
+
+See CLAUDE.md §5.18 for the revised layout, migration story
+(dual-name parsers, single-pass on first reanalyse), and the
+verification recipe.
+
 * TL;DR
 
 Per parallel-Sanskrit segment, three independent top-level
