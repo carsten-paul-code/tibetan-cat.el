@@ -244,6 +244,208 @@ documentation."
             (should-not (re-search-forward "^\\* Auto-Analysis$" nil t))))
       (delete-directory dir t))))
 
+;; ============================================================================
+;; Phase 2.1 of layout-revision §5.18 (2026-05-04):
+;;
+;; Sanskrit-first ordering for the per-segment file.  The regenerator
+;; emits sections in this canonical order:
+;;
+;;   * My Notes
+;;   * Working Translation
+;;   * (Reference Translations / Translation Comparison if present)
+;;   * Sanskrit Text                       (parallel-mode only)
+;;   * Sanskrit Analysis                   (parallel-mode only)
+;;   * Tibetan Text                        ← was first; now slot 6
+;;   * Tibetan Analysis                    (the regenerated content)
+;;   * Combined Analysis                   (parallel-mode only)
+;;   * Apparatus / Footnotes
+;;   * DharmaMitra Translation (Sanskrit)  ← Sanskrit-DM first now
+;;   * DharmaMitra Translation (Tibetan)
+;;   * Sanskrit (DharmaMitra) (legacy realign)
+;; ============================================================================
+
+(defun tibetan-analysis-test--section-pos (s name)
+  "Return byte position of `^* NAME' in S, or nil if absent."
+  (string-match (format "^\\* %s\\(?:$\\| \\|(\\)" (regexp-quote name)) s))
+
+(ert-deftest tibetan-analysis-regenerate-auto-emits-my-notes-before-tibetan-text ()
+  "Phase 2.1 of layout-revision §5.18 (2026-05-04):  user content
+\(My Notes / Working Translation) is emitted at the TOP of the
+file, before the language-source sections.  This puts the
+classroom reader's working space at the top of the buffer."
+  (let* ((dir (make-temp-file "ttest-reorder-2.1a-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "#+TITLE: T\n#+TIBETAN_HASH: aaa\n\n"
+                    "* Tibetan Text\nbdag\n\n"
+                    "* My Notes\nNOTE\n\n"
+                    "* Working Translation\nWT\n\n"
+                    "* Tibetan Analysis\n** Wylie\nbdag /\n\n"
+                    "* Footnotes\n\n"))
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (lambda (&rest _) "** Wylie\nbdag /\n\n")))
+            (tibetan-analysis-regenerate-auto file "བདག"
+                                              "** Wylie\nbdag /\n\n"))
+          (let* ((s (with-temp-buffer
+                      (insert-file-contents file)
+                      (buffer-string)))
+                 (notes (tibetan-analysis-test--section-pos s "My Notes"))
+                 (tib   (tibetan-analysis-test--section-pos s "Tibetan Text")))
+            (should (and notes tib))
+            (should (< notes tib))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-analysis-regenerate-auto-emits-sanskrit-pair-before-tibetan-pair ()
+  "Phase 2.1 of layout-revision §5.18 (2026-05-04):  in parallel-
+Sanskrit mode the Sanskrit pair (Text + Analysis) sits ABOVE the
+Tibetan pair (Text + Analysis), matching the class workflow that
+reads Sanskrit first then checks the Tibetan."
+  (let* ((dir (make-temp-file "ttest-reorder-2.1b-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "#+TITLE: T\n#+TIBETAN_HASH: bbb\n\n"
+                    "* Tibetan Text\nbdag\n\n"
+                    "* My Notes\n\n\n"
+                    "* Working Translation\n\n\n"
+                    "* Sanskrit Text\nIAST: ahaṃ\n\n"
+                    "* Tibetan Analysis\n** Wylie\nbdag /\n\n"
+                    "* Sanskrit Analysis\n** Word List\n- iha\n\n"
+                    "* Combined Analysis\n** Combined Translation\nFoo\n\n"
+                    "* Footnotes\n\n"))
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (lambda (&rest _) "** Wylie\nbdag /\n\n")))
+            (tibetan-analysis-regenerate-auto file "བདག"
+                                              "** Wylie\nbdag /\n\n"))
+          (let* ((s (with-temp-buffer
+                      (insert-file-contents file)
+                      (buffer-string)))
+                 (skt-text (tibetan-analysis-test--section-pos s "Sanskrit Text"))
+                 (skt-an   (tibetan-analysis-test--section-pos s "Sanskrit Analysis"))
+                 (tib-text (tibetan-analysis-test--section-pos s "Tibetan Text"))
+                 (tib-an   (tibetan-analysis-test--section-pos s "Tibetan Analysis")))
+            (should (and skt-text skt-an tib-text tib-an))
+            (should (< skt-text skt-an))
+            (should (< skt-an tib-text))
+            (should (< tib-text tib-an))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-analysis-regenerate-auto-emits-combined-analysis-before-footnotes ()
+  "Phase 2.1: `* Combined Analysis' sits between the language pairs
+and `* Footnotes'."
+  (let* ((dir (make-temp-file "ttest-reorder-2.1c-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "#+TITLE: T\n\n"
+                    "* Tibetan Text\nbdag\n\n"
+                    "* Tibetan Analysis\n** Wylie\nbdag\n\n"
+                    "* Combined Analysis\n** Combined Translation\nFoo\n\n"
+                    "* Footnotes\n\n"))
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (lambda (&rest _) "** Wylie\nbdag\n\n")))
+            (tibetan-analysis-regenerate-auto file "བདག" "** Wylie\nbdag\n\n"))
+          (let* ((s (with-temp-buffer
+                      (insert-file-contents file)
+                      (buffer-string)))
+                 (combined (tibetan-analysis-test--section-pos s "Combined Analysis"))
+                 (foot     (tibetan-analysis-test--section-pos s "Footnotes")))
+            (should (and combined foot))
+            (should (< combined foot))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-analysis-regenerate-auto-emits-dm-sanskrit-before-dm-tibetan ()
+  "Phase 2.1: Sanskrit-first applies to the DharmaMitra siblings
+too — `* DharmaMitra Translation (Sanskrit)' sits ABOVE
+`* DharmaMitra Translation (Tibetan)' (was below)."
+  (let* ((dir (make-temp-file "ttest-reorder-2.1d-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "#+TITLE: T\n\n"
+                    "* Tibetan Text\nbdag\n\n"
+                    "* Tibetan Analysis\n** Wylie\nbdag\n\n"
+                    "* Footnotes\n\n"
+                    "* DharmaMitra Translation (Tibetan)\nDM-T\n\n"
+                    "* DharmaMitra Translation (Sanskrit)\nDM-S\n\n"))
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (lambda (&rest _) "** Wylie\nbdag\n\n")))
+            (tibetan-analysis-regenerate-auto file "བདག" "** Wylie\nbdag\n\n"))
+          (let* ((s (with-temp-buffer
+                      (insert-file-contents file)
+                      (buffer-string)))
+                 (dm-skt (tibetan-analysis-test--section-pos s "DharmaMitra Translation (Sanskrit)"))
+                 (dm-tib (tibetan-analysis-test--section-pos s "DharmaMitra Translation (Tibetan)")))
+            (should (and dm-skt dm-tib))
+            (should (< dm-skt dm-tib))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-analysis-regenerate-auto-old-file-with-old-order-rewrites-into-new-order ()
+  "Phase 2.1 end-to-end migration:  fixture in OLD order (Tibetan
+Text first, all sections in legacy positions) is rewritten by
+`regenerate-auto' into the new Sanskrit-first order, with all
+preserved-content bodies intact."
+  (let* ((dir (make-temp-file "ttest-reorder-2.1e-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "#+TITLE: T\n#+TIBETAN_HASH: ccc\n\n"
+                    ;; OLD order: Tibetan Text → My Notes → Working
+                    ;; Translation → Sanskrit Text → Tibetan Analysis →
+                    ;; Sanskrit Analysis → Combined Analysis → Footnotes
+                    ;; → DM Tibetan → DM Sanskrit.
+                    "* Tibetan Text\nbdag\n\n"
+                    "* My Notes\nMUST-SURVIVE-NOTE\n\n"
+                    "* Working Translation\nMUST-SURVIVE-WT\n\n"
+                    "* Sanskrit Text\nIAST: ahaṃ\n\n"
+                    "* Tibetan Analysis\n** Wylie\nbdag\n\n"
+                    "* Sanskrit Analysis\n** Word List\n- iha\n\n"
+                    "* Combined Analysis\n** Combined Translation\nFoo\n\n"
+                    "* Footnotes\nMUST-SURVIVE-FN\n\n"
+                    "* DharmaMitra Translation (Tibetan)\nDM-T-BODY\n\n"
+                    "* DharmaMitra Translation (Sanskrit)\nDM-S-BODY\n\n"))
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (lambda (&rest _) "** Wylie\nbdag\n\n")))
+            (tibetan-analysis-regenerate-auto file "བདག" "** Wylie\nbdag\n\n"))
+          (let* ((s (with-temp-buffer
+                      (insert-file-contents file)
+                      (buffer-string)))
+                 (positions
+                  (mapcar (lambda (n)
+                            (cons n (tibetan-analysis-test--section-pos s n)))
+                          '("My Notes"
+                            "Working Translation"
+                            "Sanskrit Text"
+                            "Sanskrit Analysis"
+                            "Tibetan Text"
+                            "Tibetan Analysis"
+                            "Combined Analysis"
+                            "Footnotes"
+                            "DharmaMitra Translation (Sanskrit)"
+                            "DharmaMitra Translation (Tibetan)"))))
+            ;; All sections present.
+            (dolist (p positions)
+              (should (cdr p)))
+            ;; Strictly ascending positions in the new order.
+            (let ((prev -1))
+              (dolist (p positions)
+                (should (> (cdr p) prev))
+                (setq prev (cdr p))))
+            ;; CLAUDE.md §6 invariant — preserved-content bodies survive.
+            (should (string-match-p "MUST-SURVIVE-NOTE" s))
+            (should (string-match-p "MUST-SURVIVE-WT" s))
+            (should (string-match-p "MUST-SURVIVE-FN" s))
+            (should (string-match-p "DM-T-BODY" s))
+            (should (string-match-p "DM-S-BODY" s))
+            (should (string-match-p "IAST: ahaṃ" s))))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-analysis-regenerate-auto-migrates-old-auto-analysis-file ()
   "Phase 1.2 end-to-end migration:  a fixture file in OLD shape
 \(`* Auto-Analysis' parent heading) gets rewritten to NEW shape

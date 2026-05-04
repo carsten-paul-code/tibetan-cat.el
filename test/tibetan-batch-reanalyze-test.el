@@ -258,19 +258,22 @@ exercised end-to-end (legacy → canonical)."
                      (tibetan-batch-test--stub-generate "RESHAPE")))
             (let ((r (tibetan-analysis-reanalyze-file file)))
               (should (plist-get r :ok))))
-          ;; After reanalysis, order must be canonical.
+          ;; After reanalysis, order must be canonical.  Phase 2.1
+          ;; of layout-revision §5.18 (2026-05-04): user-content
+          ;; sections are emitted ABOVE `* Tibetan Text' (Sanskrit-
+          ;; first reading order), not below it.
           (with-temp-buffer
             (insert-file-contents file)
             (let* ((s (buffer-string))
-                   (tib (tibetan-batch-test--section-position s "Tibetan Text"))
                    (notes (tibetan-batch-test--section-position s "My Notes"))
                    (wt   (tibetan-batch-test--section-position s "Working Translation"))
+                   (tib (tibetan-batch-test--section-position s "Tibetan Text"))
                    (auto (tibetan-batch-test--section-position s "Tibetan Analysis"))
                    (foot (tibetan-batch-test--section-position s "Footnotes")))
               (should (and tib notes wt auto foot))
-              (should (< tib notes))
               (should (< notes wt))
-              (should (< wt auto))
+              (should (< wt tib))
+              (should (< tib auto))
               (should (< auto foot))
               ;; User content survived the reshape
               (should (string-match-p "Important class note" s))
@@ -517,18 +520,22 @@ asserted."
                       (insert-file-contents file)
                       (buffer-string)))
                  (positions
+                  ;; Phase 2.1 of layout-revision §5.18 (2026-05-04):
+                  ;; Sanskrit-first canonical order, user-content
+                  ;; sections at top, Sanskrit pair before Tibetan
+                  ;; pair, DM Sanskrit before DM Tibetan.
                   (mapcar (lambda (n)
                             (cons n (tibetan-batch-test--section-position s n)))
-                          '("Tibetan Text"
-                            "My Notes"
+                          '("My Notes"
                             "Working Translation"
                             "Sanskrit Text"
-                            "Tibetan Analysis"
                             "Sanskrit Analysis"
+                            "Tibetan Text"
+                            "Tibetan Analysis"
                             "Combined Analysis"
                             "Footnotes"
-                            "DharmaMitra Translation (Tibetan)"
                             "DharmaMitra Translation (Sanskrit)"
+                            "DharmaMitra Translation (Tibetan)"
                             "Sanskrit (DharmaMitra)"))))
             ;; Each section is present.
             (dolist (p positions)

@@ -656,36 +656,29 @@ AUTO-CONTENT is the generated analysis content (string)."
       (insert (format "#+CREATED: %s\n" date))
       (insert (format "#+LAST_ANALYZED: %s\n" date))
       (insert "\n")
-      (insert "* Tibetan Text\n")
-      (insert tibetan-text)
-      (insert "\n\n")
-      ;; User-edited sections FIRST — `My Notes' and `Working
-      ;; Translation' live immediately below the Tibetan so they are
-      ;; within a glance and a scroll-pane of the source text during
-      ;; class prep (matches Carsten's classroom flow 2026-04-22).
-      ;; `Footnotes' stays at the bottom because it's typically
-      ;; populated after the full analysis has been read.
-      ;; `Auto-Analysis' is position-independent: regen locates it by
-      ;; name via `tibetan-analysis-find-section-bounds', not by order.
+      ;; Phase 2.1 of layout-revision §5.18 (2026-05-04): Sanskrit-
+      ;; first canonical order at create time — matches the class
+      ;; workflow.  My Notes / Working Translation up top, Sanskrit
+      ;; Text + Analysis above the Tibetan pair (Sanskrit Analysis
+      ;; itself arrives via async Claude callback after create), then
+      ;; Footnotes at the bottom.
       (insert "* My Notes\n\n\n")
       (insert "* Working Translation\n\n\n")
       ;; Phase 3 of two-language-parallel-analysis (2026-04-30):
       ;; emit `* Sanskrit Text' top-level when the dynamic var
       ;; `tibetan-analysis--sanskrit-text-for-render' is bound to a
       ;; non-nil walker plist (parallel mode + non-placeholder
-      ;; `**** Sanskrit' sibling).  Caller is expected to let-bind
-      ;; the var around this call;  when nil the renderer returns
+      ;; `**** Sanskrit' sibling).  When nil the renderer returns
       ;; "" and nothing is inserted (non-parallel default).
       (insert (tibetan-analysis--render-sanskrit-source
                tibetan-analysis--sanskrit-text-for-render))
+      ;; Tibetan Text follows the Sanskrit pair (Phase 2.1 reorder).
+      (insert "* Tibetan Text\n")
+      (insert tibetan-text)
+      (insert "\n\n")
       ;; Phase 1.2 of layout-revision (2026-05-04):  the parent
       ;; heading of the auto-content is `* Tibetan Analysis' (was
-      ;; `* Auto-Analysis').  Symmetry with `* Sanskrit Analysis'
-      ;; makes language-attribution unambiguous for classroom
-      ;; reading of parallel-Sanskrit documents.  Sentence files
-      ;; and paragraph files are not in this pipeline and keep
-      ;; `* Auto-Analysis' (see `tibetan-analysis-create-paragraph-
-      ;; file' carve-out below and CLAUDE.md §5.18).
+      ;; `* Auto-Analysis').
       (insert "* Tibetan Analysis\n")
       (insert ":PROPERTIES:\n")
       (insert ":GENERATED: t\n")
@@ -901,11 +894,27 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
         (when (re-search-backward "^#\\+" nil t)
           (end-of-line)
           (insert (format "\n#+LAST_ANALYZED: %s" date))))
-      ;; Now append sections in canonical order
+      ;; Phase 2.1 of layout-revision §5.18 (2026-05-04): Sanskrit-
+      ;; first canonical order for the per-segment file.  Ordering
+      ;; below matches the class workflow that reads the Sanskrit
+      ;; first, translates it, then checks the Tibetan against it.
+      ;;
+      ;;   * My Notes                            user-edited (top)
+      ;;   * Working Translation                 user-edited
+      ;;   * Reference Translations              optional, paragraph-mode only
+      ;;   * Translation Comparison              optional, paragraph-mode only
+      ;;   * Sanskrit Text                       parallel-mode only
+      ;;   * Sanskrit Analysis                   parallel-mode only
+      ;;   * Tibetan Text                        ← was first; now slot 6
+      ;;   * Tibetan Analysis                    regenerated content
+      ;;   * Combined Analysis                   parallel-mode only
+      ;;   * Apparatus                           optional, paragraph-mode only
+      ;;   * Footnotes                           user-edited (always present)
+      ;;   * DharmaMitra Translation (Sanskrit)  ← Sanskrit-first
+      ;;   * DharmaMitra Translation (Tibetan)
+      ;;   * Sanskrit (DharmaMitra)              legacy realign output
+
       (goto-char (point-max))
-      (insert "* Tibetan Text\n")
-      (insert tibetan-text)
-      (insert "\n\n")
       ;; My Notes — preserved.  If not present before, emit an empty
       ;; placeholder so the section exists for the user to edit into.
       (insert (or my-notes "* My Notes\n\n\n"))
@@ -914,17 +923,6 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
       (insert (or working-translation "* Working Translation\n\n\n"))
       (unless (string-suffix-p "\n\n" (or working-translation ""))
         (insert "\n"))
-      ;; Phase 3 of two-language-parallel-analysis (2026-04-30):
-      ;; emit `* Sanskrit Text' top-level when present (either
-      ;; freshly rendered from the walker plist this regen, or
-      ;; preserved from the previous file state).  Sits between
-      ;; `* Working Translation' and `* Reference Translations' /
-      ;; `* Auto-Analysis' so the raw Sanskrit reads next to the
-      ;; raw Tibetan.
-      (when (and sanskrit-text (not (string-empty-p sanskrit-text)))
-        (insert sanskrit-text)
-        (unless (string-suffix-p "\n\n" sanskrit-text)
-          (insert "\n")))
       ;; Reference Translations — paragraph-only, preserved verbatim
       ;; if present.  Only emitted when the original file had it
       ;; (avoids polluting seg-NNN.org with an empty section).
@@ -933,31 +931,39 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
         (unless (string-suffix-p "\n\n" reference-translations)
           (insert "\n")))
       ;; Translation Comparison — paragraph-only, refreshed by an
-      ;; explicit `C-c u T' (NOT by reanalyze).  Preserved verbatim
-      ;; here so a regular reanalyze doesn't silently overwrite the
-      ;; user's last comparison snapshot.
+      ;; explicit `C-c u T' (NOT by reanalyze).  Preserved verbatim.
       (when translation-comparison
         (insert translation-comparison)
         (unless (string-suffix-p "\n\n" translation-comparison)
           (insert "\n")))
-      ;; Phase 1.2 of layout-revision (2026-05-04):  see commentary
-      ;; on the matching insert in `tibetan-analysis-create-file'.
+      ;; Phase 3 of two-language-parallel-analysis (2026-04-30) +
+      ;; Phase 2.1 of layout-revision §5.18 (2026-05-04): emit
+      ;; `* Sanskrit Text' BEFORE `* Tibetan Text' for the Sanskrit-
+      ;; first reading order.
+      (when (and sanskrit-text (not (string-empty-p sanskrit-text)))
+        (insert sanskrit-text)
+        (unless (string-suffix-p "\n\n" sanskrit-text)
+          (insert "\n")))
+      ;; Phase 2 of two-language-parallel-analysis (2026-04-30) +
+      ;; Phase 2.1 of layout-revision §5.18 (2026-05-04): preserve
+      ;; `* Sanskrit Analysis' verbatim, emit BEFORE Tibetan pair
+      ;; for the Sanskrit-first reading order.
+      (when sanskrit-analysis
+        (insert sanskrit-analysis)
+        (unless (string-suffix-p "\n\n" sanskrit-analysis)
+          (insert "\n")))
+      ;; Tibetan Text + Tibetan Analysis (Phase 1.2 + 2.1):  emitted
+      ;; AFTER the Sanskrit pair so the reader can compare them
+      ;; side-by-side after working out the Sanskrit translation.
+      (insert "* Tibetan Text\n")
+      (insert tibetan-text)
+      (insert "\n\n")
       (insert "* Tibetan Analysis\n")
       (insert ":PROPERTIES:\n")
       (insert ":GENERATED: t\n")
       (insert ":END:\n\n")
       (insert auto-content)
       (insert "\n\n")
-      ;; Phase 2 of two-language-parallel-analysis (2026-04-30):
-      ;; preserve `* Sanskrit Analysis' verbatim when not re-firing
-      ;; the Sanskrit Claude call.  Phase 5 dispatcher will re-fire
-      ;; via `tibetan-analysis-sanskrit--insert-sections' when
-      ;; `:re-request-claude t' — that path overwrites the section
-      ;; bodies after this rebuild lands.
-      (when sanskrit-analysis
-        (insert sanskrit-analysis)
-        (unless (string-suffix-p "\n\n" sanskrit-analysis)
-          (insert "\n")))
       ;; Phase 4 of two-language-parallel-analysis (2026-04-30):
       ;; preserve `* Combined Analysis' verbatim when not re-firing.
       (when combined-analysis
@@ -965,11 +971,8 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
         (unless (string-suffix-p "\n\n" combined-analysis)
           (insert "\n")))
       ;; Apparatus — paragraph-only section, preserved verbatim if
-      ;; present.  Created by `tibetan-analysis-create-paragraph-file'
-      ;; for new par-NNN.org files; absent from seg-NNN.org and from
-      ;; pre-Apparatus par-NNN.org files.  Conditional emission keeps
-      ;; segment-reanalyze backwards-compatible (no empty Apparatus
-      ;; appears in seg files).
+      ;; present.  Conditional emission keeps segment-reanalyze
+      ;; backwards-compatible.
       (when apparatus
         (insert apparatus)
         (unless (string-suffix-p "\n\n" apparatus)
@@ -978,18 +981,16 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
       (unless (string-suffix-p "\n\n" (or footnotes ""))
         (insert "\n"))
       ;; Phase A.1 / A.2 of multi-translator-parallel-reading
-      ;; (2026-04-30) + realign feature — preserve the three
-      ;; DharmaMitra-authored top-level sections at the bottom of
-      ;; the file.  Latent regression fix:  before this commit,
-      ;; reanalyse-without-refire silently dropped these because
-      ;; `--get-user-sections' didn't list them.
-      (when dm-tibetan
-        (insert dm-tibetan)
-        (unless (string-suffix-p "\n\n" dm-tibetan)
-          (insert "\n")))
+      ;; (2026-04-30) + Phase 2.1 of layout-revision §5.18
+      ;; (2026-05-04):  Sanskrit-side DharmaMitra emitted FIRST,
+      ;; matching the Sanskrit-first reading order.
       (when dm-sanskrit
         (insert dm-sanskrit)
         (unless (string-suffix-p "\n\n" dm-sanskrit)
+          (insert "\n")))
+      (when dm-tibetan
+        (insert dm-tibetan)
+        (unless (string-suffix-p "\n\n" dm-tibetan)
           (insert "\n")))
       (when sanskrit-dharmamitra
         (insert sanskrit-dharmamitra)

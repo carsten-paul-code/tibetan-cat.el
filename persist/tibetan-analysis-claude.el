@@ -1697,8 +1697,25 @@ now `** Translation' (was `** Claude Translation'); see
               (beginning-of-line)
             (goto-char (point-max)))
           (insert content))
-         ;; Fallback: after the first top-level heading's opening line
-         ((re-search-forward "^\\* " nil t)
+         ;; Phase 2.1 of layout-revision §5.18 (2026-05-04):  with the
+         ;; new section ordering (My Notes first, Tibetan Analysis
+         ;; later), the OLD fallback "first `* ' heading" would
+         ;; mis-place the Translation under My Notes.  New fallback:
+         ;; insert into `* Tibetan Analysis' (or legacy `* Auto-
+         ;; Analysis') subtree, after its property drawer.
+         ((re-search-forward
+           "^\\* \\(?:Tibetan Analysis\\|Auto-Analysis\\)$" nil t)
+          (forward-line 1)
+          ;; Skip property drawer if present.
+          (when (looking-at-p "[ \t]*:PROPERTIES:[ \t]*$")
+            (when (re-search-forward "^[ \t]*:END:[ \t]*$" nil t)
+              (forward-line 1)))
+          (insert content))
+         ;; Fallback of last resort: after the first top-level heading's
+         ;; opening line.
+         ((progn
+            (goto-char (point-min))
+            (re-search-forward "^\\* " nil t))
           (forward-line 1)
           (insert content))
          (t
