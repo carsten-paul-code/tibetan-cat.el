@@ -266,7 +266,7 @@ No Context in segment layout."
         ;; Segment-layout target: Translation at level 2, Vocabulary
         ;; at level 3 inside Provided Translations, Grammar at level 3
         ;; inside Grammar (U4).
-        (should (string-match-p "^\\*\\* Claude Translation$"    content))
+        (should (string-match-p "^\\*\\* Translation$"    content))
         (should (string-match-p "^\\*\\*\\* Claude Vocabulary$"  content))
         (should (string-match-p "^\\*\\* Grammar$"               content))
         (should (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
@@ -296,7 +296,7 @@ U4 (2026-04-24): Claude Grammar is now at level 3 nested under
                              for pos = (string-match re content start)
                              while pos
                              count pos)))
-          (should (= 1 (count-of "^\\*\\* Claude Translation$")))
+          (should (= 1 (count-of "^\\*\\* Translation$")))
           (should (= 1 (count-of "^\\*\\*\\* Claude Vocabulary$")))
           (should (= 1 (count-of "^\\*\\*\\* Claude Grammar$")))
           ;; No level-2 Grammar duplicates (U4 layout).
@@ -329,7 +329,7 @@ order requires:
       (tibetan-analysis--ensure-claude-headings (current-buffer))
       (let* ((content (buffer-string))
              (wylie-pos    (string-match "^\\*\\* Wylie Transliteration$" content))
-             (trans-pos    (string-match "^\\*\\* Claude Translation$"    content))
+             (trans-pos    (string-match "^\\*\\* Translation$"    content))
              (gram-pos     (string-match "^\\*\\* Grammar$"               content))
              (cl-gram-pos  (string-match "^\\*\\*\\* Claude Grammar$"     content))
              (provided-pos (string-match "^\\*\\* Provided Translations$" content))
@@ -366,7 +366,7 @@ four-section level-3 layout and create Vocabulary/Context/Grammar if missing."
         (should     (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
         (should     (string-match-p "^\\*\\*\\* Claude Context$"     content))
         ;; NO level-2 Claude Translation heading must appear in sentence files.
-        (should-not (string-match-p "^\\*\\* Claude Translation$"    content))))))
+        (should-not (string-match-p "^\\*\\* Translation$"    content))))))
 
 ;; ============================================================================
 ;; --read-claude-sections + legacy --read-claude-translation
@@ -519,7 +519,7 @@ the heading to `** Claude Translation' (level 2), creates
     (with-temp-buffer
       (insert-file-contents analysis-file)
       (let ((content (buffer-string)))
-        (should     (string-match-p "^\\*\\* Claude Translation$"    content))
+        (should     (string-match-p "^\\*\\* Translation$"    content))
         (should     (string-match-p "^\\*\\*\\* Claude Vocabulary$"  content))
         (should     (string-match-p "^\\*\\* Grammar$"               content))
         (should     (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
@@ -754,7 +754,7 @@ level 3 inside Provided Translations — on the analysis file."
     (with-temp-buffer
       (insert-file-contents analysis-file)
       (let ((content (buffer-string)))
-        (should     (string-match-p "^\\*\\* Claude Translation$"    content))
+        (should     (string-match-p "^\\*\\* Translation$"    content))
         (should     (string-match-p "^\\*\\*\\* Claude Vocabulary$"  content))
         (should     (string-match-p "^\\*\\* Grammar$"               content))
         (should     (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
@@ -1105,7 +1105,7 @@ to a level-3 org sub-heading nested under the parent."
           ;; Divergence note text preserved.
           (should (string-match-p "sequential converb scope" s))
           ;; Translation parent is still level 2.
-          (should (string-match-p "^\\*\\* Claude Translation$" s)))))))
+          (should (string-match-p "^\\*\\* Translation$" s)))))))
 
 (ert-deftest tibetan-claude-sections-writer-emits-divergence-as-org-heading-sentence ()
   "Sentence layout (`*** Claude Translation' at level 3):  the
@@ -1184,6 +1184,76 @@ needs to round-trip the divergence."
         ;; Vocabulary correctly separated.
         (should (string-match-p "stod, praise"
                                 (plist-get p :vocabulary)))))))
+
+;; ============================================================================
+;; Phase 1.3 of layout-revision §5.18 (2026-05-04):
+;;
+;; Segment-layout: `** Claude Translation' → `** Translation'.  Parent
+;; context (`* Tibetan Analysis') makes the language-attribution clear,
+;; so the redundant `Claude' qualifier on the sub-heading drops.  Level-3
+;; `*** Claude Vocabulary' / `*** Claude Particles' / `*** Claude Grammar'
+;; KEEP their `Claude' prefix — they sit under `** Grammar' or
+;; `** Provided Translations' where the prefix still disambiguates.
+;;
+;; Sentence-layout (`*** Claude Translation' at level 3): keeps the legacy
+;; name as a carve-out — sentence files are not in the parallel-Sanskrit
+;; pipeline.
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-claude-segment-emits-translation-heading-not-claude-translation ()
+  "Phase 1.3 of layout-revision §5.18 (2026-05-04):  on a fresh
+segment-layout file (with `** Wylie Transliteration', i.e. the
+segment marker), `--ensure-claude-headings' emits the level-2
+heading `** Translation' (was `** Claude Translation')."
+  (tibetan-sections-test--with-analysis
+      (concat "* Tibetan Text\nbdag\n\n"
+              "* Tibetan Analysis\n"
+              "** Wylie Transliteration\nbdag /\n\n")
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (tibetan-analysis--ensure-claude-headings (current-buffer))
+      (let ((content (buffer-string)))
+        (should (string-match-p "^\\*\\* Translation$" content))
+        (should-not (string-match-p "^\\*\\* Claude Translation$" content))))))
+
+(ert-deftest tibetan-analysis-claude-restore-reads-old-claude-translation-and-rewrites-as-translation ()
+  "Phase 1.3 migration:  a fixture with `** Claude Translation'
+\(legacy level-2 heading) round-trips through
+`--ensure-claude-headings' into `** Translation' with the body
+preserved verbatim.  This is the on-disk migration that lets
+existing seg-NNN.org files transition cleanly on first reanalyse."
+  (tibetan-sections-test--with-analysis
+      (concat "* Tibetan Text\nbdag\n\n"
+              "* Tibetan Analysis\n"
+              "** Wylie Transliteration\nbdag /\n\n"
+              "** Claude Translation\n"
+              "LEGACY-BODY-MUST-SURVIVE\n\n"
+              "** Provided Translations\n"
+              "*** DharmaMitra\n[stub]\n\n"
+              "*** Reference Translations\n[none]\n")
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (tibetan-analysis--ensure-claude-headings (current-buffer))
+      (let ((content (buffer-string)))
+        (should (string-match-p "^\\*\\* Translation$" content))
+        (should-not (string-match-p "^\\*\\* Claude Translation$" content))
+        (should (string-match-p "LEGACY-BODY-MUST-SURVIVE" content))))))
+
+(ert-deftest tibetan-analysis-claude-sentence-layout-keeps-claude-translation ()
+  "Phase 1.3 carve-out:  sentence-layout files keep the legacy
+`*** Claude Translation' (level 3) heading.  Sentence layout is
+not in the parallel-Sanskrit pipeline; only segment-layout
+\(detected by the `** Wylie Transliteration' marker) renames."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--sentence-scaffold "T body" nil nil)
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (tibetan-analysis--ensure-claude-headings (current-buffer))
+      (let ((content (buffer-string)))
+        (should (string-match-p "^\\*\\*\\* Claude Translation$" content))
+        ;; And NO bare level-2 `** Translation' that would belong only
+        ;; to the segment layout.
+        (should-not (string-match-p "^\\*\\* Translation$" content))))))
 
 (provide 'tibetan-analysis-claude-sections-test)
 ;;; tibetan-analysis-claude-sections-test.el ends here

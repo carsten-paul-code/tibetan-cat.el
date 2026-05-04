@@ -370,20 +370,26 @@ the corresponding heading has real content, not placeholder text)."
 ;; ============================================================================
 
 (defconst tibetan-sentence--segment-claude-sections
-  '("** Claude Translation"
+  '("** Translation"
+    "** Claude Translation"
     "** Claude Grammar"
     "** Provided Translations")
   "Level-2 headings stripped from segment-level auto-analysis output
 before it is embedded in a sentence file's `* Auto-Analysis' block.
 
-The segment-level renderer emits its own `** Claude Translation',
-`** Claude Grammar', and `** Provided Translations' subtrees.
+The segment-level renderer emits its own `** Translation' (Phase
+1.3 of layout-revision §5.18, 2026-05-04 — was `** Claude
+Translation'), `** Claude Grammar', and `** Provided Translations'
+subtrees.  Both the new and legacy Translation heading names are
+listed so the strip-list works whether the embedded segment-level
+output is in old or new shape.
+
 Sentence files carry their own top-level `* Provided Translations'
 with a discourse-focused Claude pass (different prompt, different
 analysis), so replicating the segment-level Claude scaffolding
 would produce two conflicting Claude conversations in one file.
-Dropping these three subtrees keeps the auto-analysis content
-strictly parser-sourced at the sentence level.")
+Dropping these subtrees keeps the auto-analysis content strictly
+parser-sourced at the sentence level.")
 
 (defun tibetan-sentence--strip-segment-claude-sections (content)
   "Return CONTENT with segment-level Claude sections removed.

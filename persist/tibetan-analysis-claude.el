@@ -1274,8 +1274,16 @@ user can see at a glance which segments still need a real Claude pass."
             (when (fboundp 'tibetan-analysis--ensure-claude-headings)
               (tibetan-analysis--ensure-claude-headings buf))
             (when (fboundp 'tibetan-analysis--replace-claude-section-body)
-              (tibetan-analysis--replace-claude-section-body
-               buf "Claude Translation" msg))
+              ;; Phase 1.3 of layout-revision §5.18 (2026-05-04): pick
+              ;; the right heading + level for the layout.  Segment
+              ;; layout writes into `** Translation' (level 2) — the
+              ;; new name.  Sentence layout writes into the legacy
+              ;; `*** Claude Translation' (level 3) carve-out.
+              (if (tibetan-analysis--claude-segment-layout-p buf)
+                  (tibetan-analysis--replace-claude-section-body
+                   buf "Translation" msg 2)
+                (tibetan-analysis--replace-claude-section-body
+                 buf "Claude Translation" msg 3)))
             (save-buffer)))))))
 
 (defun tibetan-analysis--claude-status-rate-limited-p (info)
@@ -1446,7 +1454,7 @@ five-key shape."
     result))
 
 (defconst tibetan-analysis--claude-section-order
-  '((:translation "Claude Translation" 2)
+  '((:translation "Translation"        2)
     (:vocabulary  "Claude Vocabulary"  3)
     (:grammar     "Claude Grammar"     3)
     (:particles   "Claude Particles"   3))
@@ -1454,7 +1462,14 @@ five-key shape."
 Each entry is (KEY HEADING LEVEL).
 
 Translation sits at level 2 — the workshop-agreed slot, position 3
-in the priority order (right after Wylie / Interlinear).
+in the priority order (right after Wylie / Interlinear).  Phase
+1.3 of layout-revision §5.18 (2026-05-04) renames the level-2
+heading `Claude Translation' → `Translation'; parent context
+\(`* Tibetan Analysis') makes the language-attribution clear so
+the redundant `Claude' qualifier drops.  Level-3 `Claude
+Vocabulary' / `Claude Grammar' / `Claude Particles' KEEP their
+prefix — they nest under `** Grammar' or `** Provided
+Translations' where the prefix still disambiguates.
 
 Vocabulary lives at level 3 inside `** Provided Translations' —
 a DharmaMitra-style word-by-word tier the reader consults alongside
@@ -1593,13 +1608,18 @@ Translations section exists or when no orphans are found."
                                       (concat body "\n"))))))))))))))
 
 (defun tibetan-analysis--migrate-legacy-claude-headings (buffer)
-  "Migrate legacy `*** Claude' / `*** Claude Translation' in BUFFER.
+  "Migrate legacy `*** Claude' / `*** Claude Translation' / `** Claude
+Translation' headings in BUFFER.
+
 Segment-layout buffers (with `** Wylie Transliteration'):
 1. Rename bare `*** Claude' → `*** Claude Translation'.
 2. Move `*** Claude Translation' (level-3, legacy placement under
-   `** Provided Translations') to a new `** Claude Translation'
+   `** Provided Translations') to a new `** Translation'
    (level-2) directly after `** Wylie Transliteration', preserving
    its body.
+3. Rename existing level-2 `** Claude Translation' → `** Translation'
+   in place (Phase 1.3 of layout-revision §5.18, 2026-05-04 — the
+   level-2 heading drops the redundant `Claude' qualifier).
 
 Sentence-layout buffers (no `** Wylie Transliteration'):
 1. Rename bare `*** Claude' → `*** Claude Translation'.
@@ -1618,7 +1638,9 @@ Both branches are no-ops when nothing to migrate."
       (when (tibetan-analysis--claude-segment-layout-p buffer)
         (unless (save-excursion
                   (goto-char (point-min))
-                  (re-search-forward "^\\*\\* Claude Translation$" nil t))
+                  (re-search-forward
+                   "^\\*\\* \\(?:Claude Translation\\|Translation\\)$"
+                   nil t))
           (goto-char (point-min))
           (when (re-search-forward "^\\*\\*\\* Claude Translation$" nil t)
             (let* ((heading-start (line-beginning-position))
@@ -1633,8 +1655,15 @@ Both branches are no-ops when nothing to migrate."
                           (buffer-substring-no-properties body-start body-end))))
               (delete-region heading-start body-end)
               (tibetan-analysis--insert-claude-translation-heading
-               (current-buffer) body))))))
-      ;; Step 3 (sentence only): reparent any level-3 Claude subsection
+               (current-buffer) body))))
+        ;; Step 3 (segment only, Phase 1.3 of layout-revision §5.18):
+        ;; rename existing level-2 `** Claude Translation' → `**
+        ;; Translation' in place.  Idempotent — re-running on a
+        ;; file already in the new shape is a no-op.
+        (goto-char (point-min))
+        (while (re-search-forward "^\\*\\* Claude Translation$" nil t)
+          (replace-match "** Translation" t t))))
+      ;; Step 4 (sentence only): reparent any level-3 Claude subsection
       ;; that previously landed outside `* Provided Translations' back
       ;; into it.  Repairs files written by the pre-fix regenerate run
       ;; that appended orphaned Claude headings at end-of-buffer.
@@ -1643,17 +1672,21 @@ Both branches are no-ops when nothing to migrate."
 
 
 (defun tibetan-analysis--insert-claude-translation-heading (buffer body)
-  "Insert `** Claude Translation' with BODY into BUFFER at the top.
+  "Insert `** Translation' with BODY into BUFFER at the top.
 Placement rule: right after `** Wylie Transliteration' and its body
 if that heading exists; otherwise right after the first `* ' top-level
 heading; otherwise at point-max.  BODY may be empty — the heading is
-still created with two trailing newlines."
+still created with two trailing newlines.
+
+Phase 1.3 of layout-revision §5.18 (2026-05-04):  the heading is
+now `** Translation' (was `** Claude Translation'); see
+`tibetan-analysis--claude-section-order' for the rename rationale."
   (with-current-buffer buffer
     (save-excursion
       (let ((content (if (and body (not (string-empty-p (string-trim body))))
-                         (format "** Claude Translation\n%s\n\n"
+                         (format "** Translation\n%s\n\n"
                                  (string-trim body))
-                       "** Claude Translation\n\n\n")))
+                       "** Translation\n\n\n")))
         (goto-char (point-min))
         (cond
          ;; Prefer: end of the ** Wylie Transliteration section
@@ -1789,8 +1822,12 @@ before invoking."
             (re-search-forward "^\\*\\* Grammar$" nil t))
     (goto-char (point-min))
     (cond
-     ;; After Claude Translation (priority slot 4; Grammar is slot 5).
-     ((re-search-forward "^\\*\\* Claude Translation$" nil t)
+     ;; After `** Translation' (priority slot 4; Grammar is slot 5).
+     ;; Phase 1.3 of layout-revision §5.18 (2026-05-04) renamed
+     ;; `Claude Translation' → `Translation' at level 2; we still
+     ;; tolerate the legacy name as a fallback.
+     ((re-search-forward
+       "^\\*\\* \\(?:Translation\\|Claude Translation\\)$" nil t)
       (forward-line 1)
       (if (re-search-forward
            (tibetan-analysis--claude-stop-re 2) nil t)
@@ -1878,10 +1915,16 @@ whichever target heading is still missing.  Idempotent."
        ;; SEGMENT LAYOUT: Translation at level 2, Vocab/Grammar at 3.
        ;; -------------------------------------------------------------
        ((tibetan-analysis--claude-segment-layout-p buffer)
-        ;; Ensure `** Claude Translation' exists.
+        ;; Ensure `** Translation' exists.  After the migration step
+        ;; in `--migrate-legacy-claude-headings' (called above) the
+        ;; level-2 heading is always `** Translation'; we still
+        ;; tolerate the legacy name in the existence check as belt-
+        ;; and-braces.  Phase 1.3 of layout-revision §5.18.
         (unless (save-excursion
                   (goto-char (point-min))
-                  (re-search-forward "^\\*\\* Claude Translation$" nil t))
+                  (re-search-forward
+                   "^\\*\\* \\(?:Translation\\|Claude Translation\\)$"
+                   nil t))
           (tibetan-analysis--insert-claude-translation-heading
            buffer nil))
         ;; Ensure `*** Claude Vocabulary' exists (before Grammar).
@@ -1922,10 +1965,14 @@ whichever target heading is still missing.  Idempotent."
                         (line-beginning-position)))))
               (goto-char (or mitra-end grammar-pos ref-pos section-end))
               (insert "*** Claude Vocabulary\n\n\n")))
-           ;; Fallback: after the Translation heading.
+           ;; Fallback: after the Translation heading.  Phase 1.3 of
+           ;; layout-revision §5.18 (2026-05-04): the level-2 heading
+           ;; is now `** Translation' (was `** Claude Translation');
+           ;; accept both during the soft-migration window.
            (t
             (goto-char (point-min))
-            (if (re-search-forward "^\\*\\* Claude Translation$" nil t)
+            (if (re-search-forward
+                 "^\\*\\* \\(?:Translation\\|Claude Translation\\)$" nil t)
                 (progn
                   (forward-line 1)
                   (if (re-search-forward
@@ -2383,10 +2430,16 @@ read / restore helpers in
 `persist/tibetan-analysis-combined.el'."
   (let ((translation
          (or
-          ;; Current layout: level 2.
+          ;; Current layout (Phase 1.3 of layout-revision §5.18,
+          ;; 2026-05-04): level-2 `** Translation' under
+          ;; `* Tibetan Analysis'.
+          (tibetan-analysis--read-claude-section-body
+           filepath "Translation" 2)
+          ;; Legacy level-2 (pre-rename) — old segment files.
           (tibetan-analysis--read-claude-section-body
            filepath "Claude Translation" 2)
-          ;; Legacy level-3 placement.
+          ;; Legacy level-3 placement (sentence layout, or older
+          ;; segment files before the 2026-04-16 promotion).
           (tibetan-analysis--read-claude-section-body
            filepath "Claude Translation" 3)
           ;; Pre-three-section legacy heading.
