@@ -224,10 +224,16 @@ and returns a summary plist."
 
 (ert-deftest tibetan-reanalyze-reshapes-into-canonical-layout ()
   "After reanalysis, section order is:
-  Tibetan Text → My Notes → Working Translation → Auto-Analysis → Footnotes.
-Legacy files (where user sections come after Auto-Analysis) get
-reshaped on the next re-analysis.  Idempotent: running reanalysis
-twice does not change the order."
+  Tibetan Text → My Notes → Working Translation → Tibetan Analysis → Footnotes.
+Legacy files (where user sections come after the Tibetan Analysis
+parent — old name `* Auto-Analysis') get reshaped on the next
+re-analysis.  Idempotent: running reanalysis twice does not change
+the order.
+
+Phase 1.2 of layout-revision §5.18 (2026-05-04): the parent name
+is now `Tibetan Analysis'; the fixture sample-file generator still
+emits the legacy `* Auto-Analysis' so the migration path is
+exercised end-to-end (legacy → canonical)."
   (let* ((tmp (make-temp-file "tibetan-layout-" t))
          (file (expand-file-name "seg-012.org" tmp)))
     (unwind-protect
@@ -259,7 +265,7 @@ twice does not change the order."
                    (tib (tibetan-batch-test--section-position s "Tibetan Text"))
                    (notes (tibetan-batch-test--section-position s "My Notes"))
                    (wt   (tibetan-batch-test--section-position s "Working Translation"))
-                   (auto (tibetan-batch-test--section-position s "Auto-Analysis"))
+                   (auto (tibetan-batch-test--section-position s "Tibetan Analysis"))
                    (foot (tibetan-batch-test--section-position s "Footnotes")))
               (should (and tib notes wt auto foot))
               (should (< tib notes))
@@ -270,8 +276,10 @@ twice does not change the order."
               (should (string-match-p "Important class note" s))
               (should (string-match-p "Working drop" s))
               (should (string-match-p "Footnote alpha" s))
-              ;; Auto-Analysis content was regenerated
-              (should (string-match-p "STUB RESHAPE" s))))
+              ;; Tibetan Analysis content was regenerated
+              (should (string-match-p "STUB RESHAPE" s))
+              ;; Migration path: old `* Auto-Analysis' heading is gone.
+              (should-not (string-match-p "^\\* Auto-Analysis$" s))))
           ;; Idempotency — re-running leaves the same order.
           (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
                      (tibetan-batch-test--stub-generate "RESHAPE2")))
@@ -280,7 +288,7 @@ twice does not change the order."
             (insert-file-contents file)
             (let* ((s (buffer-string))
                    (notes (tibetan-batch-test--section-position s "My Notes"))
-                   (auto (tibetan-batch-test--section-position s "Auto-Analysis"))
+                   (auto (tibetan-batch-test--section-position s "Tibetan Analysis"))
                    (foot (tibetan-batch-test--section-position s "Footnotes")))
               (should (< notes auto))
               (should (< auto foot))
@@ -373,7 +381,11 @@ helper so the test doesn't depend on the user's Portfolio file."
 
 (ert-deftest tibetan-create-file-uses-canonical-layout ()
   "Fresh `tibetan-analysis-create-file' emits sections in the
-canonical order (user sections ABOVE Auto-Analysis, Footnotes last)."
+canonical order (user sections ABOVE Tibetan Analysis, Footnotes
+last).
+
+Phase 1.2 of layout-revision §5.18 (2026-05-04): the auto-content
+parent heading is `* Tibetan Analysis' (was `* Auto-Analysis')."
   (let* ((tmp (make-temp-file "tibetan-newfile-" t))
          (source-file (expand-file-name "source.org" tmp)))
     (unwind-protect
@@ -391,7 +403,7 @@ canonical order (user sections ABOVE Auto-Analysis, Footnotes last)."
             (let* ((s (buffer-string))
                    (notes (tibetan-batch-test--section-position s "My Notes"))
                    (wt   (tibetan-batch-test--section-position s "Working Translation"))
-                   (auto (tibetan-batch-test--section-position s "Auto-Analysis"))
+                   (auto (tibetan-batch-test--section-position s "Tibetan Analysis"))
                    (foot (tibetan-batch-test--section-position s "Footnotes")))
               (should (and notes wt auto foot))
               (should (< notes wt))
@@ -485,9 +497,14 @@ default) preserves ALL six new top-level sections verbatim."
 (ert-deftest tibetan-reanalyze-canonical-section-order ()
   "Reanalyse rebuild emits sections in canonical order:
   Tibetan Text → My Notes → Working Translation → Sanskrit Text →
-  Auto-Analysis → Sanskrit Analysis → Combined Analysis →
+  Tibetan Analysis → Sanskrit Analysis → Combined Analysis →
   Footnotes → DharmaMitra Translation (Tibetan) →
-  DharmaMitra Translation (Sanskrit) → Sanskrit (DharmaMitra)."
+  DharmaMitra Translation (Sanskrit) → Sanskrit (DharmaMitra).
+
+Phase 1.2 of layout-revision §5.18 (2026-05-04): `Auto-Analysis'
+parent heading renamed to `Tibetan Analysis'.  Phase 2.1 will
+reorder this list (Sanskrit-first); for now only the rename is
+asserted."
   (let* ((tmp (make-temp-file "tibetan-toplevel-order-" t))
          (file (expand-file-name "seg-009.org" tmp)))
     (unwind-protect
@@ -506,7 +523,7 @@ default) preserves ALL six new top-level sections verbatim."
                             "My Notes"
                             "Working Translation"
                             "Sanskrit Text"
-                            "Auto-Analysis"
+                            "Tibetan Analysis"
                             "Sanskrit Analysis"
                             "Combined Analysis"
                             "Footnotes"

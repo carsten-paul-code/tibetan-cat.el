@@ -80,13 +80,20 @@ heading in the combined document, in characters.")
 
 (defun tibetan-analysis-combine--read-auto-sections (filepath)
   "Return the list of (HEADING . BODY) cons cells inside the
-`* Auto-Analysis' subtree of FILEPATH.  Nil if the file is missing
-or has no auto-analysis subtree."
+`* Tibetan Analysis' subtree of FILEPATH (or legacy
+`* Auto-Analysis' subtree on pre-migration files).  Nil if the
+file is missing or has no auto-analysis subtree.
+
+Phase 1.2 of layout-revision §5.18 (2026-05-04):  accepts both
+heading names so combine works seamlessly during the
+soft-migration window where some files have been reanalysed
+into the new shape and others still carry the old shape."
   (when (file-exists-p filepath)
     (let ((content (with-temp-buffer
                      (insert-file-contents filepath)
                      (goto-char (point-min))
-                     (when (re-search-forward "^\\* Auto-Analysis" nil t)
+                     (when (re-search-forward
+                            "^\\* \\(Tibetan Analysis\\|Auto-Analysis\\)" nil t)
                        (let ((start (1+ (match-end 0)))
                              (end (or (save-excursion
                                         (when (re-search-forward

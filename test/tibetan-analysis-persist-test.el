@@ -204,6 +204,87 @@ them."
             (should (assoc "Tibetan Analysis" sections))))
       (delete-directory dir t))))
 
+(ert-deftest tibetan-analysis-regenerate-auto-emits-tibetan-analysis-heading-not-auto-analysis ()
+  "Phase 1.2 of layout-revision (2026-05-04):  the segment-level
+regenerator must emit `* Tibetan Analysis' as the parent heading
+of the auto-content (was `* Auto-Analysis').  Symmetry with
+`* Sanskrit Analysis' makes language-attribution unambiguous for
+classroom readers.
+
+Carve-outs (NOT touched by this commit): paragraph-file creator
+keeps `* Auto-Analysis'; sentence-layout files keep their level-3
+`*** Claude Translation' embed unchanged.  See §5.18 carve-out
+documentation."
+  (let* ((dir (make-temp-file "ttest-regen-1.2-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "#+TITLE: Test\n"
+                    "#+TIBETAN_HASH: aaa\n"
+                    "#+ANALYSIS_VERSION: 1.0\n"
+                    "#+CREATED: 2026-05-04\n"
+                    "#+LAST_ANALYZED: 2026-05-04\n\n"
+                    "* Tibetan Text\nbdag\n\n"
+                    "* My Notes\n\n\n"
+                    "* Working Translation\n\n\n"
+                    "* Auto-Analysis\n"
+                    ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nbdag\n\n"
+                    "* Footnotes\n\n"))
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (lambda (&rest _) "** Wylie Transliteration\nbdag\n\n")))
+            (tibetan-analysis-regenerate-auto file "བདག"
+                                              "** Wylie Transliteration\nbdag\n\n"))
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-min))
+            (should (re-search-forward "^\\* Tibetan Analysis$" nil t))
+            (goto-char (point-min))
+            (should-not (re-search-forward "^\\* Auto-Analysis$" nil t))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-analysis-regenerate-auto-migrates-old-auto-analysis-file ()
+  "Phase 1.2 end-to-end migration:  a fixture file in OLD shape
+\(`* Auto-Analysis' parent heading) gets rewritten to NEW shape
+\(`* Tibetan Analysis') by `regenerate-auto', preserving My Notes
+body bytes verbatim (CLAUDE.md §6 user-content invariant)."
+  (let* ((dir (make-temp-file "ttest-migrate-1.2-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "#+TITLE: Test\n"
+                    "#+TIBETAN_HASH: bbb\n"
+                    "#+ANALYSIS_VERSION: 1.0\n"
+                    "#+CREATED: 2026-05-04\n"
+                    "#+LAST_ANALYZED: 2026-05-04\n\n"
+                    "* Tibetan Text\nbdag\n\n"
+                    "* My Notes\n\nIMPORTANT — must survive\n\n"
+                    "* Working Translation\n\nWORKING TRANS — must survive\n\n"
+                    "* Auto-Analysis\n"
+                    ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nold-content\n\n"
+                    "* Footnotes\n\nFOOTNOTE — must survive\n\n"))
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (lambda (&rest _) "** Wylie Transliteration\nbdag\n\n")))
+            (tibetan-analysis-regenerate-auto file "བདག"
+                                              "** Wylie Transliteration\nbdag\n\n"))
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-min))
+            (should (re-search-forward "^\\* Tibetan Analysis$" nil t))
+            (goto-char (point-min))
+            (should-not (re-search-forward "^\\* Auto-Analysis$" nil t))
+            ;; CLAUDE.md §6 invariant — user content survives.
+            (goto-char (point-min))
+            (should (search-forward "IMPORTANT — must survive" nil t))
+            (goto-char (point-min))
+            (should (search-forward "WORKING TRANS — must survive" nil t))
+            (goto-char (point-min))
+            (should (search-forward "FOOTNOTE — must survive" nil t))))
+      (delete-directory dir t))))
+
 ;; ============================================================================
 ;; SYNC CHECK TESTS
 ;; ============================================================================

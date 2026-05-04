@@ -614,6 +614,10 @@ written filepath."
         (insert "Read-only by convention — edit only in the source.\n\n")
         (dolist (ref references)
           (insert (format "** %s\n%s\n\n" (car ref) (cdr ref)))))
+      ;; Carve-out (Phase 1.2 of layout-revision §5.18, 2026-05-04):
+      ;; paragraph files (`par-NNN.org') keep `* Auto-Analysis'.
+      ;; Paragraph layout is not in the parallel-Sanskrit pipeline;
+      ;; only segment files (`seg-NNN.org') receive the rename.
       (insert "* Auto-Analysis\n")
       (insert ":PROPERTIES:\n")
       (insert ":GENERATED: t\n")
@@ -674,7 +678,15 @@ AUTO-CONTENT is the generated analysis content (string)."
       ;; "" and nothing is inserted (non-parallel default).
       (insert (tibetan-analysis--render-sanskrit-source
                tibetan-analysis--sanskrit-text-for-render))
-      (insert "* Auto-Analysis\n")
+      ;; Phase 1.2 of layout-revision (2026-05-04):  the parent
+      ;; heading of the auto-content is `* Tibetan Analysis' (was
+      ;; `* Auto-Analysis').  Symmetry with `* Sanskrit Analysis'
+      ;; makes language-attribution unambiguous for classroom
+      ;; reading of parallel-Sanskrit documents.  Sentence files
+      ;; and paragraph files are not in this pipeline and keep
+      ;; `* Auto-Analysis' (see `tibetan-analysis-create-paragraph-
+      ;; file' carve-out below and CLAUDE.md §5.18).
+      (insert "* Tibetan Analysis\n")
       (insert ":PROPERTIES:\n")
       (insert ":GENERATED: t\n")
       (insert ":END:\n\n")
@@ -928,7 +940,9 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
         (insert translation-comparison)
         (unless (string-suffix-p "\n\n" translation-comparison)
           (insert "\n")))
-      (insert "* Auto-Analysis\n")
+      ;; Phase 1.2 of layout-revision (2026-05-04):  see commentary
+      ;; on the matching insert in `tibetan-analysis-create-file'.
+      (insert "* Tibetan Analysis\n")
       (insert ":PROPERTIES:\n")
       (insert ":GENERATED: t\n")
       (insert ":END:\n\n")

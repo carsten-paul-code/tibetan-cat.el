@@ -768,11 +768,16 @@ canonical position.  Idempotent."
                          (line-beginning-position)
                        (point-max)))))
           (delete-region start end)))
-      ;; Insertion point: just before `* Auto-Analysis', or before
-      ;; first `* ' heading after `* Working Translation', or at end.
+      ;; Insertion point: just before `* Tibetan Analysis' (or
+      ;; legacy `* Auto-Analysis'), or before first `* ' heading
+      ;; after `* Working Translation', or at end.  Phase 1.2 of
+      ;; layout-revision §5.18 (2026-05-04): the parent heading
+      ;; rename means readers must accept BOTH names — old files
+      ;; pre-migration still carry `* Auto-Analysis' until first
+      ;; reanalyse rewrites them.
       (goto-char (point-min))
       (cond
-       ((re-search-forward "^\\* Auto-Analysis\\b" nil t)
+       ((re-search-forward "^\\* \\(Tibetan Analysis\\|Auto-Analysis\\)\\b" nil t)
         (beginning-of-line))
        ((re-search-forward "^\\* Working Translation\\b" nil t)
         (forward-line 1)
