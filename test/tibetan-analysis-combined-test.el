@@ -190,31 +190,40 @@ here for empty-string too)."
 ;; ============================================================================
 
 (ert-deftest tibetan-com-parse-translation-and-divergence ()
-  "Response with both sections parses both keys."
+  "Response with both sections parses both keys.
+
+Phase 3.1 of layout-revision §5.18 (2026-05-04): plist key
+renamed `:divergence' → `:comparison'.  The fixture's
+`## Divergence' heading still routes to `:comparison' for
+backwards compat with archived Claude responses."
   (let ((p (tibetan-analysis-combined--parse-claude-sections
             tibetan-com-test--full-response)))
     (should (string-match-p "Synthesis:" (plist-get p :translation)))
-    (should (string-match-p "prakṛtyaiva" (plist-get p :divergence)))))
+    (should (string-match-p "prakṛtyaiva" (plist-get p :comparison)))))
 
 (ert-deftest tibetan-com-parse-divergence-omitted-when-faithful ()
-  "Response with no Divergence section leaves `:divergence' nil."
+  "Response with no Comparison section leaves `:comparison' nil."
   (let ((p (tibetan-analysis-combined--parse-claude-sections
             tibetan-com-test--no-divergence-response)))
     (should (plist-get p :translation))
-    (should (null (plist-get p :divergence)))))
+    (should (null (plist-get p :comparison)))))
 
 (ert-deftest tibetan-com-parse-empty-input ()
   "Empty / nil input returns plist with both keys nil."
   (dolist (input '(nil ""))
     (let ((p (tibetan-analysis-combined--parse-claude-sections input)))
       (should (null (plist-get p :translation)))
-      (should (null (plist-get p :divergence))))))
+      (should (null (plist-get p :comparison))))))
 
 ;; ============================================================================
 ;; insert + read + restore round-trip
 ;; ============================================================================
 
 (ert-deftest tibetan-com-insert-creates-parent-and-sections ()
+  "Phase 3.2 of layout-revision §5.18 (2026-05-04):  the writer
+emits `** Sanskrit-Tibetan Comparison' (was `** Divergence').
+The fixture's `## Divergence' heading parses into `:comparison'
+which the writer renders as the new heading."
   (tibetan-com-test--with-analysis
       "* Tibetan Text\nbdag\n\n* Footnotes\n"
     (tibetan-analysis-combined--insert-sections
@@ -228,13 +237,20 @@ here for empty-string too)."
       (let ((s (buffer-string)))
         (should (string-match-p "^\\* Combined Analysis$" s))
         (should (string-match-p "^\\*\\* Combined Translation$" s))
-        (should (string-match-p "^\\*\\* Divergence$" s))
+        (should (string-match-p "^\\*\\* Sanskrit-Tibetan Comparison$" s))
+        (should-not (string-match-p "^\\*\\* Divergence$" s))
         (should (string-match-p "Synthesis:" s))
         (should (string-match-p "prakṛtyaiva" s))))))
 
 (ert-deftest tibetan-com-insert-skips-divergence-when-faithful ()
   "Faithful-rendering response → Combined Translation section
-appears, Divergence does NOT."
+appears, Sanskrit-Tibetan Comparison does NOT (parser found no
+matching heading in the fixture).
+
+NOTE: Phase 3.3 of layout-revision §5.18 will change the prompt
+so Claude ALWAYS emits the comparison section; this test still
+exercises the writer's behaviour when the parser finds no
+comparison heading."
   (tibetan-com-test--with-analysis
       "* Tibetan Text\nbdag\n\n* Footnotes\n"
     (tibetan-analysis-combined--insert-sections
@@ -247,6 +263,7 @@ appears, Divergence does NOT."
       (insert-file-contents analysis-file)
       (let ((s (buffer-string)))
         (should (string-match-p "^\\*\\* Combined Translation$" s))
+        (should-not (string-match-p "^\\*\\* Sanskrit-Tibetan Comparison$" s))
         (should-not (string-match-p "^\\*\\* Divergence$" s))))))
 
 (ert-deftest tibetan-com-insert-empty-response-no-op ()
@@ -265,6 +282,8 @@ appears, Divergence does NOT."
                                     (buffer-string)))))))
 
 (ert-deftest tibetan-com-read-round-trip ()
+  "Phase 3.2 of layout-revision §5.18 (2026-05-04):  `--read-sections'
+returns `:comparison' (was `:divergence')."
   (tibetan-com-test--with-analysis
       "* Tibetan Text\nbdag\n\n* Footnotes\n"
     (tibetan-analysis-combined--insert-sections
@@ -275,9 +294,11 @@ appears, Divergence does NOT."
         (kill-buffer buf)))
     (let ((p (tibetan-analysis-combined--read-sections analysis-file)))
       (should (string-match-p "Synthesis:" (plist-get p :translation)))
-      (should (string-match-p "prakṛtyaiva" (plist-get p :divergence))))))
+      (should (string-match-p "prakṛtyaiva" (plist-get p :comparison))))))
 
 (ert-deftest tibetan-com-restore-round-trip ()
+  "Phase 3.2:  restore uses `:comparison' key; writes the body
+under `** Sanskrit-Tibetan Comparison'."
   (tibetan-com-test--with-analysis
       "* Tibetan Text\nbdag\n\n* Footnotes\n"
     (tibetan-analysis-combined--insert-sections
@@ -289,14 +310,14 @@ appears, Divergence does NOT."
     (tibetan-analysis-combined--restore-sections
      analysis-file
      (list :translation "UPDATED translation"
-           :divergence  "UPDATED divergence"))
+           :comparison  "UPDATED comparison"))
     (let ((buf (find-buffer-visiting analysis-file)))
       (when buf
         (with-current-buffer buf (set-buffer-modified-p nil))
         (kill-buffer buf)))
     (let ((p (tibetan-analysis-combined--read-sections analysis-file)))
       (should (equal (plist-get p :translation) "UPDATED translation"))
-      (should (equal (plist-get p :divergence)  "UPDATED divergence")))))
+      (should (equal (plist-get p :comparison)  "UPDATED comparison")))))
 
 ;; ============================================================================
 ;; Queue integration (concurrency optimization, 2026-04-30)
@@ -348,6 +369,132 @@ appears, Divergence does NOT."
        (list :iast "ahaṃ" :devanagari nil :script-source 'iast-line)
        "" "S" nil "/tmp/x.org"))
     (should-not submitted)))
+
+;; ============================================================================
+;; Phase 3 of layout-revision §5.18 (2026-05-04):
+;;
+;; `** Divergence' (opt-in, only when serious differences) →
+;; `** Sanskrit-Tibetan Comparison' (always emitted, with explicit
+;; `[Faithful — …]' marker for faithful renderings).  Plist key
+;; `:divergence' is renamed to `:comparison'.  Parser accepts the
+;; legacy `## Divergence' heading + the new `## Sanskrit-Tibetan
+;; Comparison' / `## Comparison' headings, all routed to `:comparison'.
+;; ============================================================================
+
+(ert-deftest tibetan-com-parse-comparison-key-is-comparison-not-divergence ()
+  "Phase 3.1 of layout-revision §5.18 (2026-05-04):  the parser
+result plist uses `:comparison' (not `:divergence') for the
+second section.  A response with the new `## Sanskrit-Tibetan
+Comparison' heading populates `:comparison'."
+  (let ((p (tibetan-analysis-combined--parse-claude-sections
+            "## Translation\nFoo bar.\n\n## Sanskrit-Tibetan Comparison\n[Faithful — close.]\n")))
+    (should (equal (plist-get p :translation) "Foo bar."))
+    (should (equal (plist-get p :comparison) "[Faithful — close.]"))
+    ;; Old key is gone.
+    (should (null (plist-get p :divergence)))))
+
+(ert-deftest tibetan-com-parse-divergence-legacy-heading-still-recognised-as-comparison ()
+  "Phase 3.1 backwards compat:  a response with the LEGACY
+`## Divergence' heading routes to the NEW `:comparison' plist
+key.  Lets archived Claude responses round-trip during the
+soft-migration window."
+  (let ((p (tibetan-analysis-combined--parse-claude-sections
+            "## Translation\nFoo.\n\n## Divergence\n- legacy bullet\n")))
+    (should (equal (plist-get p :translation) "Foo."))
+    (should (equal (plist-get p :comparison) "- legacy bullet"))
+    (should (null (plist-get p :divergence)))))
+
+(ert-deftest tibetan-com-parse-recognises-bare-comparison-heading ()
+  "Phase 3.1:  the parser accepts the bare `## Comparison' heading
+\(in addition to `## Sanskrit-Tibetan Comparison').  Defensive
+against Claude shortening the heading occasionally."
+  (let ((p (tibetan-analysis-combined--parse-claude-sections
+            "## Translation\nFoo.\n\n## Comparison\nBar.\n")))
+    (should (equal (plist-get p :comparison) "Bar."))))
+
+(ert-deftest tibetan-com-parse-faithful-marker-treated-as-content-not-empty ()
+  "Phase 3.1:  a `[Faithful — …]' single-line body is treated as
+real content, not stripped as empty.  This is the marker the
+new prompt asks for when the Tibetan closely renders the
+Sanskrit."
+  (let ((p (tibetan-analysis-combined--parse-claude-sections
+            "## Translation\nFoo.\n\n## Sanskrit-Tibetan Comparison\n[Faithful — Tibetan closely renders the Sanskrit; no significant differences.]\n")))
+    (should (plist-get p :comparison))
+    (should (string-match-p "\\`\\[Faithful" (plist-get p :comparison)))))
+
+(ert-deftest tibetan-com-section-order-uses-comparison-heading ()
+  "Phase 3.2 of layout-revision §5.18 (2026-05-04):  the
+section-order defconst maps `:comparison' to the heading
+`Sanskrit-Tibetan Comparison' at level 2.  The legacy
+`:divergence' / `Divergence' entry is gone."
+  (let ((order tibetan-analysis-combined--section-order))
+    (should (equal (assq :comparison order)
+                   '(:comparison "Sanskrit-Tibetan Comparison" 2)))
+    (should (null (assq :divergence order)))
+    (should (equal (assq :translation order)
+                   '(:translation "Combined Translation" 2)))))
+
+(ert-deftest tibetan-com-insert-emits-comparison-heading-not-divergence ()
+  "Phase 3.2:  on a fresh fixture, the writer emits the new
+`** Sanskrit-Tibetan Comparison' heading (not legacy
+`** Divergence')."
+  (tibetan-com-test--with-analysis
+      "* Tibetan Text\nbdag\n\n* Footnotes\n"
+    (tibetan-analysis-combined--insert-sections
+     "## Translation\nFoo.\n\n## Sanskrit-Tibetan Comparison\nBar.\n"
+     analysis-file)
+    (let ((buf (find-buffer-visiting analysis-file)))
+      (when buf
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf)))
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (let ((s (buffer-string)))
+        (should (string-match-p "^\\*\\* Sanskrit-Tibetan Comparison$" s))
+        (should-not (string-match-p "^\\*\\* Divergence$" s))))))
+
+(ert-deftest tibetan-com-restore-migrates-old-divergence-heading ()
+  "Phase 3.2 on-disk migration:  a fixture with the LEGACY
+`** Divergence' heading inside `* Combined Analysis' is
+rewritten to `** Sanskrit-Tibetan Comparison' on the next
+`--insert-sections' run, body bytes preserved."
+  (tibetan-com-test--with-analysis
+      (concat "* Tibetan Text\nbdag\n\n"
+              "* Combined Analysis\n"
+              ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+              "** Combined Translation\nold trans\n\n"
+              "** Divergence\n- LEGACY-DIV-BODY\n\n"
+              "* Footnotes\n")
+    (tibetan-analysis-combined--insert-sections
+     "## Translation\nNEW-TRANS\n\n## Sanskrit-Tibetan Comparison\nNEW-COMP\n"
+     analysis-file)
+    (let ((buf (find-buffer-visiting analysis-file)))
+      (when buf
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf)))
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (let ((s (buffer-string)))
+        (should (string-match-p "^\\*\\* Sanskrit-Tibetan Comparison$" s))
+        (should-not (string-match-p "^\\*\\* Divergence$" s))
+        (should (string-match-p "NEW-COMP" s))
+        (should (string-match-p "NEW-TRANS" s))))))
+
+(ert-deftest tibetan-com-read-sections-fallback-reads-divergence-as-comparison ()
+  "Phase 3.2 backwards-compat read:  a fixture with the legacy
+`** Divergence' (and no new heading) is resolved by
+`--read-sections' as `:comparison'.  Lets pre-rename files
+round-trip."
+  (tibetan-com-test--with-analysis
+      (concat "* Tibetan Text\nbdag\n\n"
+              "* Combined Analysis\n"
+              ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+              "** Combined Translation\ntranslation body\n\n"
+              "** Divergence\nLEGACY-DIV\n\n"
+              "* Footnotes\n")
+    (let ((p (tibetan-analysis-combined--read-sections analysis-file)))
+      (should (equal (plist-get p :translation) "translation body"))
+      (should (equal (plist-get p :comparison) "LEGACY-DIV")))))
 
 (provide 'tibetan-analysis-combined-test)
 ;;; tibetan-analysis-combined-test.el ends here

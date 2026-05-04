@@ -204,13 +204,25 @@ is meaningful only when all four inputs are present."
 
 (defun tibetan-analysis-combined--parse-claude-sections (response)
   "Split a Combined Claude RESPONSE on `## Translation' /
-`## Divergence' headings.
+`## Sanskrit-Tibetan Comparison' headings.
 
-Returns a plist with `:translation' and `:divergence' keys.
-Missing sections are nil; Divergence is opt-in (most segments
-should have a faithful rendering and skip it)."
-  (let ((result (list :translation nil :divergence nil))
-        (re "^## \\(Translation\\|Divergence\\)[ \t]*$"))
+Returns a plist with `:translation' and `:comparison' keys.
+Missing sections are nil.
+
+Phase 3.1 of layout-revision §5.18 (2026-05-04):  the second
+section is now always emitted (with `[Faithful — …]' for faithful
+renderings).  Renamed from `:divergence' to `:comparison'.  The
+parser accepts THREE heading aliases for the comparison body —
+the new `## Sanskrit-Tibetan Comparison', the bare `## Comparison',
+and the legacy `## Divergence' (so archived Claude responses still
+round-trip)."
+  (let ((result (list :translation nil :comparison nil))
+        (re (concat "^## "
+                    "\\(Translation"
+                    "\\|Sanskrit-Tibetan Comparison"
+                    "\\|Comparison"
+                    "\\|Divergence"
+                    "\\)[ \t]*$")))
     (when (and response (stringp response) (not (string-empty-p response)))
       (with-temp-buffer
         (insert response)
@@ -219,10 +231,13 @@ should have a faithful rendering and skip it)."
           (goto-char (point-min))
           (let ((matches '()))
             (while (re-search-forward re nil t)
-              (push (list (intern (format ":%s"
-                                          (downcase (match-string 1))))
-                          (match-end 0))
-                    matches))
+              (let* ((token (match-string 1))
+                     (key (cond
+                           ((string= token "Translation") :translation)
+                           ;; Sanskrit-Tibetan Comparison / Comparison /
+                           ;; Divergence all route to :comparison.
+                           (t :comparison))))
+                (push (list key (match-end 0)) matches)))
             (setq matches (nreverse matches))
             (cl-loop for (cell . rest) on matches
                      for key = (car cell)
@@ -248,11 +263,16 @@ should have a faithful rendering and skip it)."
 ;; ============================================================================
 
 (defconst tibetan-analysis-combined--section-order
-  '((:translation "Combined Translation" 2)
-    (:divergence  "Divergence"            2))
+  '((:translation "Combined Translation"          2)
+    (:comparison  "Sanskrit-Tibetan Comparison"   2))
   "Canonical order, heading names, levels for Combined sections
-inside `* Combined Analysis'.  Both at level 2;  Divergence is
-opt-in.")
+inside `* Combined Analysis'.  Both at level 2.
+
+Phase 3.2 of layout-revision §5.18 (2026-05-04):  `:divergence' →
+`:comparison' and heading rename `Divergence' → `Sanskrit-Tibetan
+Comparison'.  The Combined Claude prompt now ALWAYS emits the
+comparison section (with `[Faithful — …]' for faithful
+renderings — see Phase 3.3).")
 
 (defun tibetan-analysis-combined--ensure-parent (buffer)
   "Ensure `* Combined Analysis' top-level heading exists in BUFFER.
@@ -304,6 +324,25 @@ in BUFFER.  Idempotent."
             (goto-char start)
             (insert (format "%s\n\n" (string-trim body)))))))))
 
+(defun tibetan-analysis-combined--migrate-legacy-divergence-heading (buffer)
+  "Rename any legacy `** Divergence' inside `* Combined Analysis' →
+`** Sanskrit-Tibetan Comparison' (Phase 3.2 of layout-revision
+§5.18, 2026-05-04).  Idempotent — no-op when the file already uses
+the new heading name.
+
+Called at the start of `--insert-sections' / `--restore-sections'
+so subsequent existence checks find the new name on legacy files."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward "^\\* Combined Analysis$" nil t)
+        (let ((bound (save-excursion
+                       (if (re-search-forward "^\\* " nil t)
+                           (line-beginning-position)
+                         (point-max)))))
+          (while (re-search-forward "^\\*\\* Divergence$" bound t)
+            (replace-match "** Sanskrit-Tibetan Comparison" t t)))))))
+
 (defun tibetan-analysis-combined--insert-sections (response analysis-file)
   "Parse a Combined Claude RESPONSE and write its sections into
 ANALYSIS-FILE under `* Combined Analysis' (top-level).
@@ -320,6 +359,9 @@ parsed or ANALYSIS-FILE is missing."
                          (plist-get sections (nth 0 entry)))
                        tibetan-analysis-combined--section-order)
           (tibetan-analysis-combined--ensure-parent buf)
+          ;; Phase 3.2 of layout-revision §5.18 (2026-05-04): rename
+          ;; any legacy `** Divergence' before existence checks run.
+          (tibetan-analysis-combined--migrate-legacy-divergence-heading buf)
           (dolist (entry tibetan-analysis-combined--section-order)
             (let ((key (nth 0 entry))
                   (heading (nth 1 entry)))
@@ -364,13 +406,20 @@ in FILEPATH."
 
 (defun tibetan-analysis-combined--read-sections (filepath)
   "Return preserved Combined-Claude content as a plist with
-`:translation' / `:divergence' keys."
+`:translation' / `:comparison' keys.
+
+Phase 3.2 of layout-revision §5.18 (2026-05-04):  the `:comparison'
+slot's body lookup tries the new heading `Sanskrit-Tibetan
+Comparison' first and falls back to the legacy `Divergence' name
+so files written before this commit still resolve cleanly."
   (list :translation
         (tibetan-analysis-combined--read-section-body
          filepath "Combined Translation")
-        :divergence
-        (tibetan-analysis-combined--read-section-body
-         filepath "Divergence")))
+        :comparison
+        (or (tibetan-analysis-combined--read-section-body
+             filepath "Sanskrit-Tibetan Comparison")
+            (tibetan-analysis-combined--read-section-body
+             filepath "Divergence"))))
 
 (defun tibetan-analysis-combined--restore-sections (filepath sections)
   "Write SECTIONS (a plist) back into FILEPATH's `* Combined
@@ -382,6 +431,9 @@ Analysis' section."
                          (plist-get sections (nth 0 entry)))
                        tibetan-analysis-combined--section-order)
           (tibetan-analysis-combined--ensure-parent buf)
+          ;; Phase 3.2 of layout-revision §5.18 (2026-05-04): same
+          ;; legacy-heading migration as `--insert-sections'.
+          (tibetan-analysis-combined--migrate-legacy-divergence-heading buf)
           (dolist (entry tibetan-analysis-combined--section-order)
             (let ((key (nth 0 entry))
                   (heading (nth 1 entry)))
