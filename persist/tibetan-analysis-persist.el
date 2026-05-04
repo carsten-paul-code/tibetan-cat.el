@@ -757,6 +757,20 @@ silently destroying the upstream-Claude / DM artefacts."
                                 "Sanskrit Text"
                                 "Sanskrit Analysis"
                                 "Combined Analysis"
+                                ;; Phase 1.1 of layout-revision
+                                ;; (2026-05-04): the rename of
+                                ;; `* Auto-Analysis' → `* Tibetan
+                                ;; Analysis' for Sanskrit-first
+                                ;; reading.  Listed here so the
+                                ;; regenerator's alist consumer
+                                ;; sees the new heading on already-
+                                ;; migrated files.  Auto-content
+                                ;; bodies are always regenerated
+                                ;; (never preserved verbatim), so
+                                ;; this is a discoverability hook
+                                ;; rather than a content-preservation
+                                ;; hook.
+                                "Tibetan Analysis"
                                 "DharmaMitra Translation (Tibetan)"
                                 "DharmaMitra Translation (Sanskrit)"
                                 "Sanskrit (DharmaMitra)"))

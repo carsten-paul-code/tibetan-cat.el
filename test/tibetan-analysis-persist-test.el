@@ -150,6 +150,60 @@
   "Test that get-user-sections function exists."
   (should (fboundp 'tibetan-analysis-get-user-sections)))
 
+(ert-deftest tibetan-analysis-get-user-sections-reads-tibetan-analysis-as-auto-analysis-fallback ()
+  "Phase 1.1 of layout-revision (2026-05-04):  the new top-level
+heading `* Tibetan Analysis' (rename of `* Auto-Analysis') must be
+in `--get-user-sections's section-name walk so the regenerator
+picks it up on subsequent reanalyse.  Without it, a file that
+already carries the new heading would have its body treated as
+not-preserved by callers that consult the alist by section name.
+
+The auto-content body is always regenerated (not preserved-from-
+old) so this test does not assert the alist's value byte-for-byte;
+it asserts only that the section name is recognised — i.e. the
+returned alist contains a key `\"Tibetan Analysis\"' when the
+file has the new heading."
+  (let* ((dir (make-temp-file "ttest-getuser-1.1-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "#+TITLE: Test\n\n"
+                    "* Tibetan Text\nbdag\n\n"
+                    "* Tibetan Analysis\n"
+                    ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nbdag\n\n"
+                    "* Footnotes\n\n"))
+          (let ((sections (tibetan-analysis-get-user-sections file)))
+            (should (assoc "Tibetan Analysis" sections))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-analysis-get-user-sections-reads-old-and-new-when-both-present ()
+  "Edge case (cannot occur in real workflow, but locks behaviour):
+when a file simultaneously carries both `* Auto-Analysis' and
+`* Tibetan Analysis', `--get-user-sections' returns BOTH keys.
+The downstream regenerator owns disambiguation — it discards the
+auto-content body anyway and re-emits using only the new heading.
+This test simply ensures the reader does not silently drop one of
+them."
+  (let* ((dir (make-temp-file "ttest-getuser-1.1b-" t))
+         (file (expand-file-name "seg-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "#+TITLE: Test\n\n"
+                    "* Tibetan Text\nbdag\n\n"
+                    "* Auto-Analysis\n"
+                    ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nlegacy\n\n"
+                    "* Tibetan Analysis\n"
+                    ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nnew\n\n"
+                    "* Footnotes\n\n"))
+          (let ((sections (tibetan-analysis-get-user-sections file)))
+            (should (assoc "Tibetan Analysis" sections))))
+      (delete-directory dir t))))
+
 ;; ============================================================================
 ;; SYNC CHECK TESTS
 ;; ============================================================================
