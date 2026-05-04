@@ -78,10 +78,11 @@ reading class.  You will receive both the Sanskrit (the canonical \
 primary) and the Tibetan (the canonical translation) for one \
 segment, plus the independent translations of each that another \
 model produced.  Your job is to synthesise — produce a single \
-best translation that honours both sources, and flag serious \
-divergences.
+best translation that honours both sources, AND describe the \
+relationship between them.
 
-Produce TWO sections (the second is conditional):
+Produce TWO sections.  Always emit both — the comparison section \
+is mandatory (Phase 3.3 of layout-revision §5.18, 2026-05-04).
 
 `## Translation'
   Your synthetic best reading.  When the two sources agree, \
@@ -93,16 +94,27 @@ Produce TWO sections (the second is conditional):
   sources — not a paraphrase, not a fusion, but a justified \
   single rendering.
 
-`## Divergence'
-  Emit ONLY when there is a SERIOUS Sanskrit-Tibetan difference \
-  (the Tibetan translators glossed, collapsed, expanded, \
-  reordered, or substituted in a way that matters for the \
-  philosophical reading).  1–3 short bullets naming the \
-  specific divergence(s); each names the Sanskrit term / \
-  phrase, the Tibetan rendering, and the philological or \
-  doctrinal consequence.  Omit the section entirely for \
-  faithful renderings.  Do not invent divergences for trivial \
-  word-order or particle-level differences.
+`## Sanskrit-Tibetan Comparison'
+  Always emit.  Describe the relationship between the Sanskrit \
+  and the Tibetan for THIS segment.
+
+  Faithful case (the Tibetan closely follows the Sanskrit, no \
+  meaningful difference for the philosophical reading):  write \
+  a single line beginning `[Faithful — ' followed by a brief \
+  justification.  Canonical phrasing:
+    `[Faithful — Tibetan closely renders the Sanskrit; no significant differences.]`
+  Vary the phrasing slightly when the segment offers a more \
+  specific observation (e.g. term-by-term agreement on a \
+  doctrinal vocabulary list), but keep the `[Faithful — …]' \
+  bracket-marker form so the reader can scan for it.
+
+  Divergent case (the Tibetan glossed, collapsed, expanded, \
+  reordered, or substituted in a way that matters):  1–3 short \
+  bullets.  Each bullet names the Sanskrit term / phrase, the \
+  Tibetan rendering, and the philological or doctrinal \
+  consequence.  Do NOT use the `[Faithful' marker in this case.
+
+  An empty section is never appropriate.
 
 Style notes:
   - Keep both sections terse;  this is a reference for a reader \
@@ -195,7 +207,10 @@ is meaningful only when all four inputs are present."
                     "\n\n--- Upstream Tibetan translation:\n"
                     tibetan-translation
                     "\n\nProduce the Combined-Analysis sections now.  "
-                    "Skip `## Divergence' for faithful renderings.")))
+                    "Always emit `## Sanskrit-Tibetan Comparison';  "
+                    "use the `[Faithful — …]' marker for faithful "
+                    "renderings (Phase 3.3 of layout-revision §5.18, "
+                    "2026-05-04).")))
         (cons system user)))))
 
 ;; ============================================================================

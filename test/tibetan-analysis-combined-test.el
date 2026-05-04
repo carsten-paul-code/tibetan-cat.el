@@ -99,7 +99,10 @@ carries both raw sources AND both upstream translations."
     (should (stringp user))
     (should (string-match-p "comparative reader" system))
     (should (string-match-p "## Translation" system))
-    (should (string-match-p "## Divergence" system))
+    ;; Phase 3.3 of layout-revision §5.18 (2026-05-04): the second
+    ;; section is `## Sanskrit-Tibetan Comparison' (always emitted),
+    ;; replacing the legacy opt-in `## Divergence'.
+    (should (string-match-p "## Sanskrit-Tibetan Comparison" system))
     ;; User prompt has both raw + both translations.
     (should (string-match-p "ahaṃ" user))
     (should (string-match-p "བདག" user))
@@ -422,6 +425,56 @@ Sanskrit."
     (should (plist-get p :comparison))
     (should (string-match-p "\\`\\[Faithful" (plist-get p :comparison)))))
 
+(ert-deftest tibetan-com-build-prompts-system-mentions-comparison-always-emit ()
+  "Phase 3.3 of layout-revision §5.18 (2026-05-04):  the Combined
+system prompt explicitly directs Claude to ALWAYS emit the
+Comparison section.  This is the prompt-side change that pairs
+with the parser/writer rename in Phase 3.1+3.2.
+
+The new directive includes the literal phrase `Always emit'
+near the `Sanskrit-Tibetan Comparison' heading."
+  (skip-unless (fboundp 'tibetan-analysis-combined--build-prompts))
+  (tibetan-com-test--with-source
+      "#+TITLE: Doc\n#+SOURCE_MODE: parallel-sanskrit\n"
+    (let ((prompt (tibetan-analysis-combined--build-prompts
+                   "བདག"
+                   '(:iast "ahaṃ" :devanagari nil :script-source iast-line)
+                   "I (Tib)" "I (Skt)" source-file)))
+      (should prompt)
+      (let ((system (car prompt)))
+        (should (string-match-p "Always emit" system))
+        (should (string-match-p "Sanskrit-Tibetan Comparison" system))))))
+
+(ert-deftest tibetan-com-build-prompts-system-no-longer-says-only-when-serious ()
+  "Phase 3.3:  the Combined system prompt no longer carries the
+opt-in phrase `ONLY when there is a SERIOUS' that gated emission
+on serious differences."
+  (skip-unless (fboundp 'tibetan-analysis-combined--build-prompts))
+  (tibetan-com-test--with-source
+      "#+TITLE: Doc\n#+SOURCE_MODE: parallel-sanskrit\n"
+    (let ((prompt (tibetan-analysis-combined--build-prompts
+                   "བདག"
+                   '(:iast "ahaṃ" :devanagari nil :script-source iast-line)
+                   "T" "S" source-file)))
+      (should prompt)
+      (let ((system (car prompt)))
+        (should-not (string-match-p "ONLY when there is a SERIOUS" system))))))
+
+(ert-deftest tibetan-com-build-prompts-system-mentions-faithful-marker ()
+  "Phase 3.3:  the system prompt names the canonical faithful-case
+marker text `[Faithful' so Claude emits a stable phrase the
+reader can scan for at a glance."
+  (skip-unless (fboundp 'tibetan-analysis-combined--build-prompts))
+  (tibetan-com-test--with-source
+      "#+TITLE: Doc\n#+SOURCE_MODE: parallel-sanskrit\n"
+    (let ((prompt (tibetan-analysis-combined--build-prompts
+                   "བདག"
+                   '(:iast "ahaṃ" :devanagari nil :script-source iast-line)
+                   "T" "S" source-file)))
+      (should prompt)
+      (let ((system (car prompt)))
+        (should (string-match-p "\\[Faithful" system))))))
+
 (ert-deftest tibetan-com-section-order-uses-comparison-heading ()
   "Phase 3.2 of layout-revision §5.18 (2026-05-04):  the
 section-order defconst maps `:comparison' to the heading
@@ -495,6 +548,60 @@ round-trip."
     (let ((p (tibetan-analysis-combined--read-sections analysis-file)))
       (should (equal (plist-get p :translation) "translation body"))
       (should (equal (plist-get p :comparison) "LEGACY-DIV")))))
+
+(ert-deftest tibetan-com-end-to-end-faithful-response-writes-comparison-section ()
+  "Phase 3.4 of layout-revision §5.18 (2026-05-04):  end-to-end
+exercise of the wired-up surface — a faithful Claude response
+including the new `## Sanskrit-Tibetan Comparison' heading with
+a `[Faithful — …]' marker round-trips through `--insert-sections'
+and lands in the analysis file under
+`** Sanskrit-Tibetan Comparison'."
+  (tibetan-com-test--with-analysis
+      "* Tibetan Text\nbdag\n\n* Footnotes\n"
+    (tibetan-analysis-combined--insert-sections
+     (concat "## Translation\n"
+             "What is the support?  Here, a bodhisattva's own lineage.\n\n"
+             "## Sanskrit-Tibetan Comparison\n"
+             "[Faithful — Tibetan closely renders the Sanskrit; "
+             "no significant differences.]\n")
+     analysis-file)
+    (let ((buf (find-buffer-visiting analysis-file)))
+      (when buf
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf)))
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (let ((s (buffer-string)))
+        (should (string-match-p "^\\*\\* Sanskrit-Tibetan Comparison$" s))
+        (should (string-match-p "\\[Faithful" s))
+        (should (string-match-p "no significant differences" s))))))
+
+(ert-deftest tibetan-com-end-to-end-divergent-response-writes-bullets ()
+  "Phase 3.4:  a divergent response with bulleted divergences
+under `## Sanskrit-Tibetan Comparison' round-trips intact (the
+writer doesn't strip the bullet structure)."
+  (tibetan-com-test--with-analysis
+      "* Tibetan Text\nbdag\n\n* Footnotes\n"
+    (tibetan-analysis-combined--insert-sections
+     (concat "## Translation\n"
+             "Combined synthesis.\n\n"
+             "## Sanskrit-Tibetan Comparison\n"
+             "- Sanskrit *gotra*: rendered as Tibetan rigs (lineage).\n"
+             "- Sanskrit *cittotpāda*: Tibetan expands to "
+             "sems bskyed pa (bodhicitta-arousal).\n")
+     analysis-file)
+    (let ((buf (find-buffer-visiting analysis-file)))
+      (when buf
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf)))
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (let ((s (buffer-string)))
+        (should (string-match-p "^\\*\\* Sanskrit-Tibetan Comparison$" s))
+        (should (string-match-p "Sanskrit \\*gotra\\*" s))
+        (should (string-match-p "bodhicitta-arousal" s))
+        ;; No `[Faithful' marker — divergent case.
+        (should-not (string-match-p "\\[Faithful" s))))))
 
 (provide 'tibetan-analysis-combined-test)
 ;;; tibetan-analysis-combined-test.el ends here
