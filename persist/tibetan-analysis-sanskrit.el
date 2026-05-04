@@ -297,6 +297,136 @@ naive downcase + intern."
    (t (intern (format ":%s" (downcase heading-token))))))
 
 ;; ============================================================================
+;; POST-FIRE VALIDATION + RETRY (2026-05-04, Issue 1)
+;; ============================================================================
+;;
+;; Live observation:  on short gotrapaṭala segments after the §5.18
+;; layout-revision work landed, Sanskrit Claude was returning
+;; partial responses missing `## Translation' and `## Grammar'.  The
+;; system + user prompts had already been hardened to "REQUIRED
+;; — emit every time" (see `--build-prompts'), but Claude still
+;; collapsed brevity-as-quality on one-clause segments.
+;;
+;; Belt-and-braces fix:  AFTER parsing the response, detect missing
+;; required sections and fire ONE focused retry through the same
+;; in-flight queue thunk asking for ONLY the missing pieces.  The
+;; retry's SYSTEM block is byte-identical to the first call's SYSTEM
+;; block (Anthropic prompt cache stays warm).  The retry's USER
+;; block re-includes the IAST + names the missing sections.
+;;
+;; On retry response, MERGE retry into original (original wins on
+;; collisions — retry is fill-missing, not overwrite) and write the
+;; merged plist via `--write-from-plist'.
+
+(defconst tibetan-analysis-sanskrit--required-keys
+  '(:translation :word-list :grammar)
+  "Plist keys from `--parse-claude-sections' that MUST be populated
+for the response to count as complete.  `:devanagari' and
+`:sandhi' are conditional — Claude correctly omits them when the
+predicate doesn't hold.")
+
+(defun tibetan-analysis-sanskrit--missing-required-sections (parsed)
+  "Return the subset of `--required-keys' that are missing or empty
+in PARSED.  Empty list → response is complete enough to write
+without retry."
+  (cl-remove-if
+   (lambda (key)
+     (let ((val (plist-get parsed key)))
+       (and val (stringp val)
+            (not (string-empty-p (string-trim val))))))
+   tibetan-analysis-sanskrit--required-keys))
+
+(defun tibetan-analysis-sanskrit--merge-parsed (original retry)
+  "Combine ORIGINAL and RETRY parsed plists.  For each section key
+in `--section-order', prefer ORIGINAL's non-empty value;  fall
+back to RETRY's value when ORIGINAL's slot is nil/empty.  Result
+is a fresh plist (does not mutate inputs).
+
+Original wins on collisions because the retry is FILL-MISSING,
+not OVERWRITE — a verbose retry response should never clobber a
+perfectly-good Word List from the first try."
+  (let ((all-keys '(:translation :devanagari :sandhi :word-list :grammar))
+        (out '()))
+    (dolist (key all-keys)
+      (let ((orig-val (plist-get original key))
+            (retry-val (plist-get retry key)))
+        (setq out
+              (plist-put out key
+                         (cond
+                          ((and orig-val (stringp orig-val)
+                                (not (string-empty-p (string-trim orig-val))))
+                           orig-val)
+                          ((and retry-val (stringp retry-val)
+                                (not (string-empty-p (string-trim retry-val))))
+                           retry-val)
+                          (t nil))))))
+    out))
+
+(defun tibetan-analysis-sanskrit--key-to-heading (key)
+  "Map a parsed plist KEY back to its `## ' heading token (for use
+in retry prompts).  Inverse of `--heading-key'."
+  (cond
+   ((eq key :translation) "Translation")
+   ((eq key :devanagari)  "Devanagari")
+   ((eq key :sandhi)      "Sandhi")
+   ((eq key :word-list)   "Word List")
+   ((eq key :grammar)     "Grammar")
+   (t nil)))
+
+(defun tibetan-analysis-sanskrit--build-retry-prompts
+    (sanskrit-plist source-file missing-keys)
+  "Build (SYSTEM . USER) prompts for a focused Sanskrit retry.
+
+SYSTEM is byte-identical to `--build-prompts' so the Anthropic
+prompt cache stays warm — only the user-block delta is billed at
+full rate on the retry.
+
+USER re-includes the original IAST (and Devanagari when present)
+and explicitly names the sections the previous response did not
+emit, instructing Claude to produce ONLY those.
+
+Returns nil when SANSKRIT-PLIST lacks IAST or MISSING-KEYS is
+empty."
+  (when (and sanskrit-plist
+             (plist-get sanskrit-plist :iast)
+             missing-keys
+             (consp missing-keys))
+    (let* ((base (tibetan-analysis-sanskrit--build-prompts
+                  sanskrit-plist source-file nil)))
+      (when base
+        (let* ((system (car base))
+               (iast (plist-get sanskrit-plist :iast))
+               (devanagari (plist-get sanskrit-plist :devanagari))
+               (heading-list
+                (mapconcat
+                 (lambda (k)
+                   (format "  - ## %s"
+                           (or (tibetan-analysis-sanskrit--key-to-heading k)
+                               (symbol-name k))))
+                 missing-keys "\n"))
+               (user
+                (concat
+                 "Sanskrit passage (IAST):\n\n"
+                 iast
+                 (when (and devanagari (stringp devanagari)
+                            (not (string-empty-p (string-trim devanagari))))
+                   (format "\n\nSanskrit passage (Devanagari):\n\n%s"
+                           devanagari))
+                 "\n\nYour previous response for this passage was "
+                 "incomplete:  the following REQUIRED sections were "
+                 "not emitted:\n\n"
+                 heading-list
+                 "\n\nProduce ONLY the missing sections, each as a "
+                 "single `## ' heading followed by its body, in the "
+                 "same format the original prompt specified.  Do NOT "
+                 "re-emit sections you already provided — emit only "
+                 "the headings listed above.  Even for a one-clause "
+                 "passage, give a complete Translation and at least "
+                 "one sentence of Grammar (case-frame + verb)."
+                 )))
+          (cons system user))))))
+
+;; ============================================================================
 ;; SECTION ORDER + WRITER (response → analysis file)
 ;; ============================================================================
 
@@ -397,22 +527,23 @@ trims body + adds one trailing blank line."
             (goto-char start)
             (insert (format "%s\n\n" (string-trim body)))))))))
 
-(defun tibetan-analysis-sanskrit--insert-sections (response analysis-file)
-  "Parse a Sanskrit Claude RESPONSE and write its sections into
-ANALYSIS-FILE under `* Sanskrit Analysis' (top-level).  Each
-section named in `tibetan-analysis-sanskrit--section-order'
-that the parser populated is written under its heading;
-missing sections are skipped (their existing body stays).
+(defun tibetan-analysis-sanskrit--write-from-plist (sections analysis-file)
+  "Write SECTIONS (a parsed plist) into ANALYSIS-FILE under `*
+Sanskrit Analysis' (top-level).  Each non-nil entry in
+`--section-order' is written under its heading; nil entries are
+skipped (their existing org body stays).
 
-Returns t on successful write, nil when ANALYSIS-FILE is
-missing or RESPONSE is empty."
-  (when (and response analysis-file (file-exists-p analysis-file))
-    (let* ((sections (tibetan-analysis-sanskrit--parse-claude-sections
-                      response))
-           (buf (or (find-buffer-visiting analysis-file)
-                    (find-file-noselect analysis-file))))
+Returns t on successful write, nil when ANALYSIS-FILE is missing
+or SECTIONS has no populated slots.
+
+Extracted from `--insert-sections' (2026-05-04, Issue 1) so the
+post-fire retry path can write a MERGED plist (original + retry)
+without round-tripping through a synthesised response string."
+  (when (and sections analysis-file (file-exists-p analysis-file))
+    (let ((buf (or (find-buffer-visiting analysis-file)
+                   (find-file-noselect analysis-file))))
       (with-current-buffer buf
-        ;; Only proceed when at least one section was parsed.
+        ;; Only proceed when at least one section was populated.
         (when (cl-some (lambda (entry)
                          (plist-get sections (nth 0 entry)))
                        tibetan-analysis-sanskrit--section-order)
@@ -426,6 +557,23 @@ missing or RESPONSE is empty."
                  buf heading (plist-get sections key)))))
           (save-buffer)
           t)))))
+
+(defun tibetan-analysis-sanskrit--insert-sections (response analysis-file)
+  "Parse a Sanskrit Claude RESPONSE and write its sections into
+ANALYSIS-FILE under `* Sanskrit Analysis' (top-level).  Each
+section named in `tibetan-analysis-sanskrit--section-order'
+that the parser populated is written under its heading;
+missing sections are skipped (their existing body stays).
+
+Thin wrapper around `--write-from-plist' (2026-05-04 refactor):
+parse → plist → write.  Existing call sites unchanged.
+
+Returns t on successful write, nil when ANALYSIS-FILE is
+missing or RESPONSE is empty."
+  (when (and response analysis-file (file-exists-p analysis-file))
+    (tibetan-analysis-sanskrit--write-from-plist
+     (tibetan-analysis-sanskrit--parse-claude-sections response)
+     analysis-file)))
 
 ;; ============================================================================
 ;; READ + RESTORE (preserve across reanalyse)
@@ -515,6 +663,82 @@ section headings if absent."
 ;; ASYNC FIRE (wired by Phase 5 dispatcher)
 ;; ============================================================================
 
+(defun tibetan-analysis-sanskrit--fire-retry-for-missing
+    (sanskrit-plist source-file analysis-file partial missing-keys label callback done)
+  "Fire one focused Sanskrit Claude retry asking only for MISSING-KEYS.
+
+PARTIAL is the original parsed plist (which slots were populated
+by the first response).  On retry response, MERGE into PARTIAL
+(original wins on collisions) and write the merged plist via
+`--write-from-plist'.  CALLBACK is the user-supplied callback
+from `--request-translation' (chains the Combined call).  DONE
+is the queue thunk's done-callback.
+
+When the retry prompt cannot be built, or the retry call itself
+returns an empty response, fall back to writing PARTIAL alone —
+the user gets whatever sections did make it on the first pass,
+not nothing.  Done is always called exactly once per invocation
+of this helper.
+
+Caller stays inside the queue's in-flight thunk for the duration
+of the retry — concurrency cap is correctly respected and the
+rate-limit budget is shared with the Tibetan side."
+  (let ((retry-prompts
+         (tibetan-analysis-sanskrit--build-retry-prompts
+          sanskrit-plist source-file missing-keys)))
+    (cond
+     ;; No retry possible (e.g. empty IAST).  Write what we have.
+     ((not retry-prompts)
+      (condition-case e
+          (progn
+            (tibetan-analysis-sanskrit--write-from-plist partial analysis-file)
+            (when callback (funcall callback partial)))
+        (error
+         (message "Sanskrit partial-write failed for %s: %s"
+                  (or label "<file>")
+                  (error-message-string e))))
+      (funcall done '(:status ok)))
+     (t
+      (condition-case err
+          (let ((gptel-cache '(system)))
+            (gptel-request
+             (cdr retry-prompts)
+             :system (car retry-prompts)
+             :callback
+             (lambda (retry-response _retry-info)
+               (let* ((retry-parsed
+                       (and retry-response (stringp retry-response)
+                            (not (string-empty-p retry-response))
+                            (tibetan-analysis-sanskrit--parse-claude-sections
+                             retry-response)))
+                      (merged
+                       (if retry-parsed
+                           (tibetan-analysis-sanskrit--merge-parsed
+                            partial retry-parsed)
+                         partial)))
+                 (condition-case e
+                     (progn
+                       (tibetan-analysis-sanskrit--write-from-plist
+                        merged analysis-file)
+                       (when callback (funcall callback merged)))
+                   (error
+                    (message "Sanskrit retry-merge write failed for %s: %s"
+                             (or label "<file>")
+                             (error-message-string e))))
+                 (funcall done '(:status ok))))))
+        (error
+         (message "Sanskrit retry submission failed for %s: %s"
+                  (or label "<file>")
+                  (error-message-string err))
+         ;; Fall back to writing what we already have.
+         (condition-case _e
+             (progn
+               (tibetan-analysis-sanskrit--write-from-plist
+                partial analysis-file)
+               (when callback (funcall callback partial)))
+           (error nil))
+         (funcall done '(:status ok))))))))
+
 ;;;###autoload
 (defun tibetan-analysis-sanskrit--request-translation
     (sanskrit-plist source-file analysis-file &optional callback)
@@ -564,18 +788,37 @@ No-op when:
                       (cond
                        ((and response (stringp response)
                              (not (string-empty-p response)))
+                        ;; Post-fire validation + optional retry
+                        ;; (2026-05-04, Issue 1).  Parse first; if any
+                        ;; required section (Translation / Word List
+                        ;; / Grammar) is missing, fire ONE focused
+                        ;; retry inside the same in-flight queue
+                        ;; thunk.  Otherwise write + finish as
+                        ;; before.
                         (condition-case e
-                            (let ((parsed
-                                   (tibetan-analysis-sanskrit--parse-claude-sections
-                                    response)))
-                              (tibetan-analysis-sanskrit--insert-sections
-                               response analysis-file)
-                              (when callback (funcall callback parsed)))
+                            (let* ((parsed
+                                    (tibetan-analysis-sanskrit--parse-claude-sections
+                                     response))
+                                   (missing
+                                    (tibetan-analysis-sanskrit--missing-required-sections
+                                     parsed)))
+                              (cond
+                               ;; Complete response — fast path.
+                               ((null missing)
+                                (tibetan-analysis-sanskrit--write-from-plist
+                                 parsed analysis-file)
+                                (when callback (funcall callback parsed))
+                                (funcall done '(:status ok)))
+                               ;; Incomplete response — fire retry.
+                               (t
+                                (tibetan-analysis-sanskrit--fire-retry-for-missing
+                                 sanskrit-plist source-file analysis-file
+                                 parsed missing label callback done))))
                           (error
                            (message "Sanskrit insert failed for %s: %s"
                                     (or label "<file>")
-                                    (error-message-string e))))
-                        (funcall done '(:status ok)))
+                                    (error-message-string e))
+                           (funcall done '(:status ok)))))
                        ((and (fboundp 'tibetan-analysis--claude-status-rate-limited-p)
                              (tibetan-analysis--claude-status-rate-limited-p info))
                         (funcall done '(:status rate-limited)))

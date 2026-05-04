@@ -527,5 +527,287 @@ when SANSKRIT-PLIST is nil / lacks IAST."
        nil "/tmp/x.org"))
     (should-not submitted)))
 
+;; ============================================================================
+;; Post-fire validation + retry (2026-05-04, Issue 1)
+;; ============================================================================
+;;
+;; Live observation on gotrapaṭala segment 9 after §5.18 layout-
+;; revision landed:  Sanskrit Claude returned a partial response
+;; missing `## Translation' and `## Grammar' for short segments.
+;; Claude collapses brevity-as-quality even after the prompt was
+;; tightened to "REQUIRED — emit every time".  Belt-and-braces fix:
+;; detect missing required sections in the parsed plist and fire ONE
+;; focused retry asking only for the missing pieces.
+
+(ert-deftest tibetan-skt-missing-required-sections-empty-when-all-present ()
+  "All three required keys (`:translation' / `:word-list' / `:grammar')
+populated → returns nil.  Conditional sections (`:devanagari' /
+`:sandhi') don't enter the calculation."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--missing-required-sections))
+  (let ((parsed (list :translation "T body"
+                      :devanagari nil
+                      :sandhi nil
+                      :word-list "WL body"
+                      :grammar "G body")))
+    (should (null
+             (tibetan-analysis-sanskrit--missing-required-sections parsed)))))
+
+(ert-deftest tibetan-skt-missing-required-sections-detects-translation ()
+  "Missing `:translation' → returned list contains `:translation'."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--missing-required-sections))
+  (let ((parsed (list :translation nil
+                      :word-list "WL body"
+                      :grammar "G body")))
+    (should
+     (memq :translation
+           (tibetan-analysis-sanskrit--missing-required-sections parsed)))))
+
+(ert-deftest tibetan-skt-missing-required-sections-detects-grammar ()
+  "Missing `:grammar' → returned list contains `:grammar'."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--missing-required-sections))
+  (let ((parsed (list :translation "T body"
+                      :word-list "WL body"
+                      :grammar nil)))
+    (should
+     (memq :grammar
+           (tibetan-analysis-sanskrit--missing-required-sections parsed)))))
+
+(ert-deftest tibetan-skt-missing-required-sections-detects-empty-string ()
+  "Empty / whitespace-only body counts as missing — guards against
+Claude emitting `## Translation' followed by an empty body."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--missing-required-sections))
+  (let ((parsed (list :translation "   "
+                      :word-list "WL body"
+                      :grammar "")))
+    (let ((missing
+           (tibetan-analysis-sanskrit--missing-required-sections parsed)))
+      (should (memq :translation missing))
+      (should (memq :grammar missing)))))
+
+(ert-deftest tibetan-skt-missing-required-sections-ignores-conditional ()
+  "Missing `:devanagari' or `:sandhi' alone → nil (they are
+conditional, not required).  This is the live faithful-rendering
+case where Claude correctly omits a Devanagari section."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--missing-required-sections))
+  (let ((parsed (list :translation "T"
+                      :devanagari nil
+                      :sandhi nil
+                      :word-list "WL"
+                      :grammar "G")))
+    (should (null
+             (tibetan-analysis-sanskrit--missing-required-sections parsed)))))
+
+(ert-deftest tibetan-skt-merge-parsed-fills-missing-from-retry ()
+  "`--merge-parsed' fills a nil slot in original from the retry
+response.  Retry responsible for the missing pieces; original
+keeps everything it has."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--merge-parsed))
+  (let* ((original (list :translation nil
+                         :devanagari nil
+                         :sandhi nil
+                         :word-list "WL body"
+                         :grammar nil))
+         (retry (list :translation "T body"
+                      :devanagari nil
+                      :sandhi nil
+                      :word-list nil
+                      :grammar "G body"))
+         (merged
+          (tibetan-analysis-sanskrit--merge-parsed original retry)))
+    (should (string= "T body" (plist-get merged :translation)))
+    (should (string= "WL body" (plist-get merged :word-list)))
+    (should (string= "G body" (plist-get merged :grammar)))))
+
+(ert-deftest tibetan-skt-merge-parsed-prefers-original-when-both-present ()
+  "When both original and retry populate the same slot, original
+wins — retry is FILL-MISSING, not OVERWRITE.  Guards against a
+verbose retry response clobbering a perfectly-good Word List from
+the first try."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--merge-parsed))
+  (let* ((original (list :translation "Original T"
+                         :word-list "Original WL"
+                         :grammar nil))
+         (retry (list :translation "Retry T"
+                      :word-list "Retry WL"
+                      :grammar "Retry G"))
+         (merged
+          (tibetan-analysis-sanskrit--merge-parsed original retry)))
+    (should (string= "Original T" (plist-get merged :translation)))
+    (should (string= "Original WL" (plist-get merged :word-list)))
+    ;; Only `:grammar' was missing in original; takes from retry.
+    (should (string= "Retry G" (plist-get merged :grammar)))))
+
+(ert-deftest tibetan-skt-build-retry-prompts-system-byte-identical ()
+  "The retry's SYSTEM block is byte-identical to the first call's
+SYSTEM block.  Anthropic prompt cache stays warm for the retry —
+only the user-block delta is billed at full rate."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--build-retry-prompts))
+  (let* ((skt-plist (list :iast "ahaṃ vadāmi" :devanagari nil
+                          :script-source 'iast-line))
+         (orig (tibetan-analysis-sanskrit--build-prompts skt-plist nil nil))
+         (retry (tibetan-analysis-sanskrit--build-retry-prompts
+                 skt-plist nil '(:translation :grammar))))
+    (should retry)
+    (should (string= (car orig) (car retry)))))
+
+(ert-deftest tibetan-skt-build-retry-prompts-user-mentions-missing ()
+  "The retry's USER block names the specific sections that the
+first response did not emit, prefixed with `## ' so Claude sees
+the heading shape it needs to produce."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--build-retry-prompts))
+  (let* ((skt-plist (list :iast "ahaṃ vadāmi" :devanagari nil
+                          :script-source 'iast-line))
+         (retry (tibetan-analysis-sanskrit--build-retry-prompts
+                 skt-plist nil '(:translation :grammar)))
+         (user (cdr retry)))
+    (should (string-match-p "## Translation" user))
+    (should (string-match-p "## Grammar" user))
+    (should-not (string-match-p "## Word List" user))))
+
+(ert-deftest tibetan-skt-build-retry-prompts-user-includes-iast ()
+  "The retry's USER block re-includes the original IAST passage so
+Claude can reference it when building the missing sections."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--build-retry-prompts))
+  (let* ((skt-plist (list :iast "ṣaḍ imāni dharmāḥ"
+                          :devanagari nil
+                          :script-source 'iast-line))
+         (retry (tibetan-analysis-sanskrit--build-retry-prompts
+                 skt-plist nil '(:translation))))
+    (should (string-match-p "ṣaḍ imāni dharmāḥ" (cdr retry)))))
+
+(ert-deftest tibetan-skt-build-retry-prompts-nil-when-no-missing-keys ()
+  "Empty / nil missing-keys → returns nil.  No retry to fire."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--build-retry-prompts))
+  (let ((skt-plist (list :iast "ahaṃ" :devanagari nil
+                         :script-source 'iast-line)))
+    (should (null
+             (tibetan-analysis-sanskrit--build-retry-prompts
+              skt-plist nil nil)))
+    (should (null
+             (tibetan-analysis-sanskrit--build-retry-prompts
+              skt-plist nil '())))))
+
+(ert-deftest tibetan-skt-request-translation-fires-retry-when-translation-missing ()
+  "Integration:  when the first Sanskrit response is missing
+`## Translation', `--request-translation' fires a SECOND
+gptel-request inside the same queue thunk asking for the missing
+section.  Locks the production retry path."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--fire-retry-for-missing))
+  (let ((requests '())
+        (queue-args nil)
+        (incomplete-response
+         "## Word List\n- iha — adv.\n\n")  ; missing Translation + Grammar
+        (retry-response
+         "## Translation\nHere…\n\n## Grammar\nNominal sentence.\n"))
+    (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+               (lambda (thunk &rest args)
+                 (setq queue-args args)
+                 ;; Run the thunk synchronously — it fires the
+                 ;; gptel-request whose stub captures the call,
+                 ;; then drives the retry from inside.
+                 (funcall thunk (lambda (&rest _) nil))))
+              ((symbol-function 'tibetan-analysis--ensure-gptel-ready)
+               (lambda () nil))
+              ((symbol-function 'gptel-request)
+               (lambda (user-prompt &rest args)
+                 (push (list :user user-prompt
+                             :system (plist-get args :system))
+                       requests)
+                 ;; First call returns incomplete; second returns retry.
+                 (let ((cb (plist-get args :callback))
+                       (resp (if (= 1 (length requests))
+                                 incomplete-response
+                               retry-response)))
+                   (when cb (funcall cb resp '(:status . 200)))))))
+      (tibetan-skt-test--with-analysis
+          "* Tibetan Text\nbdag\n\n* Footnotes\n"
+        (tibetan-analysis-sanskrit--request-translation
+         (list :iast "ahaṃ vadāmi" :devanagari nil
+               :script-source 'iast-line)
+         nil analysis-file)
+        ;; Two gptel-request calls fired: original + retry.
+        (should (= 2 (length requests)))
+        ;; Second call's user prompt names the missing sections.
+        (let ((retry-user (plist-get (car requests) :user)))
+          (should (string-match-p "## Translation" retry-user))
+          (should (string-match-p "## Grammar" retry-user))
+          (should-not (string-match-p "## Word List" retry-user)))
+        ;; Both calls used the same SYSTEM block (cache stays warm).
+        (should (string=
+                 (plist-get (car requests) :system)
+                 (plist-get (cadr requests) :system)))
+        ;; File was written with merged content (Translation + Word
+        ;; List + Grammar all present).
+        (let ((buf (find-buffer-visiting analysis-file)))
+          (when buf
+            (with-current-buffer buf (set-buffer-modified-p nil))
+            (kill-buffer buf)))
+        (with-temp-buffer
+          (insert-file-contents analysis-file)
+          (let ((s (buffer-string)))
+            (should (string-match-p "^\\* Sanskrit Analysis$" s))
+            (should (string-match-p "^\\*\\* Translation$" s))
+            (should (string-match-p "Here…" s))
+            (should (string-match-p "^\\*\\* Word List$" s))
+            (should (string-match-p "iha" s))
+            (should (string-match-p "^\\*\\* Grammar$" s))
+            (should (string-match-p "Nominal sentence" s))))))))
+
+(ert-deftest tibetan-skt-request-translation-no-retry-when-response-complete ()
+  "Integration:  when the first Sanskrit response includes all
+three required sections, NO retry is fired."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--fire-retry-for-missing))
+  (let ((requests '()))
+    (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+               (lambda (thunk &rest _args)
+                 (funcall thunk (lambda (&rest _) nil))))
+              ((symbol-function 'tibetan-analysis--ensure-gptel-ready)
+               (lambda () nil))
+              ((symbol-function 'gptel-request)
+               (lambda (_user-prompt &rest args)
+                 (push t requests)
+                 (let ((cb (plist-get args :callback)))
+                   (when cb
+                     (funcall cb tibetan-skt-test--full-response
+                              '(:status . 200)))))))
+      (tibetan-skt-test--with-analysis
+          "* Tibetan Text\nbdag\n\n* Footnotes\n"
+        (tibetan-analysis-sanskrit--request-translation
+         (list :iast "ahaṃ vadāmi" :devanagari nil
+               :script-source 'iast-line)
+         nil analysis-file)
+        ;; Exactly ONE gptel-request — no retry.
+        (should (= 1 (length requests)))))))
+
+(ert-deftest tibetan-skt-write-from-plist-writes-three-required ()
+  "`--write-from-plist' accepts a plist directly and writes each
+non-nil section.  Used by the retry-merge path after the original
++ retry plists have been merged.  Bypasses the response-string
+parser."
+  (skip-unless (fboundp 'tibetan-analysis-sanskrit--write-from-plist))
+  (tibetan-skt-test--with-analysis
+      "* Tibetan Text\nbdag\n\n* Footnotes\n"
+    (tibetan-analysis-sanskrit--write-from-plist
+     (list :translation "Merged T"
+           :devanagari nil
+           :sandhi nil
+           :word-list "Merged WL"
+           :grammar "Merged G")
+     analysis-file)
+    (let ((buf (find-buffer-visiting analysis-file)))
+      (when buf
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf)))
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (let ((s (buffer-string)))
+        (should (string-match-p "^\\* Sanskrit Analysis$" s))
+        (should (string-match-p "^\\*\\* Translation$" s))
+        (should (string-match-p "Merged T" s))
+        (should (string-match-p "^\\*\\* Word List$" s))
+        (should (string-match-p "Merged WL" s))
+        (should (string-match-p "^\\*\\* Grammar$" s))
+        (should (string-match-p "Merged G" s))))))
+
 (provide 'tibetan-analysis-sanskrit-test)
 ;;; tibetan-analysis-sanskrit-test.el ends here
