@@ -3,12 +3,14 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-04-30 (§5.17 added: two-language-parallel-
-analysis architectural elevation — Sanskrit + Combined as peer top-level
-sections, three Claude calls per segment in parallel mode, reanalyse-
-preservation regression closed for DM sections; supersedes the §5.16
-suffixed-Tibetan-side schema. Previous: §5.10–§5.13: dictionary polish,
-grammar unification, thesaurus + target-language pipeline, three-level
+editing. Last updated 2026-05-04 (§5.18 added: per-segment layout
+revision for Sanskrit-first reading workflow — Sanskrit grouped above
+Tibetan, parent rename `* Auto-Analysis' → `* Tibetan Analysis', level-2
+`** Claude Translation' → `** Translation' on both sides, `** Divergence'
+→ `** Sanskrit-Tibetan Comparison' always-emitted with `[Faithful — …]'
+marker.  Architecture unchanged from §5.17.  Previous: §5.17 two-
+language-parallel architecture; §5.10–§5.13 dictionary polish, grammar
+unification, thesaurus + target-language pipeline, three-level
 dispatch).
 
 Companion files worth reading alongside this one:
@@ -222,7 +224,7 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-04-30): **1787 tests, 1786 expected, 0 unexpected
+Current state (2026-05-04): **1839 tests, 1838 expected, 0 unexpected
 failures, 1 intentional skip (compound-analysis-callable).**  Carsten
 runs this after every change and expects it to stay green.
 
@@ -829,7 +831,17 @@ Sanskrit and Combined output now live in dedicated top-level
 sections via three independent Claude calls.  See §5.17 for
 the new architecture.
 
-### 5.17 Two-language parallel analysis (done, tested, 2026-04-30)
+### 5.17 Two-language parallel analysis (done, tested, 2026-04-30 — superseded by §5.18)
+
+**SUPERSEDED 2026-05-04 by §5.18.**  The per-segment file layout
+described below was reorganised for the Sanskrit-first reading
+workflow:  parent heading rename `* Auto-Analysis' → `* Tibetan
+Analysis'; level-2 `** Claude Translation' → `** Translation' on
+both Tibetan and Sanskrit sides; section reorder Sanskrit-first;
+`** Divergence' (opt-in) → `** Sanskrit-Tibetan Comparison'
+(always-emitted with `[Faithful — …]' marker for faithful
+renderings).  Architecture (three Claude calls, walker, queue,
+dispatcher) unchanged.  See §5.18 for the layout-revision details.
 
 **Architectural elevation** of yesterday's §5.16 work.  After
 §5.16's seg-005 live test surfaced a Combined-translation
@@ -932,6 +944,191 @@ Design doc: `docs/feature-two-language-parallel.org` — full
 phase walkthrough + per-segment file layout diagram + the
 three Claude system-prompt drafts + dispatcher mechanics +
 preservation invariants + verification recipe + commit trail.
+
+### 5.18 Per-segment layout revision (Sanskrit-first reading, done, tested, 2026-05-04)
+
+**Layout-only revision of §5.17.**  Architecture is unchanged
+(three Claude calls per parallel-Sanskrit segment; walker +
+queue + dispatcher all preserved).  This work reorganises the
+on-disk shape of the per-segment analysis file to match the
+class workflow:  Yogācārabhūmi reading reads the Sanskrit FIRST,
+translates it, then checks the Tibetan against it.  Three
+specific user-facing pain points:
+
+1. Tibetan was first in the file order, with Sanskrit
+   interleaved — wrong reading order.
+2. Both `* Auto-Analysis' and `* Sanskrit Analysis' carried
+   level-2 `** Claude Translation' — students couldn't tell at
+   a glance which language a translation was in.
+3. `** Divergence' was opt-in; faithful renderings produced
+   no comparison section, so the reader couldn't tell whether
+   comparison was performed.
+
+#### Target on-disk layout
+
+```
+* My Notes                                    user-edited
+* Working Translation                         user-edited
+
+* Sanskrit Text                               raw IAST + Devanagari
+* Sanskrit Analysis
+  ** Devanagari                               (conditional)
+  ** Sandhi Decomposition                     (conditional)
+  ** Word List
+  ** Translation                              ← was ** Claude Translation
+  ** Grammar
+
+* Tibetan Text                                raw Tibetan
+* Tibetan Analysis                            ← was * Auto-Analysis
+  ** Wylie Transliteration
+  ** Interlinear Gloss
+  ** Translation                              ← was ** Claude Translation
+  ** Grammar
+    *** Particle Map
+    *** Claude Grammar                        (level-3, kept)
+    *** Particles in This Segment
+  ** Sentence Structure / Verb Classification / Detailed Dictionary
+  ** Provided Translations
+    *** Claude Vocabulary                     (level-3, kept)
+    *** Claude Particles                      (level-3, kept)
+
+* Combined Analysis
+  ** Combined Translation
+  ** Sanskrit-Tibetan Comparison              ← always emitted
+                                                 ([Faithful — …] marker
+                                                 when faithful)
+
+* Footnotes                                   user-edited
+
+* DharmaMitra Translation (Sanskrit)          ← Sanskrit-DM first now
+* DharmaMitra Translation (Tibetan)
+* Sanskrit (DharmaMitra)                      legacy realign output
+```
+
+#### Heading rename table
+
+| Old (§5.17)              | New (§5.18)                      |
+|--------------------------|----------------------------------|
+| `* Auto-Analysis`        | `* Tibetan Analysis`             |
+| `** Claude Translation`  | `** Translation` (both sides)    |
+| `** Divergence`          | `** Sanskrit-Tibetan Comparison` |
+
+Level-3 sub-headings under `** Grammar' / `** Provided
+Translations' KEEP their `Claude' prefix:  `*** Claude
+Vocabulary', `*** Claude Particles', `*** Claude Grammar'.
+The prefix still disambiguates among multiple level-3 cousins
+(DharmaMitra / Roehrich / Reference Translations).
+
+#### Phases (13 commits, +30 tests)
+
+| Phase | Commits | Tests | Description |
+|-------|---------|-------|-------------|
+| 1.1   | 1       | +2    | `--get-user-sections' lists Tibetan Analysis |
+| 1.2   | 1       | +2    | Writers emit `* Tibetan Analysis` (paragraph carve-out kept) |
+| 1.3   | 1       | +3    | Tibetan-side `** Claude Translation` → `** Translation` |
+| 1.4   | 1       | +3    | Sanskrit-side same rename |
+| 1.5   | 1       | +2    | Dispatcher reads `** Translation` for chained Combined call |
+| 2.1   | 1       | +5    | Sanskrit-first section reorder in `regenerate-auto` + `create-file` |
+| 3.1+2 | 1       | +8    | Combined parser/writer rename + on-disk migration |
+| 3.3+4 | 1       | +5    | Combined system prompt always-emit + faithful marker + end-to-end |
+| 4.1–3 | 3       | +0    | CLAUDE.md §5.18 + cross-doc sweep |
+
+#### Migration story
+
+**Dual-name parsers + new-name-only writers.**  Every reader
+accepts both old and new heading names (preferring new); every
+writer emits only the new name.  On first reanalyse of an OLD
+file, the preserved-content path picks up bodies from old
+headings, the regenerator emits using new headings — natural
+one-pass migration, no manual sweep, no scripted batch.
+
+Every rename has an in-place migration helper called from the
+appropriate insert/restore entry point:
+- `tibetan-analysis--migrate-legacy-claude-headings' renames
+  level-2 `** Claude Translation' → `** Translation' (Tibetan
+  side, segment layout only).
+- `tibetan-analysis-sanskrit--migrate-legacy-translation-heading'
+  same for Sanskrit-side.
+- `tibetan-analysis-combined--migrate-legacy-divergence-heading'
+  renames `** Divergence' → `** Sanskrit-Tibetan Comparison'.
+- `regenerate-auto' rewrites `* Auto-Analysis' → `* Tibetan
+  Analysis' on the next reanalyse pass.
+
+All migrations are idempotent.  `--get-user-sections' lists both
+old and new section names so the regenerator's alist consumer
+sees the new heading on already-migrated files.
+
+#### Carve-outs (deliberately untouched)
+
+- **Sentence files (`sent-NNN*.org`):** keep `* Auto-Analysis'
+  parent and the legacy `*** Claude Translation' (level-3).
+  Sentence layout is not in the parallel-Sanskrit pipeline.
+  Phase 1.3 strip-list adds `** Translation' so segment-level
+  embedding inside sentence files cleans up correctly.
+- **Paragraph files (`par-NNN.org`):** keep `* Auto-Analysis'.
+  Different flow; not parallel-Sanskrit.
+- **Compound analysis (`tibetan-compound-analysis.el`):** keeps
+  `* Auto-Analysis'.  Multi-verb verse workflow, separate.
+
+#### Cache impact
+
+Tibetan + Sanskrit Claude system prompts byte-identical pre/post
+refactor — Anthropic prompt cache stays warm.  Only Combined
+prompt changes in Phase 3.3 (one-time cache miss on the first
+Combined call after the commit lands; subsequent calls re-cache
+at the usual 10% input cost — bounded to one segment per active
+Combined batch).
+
+#### Suite trajectory
+
+1809 (post-§5.17 + DSBC alignment + cleanup work) → 1811 (Phase
+1.1) → 1813 (1.2) → 1816 (1.3) → 1819 (1.4) → 1821 (1.5) → 1826
+(2.1) → 1834 (3.1+3.2) → **1839** (3.3+3.4).  Monotonic growth;
+zero unexpected failures at any phase boundary.
+
+#### Verification recipe
+
+Run after migration ships:
+
+1. `cd /Users/cp/tibetan-cat.el/test && emacs -batch -l
+   run-all-tests.el -f ert-run-tests-batch-and-exit` → 1839
+   pass / 0 unexpected / 1 intentional skip.
+
+2. **Live migration**.  On a copy of the gotrapaṭala
+   `analysis/` folder (~97 seg-NNN.org files):
+   - `M-x tibetan-analysis-batch-reanalyze` with
+     `:re-request-claude nil`.
+   - Spot-check three random files:  confirm new top-level
+     order (My Notes / Working Translation at top, Sanskrit
+     pair before Tibetan pair, DM Sanskrit before DM Tibetan),
+     `* Tibetan Analysis' parent heading, `** Translation'
+     (both sides), `** Sanskrit-Tibetan Comparison' present.
+   - `git diff` on the analysis folder:  heading renames +
+     section reorder + `** Divergence' → `**
+     Sanskrit-Tibetan Comparison', no lost user content.
+
+3. **Live re-fire**.  Pick one segment, re-fire with
+   `:re-request-claude t` to confirm the Combined Claude call's
+   new prompt produces a non-empty `** Sanskrit-Tibetan
+   Comparison' body on a previously faithful-rendering segment
+   (the `[Faithful — …]' marker should appear).
+
+4. **Idempotency**.  Re-run batch reanalyse a second time; diff
+   should be empty modulo whitespace + LAST_ANALYZED stamps.
+
+5. **Carve-out**.  Reanalyse a sentence file; confirm `*
+   Auto-Analysis' stays unchanged.
+
+#### Files changed
+
+| Path | Role |
+|------|------|
+| `persist/tibetan-analysis-persist.el` | `regenerate-auto` reorder + parent rename, `create-file` reorder, `--get-user-sections` extension, `--fire-parallel-claude-with-plist` translation-readback chain |
+| `persist/tibetan-analysis-claude.el` | `--claude-section-order` (segment) `Translation` rename, `--migrate-legacy-claude-headings` extension, `--insert-claude-translation-heading` rewrite + new fallback, `--ensure-claude-headings` dual-name accept, `--write-comparison-section` regex, `--write-claude-failure-stub` layout-aware dispatch, `--read-claude-sections` chain |
+| `persist/tibetan-analysis-sanskrit.el` | `--section-order` `Translation` rename, `--migrate-legacy-translation-heading` helper, `--read-sections` fallback |
+| `persist/tibetan-analysis-combined.el` | `:divergence` → `:comparison` parser key, `--section-order` `Sanskrit-Tibetan Comparison` rename, `--migrate-legacy-divergence-heading` helper, `--read-sections` fallback, `--system-prompt-base` rewrite (always-emit + `[Faithful — …]` marker) |
+| `persist/tibetan-analysis-combine.el` | `--read-auto-sections` regex multi-name accept |
+| `persist/tibetan-sentence-persist.el` | strip-list extended with `** Translation` for segment embeds |
 
 ### 5.8 Claude integration hardening + Anthropic prompt caching (done, 2026-04-20)
 
