@@ -575,6 +575,83 @@ nil — no Sanskrit / Combined call fired."
    (tibetan-analysis--fire-parallel-mode-claude-calls
     "བདག" "/some/source.org" nil)))
 
+(ert-deftest tibetan-analysis-fire-parallel-uses-translation-heading-for-tibetan-readback ()
+  "Phase 1.5 of layout-revision §5.18 (2026-05-04):  the dispatcher
+reads the previously-stored Tibetan-side translation body via the
+new `** Translation' heading (Phase 1.3 rename) when chaining off
+the Sanskrit response into the Combined call.
+
+Fixture: an analysis file where `** Translation' (NEW heading)
+carries the Tibetan-side translation.  Stub Sanskrit's
+`--request-translation' to invoke its callback with a known plist
+\(`(:translation \"S-trans\")').  Stub Combined's
+`--request-synthesis' to capture its arguments.  Assert the
+captured `tib-trans' arg is the body that lived under
+`** Translation'."
+  (skip-unless (fboundp 'tibetan-analysis--fire-parallel-claude-with-plist))
+  (let* ((tmp (make-temp-file "tibetan-fire-trans-" t))
+         (ana (expand-file-name "seg-001.org" tmp))
+         captured)
+    (unwind-protect
+        (progn
+          (with-temp-file ana
+            (insert "* Tibetan Text\nbdag\n\n"
+                    "* Tibetan Analysis\n"
+                    ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Translation\n"
+                    "TIB-TRANS-NEW-HEADING\n\n"
+                    "** Wylie Transliteration\nbdag /\n\n"))
+          (cl-letf
+              (((symbol-function 'tibetan-analysis-sanskrit--request-translation)
+                (lambda (_skt _src _ana on-done)
+                  (funcall on-done '(:translation "S-trans"))))
+               ((symbol-function 'tibetan-analysis-combined--request-synthesis)
+                (lambda (tib _skt tib-trans skt-trans &rest _)
+                  (setq captured (list :tib tib :tib-trans tib-trans
+                                       :skt-trans skt-trans))
+                  t)))
+            (tibetan-analysis--fire-parallel-claude-with-plist
+             "བདག"
+             '(:iast "ahaṃ" :devanagari nil :script-source iast-line)
+             "/dev/null/source.org" ana))
+          (should captured)
+          (should (equal (plist-get captured :tib-trans)
+                         "TIB-TRANS-NEW-HEADING"))
+          (should (equal (plist-get captured :skt-trans) "S-trans")))
+      (when (file-exists-p tmp) (delete-directory tmp t)))))
+
+(ert-deftest tibetan-analysis-fire-parallel-falls-back-to-claude-translation-on-legacy-files ()
+  "Phase 1.5 migration:  if the analysis file still carries the
+LEGACY `** Claude Translation' heading (level 2, pre-rename),
+the dispatcher falls back to it for the Tibetan-side readback."
+  (skip-unless (fboundp 'tibetan-analysis--fire-parallel-claude-with-plist))
+  (let* ((tmp (make-temp-file "tibetan-fire-fallback-" t))
+         (ana (expand-file-name "seg-001.org" tmp))
+         captured)
+    (unwind-protect
+        (progn
+          (with-temp-file ana
+            (insert "* Tibetan Text\nbdag\n\n"
+                    "* Auto-Analysis\n"
+                    ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Claude Translation\n"
+                    "TIB-TRANS-LEGACY\n\n"
+                    "** Wylie Transliteration\nbdag /\n\n"))
+          (cl-letf
+              (((symbol-function 'tibetan-analysis-sanskrit--request-translation)
+                (lambda (_skt _src _ana on-done)
+                  (funcall on-done '(:translation "S-trans"))))
+               ((symbol-function 'tibetan-analysis-combined--request-synthesis)
+                (lambda (_tib _skt tib-trans _skt-trans &rest _)
+                  (setq captured tib-trans)
+                  t)))
+            (tibetan-analysis--fire-parallel-claude-with-plist
+             "བདག"
+             '(:iast "ahaṃ" :devanagari nil :script-source iast-line)
+             "/dev/null/source.org" ana))
+          (should (equal captured "TIB-TRANS-LEGACY")))
+      (when (file-exists-p tmp) (delete-directory tmp t)))))
+
 ;; ============================================================================
 ;; Phase 5 dispatcher: wired into the INTERACTIVE entry points
 ;; ============================================================================

@@ -4214,17 +4214,20 @@ Returns t when the Sanskrit call was dispatched, nil otherwise."
              ;; Sanskrit response landed.  Find the Tibetan
              ;; translation body (either preserved from a prior run
              ;; or freshly arrived from the parallel Tibetan call)
-             ;; and fire Combined when both are present.  Try the
-             ;; segment layout first (level-2 `** Claude Translation'
-             ;; under `* Auto-Analysis'), then sentence layout
-             ;; (level-3 `*** Claude Translation' under `* Provided
-             ;; Translations').
+             ;; and fire Combined when both are present.  Phase 1.5
+             ;; of layout-revision §5.18 (2026-05-04):  segment
+             ;; layout's level-2 heading is now `** Translation' (was
+             ;; `** Claude Translation').  Try the new name first;
+             ;; fall back to the legacy name at level 2 (pre-rename
+             ;; segment layout) and level 3 (sentence layout).
              (when (fboundp 'tibetan-analysis-combined--request-synthesis)
                (let* ((skt-trans
                        (plist-get skt-parsed :translation))
                       (tib-trans
                        (and (fboundp 'tibetan-analysis--read-claude-section-body)
                             (or
+                             (tibetan-analysis--read-claude-section-body
+                              ana "Translation" 2)
                              (tibetan-analysis--read-claude-section-body
                               ana "Claude Translation" 2)
                              (tibetan-analysis--read-claude-section-body
