@@ -48,8 +48,10 @@ jobs:
           emacs --batch \
             -L . -L core -L analysis -L workspace \
             -L philology -L persist -L config -L data \
+            -L doc-prep -L setup \
             --eval "(setq byte-compile-error-on-warn t)" \
             -f batch-byte-compile \
             tibetan-cat.el \
             core/*.el analysis/*.el workspace/*.el \
-            philology/*.el persist/*.el config/*.el data/*.el
+            philology/*.el persist/*.el config/*.el data/*.el \
+            doc-prep/*.el setup/*.el
