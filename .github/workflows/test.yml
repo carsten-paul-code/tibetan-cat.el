@@ -11,7 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        emacs-version: ['27.1', '28.2', '29.4']
+        # Carsten runs Emacs 30.x locally;  CI tracks the same line.
+        # Older versions (27.1 / 28.2 / 29.4) are out of scope —
+        # production code freely uses post-29 features (`plistp', the
+        # built-in SQLite backing the Steinert dictionary).
+        emacs-version: ['30.2']
 
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +45,7 @@ jobs:
       - name: Set up Emacs
         uses: purcell/setup-emacs@master
         with:
-          version: '29.4'
+          version: '30.2'
 
       - name: Check for byte-compile warnings
         run: |

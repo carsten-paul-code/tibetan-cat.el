@@ -11,9 +11,26 @@
 
 ;;; Code:
 
+(require 'cl-lib)
+
 ;; Skip slow external glossary loading during tests
 (defvar tibetan-skip-external-glossaries t
   "When non-nil, skip loading external glossaries during tests.")
+
+;; Polyfill `plistp' for Emacs < 29.  The OCR-correct + doc-prep test
+;; suites use `(should (plistp result))' to assert plist shape.  The
+;; built-in `plistp' was introduced in Emacs 29;  on 27 / 28 we
+;; provide a minimal compatible definition so the tests run
+;; identically across the CI matrix.
+(unless (fboundp 'plistp)
+  (defun plistp (object)
+    "Return non-nil when OBJECT is a property list.
+Polyfill for Emacs < 29 where the built-in is unavailable."
+    (and (listp object)
+         (let ((len (length object)))
+           (and (zerop (mod len 2))
+                (cl-loop for (k _v) on object by #'cddr
+                         always (and k (symbolp k))))))))
 
 ;; Setup load path
 (let ((base-dir (file-name-directory (or load-file-name buffer-file-name))))

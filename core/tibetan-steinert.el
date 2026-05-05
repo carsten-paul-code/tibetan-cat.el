@@ -32,6 +32,18 @@
 (require 'sqlite nil t) ;; built-in since Emacs 29
 (require 'url-util)     ;; for url-hexify-string in URL generation
 
+;; Byte-compile-time declarations for the SQLite C-builtins (Emacs
+;; 29+).  All call sites are runtime-gated by
+;; `tibetan-steinert-available-p' (which checks `featurep 'sqlite'),
+;; so older Emacs simply never invokes them — but the byte-compiler
+;; on Emacs 28 doesn't know that and emits "function not known"
+;; warnings that lint flags as fatal.  These declarations keep the
+;; lint clean across all supported versions without changing
+;; runtime behaviour.
+(declare-function sqlite-open "sqlite" (file &optional readonly))
+(declare-function sqlite-close "sqlite" (db))
+(declare-function sqlite-select "sqlite" (db query &optional values return-type))
+
 (defcustom tibetan-steinert-db-path
   (let* ((here (or load-file-name buffer-file-name))
          (base (and here (file-name-directory here))))

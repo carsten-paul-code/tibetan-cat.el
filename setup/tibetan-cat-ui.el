@@ -18,6 +18,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'package)  ; for package-installed-p (lint cleanliness on Emacs 28)
 
 ;; ============================================================================
 ;; OPTIONAL-DEPENDENCY DECLARATIONS
@@ -55,6 +56,7 @@
 (declare-function beacon-mode "beacon" (&optional arg))
 (declare-function dimmer-configure-which-key "dimmer" ())
 (declare-function dimmer-mode "dimmer" (&optional arg))
+(declare-function which-key-mode "which-key" (&optional arg))
 (declare-function org-bullets-mode "org-bullets" (&optional arg))
 (declare-function vertico-mode "vertico" (&optional arg))
 (declare-function marginalia-mode "marginalia" (&optional arg))
