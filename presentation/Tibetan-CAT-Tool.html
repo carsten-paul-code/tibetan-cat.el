@@ -59,7 +59,15 @@
   .roadmap-row .what .meta { display: block; font-family: var(--mono); font-size: 20px; color: var(--gold); letter-spacing: 0.08em; margin-top: 4px; }
   .roadmap-row.done .when { color: var(--gold); }
 
-  /* Origin slide — narrative quote */
+  /* Primer cards (slide 03) */
+  .primer-card {
+    background: var(--parchment-warm); border-left: 4px solid var(--maroon);
+    padding: 28px 32px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .primer-card .lbl { font-family: var(--mono); font-size: 22px; color: var(--maroon); letter-spacing: 0.18em; }
+  .primer-card .desc { font-family: var(--serif); font-size: 28px; line-height: 1.35; color: var(--ink); }
+
+  /* Origin slide */
   .origin-quote {
     font-family: var(--serif); font-style: italic;
     font-size: 56px; line-height: 1.25; color: var(--gold-soft);
@@ -76,10 +84,8 @@
     text-decoration: line-through; text-decoration-color: rgba(92,26,27,0.55);
   }
   .origin-strike .why {
-    font-family: var(--serif); font-size: 22px;
-    font-style: italic; color: var(--ink-soft);
-    text-decoration: none; letter-spacing: 0;
-    margin-left: 24px;
+    font-family: var(--serif); font-size: 22px; font-style: italic; color: var(--ink-soft);
+    text-decoration: none; letter-spacing: 0; margin-left: 24px;
   }
 
   /* Why Emacs cards */
@@ -87,60 +93,105 @@
     background: var(--parchment-warm); border-left: 4px solid var(--maroon);
     padding: 26px 32px; display: flex; gap: 28px; align-items: baseline;
   }
-  .why-card .num {
-    font-family: var(--mono); font-size: 32px; color: var(--gold);
-    letter-spacing: 0.1em; flex-shrink: 0; min-width: 70px;
-  }
-  .why-card .name {
-    font-family: var(--mono); font-size: 22px; color: var(--maroon);
-    letter-spacing: 0.18em; min-width: 320px; flex-shrink: 0;
-  }
-  .why-card .desc {
-    font-family: var(--serif); font-size: 30px; color: var(--ink); line-height: 1.3;
-  }
+  .why-card .num { font-family: var(--mono); font-size: 32px; color: var(--gold); letter-spacing: 0.1em; flex-shrink: 0; min-width: 70px; }
+  .why-card .name { font-family: var(--mono); font-size: 22px; color: var(--maroon); letter-spacing: 0.18em; min-width: 320px; flex-shrink: 0; }
+  .why-card .desc { font-family: var(--serif); font-size: 30px; color: var(--ink); line-height: 1.3; }
 
   /* Metric tiles */
-  .metric-grid {
-    display: grid; grid-template-columns: repeat(4, 1fr);
-    gap: 18px; flex: 1;
-  }
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; flex: 1; }
   .metric-tile {
-    background: rgba(242,232,213,0.06);
-    border: 1px solid rgba(184,137,62,0.45);
-    padding: 24px 28px;
-    display: flex; flex-direction: column; justify-content: space-between;
-    min-height: 170px;
+    background: rgba(242,232,213,0.06); border: 1px solid rgba(184,137,62,0.45);
+    padding: 24px 28px; display: flex; flex-direction: column; justify-content: space-between; min-height: 170px;
   }
-  .metric-tile .num {
-    font-family: var(--serif); font-weight: 500;
-    font-size: 96px; line-height: 1; color: var(--saffron);
-    letter-spacing: -0.02em;
-  }
-  .metric-tile .lbl {
-    font-family: var(--mono); font-size: 22px;
-    color: var(--gold-soft); letter-spacing: 0.16em;
-    text-transform: uppercase; line-height: 1.3;
-  }
+  .metric-tile .num { font-family: var(--serif); font-weight: 500; font-size: 96px; line-height: 1; color: var(--saffron); letter-spacing: -0.02em; }
+  .metric-tile .lbl { font-family: var(--mono); font-size: 22px; color: var(--gold-soft); letter-spacing: 0.16em; text-transform: uppercase; line-height: 1.3; }
 
   /* Discussion question rows */
   .q-row {
-    display: grid; grid-template-columns: 64px 1fr;
-    gap: 20px; padding: 22px 0;
+    display: grid; grid-template-columns: 64px 1fr; gap: 20px; padding: 22px 0;
     border-bottom: 1px solid rgba(184,137,62,0.25);
   }
   .q-row:last-child { border-bottom: none; }
-  .q-row .q-mark {
-    font-family: var(--serif); font-style: italic;
-    font-size: 56px; line-height: 0.9; color: var(--saffron);
-  }
-  .q-row .q-text {
-    font-family: var(--serif); font-size: 32px; line-height: 1.35;
-  }
+  .q-row .q-mark { font-family: var(--serif); font-style: italic; font-size: 56px; line-height: 0.9; color: var(--saffron); }
+  .q-row .q-text { font-family: var(--serif); font-size: 32px; line-height: 1.35; }
   .saffron-slide .q-row { border-bottom-color: rgba(58,15,16,0.25); }
   .saffron-slide .q-row .q-mark { color: var(--maroon-deep); }
   .saffron-slide .q-row .q-text { color: var(--maroon-deep); }
   .section-slide .q-row .q-mark { color: var(--saffron); }
   .section-slide .q-row .q-text { color: var(--parchment); }
+
+  /* Journey-arc framing — "the wall" + "and then" */
+  .wall {
+    background: rgba(217,122,31,0.10);
+    border-left: 4px solid var(--saffron);
+    padding: 16px 24px;
+    font-family: var(--serif); font-size: 26px; line-height: 1.4;
+    color: var(--ink); max-width: 1500px;
+  }
+  .wall .lbl {
+    font-family: var(--mono); font-size: 20px; color: var(--maroon);
+    letter-spacing: 0.2em; margin-right: 14px; text-transform: uppercase;
+    display: inline-block;
+  }
+  .then-arrow {
+    padding-top: 16px; border-top: 1px dashed rgba(92,26,27,0.3);
+    font-family: var(--serif); font-style: italic; font-size: 22px;
+    color: var(--maroon); margin-top: auto;
+  }
+  .then-arrow .lbl {
+    font-family: var(--mono); font-style: normal; font-size: 18px;
+    color: var(--saffron); letter-spacing: 0.2em; margin-right: 14px;
+  }
+  .indigo-slide .wall, .section-slide .wall {
+    background: rgba(242,232,213,0.08); color: var(--parchment);
+  }
+  .indigo-slide .wall .lbl, .section-slide .wall .lbl { color: var(--saffron-soft); }
+  .indigo-slide .then-arrow, .section-slide .then-arrow {
+    color: var(--gold-soft); border-top-color: rgba(184,137,62,0.3);
+  }
+  .indigo-slide .then-arrow .lbl, .section-slide .then-arrow .lbl { color: var(--saffron); }
+  .saffron-slide .wall {
+    background: rgba(58,15,16,0.12); border-left-color: var(--maroon-deep);
+    color: var(--maroon-deep);
+  }
+  .saffron-slide .wall .lbl { color: var(--maroon-deep); }
+  .saffron-slide .then-arrow { color: var(--maroon-deep); border-top-color: rgba(58,15,16,0.3); }
+  .saffron-slide .then-arrow .lbl { color: var(--maroon-deep); }
+
+  /* Screenshot drop zone */
+  .shot {
+    background:
+      repeating-linear-gradient(135deg,
+        rgba(184,137,62,0.10) 0 14px,
+        rgba(184,137,62,0.18) 14px 15px);
+    border: 1px dashed var(--gold);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 24px;
+    font-family: var(--mono); font-size: 22px;
+    color: var(--maroon); letter-spacing: 0.08em;
+    text-align: center;
+    min-height: 280px;
+  }
+  .shot .tag {
+    font-family: var(--mono); font-size: 18px;
+    color: var(--gold); letter-spacing: 0.18em;
+    margin-bottom: 10px; text-transform: uppercase;
+  }
+  .shot .cap {
+    font-family: var(--serif); font-style: italic;
+    font-size: 22px; color: var(--ink-soft);
+    letter-spacing: 0; margin-top: 6px; max-width: 520px; line-height: 1.35;
+  }
+  .indigo-slide .shot, .section-slide .shot {
+    border-color: rgba(184,137,62,0.6);
+    background:
+      repeating-linear-gradient(135deg,
+        rgba(242,232,213,0.04) 0 14px,
+        rgba(242,232,213,0.10) 14px 15px);
+    color: var(--gold-soft);
+  }
+  .indigo-slide .shot .cap, .section-slide .shot .cap { color: var(--parchment-warm); }
 
   /* Closing */
   .closing-slide { background: var(--ink); color: var(--parchment); }
@@ -230,8 +281,7 @@
             between them, losing the thread.
           </p>
           <p class="body-text" style="color: var(--parchment-warm); margin-top: 22px;">
-            Each tool was good. The seams between them were where the
-            time went.
+            Each tool was good. The seams between them were where the time went.
           </p>
         </div>
 
@@ -246,8 +296,7 @@
             <span class="why">no scholarly workflow.</span>
           </div>
           <div style="margin-top: 12px; padding: 24px; background: rgba(217,122,31,0.16); border-left: 4px solid var(--saffron); font-family: var(--serif); font-size: 32px; line-height: 1.3; color: var(--parchment);">
-            So I built one &mdash; native to Emacs, where the rest of the
-            scholarly work already lives.
+            So I built one &mdash; native to Emacs, where the rest of the scholarly work already lives.
           </div>
         </div>
       </div>
@@ -260,23 +309,117 @@
         <span class="ml-mode">(Org · Notes)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">2 / 17</div>
+      <div class="ml-pos">2 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 03 — WHY EMACS ═══════════ -->
-  <section data-label="03 Why Emacs">
+  <!-- ═══════════ 03 — PRIMER · WHAT IS A CAT-TOOL ═══════════ -->
+  <section data-label="03 What is a CAT-Tool">
     <div class="slide-frame">
-      <div class="eyebrow"><span class="dot"></span><span class="num">03</span><span>Foundation</span></div>
+      <div class="eyebrow"><span class="dot"></span><span class="num">03</span><span>Primer · so the rest makes sense</span></div>
+      <h2 class="slide-title">What is a CAT-Tool?</h2>
+      <div class="pecha-rule" style="margin-top: 32px;"></div>
+
+      <p class="body-text" style="margin-top: 36px; max-width: 1500px;">
+        <strong>Computer-Assisted Translation.</strong>
+        Not the same as Machine Translation &mdash; the human stays in the chair. The tool handles the bookkeeping of segments, glossaries, and previously-translated material so the translator can spend their attention on the language.
+      </p>
+
+      <div class="cols-3" style="margin-top: 40px; flex: 1; align-items: stretch;">
+        <div class="primer-card">
+          <div class="lbl">01 / SEGMENTATION</div>
+          <div class="desc">Chop the source into translatable units &mdash; sentence, clause, segment.</div>
+        </div>
+        <div class="primer-card">
+          <div class="lbl">02 / TRANSLATION MEMORY</div>
+          <div class="desc">Remember every (source &rarr; target) pair. Suggest a match when similar text re-appears.</div>
+        </div>
+        <div class="primer-card">
+          <div class="lbl">03 / TERMBASE</div>
+          <div class="desc">A project-specific glossary, hand-curated, consulted at every token.</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 30px; padding: 20px 28px; background: var(--ink); color: var(--parchment); font-family: var(--mono); font-size: 22px; line-height: 1.55; letter-spacing: 0.04em;">
+        <span style="color: var(--saffron);">;;</span> existing CAT tools &mdash; Wordfast · OmegaT · Trados · MemoQ &mdash; are built for European-language commercial translation. Tibetan breaks all three pillars at once.
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">cat-tool-primer.org</span>
+        <span class="ml-mode">(Org · primer)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">3 / 19</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 04 — PRIMER · WHAT IS EMACS ═══════════ -->
+  <section data-label="04 What is Emacs">
+    <div class="slide-frame">
+      <div class="eyebrow"><span class="dot"></span><span class="num">04</span><span>Primer · so the rest makes sense</span></div>
+      <h2 class="slide-title">What is Emacs?</h2>
+      <div class="pecha-rule" style="margin-top: 32px;"></div>
+
+      <p class="body-text" style="margin-top: 36px; max-width: 1500px;">
+        A <strong>49-year-old text editor</strong> that is also a Lisp environment. Every behavior is rewritable; every feature is a few lines of <span style="font-family: var(--mono); font-size: 26px;">.el</span> away.
+      </p>
+
+      <div class="cols-2" style="margin-top: 40px; flex: 1; gap: 56px; align-items: stretch;">
+        <div>
+          <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon); margin-bottom: 18px;">WHAT LIVES INSIDE IT &mdash; FOR AN ACADEMIC</div>
+          <div class="buffer">
+            <div style="font-family: var(--mono); font-size: 22px; line-height: 1.7; color: var(--parchment); display: flex; flex-direction: column; gap: 4px;">
+              <div><span style="color: var(--saffron);">▸</span> source texts &nbsp;&nbsp;<span style="color: rgba(212,168,92,0.55);">.org</span></div>
+              <div><span style="color: var(--saffron);">▸</span> outline + notes &nbsp;&nbsp;<span style="color: rgba(212,168,92,0.55);">org-mode</span></div>
+              <div><span style="color: var(--saffron);">▸</span> Zettelkasten &nbsp;&nbsp;<span style="color: rgba(212,168,92,0.55);">org-roam</span></div>
+              <div><span style="color: var(--saffron);">▸</span> bibliography &nbsp;&nbsp;<span style="color: rgba(212,168,92,0.55);">BibTeX · citar</span></div>
+              <div><span style="color: var(--saffron);">▸</span> paper writing &nbsp;&nbsp;<span style="color: rgba(212,168,92,0.55);">.org &rarr; LuaLaTeX &rarr; PDF</span></div>
+              <div><span style="color: var(--saffron);">▸</span> agenda &nbsp;&nbsp;<span style="color: rgba(212,168,92,0.55);">org-agenda · beorg (mobile)</span></div>
+              <div><span style="color: var(--saffron);">▸</span> mail · git · shell &nbsp;&nbsp;<span style="color: rgba(212,168,92,0.55);">native</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 24px; padding-top: 8px;">
+          <div style="font-family: var(--serif); font-size: 32px; line-height: 1.35; color: var(--ink); border-left: 3px solid var(--saffron); padding-left: 24px;">
+            For many academics, Emacs <em>is</em> the working environment &mdash; not just one of its windows.
+          </div>
+          <div style="background: var(--parchment-warm); padding: 22px 28px; border: 1px solid var(--maroon); font-family: var(--serif); font-size: 26px; line-height: 1.4; color: var(--ink-soft);">
+            <strong>Why this matters:</strong> the CAT tool isn't asking you to learn a new application. It is one more <span style="font-family: var(--mono); font-size: 22px;">.el</span> file in a place where the rest of your work already lives.
+          </div>
+          <div style="font-family: var(--mono); font-size: 22px; color: var(--maroon); letter-spacing: 0.04em;">
+            ;; if org-mode is the document, Emacs is the desk it sits on.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modeline">
+      <div class="ml-left">
+        <span class="ml-mark">●</span>
+        <span class="ml-buf">what-is-emacs.org</span>
+        <span class="ml-mode">(Org · primer)</span>
+      </div>
+      <div class="ml-spacer"></div>
+      <div class="ml-pos">4 / 19</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 05 — WHY EMACS (PERSONAL) ═══════════ -->
+  <section data-label="05 Why Emacs (personal)">
+    <div class="slide-frame">
+      <div class="eyebrow"><span class="dot"></span><span class="num">05</span><span>Foundation · why this Emacs, for me</span></div>
       <h2 class="slide-title">Why Emacs.</h2>
       <div class="pecha-rule" style="margin-top: 32px;"></div>
 
       <p class="body-text" style="margin-top: 40px; max-width: 1500px;">
-        I didn't pick Emacs for the CAT tool. The CAT tool came to Emacs
-        because the rest of the work was already there.
+        I didn't pick Emacs for the CAT tool. The CAT tool came to Emacs because the rest of the work was already there.
       </p>
 
-      <div style="display: flex; flex-direction: column; gap: 18px; margin-top: 40px; flex: 1;">
+      <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 36px; flex: 1;">
         <div class="why-card">
           <div class="num">01</div>
           <div class="name">DAILY WORKFLOW</div>
@@ -299,7 +442,7 @@
         </div>
       </div>
 
-      <div style="margin-top: 32px; font-family: var(--mono); font-size: 24px; color: var(--maroon); letter-spacing: 0.08em; padding-top: 24px; border-top: 1px solid rgba(92,26,27,0.22);">
+      <div style="margin-top: 28px; font-family: var(--mono); font-size: 24px; color: var(--maroon); letter-spacing: 0.08em; padding-top: 22px; border-top: 1px solid rgba(92,26,27,0.22);">
         ;; the CAT layer is the missing tile, not a new home.
       </div>
     </div>
@@ -311,39 +454,44 @@
         <span class="ml-mode">(Emacs-Lisp)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">3 / 17</div>
+      <div class="ml-pos">5 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 04 — WYLIE ═══════════ -->
-  <section data-label="04 Feature 01 Wylie">
+  <!-- ═══════════ 06 — WYLIE ═══════════ -->
+  <section data-label="06 Feature 01 Wylie">
     <div class="slide-frame">
-      <div class="eyebrow"><span class="dot"></span><span class="num">04</span><span>Feature 01 of 06</span></div>
+      <div class="eyebrow"><span class="dot"></span><span class="num">06</span><span>Feature 01 of 06</span></div>
       <h2 class="slide-title">Wylie alongside Uchen.</h2>
-      <p class="body-text" style="margin-top: 24px; max-width: 1400px;">
-        For European learners, Wylie is far easier to recognise than Uchen at the start &mdash; you can read it without re-training your eye. Every section that touches a Tibetan token in this tool also renders the Wylie. One transcription, one notation, in every analysis file.
-      </p>
 
-      <div style="margin-top: 40px; flex: 1; display: grid; grid-template-columns: 1fr auto 1fr; gap: 32px; align-items: center;">
-        <div style="background: var(--parchment-warm); border: 1px solid var(--maroon); padding: 44px;">
-          <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon); margin-bottom: 24px;">UCHEN</div>
-          <div class="tibetan" style="font-size: 76px; line-height: 1.4; color: var(--ink);">
+      <div class="wall" style="margin-top: 28px;">
+        <span class="lbl">The wall</span>When I started, I couldn't read Uchen fluently &mdash; my eye hadn't been trained on it yet. For a European learner, Wylie is far easier to recognise. But every CAT-style tool I tried showed me one or the other, never both.
+      </div>
+
+      <div style="margin-top: 32px; flex: 1; display: grid; grid-template-columns: 1fr auto 1fr; gap: 32px; align-items: center;">
+        <div style="background: var(--parchment-warm); border: 1px solid var(--maroon); padding: 40px;">
+          <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon); margin-bottom: 22px;">UCHEN</div>
+          <div class="tibetan" style="font-size: 72px; line-height: 1.4; color: var(--ink);">
             སངས་རྒྱས་<br>བཅོམ་ལྡན་འདས།
           </div>
         </div>
 
         <div style="font-family: var(--mono); font-size: 56px; color: var(--saffron);">→</div>
 
-        <div style="background: var(--ink); color: var(--parchment); padding: 44px; border-radius: 4px;">
-          <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--gold-soft); margin-bottom: 24px;">WYLIE</div>
-          <div style="font-family: var(--mono); font-size: 52px; line-height: 1.35; color: var(--parchment);">
+        <div style="background: var(--ink); color: var(--parchment); padding: 40px; border-radius: 4px;">
+          <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--gold-soft); margin-bottom: 22px;">WYLIE</div>
+          <div style="font-family: var(--mono); font-size: 50px; line-height: 1.35; color: var(--parchment);">
             sangs rgyas<br>bcom ldan 'das/
           </div>
         </div>
       </div>
 
-      <div style="margin-top: 28px; font-family: var(--mono); font-size: 22px; color: var(--maroon); letter-spacing: 0.08em;">
+      <div style="margin-top: 22px; font-family: var(--mono); font-size: 22px; color: var(--maroon); letter-spacing: 0.06em;">
         core/tibetan-wylie.el · implicit-'a' rule · EWTS · Sanskrit-derived stacks · single helper for every section
+      </div>
+
+      <div class="then-arrow">
+        <span class="lbl">And then →</span> the texts I wanted to read were scanned PDFs of pecha &mdash; and the OCR on those scans had errors.
       </div>
     </div>
 
@@ -354,53 +502,52 @@
         <span class="ml-mode">(Emacs-Lisp)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">4 / 17</div>
+      <div class="ml-pos">6 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 05 — OCR ═══════════ -->
-  <section data-label="05 Feature 02 OCR">
+  <!-- ═══════════ 07 — OCR ═══════════ -->
+  <section data-label="07 Feature 02 OCR">
     <div class="slide-frame">
-      <div class="eyebrow"><span class="dot"></span><span class="num">05</span><span>Feature 02 of 06</span></div>
+      <div class="eyebrow"><span class="dot"></span><span class="num">07</span><span>Feature 02 of 06</span></div>
       <h2 class="slide-title">OCR &amp; validation.</h2>
-      <p class="body-text" style="margin-top: 24px; max-width: 1300px;">
-        Buffer-side cleanup of scanned pecha pages. A local validator screens every syllable against three sources; only what fails goes to Claude, with a conservative prompt that says "only change syllables that are clearly erroneous".
-      </p>
 
-      <div class="cols-2" style="margin-top: 40px; flex: 1; gap: 40px;">
-        <div style="background: var(--parchment-warm); border: 1px solid var(--maroon); padding: 32px 36px; display: flex; flex-direction: column; gap: 18px;">
+      <div class="wall" style="margin-top: 28px;">
+        <span class="lbl">The wall</span>Pecha scans need OCR, and OCR for Tibetan is unreliable: stack splittings, missing tshegs, confused letters. I needed cleanup that was conservative &mdash; not a model rewriting whole lines, but a checker that flagged the suspicious syllables and asked me before changing them.
+      </div>
+
+      <div class="cols-2" style="margin-top: 32px; flex: 1; gap: 36px;">
+        <div style="background: var(--parchment-warm); border: 1px solid var(--maroon); padding: 28px 32px; display: flex; flex-direction: column; gap: 14px;">
           <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon);">VALIDATOR · 3 SOURCES</div>
-          <div style="font-family: var(--serif); font-size: 26px; color: var(--ink-soft); line-height: 1.4;">
+          <div style="font-family: var(--serif); font-size: 24px; color: var(--ink-soft); line-height: 1.4;">
             <strong>~17.7k</strong> &nbsp;vocabulary entries (root + particle aware)<br>
             <strong>~3k</strong> &nbsp;compound terms<br>
             <strong>proper nouns</strong> &nbsp;(places, people, deities)
           </div>
           <div style="height: 1px; background: var(--maroon); opacity: 0.3; margin: 4px 0;"></div>
           <div style="font-family: var(--mono); font-size: 22px; color: var(--maroon); letter-spacing: 0.06em;">FLAG · TWO LEVELS</div>
-          <div style="font-family: var(--serif); font-size: 24px; color: var(--ink-soft); line-height: 1.4;">
+          <div style="font-family: var(--serif); font-size: 22px; color: var(--ink-soft); line-height: 1.4;">
             <span style="font-family: var(--mono); color: var(--gold);">:unknown</span> &mdash; valid Tibetan structure, not in dict.<br>
             <span style="font-family: var(--mono); color: var(--saffron);">:suspicious</span> &mdash; violates syllable structure.
           </div>
+          <div style="height: 1px; background: var(--maroon); opacity: 0.3; margin: 4px 0;"></div>
+          <div style="font-family: var(--serif); font-size: 22px; color: var(--ink-soft);">
+            Reproducer: <span class="tibetan" style="font-size: 28px;">སེམཀྱི</span> &rarr; <span class="tibetan" style="font-size: 28px; color: var(--saffron);">སེམ་ཀྱི</span> <em>(missing tsheg)</em>
+          </div>
+          <div style="font-family: var(--mono); font-size: 20px; color: var(--maroon); letter-spacing: 0.06em;">
+            M-x tibetan-ocr-correct-buffer / -region
+          </div>
         </div>
 
-        <div class="buffer">
-          <div class="buf-header" style="white-space: nowrap;">
-            <span class="ml-mark" style="color: var(--saffron);">●</span>
-            <span>kangyur-001.tib</span>
-            <span style="margin-left:auto; color: var(--gold-soft);">OCR</span>
-          </div>
-<div style="font-family: var(--mono); font-size: 22px; line-height: 1.9; color: var(--parchment); display: flex; flex-direction: column; gap: 12px;">
-  <div class="com">;; tibetan-ocr-validate flagged 1 syllable</div>
-  <div class="tibetan" style="font-size: 30px; line-height: 1.6; padding: 8px 0;"><span class="hl">སེམཀྱི</span></div>
-  <div class="com">;; Claude (conservative prompt) →</div>
-  <div class="tibetan" style="font-size: 30px; line-height: 1.6; padding: 8px 0; color: var(--saffron-soft);">སེམ་ཀྱི</div>
-  <div class="com">;; reason: missing tsheg</div>
-  <div style="height: 8px;"></div>
-  <div><span class="kw">M-x</span> <span class="var">tibetan-ocr-correct-buffer</span></div>
-  <div><span class="kw">M-x</span> <span class="var">tibetan-ocr-correct-region</span></div>
-  <div class="com">;; defcustom tibetan-ocr-correct-auto-accept</div>
-</div>
+        <div class="shot">
+          <div class="tag">Screenshot · 07-OCR</div>
+          <div>OCR review session</div>
+          <div class="cap">M-x tibetan-ocr-correct-buffer running on a real pecha scan &mdash; flagged syllables highlighted, Claude-suggested corrections in a side window.</div>
         </div>
+      </div>
+
+      <div class="then-arrow">
+        <span class="lbl">And then →</span> with clean text in hand, the next wall: Tibetan has no spaces. Where does a sentence start?
       </div>
     </div>
 
@@ -411,36 +558,40 @@
         <span class="ml-mode">(Emacs-Lisp · OCR)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">5 / 17</div>
+      <div class="ml-pos">7 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 06 — SEGMENTATION ═══════════ -->
-  <section data-label="06 Feature 03 Segmentation" class="saffron-slide">
+  <!-- ═══════════ 08 — SEGMENTATION ═══════════ -->
+  <section data-label="08 Feature 03 Segmentation" class="saffron-slide">
     <div class="slide-frame">
-      <div class="eyebrow"><span class="dot"></span><span class="num">06</span><span>Feature 03 of 06</span></div>
+      <div class="eyebrow"><span class="dot"></span><span class="num">08</span><span>Feature 03 of 06</span></div>
       <h2 class="slide-title">Segmentation &amp; sentence recognition.</h2>
-      <p class="body-text" style="margin-top: 24px; color: var(--maroon-deep); max-width: 1400px;">
-        Tibetan has no spaces and no full stops in the Western sense. Tsheg, shad, and sometimes line breaks. The Round-2 clause segmenter reads them, finds verb / converb / final-particle boundaries, and assigns argument structure from Hill-2010 case frames.
-      </p>
 
-      <div style="margin-top: 36px; background: var(--parchment); padding: 32px 40px; border: 2px solid var(--maroon-deep); flex: 1; display: flex; flex-direction: column; justify-content: center;">
-        <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon-deep); margin-bottom: 16px;">INPUT · 6 WORDS</div>
-        <div class="tibetan" style="font-size: 38px; line-height: 1.5; color: var(--ink);">
+      <div class="wall" style="margin-top: 28px;">
+        <span class="lbl">The wall</span>Tibetan doesn't punctuate the way European languages do. Tsheg between syllables, shad to mark some clause-ends, sometimes a line break instead of a full stop. CAT-tool segmentation by full-stop fails immediately.
+      </div>
+
+      <div style="margin-top: 28px; background: var(--parchment); padding: 28px 36px; border: 2px solid var(--maroon-deep); flex: 1; display: flex; flex-direction: column; justify-content: center;">
+        <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon-deep); margin-bottom: 14px;">INPUT · 6 WORDS</div>
+        <div class="tibetan" style="font-size: 36px; line-height: 1.5; color: var(--ink);">
           དེ་ ལ་ མ་ ཉན་ པས་ ཁྲོས།
         </div>
-        <div style="margin-top: 24px; font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon); margin-bottom: 12px;">SEGMENTED · 2 CLAUSES</div>
-        <div style="display: flex; flex-direction: column; gap: 8px; font-family: var(--mono); font-size: 22px; color: var(--ink-soft);">
+        <div style="margin-top: 22px; font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon); margin-bottom: 12px;">SEGMENTED · 2 CLAUSES</div>
+        <div style="display: flex; flex-direction: column; gap: 6px; font-family: var(--mono); font-size: 22px; color: var(--ink-soft);">
           <div><span style="color: var(--maroon); font-weight: 600;">[clause 1]</span> དེ་ལ་མ་ཉན་པས &nbsp;&nbsp; <span style="color: var(--gold);">type=causal</span> &nbsp; <span style="color: var(--gold);">converb=པས</span></div>
           <div><span style="color: var(--maroon); font-weight: 600;">[clause 2]</span> ཁྲོས &nbsp;&nbsp; <span style="color: var(--gold);">main · verb=ཁྲོ</span></div>
         </div>
-        <div style="margin-top: 24px; font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon); margin-bottom: 10px;">NP CHUNKS · CASE TAGS</div>
-        <div style="font-family: var(--mono); font-size: 22px; color: var(--ink-soft);">
-          ERG &nbsp;·&nbsp; GEN &nbsp;·&nbsp; DAT &nbsp;·&nbsp; LOC &nbsp;·&nbsp; TERM &nbsp;·&nbsp; ABL &nbsp;·&nbsp; COM
+        <div style="margin-top: 18px; font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon);">
+          NP CHUNKS · CASE TAGS &nbsp;·&nbsp; ERG · GEN · DAT · LOC · TERM · ABL · COM
         </div>
-        <div style="margin-top: 22px; font-family: var(--mono); font-size: 22px; color: var(--maroon-deep); letter-spacing: 0.08em; padding-top: 16px; border-top: 1px solid rgba(58,15,16,0.3);">
+        <div style="margin-top: 18px; font-family: var(--mono); font-size: 22px; color: var(--maroon-deep); letter-spacing: 0.06em; padding-top: 14px; border-top: 1px solid rgba(58,15,16,0.3);">
           C-c u B  ·  auto-analyze-document &nbsp;&nbsp; C-c s N  ·  sentence-create-all &nbsp;&nbsp; C-c s Z  ·  resegment
         </div>
+      </div>
+
+      <div class="then-arrow">
+        <span class="lbl">And then →</span> once I had clauses, the particles inside them weren't always separate syllables. <em>devs</em> looks like one syllable, but it's <em>de</em> + <em>s</em>.
       </div>
     </div>
 
@@ -451,43 +602,48 @@
         <span class="ml-mode">(Emacs-Lisp · Round-2)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">6 / 17</div>
+      <div class="ml-pos">8 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 07 — PARTICLES ═══════════ -->
-  <section data-label="07 Feature 04 Particles" class="indigo-slide">
+  <!-- ═══════════ 09 — PARTICLES ═══════════ -->
+  <section data-label="09 Feature 04 Particles" class="indigo-slide">
     <div class="slide-frame">
-      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">07</span><span>Feature 04 of 06</span></div>
+      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">09</span><span>Feature 04 of 06</span></div>
       <h2 class="slide-title">Particle recognition &mdash; the hard case.</h2>
-      <p class="body-text" style="margin-top: 24px; color: var(--parchment-warm); max-width: 1400px;">
-        The easy case is a particle as its own syllable. The hard case is a particle <em>agglutinated</em> to the stem &mdash; one syllable, two morphemes, only context tells you which. The system disambiguates with a whitelist drawn from <em>Joanna Bialek's "A Textbook in Classical Tibetan"</em>.
-      </p>
 
-      <div style="margin-top: 40px; background: rgba(242,232,213,0.06); padding: 36px 44px; border: 1px solid rgba(184,137,62,0.45); flex: 1; display: flex; flex-direction: column; justify-content: center;">
-        <div style="display: flex; gap: 64px; align-items: center;">
-          <div class="tibetan" style="font-size: 96px; color: var(--parchment); line-height: 1;">
+      <div class="wall" style="margin-top: 28px;">
+        <span class="lbl">The wall</span>Bialek's exercises were full of cases where a particle is glued onto its stem. Get this wrong and the whole clause analysis breaks. Disambiguation needs grammar, not surface form.
+      </div>
+
+      <div style="margin-top: 32px; background: rgba(242,232,213,0.06); padding: 32px 40px; border: 1px solid rgba(184,137,62,0.45); flex: 1; display: flex; flex-direction: column; justify-content: center;">
+        <div style="display: flex; gap: 56px; align-items: center;">
+          <div class="tibetan" style="font-size: 88px; color: var(--parchment); line-height: 1;">
             <span style="background: rgba(217,122,31,0.25); padding: 0 16px; border-bottom: 3px solid var(--saffron);">དེས</span>
           </div>
-          <div style="font-family: var(--mono); font-size: 44px; color: var(--saffron);">=</div>
-          <div class="tibetan" style="font-size: 96px; color: var(--parchment); line-height: 1;">
-            དེ <span style="color: var(--gold-soft); font-size: 48px;">+</span> ས
+          <div style="font-family: var(--mono); font-size: 40px; color: var(--saffron);">=</div>
+          <div class="tibetan" style="font-size: 88px; color: var(--parchment); line-height: 1;">
+            དེ <span style="color: var(--gold-soft); font-size: 44px;">+</span> ས
           </div>
         </div>
-        <div style="margin-top: 28px; font-family: var(--serif); font-style: italic; font-size: 28px; color: var(--gold-soft); max-width: 1500px; line-height: 1.4;">
+        <div style="margin-top: 22px; font-family: var(--serif); font-style: italic; font-size: 26px; color: var(--gold-soft); max-width: 1500px; line-height: 1.4;">
           ergative particle on a vowel-final demonstrative &mdash; <strong>not</strong> the past stem of a verb.
         </div>
 
-        <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(184,137,62,0.3); display: grid; grid-template-columns: 240px 1fr; gap: 32px; align-items: baseline;">
+        <div style="margin-top: 26px; padding-top: 22px; border-top: 1px solid rgba(184,137,62,0.3); display: grid; grid-template-columns: 240px 1fr; gap: 28px; align-items: baseline;">
           <div style="font-family: var(--mono); font-size: 22px; color: var(--saffron); letter-spacing: 0.18em;">SINGLE-ས WHITELIST</div>
-          <div class="tibetan" style="font-size: 36px; color: var(--parchment); letter-spacing: 0.05em;">
+          <div class="tibetan" style="font-size: 32px; color: var(--parchment); letter-spacing: 0.05em;">
             དེ &nbsp;·&nbsp; འདི &nbsp;·&nbsp; ཁོ &nbsp;·&nbsp; མོ &nbsp;·&nbsp; ང &nbsp;·&nbsp; སུ &nbsp;·&nbsp; བུ &nbsp;·&nbsp; མཐུ
           </div>
         </div>
 
-        <div style="margin-top: 28px; font-family: var(--mono); font-size: 22px; color: var(--gold-soft); letter-spacing: 0.08em;">
-          tibetan-analyze-grammar-bialek &nbsp;·&nbsp; Bialek Portfolio sections inlined into the Claude system prompt
+        <div style="margin-top: 22px; font-family: var(--mono); font-size: 20px; color: var(--gold-soft); letter-spacing: 0.06em;">
+          Reference: Joanna Bialek, <em>A Textbook in Classical Tibetan</em> &mdash; Portfolio sections inlined into the Claude system prompt.
         </div>
+      </div>
+
+      <div class="then-arrow">
+        <span class="lbl">And then →</span> grammar was now legible, but every unfamiliar word still had to be looked up &mdash; in every dictionary, every time.
       </div>
     </div>
 
@@ -498,73 +654,75 @@
         <span class="ml-mode">(Tibetan · Grammar)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">7 / 17</div>
+      <div class="ml-pos">9 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 08 — DICTIONARY ═══════════ -->
-  <section data-label="08 Feature 05 Dictionary">
+  <!-- ═══════════ 10 — DICTIONARY ═══════════ -->
+  <section data-label="10 Feature 05 Dictionary">
     <div class="slide-frame">
-      <div class="eyebrow"><span class="dot"></span><span class="num">08</span><span>Feature 05 of 06</span></div>
+      <div class="eyebrow"><span class="dot"></span><span class="num">10</span><span>Feature 05 of 06</span></div>
       <h2 class="slide-title">Multi-source dictionary.</h2>
-      <p class="body-text" style="margin-top: 24px; max-width: 1400px;">
-        Six sources, ranked, deduplicated by gloss fingerprint. The hand-curated Resources for the specific text being read leads &mdash; everything else fills in around it.
-      </p>
 
-      <div class="cols-2" style="margin-top: 36px; flex: 1; gap: 36px;">
-        <div style="display: flex; flex-direction: column; gap: 10px;">
-          <div class="stack-row" style="margin-bottom: 0;">
-            <div class="layer">01 RESOURCES</div>
-            <div class="what">Per-text, hand-curated. Bilingual DE//EN.</div>
-            <div class="tag">user</div>
+      <div class="wall" style="margin-top: 28px;">
+        <span class="lbl">The wall</span>Tibetan philology depends on multiple dictionaries that disagree productively. Manually consulting Steinert, Rangjung Yeshe, the Hopkins glossary, and a per-text vocabulary list took as long as the translation itself.
+      </div>
+
+      <div class="cols-2" style="margin-top: 28px; flex: 1; gap: 32px;">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div class="stack-row" style="margin-bottom: 0; padding: 16px 24px;">
+            <div class="layer" style="font-size: 22px;">01 RESOURCES</div>
+            <div class="what" style="font-size: 24px;">Per-text, hand-curated. Bilingual DE//EN.</div>
+            <div class="tag" style="font-size: 20px;">user</div>
           </div>
-          <div class="stack-row" style="margin-bottom: 0;">
-            <div class="layer">02 CUSTOM</div>
-            <div class="what"><span style="font-family: var(--mono); font-size: 22px;">#+TIBETAN_VOCAB_FILE:</span> per document.</div>
-            <div class="tag">user</div>
+          <div class="stack-row" style="margin-bottom: 0; padding: 16px 24px;">
+            <div class="layer" style="font-size: 22px;">02 CUSTOM</div>
+            <div class="what" style="font-size: 24px;"><span style="font-family: var(--mono); font-size: 20px;">#+TIBETAN_VOCAB_FILE:</span> per document.</div>
+            <div class="tag" style="font-size: 20px;">user</div>
           </div>
-          <div class="stack-row" style="margin-bottom: 0;">
-            <div class="layer">03 STEINERT</div>
-            <div class="what">SQLite &mdash; Hopkins, Valby, Waldo, Bialek, 84000.</div>
-            <div class="tag">sql</div>
+          <div class="stack-row" style="margin-bottom: 0; padding: 16px 24px;">
+            <div class="layer" style="font-size: 22px;">03 STEINERT</div>
+            <div class="what" style="font-size: 24px;">SQLite &mdash; Hopkins, Valby, Waldo, Bialek, 84000.</div>
+            <div class="tag" style="font-size: 20px;">sql</div>
           </div>
-          <div class="stack-row" style="margin-bottom: 0;">
-            <div class="layer">04 RANGJUNG YESHE</div>
-            <div class="what">162k entries, lazy-loaded.</div>
-            <div class="tag">file</div>
+          <div class="stack-row" style="margin-bottom: 0; padding: 16px 24px;">
+            <div class="layer" style="font-size: 22px;">04 RANGJUNG YESHE</div>
+            <div class="what" style="font-size: 24px;">162k entries, lazy-loaded.</div>
+            <div class="tag" style="font-size: 20px;">file</div>
           </div>
-          <div class="stack-row" style="margin-bottom: 0;">
-            <div class="layer">05 BUNDLED</div>
-            <div class="what">Hopkins, local glossary.</div>
-            <div class="tag">file</div>
+          <div class="stack-row" style="margin-bottom: 0; padding: 16px 24px;">
+            <div class="layer" style="font-size: 22px;">05 BUNDLED</div>
+            <div class="what" style="font-size: 24px;">Hopkins, local glossary.</div>
+            <div class="tag" style="font-size: 20px;">file</div>
           </div>
-          <div class="stack-row" style="margin-bottom: 0;">
-            <div class="layer">06 DHARMAMITRA</div>
-            <div class="what">Online AI fallback.</div>
-            <div class="tag">http</div>
+          <div class="stack-row" style="margin-bottom: 0; padding: 16px 24px;">
+            <div class="layer" style="font-size: 22px;">06 DHARMAMITRA</div>
+            <div class="what" style="font-size: 24px;">Online AI fallback.</div>
+            <div class="tag" style="font-size: 20px;">http</div>
           </div>
         </div>
 
-        <div style="background: var(--parchment-warm); border: 1px solid var(--maroon); padding: 28px 32px; display: flex; flex-direction: column; gap: 14px; font-family: var(--serif);">
-          <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--maroon); padding-bottom: 12px;">
-            <div class="tibetan" style="font-size: 40px; color: var(--maroon-deep);">བྱང་ཆུབ་</div>
-            <div style="font-family: var(--mono); font-size: 22px; color: var(--gold); letter-spacing: 0.14em;">byang chub</div>
+        <div style="background: var(--parchment-warm); border: 1px solid var(--maroon); padding: 24px 28px; display: flex; flex-direction: column; gap: 12px; font-family: var(--serif);">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--maroon); padding-bottom: 10px;">
+            <div class="tibetan" style="font-size: 36px; color: var(--maroon-deep);">བྱང་ཆུབ་</div>
+            <div style="font-family: var(--mono); font-size: 20px; color: var(--gold); letter-spacing: 0.14em;">byang chub</div>
           </div>
-          <div style="font-style: italic; font-size: 24px; color: var(--ink-soft);">n. — awakening, enlightenment.</div>
-          <div style="font-size: 22px; line-height: 1.55; color: var(--ink-soft);">
+          <div style="font-style: italic; font-size: 22px; color: var(--ink-soft);">n. — awakening, enlightenment.</div>
+          <div style="font-family: var(--mono); font-size: 20px; color: var(--maroon); letter-spacing: 0.06em;">SOURCES &nbsp;·&nbsp; ranked, deduplicated</div>
+          <div style="font-size: 22px; line-height: 1.5; color: var(--ink-soft);">
             <strong>Resources</strong> — chap. 2, n. 14.<br>
             <strong>Steinert</strong> — Hopkins agg. 5 senses.<br>
-            <strong>Rangjung Yeshe</strong> — perfect knowledge, supreme wisdom.<br>
-            <strong>DharmaMitra</strong> — bodhi (Skt.), awakened state.
+            <strong>Rangjung Yeshe</strong> — supreme wisdom.<br>
+            <strong>DharmaMitra</strong> — bodhi (Skt.)
           </div>
-          <div style="height: 1px; background: var(--maroon); opacity: 0.3; margin: 6px 0;"></div>
-          <div style="font-family: var(--mono); font-size: 20px; color: var(--gold); letter-spacing: 0.08em;">
-            Sanskrit: <em>bodhi</em> &mdash; surfaced because Steinert entry carries it natively.
-          </div>
-          <div style="font-family: var(--mono); font-size: 20px; color: var(--maroon); letter-spacing: 0.06em;">
+          <div style="font-family: var(--mono); font-size: 18px; color: var(--gold); letter-spacing: 0.06em; padding-top: 6px;">
             tibetan-vocab-multisource-entries · dedup by fingerprint
           </div>
         </div>
+      </div>
+
+      <div class="then-arrow">
+        <span class="lbl">And then →</span> I noticed I was redoing the same analysis whenever I came back to a passage. The work needed to <em>persist</em>.
       </div>
     </div>
 
@@ -575,60 +733,59 @@
         <span class="ml-mode">(Emacs-Lisp · SQLite)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">8 / 17</div>
+      <div class="ml-pos">10 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 09 — PER-SEGMENT ORG FILE ═══════════ -->
-  <section data-label="09 Per-segment Org file">
+  <!-- ═══════════ 11 — PER-SEGMENT ORG FILE ═══════════ -->
+  <section data-label="11 Per-segment Org file">
     <div class="slide-frame">
-      <div class="eyebrow"><span class="dot"></span><span class="num">09</span><span>The central artifact</span></div>
+      <div class="eyebrow"><span class="dot"></span><span class="num">11</span><span>The central artifact</span></div>
       <h2 class="slide-title">The per-segment Org file.</h2>
-      <p class="body-text" style="margin-top: 24px; max-width: 1400px;">
-        One file per shad-bounded clause. The user's hand-written content lives at top level and is preserved on every reanalyze; the auto-generated analysis lives under <span style="font-family: var(--mono); font-size: 24px;">* Tibetan Analysis</span> and is regenerated from scratch.
-      </p>
 
-      <div class="cols-2" style="margin-top: 36px; flex: 1; gap: 40px;">
+      <div class="wall" style="margin-top: 28px;">
+        <span class="lbl">The wall</span>I wanted to write my own notes alongside the analysis &mdash; <em>and</em> have them survive when I re-ran the analyzer with newer dictionaries or a corrected source. Re-running must <em>never</em> overwrite a sentence I wrote by hand.
+      </div>
+
+      <div class="cols-2" style="margin-top: 28px; flex: 1; gap: 32px;">
         <div class="buffer">
           <div class="buf-header" style="white-space: nowrap;">
             <span class="ml-mark" style="color: var(--saffron);">●</span>
             <span>seg-014.org</span>
             <span style="margin-left:auto; color: var(--gold-soft);">Org</span>
           </div>
-<div style="font-family: var(--mono); font-size: 21px; line-height: 1.7; color: var(--parchment); display: flex; flex-direction: column;">
+<div style="font-family: var(--mono); font-size: 20px; line-height: 1.65; color: var(--parchment); display: flex; flex-direction: column;">
   <div style="color: var(--saffron-soft);">* Tibetan Analysis</div>
-  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Wylie Transliteration</div>
-  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Interlinear Gloss</div>
-  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Translation        <span style="color: var(--gold);">; Claude</span></div>
-  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Grammar &mdash; Particle Map</div>
-  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Sentence Structure</div>
-  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Verb Classification</div>
-  <div style="padding-left: 20px; color: rgba(242,232,213,0.65);">** Detailed Dictionary</div>
-  <div style="height: 12px;"></div>
-  <div style="color: var(--saffron);">* My Notes              <span style="color: var(--gold-soft); font-size: 18px;">[preserved]</span></div>
-  <div style="color: var(--saffron);">* Working Translation   <span style="color: var(--gold-soft); font-size: 18px;">[preserved]</span></div>
-  <div style="color: var(--saffron);">* Footnotes             <span style="color: var(--gold-soft); font-size: 18px;">[preserved]</span></div>
-  <div style="height: 12px;"></div>
-  <div style="color: rgba(242,232,213,0.5); font-style: italic;">;; reanalyze regenerates the * Tibetan Analysis tree;</div>
-  <div style="color: rgba(242,232,213,0.5); font-style: italic;">;; the three sibling sections survive untouched.</div>
+  <div style="padding-left: 18px; color: rgba(242,232,213,0.65);">** Wylie Transliteration</div>
+  <div style="padding-left: 18px; color: rgba(242,232,213,0.65);">** Interlinear Gloss</div>
+  <div style="padding-left: 18px; color: rgba(242,232,213,0.65);">** Translation        <span style="color: var(--gold);">; Claude</span></div>
+  <div style="padding-left: 18px; color: rgba(242,232,213,0.65);">** Grammar &mdash; Particle Map</div>
+  <div style="padding-left: 18px; color: rgba(242,232,213,0.65);">** Sentence Structure</div>
+  <div style="padding-left: 18px; color: rgba(242,232,213,0.65);">** Verb Classification</div>
+  <div style="padding-left: 18px; color: rgba(242,232,213,0.65);">** Detailed Dictionary</div>
+  <div style="height: 10px;"></div>
+  <div style="color: var(--saffron);">* My Notes              <span style="color: var(--gold-soft); font-size: 16px;">[preserved]</span></div>
+  <div style="color: var(--saffron);">* Working Translation   <span style="color: var(--gold-soft); font-size: 16px;">[preserved]</span></div>
+  <div style="color: var(--saffron);">* Footnotes             <span style="color: var(--gold-soft); font-size: 16px;">[preserved]</span></div>
+  <div style="height: 8px;"></div>
+  <div style="color: rgba(242,232,213,0.5); font-style: italic; font-size: 18px;">;; reanalyze regenerates the * Tibetan Analysis tree;</div>
+  <div style="color: rgba(242,232,213,0.5); font-style: italic; font-size: 18px;">;; the three sibling sections survive untouched.</div>
 </div>
         </div>
 
-        <div style="background: var(--parchment-warm); border: 1px solid var(--maroon); padding: 28px 32px; display: flex; flex-direction: column; gap: 18px;">
-          <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--maroon);">PRESERVATION CONTRACT</div>
-          <p style="font-family: var(--serif); font-size: 26px; color: var(--ink-soft); line-height: 1.4; margin: 0;">
-            Re-running analysis must <em>never</em> overwrite a sentence I wrote by hand. This is enforced in code &mdash; <span style="font-family: var(--mono); font-size: 22px;">tibetan-analysis-reanalyze-file</span> reads each user section, regenerates the auto tree, then restores the user content verbatim.
-          </p>
-          <div style="font-family: var(--mono); font-size: 20px; color: var(--maroon); letter-spacing: 0.06em; padding-top: 12px; border-top: 1px solid rgba(92,26,27,0.3);">
-            asserted by test/tibetan-batch-reanalyze-test.el
-          </div>
-          <div style="margin-top: 8px; font-family: var(--mono); font-size: 22px; color: var(--maroon); letter-spacing: 0.06em; line-height: 1.6;">
-            C-c u A &nbsp;·&nbsp; open / create<br>
-            C-c u R &nbsp;·&nbsp; reanalyze, preserve user content<br>
-            C-c u r &nbsp;·&nbsp; batch reanalyze folder<br>
-            C-c u F &nbsp;·&nbsp; fire pending Claude placeholders
-          </div>
+        <div class="shot">
+          <div class="tag">Screenshot · 11-Per-segment</div>
+          <div>seg-014.org open in Emacs</div>
+          <div class="cap">Full Emacs frame: source on the left, the per-segment analysis file on the right with all seven Tibetan-Analysis subsections expanded.</div>
         </div>
+      </div>
+
+      <div style="margin-top: 18px; font-family: var(--mono); font-size: 20px; color: var(--maroon); letter-spacing: 0.06em;">
+        C-c u A &nbsp;open · C-c u R &nbsp;reanalyze (preserve) · C-c u r &nbsp;batch · C-c u F &nbsp;fire pending &nbsp;&nbsp;|&nbsp;&nbsp; preservation asserted by test/tibetan-batch-reanalyze-test.el
+      </div>
+
+      <div class="then-arrow">
+        <span class="lbl">And then →</span> draft translations still ate hours. Two AI bridges entered the workflow &mdash; very carefully.
       </div>
     </div>
 
@@ -639,45 +796,56 @@
         <span class="ml-mode">(Org · Tibetan)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">9 / 17</div>
+      <div class="ml-pos">11 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 10 — AI BRIDGES ═══════════ -->
-  <section data-label="10 Feature 06 AI Bridges" class="indigo-slide">
+  <!-- ═══════════ 12 — AI BRIDGES ═══════════ -->
+  <section data-label="12 Feature 06 AI Bridges" class="indigo-slide">
     <div class="slide-frame">
-      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">10</span><span>Feature 06 of 06</span></div>
+      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">12</span><span>Feature 06 of 06</span></div>
       <h2 class="slide-title">DharmaMitra &amp; Claude.</h2>
-      <p class="body-text" style="margin-top: 24px; color: var(--parchment-warm); max-width: 1400px;">
-        Two AI bridges, both real on disk, both rate-aware. DharmaMitra arrived first &mdash; it was already in the Emacs ecosystem. Claude was wired afterwards through a queue + caching layer that keeps long sessions affordable.
-      </p>
 
-      <div class="cols-2" style="margin-top: 40px; flex: 1; gap: 48px;">
-        <div style="background: var(--parchment-warm); border-top: 4px solid var(--saffron); padding: 32px 36px; display: flex; flex-direction: column; gap: 14px;">
+      <div class="wall" style="margin-top: 28px;">
+        <span class="lbl">The wall</span>Drafting an English translation of every clause &mdash; even with the dictionary right there &mdash; was the slow part. The temptation to use AI is obvious. The risk is also obvious: an unaccountable, unattributable text masquerading as scholarship.
+      </div>
+
+      <div class="cols-2" style="margin-top: 32px; flex: 1; gap: 40px;">
+        <div style="background: var(--parchment-warm); border-top: 4px solid var(--saffron); padding: 28px 32px; display: flex; flex-direction: column; gap: 12px;">
           <span style="font-family: var(--mono); color: var(--maroon); font-size: 22px; letter-spacing: 0.18em;">BRIDGE 01 · DOMAIN-TRAINED</span>
-          <div style="font-family: var(--serif); font-size: 44px; color: var(--ink); line-height: 1.1;">DharmaMitra</div>
-          <div class="body-text" style="font-size: 24px; margin: 0; color: var(--ink-soft);">
-            HTTP + SSE client (<span style="font-family: var(--mono); font-size: 22px;">core/tibetan-dharmamitra-api.el</span>). Two parallel translation calls (Tibetan + Sanskrit). Search-API path proposes Sanskrit candidates; Claude picks the best fit with a <span style="font-family: var(--mono); font-size: 20px;">## Choice / ## Reason</span> schema. SHA-256 cache.
+          <div style="font-family: var(--serif); font-size: 42px; color: var(--ink); line-height: 1.05;">DharmaMitra</div>
+          <div style="font-family: var(--mono); font-size: 18px; color: var(--gold); letter-spacing: 0.06em;">
+            by Sebastian Nehrdich et al. &mdash; neural translation for Skt &amp; Tib.
           </div>
-          <div style="margin-top: auto; display: flex; flex-direction: column; gap: 4px; font-family: var(--mono); font-size: 21px; color: var(--gold); letter-spacing: 0.08em;">
+          <div class="body-text" style="font-size: 22px; margin: 0; color: var(--ink-soft);">
+            HTTP + SSE client. Two parallel translation calls (Tibetan + Sanskrit). A search-API path proposes Sanskrit candidates; Claude picks the best fit with a <span style="font-family: var(--mono); font-size: 18px;">## Choice / ## Reason</span> schema. SHA-256 cache.
+          </div>
+          <div style="margin-top: auto; display: flex; flex-direction: column; gap: 3px; font-family: var(--mono); font-size: 20px; color: var(--gold); letter-spacing: 0.06em;">
             <div>C-c u m &nbsp;·&nbsp; mitra-translate-dwim</div>
             <div>C-c u D &nbsp;·&nbsp; refresh-dharmamitra-translation</div>
             <div>C-c u z d / D &nbsp;·&nbsp; Sanskrit realignment</div>
           </div>
         </div>
 
-        <div style="background: var(--ink); color: var(--parchment); border-top: 4px solid var(--gold-soft); padding: 32px 36px; display: flex; flex-direction: column; gap: 14px; border-radius: 4px;">
+        <div style="background: var(--ink); color: var(--parchment); border-top: 4px solid var(--gold-soft); padding: 28px 32px; display: flex; flex-direction: column; gap: 12px; border-radius: 4px;">
           <span style="font-family: var(--mono); color: var(--saffron); font-size: 22px; letter-spacing: 0.18em;">BRIDGE 02 · GENERAL REASONING</span>
-          <div style="font-family: var(--serif); font-size: 44px; color: var(--parchment); line-height: 1.1;">Claude</div>
-          <div class="body-text" style="font-size: 24px; margin: 0; color: var(--parchment-warm);">
-            Queued through <span style="font-family: var(--mono); font-size: 22px;">tibetan-claude-queue</span> (default 3 concurrent, exponential 429 backoff). System prompt cached at 10% input cost via <span style="font-family: var(--mono); font-size: 20px;">(let ((gptel-cache '(system))) ...)</span>. Bialek Portfolio inlined.
+          <div style="font-family: var(--serif); font-size: 42px; color: var(--parchment); line-height: 1.05;">Claude</div>
+          <div style="font-family: var(--mono); font-size: 18px; color: var(--gold-soft); letter-spacing: 0.06em;">
+            via gptel.el &mdash; queued, prompt-cached, accountable.
           </div>
-          <div style="margin-top: auto; display: flex; flex-direction: column; gap: 4px; font-family: var(--mono); font-size: 21px; color: var(--gold-soft); letter-spacing: 0.08em;">
+          <div class="body-text" style="font-size: 22px; margin: 0; color: var(--parchment-warm);">
+            Queued through <span style="font-family: var(--mono); font-size: 20px;">tibetan-claude-queue</span> (default 3 concurrent, exponential 429 backoff). System prompt cached at 10% input cost via <span style="font-family: var(--mono); font-size: 18px;">(let ((gptel-cache '(system))) ...)</span>. Bialek Portfolio inlined.
+          </div>
+          <div style="margin-top: auto; display: flex; flex-direction: column; gap: 3px; font-family: var(--mono); font-size: 20px; color: var(--gold-soft); letter-spacing: 0.06em;">
             <div>C-c u A &nbsp;·&nbsp; open / create + auto-fire</div>
             <div>C-c u R &nbsp;·&nbsp; reanalyze, preserve translation</div>
             <div>C-c u F &nbsp;·&nbsp; fire all pending placeholders</div>
           </div>
         </div>
+      </div>
+
+      <div class="then-arrow">
+        <span class="lbl">And then →</span> Sanskrit and Tibetan often arrive together. Kāvya, abhidharma, tantra &mdash; the meaning lives in <em>both</em> sources at once.
       </div>
     </div>
 
@@ -688,44 +856,51 @@
         <span class="ml-mode">(Emacs-Lisp · async)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">10 / 17</div>
+      <div class="ml-pos">12 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 11 — BILINGUAL ═══════════ -->
-  <section data-label="11 Bilingual Sanskrit and Tibetan" class="section-slide">
+  <!-- ═══════════ 13 — BILINGUAL ═══════════ -->
+  <section data-label="13 Bilingual Sanskrit and Tibetan" class="section-slide">
     <div class="slide-frame">
-      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">11</span><span>Two-language parallel</span></div>
-      <h2 class="slide-title" style="font-size: 88px; max-width: 1500px;">Bilingual mode &mdash;<br>Sanskrit &amp; Tibetan.</h2>
+      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">13</span><span>Two-language parallel</span></div>
+      <h2 class="slide-title" style="font-size: 84px; max-width: 1500px;">Bilingual mode &mdash;<br>Sanskrit &amp; Tibetan.</h2>
 
-      <div style="margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 56px; flex: 1; align-items: center;">
-        <div>
+      <div class="wall" style="margin-top: 28px;">
+        <span class="lbl">The wall</span>Many texts that matter most for current scholarship &mdash; abhidharma, tantra, kāvya &mdash; exist in Sanskrit and Tibetan together. Working from one without the other loses too much.
+      </div>
+
+      <div style="margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 36px; flex: 1; align-items: stretch;">
+        <div style="display: flex; flex-direction: column; gap: 18px;">
           <p class="body-text" style="color: var(--parchment-warm); margin: 0;">
-            Toggle <span style="font-family: var(--mono); color: var(--gold-soft); font-size: 28px;">#+SOURCE_MODE: parallel-sanskrit</span> on a document and every per-segment file emits <em>three concurrent Claude analyses</em> &mdash; Sanskrit, Tibetan, and a Combined synthesis with a Sanskrit-Tibetan Comparison &mdash; <em>plus three DharmaMitra sections</em> for translation and Sanskrit realignment.
+            Toggle <span style="font-family: var(--mono); color: var(--gold-soft); font-size: 26px;">#+SOURCE_MODE: parallel-sanskrit</span> on a document and every per-segment file emits <em>three concurrent Claude analyses</em> &mdash; Sanskrit, Tibetan, and a Combined synthesis with a Sanskrit-Tibetan Comparison &mdash; <em>plus three DharmaMitra sections</em> for translation and Sanskrit realignment.
           </p>
-          <p class="body-text" style="color: var(--parchment-warm); margin-top: 22px;">
-            Six independent results land in one Org buffer. Sanskrit-first reading layout. User notes preserved on reanalyze.
-          </p>
-          <div style="margin-top: 28px; font-family: var(--mono); font-size: 22px; color: var(--gold-soft); letter-spacing: 0.08em;">
-            C-c u z P  ·  toggle parallel-sanskrit mode
+          <div style="background: rgba(242,232,213,0.06); border: 1px solid var(--gold-soft); padding: 22px;">
+            <div style="font-family: var(--mono); font-size: 20px; letter-spacing: 0.16em; color: var(--gold-soft); margin-bottom: 14px;">PER-SEGMENT FILE · 6 SECTIONS</div>
+            <div style="font-family: var(--mono); font-size: 20px; color: var(--parchment); line-height: 1.6;">
+              <div><span style="color: var(--saffron);">*</span> Sanskrit Analysis <span style="color: rgba(212,168,92,0.55);">— Claude</span></div>
+              <div><span style="color: var(--saffron);">*</span> Tibetan Analysis <span style="color: rgba(212,168,92,0.55);">— Claude</span></div>
+              <div><span style="color: var(--saffron);">*</span> Combined Analysis <span style="color: rgba(212,168,92,0.55);">— Claude</span></div>
+              <div style="padding-left: 22px; color: var(--parchment-warm); font-size: 18px;">└ ** Sanskrit-Tibetan Comparison</div>
+              <div><span style="color: var(--saffron);">*</span> DharmaMitra Translation (Sanskrit)</div>
+              <div><span style="color: var(--saffron);">*</span> DharmaMitra Translation (Tibetan)</div>
+              <div><span style="color: var(--saffron);">*</span> Sanskrit (DharmaMitra realignment)</div>
+            </div>
+          </div>
+          <div style="font-family: var(--mono); font-size: 20px; color: var(--gold-soft); letter-spacing: 0.06em;">
+            C-c u z P &nbsp;·&nbsp; toggle parallel-sanskrit mode
           </div>
         </div>
-        <div style="background: rgba(242,232,213,0.05); border: 1px solid var(--gold-soft); padding: 28px;">
-          <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--gold-soft); margin-bottom: 18px;">PER-SEGMENT FILE · 6 SECTIONS</div>
-          <div style="font-family: var(--mono); font-size: 22px; color: var(--parchment); line-height: 1.7;">
-            <div><span style="color: var(--saffron);">*</span> Sanskrit Analysis <span style="color: rgba(212,168,92,0.55);">— Claude</span></div>
-            <div><span style="color: var(--saffron);">*</span> Tibetan Analysis <span style="color: rgba(212,168,92,0.55);">— Claude</span></div>
-            <div><span style="color: var(--saffron);">*</span> Combined Analysis <span style="color: rgba(212,168,92,0.55);">— Claude</span></div>
-            <div style="padding-left: 24px; color: var(--parchment-warm); font-size: 20px;">└ ** Sanskrit-Tibetan Comparison</div>
-            <div><span style="color: var(--saffron);">*</span> DharmaMitra Translation (Sanskrit)</div>
-            <div><span style="color: var(--saffron);">*</span> DharmaMitra Translation (Tibetan)</div>
-            <div><span style="color: var(--saffron);">*</span> Sanskrit (DharmaMitra realignment)</div>
-          </div>
-          <div style="height: 1px; background: rgba(212,168,92,0.4); margin: 18px 0;"></div>
-          <div style="font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--gold-soft);">
-            three Claude calls · three DM calls · all queued · cached system prompt
-          </div>
+
+        <div class="shot">
+          <div class="tag">Screenshot · 13-Parallel</div>
+          <div>parallel-sanskrit mode in Emacs</div>
+          <div class="cap">A real seg-NNN.org in parallel-sanskrit mode &mdash; all six sections visible, with both Devanagari and Uchen rendered alongside.</div>
         </div>
+      </div>
+
+      <div class="then-arrow">
+        <span class="lbl">And then →</span> the question is no longer "what does this feature do?" but "how does it all fit into one editor?"
       </div>
     </div>
 
@@ -736,14 +911,14 @@
         <span class="ml-mode">(Skt · Tibetan · parallel)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">11 / 17</div>
+      <div class="ml-pos">13 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 12 — WORKFLOW ═══════════ -->
-  <section data-label="12 The Scholar's Workflow">
+  <!-- ═══════════ 14 — WORKFLOW ═══════════ -->
+  <section data-label="14 The Scholar's Workflow">
     <div class="slide-frame">
-      <div class="eyebrow"><span class="dot"></span><span class="num">12</span><span>End-to-end</span></div>
+      <div class="eyebrow"><span class="dot"></span><span class="num">14</span><span>End-to-end</span></div>
       <h2 class="slide-title">The scholar's workflow.</h2>
 
       <div style="margin-top: 56px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; align-items: stretch;">
@@ -780,14 +955,14 @@
         <span class="ml-mode">(Org)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">12 / 17</div>
+      <div class="ml-pos">14 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 13 — BY THE NUMBERS ═══════════ -->
-  <section data-label="13 By the Numbers" class="indigo-slide">
+  <!-- ═══════════ 15 — BY THE NUMBERS ═══════════ -->
+  <section data-label="15 By the Numbers" class="indigo-slide">
     <div class="slide-frame">
-      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">13</span><span>Live · 2026-05-04</span></div>
+      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">15</span><span>Live · 2026-05-04</span></div>
       <h2 class="slide-title">By the numbers.</h2>
 
       <div class="metric-grid" style="margin-top: 44px;">
@@ -848,14 +1023,14 @@
         <span class="ml-mode">(Magit · Stats)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">13 / 17</div>
+      <div class="ml-pos">15 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 14 — ROADMAP ═══════════ -->
-  <section data-label="14 Roadmap and Status">
+  <!-- ═══════════ 16 — ROADMAP ═══════════ -->
+  <section data-label="16 Roadmap and Status">
     <div class="slide-frame">
-      <div class="eyebrow"><span class="dot"></span><span class="num">14</span><span>Status &amp; ship target</span></div>
+      <div class="eyebrow"><span class="dot"></span><span class="num">16</span><span>Status &amp; ship target</span></div>
       <h2 class="slide-title">Shipping by end of semester.</h2>
       <div class="pecha-rule" style="margin-top: 32px;"></div>
 
@@ -894,14 +1069,14 @@
         <span class="ml-mode">(Markdown · TODO)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">14 / 17</div>
+      <div class="ml-pos">16 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 15 — DISCUSSION: PEDAGOGY ═══════════ -->
-  <section data-label="15 Discussion Pedagogy" class="saffron-slide">
+  <!-- ═══════════ 17 — DISCUSSION: PEDAGOGY ═══════════ -->
+  <section data-label="17 Discussion Pedagogy" class="saffron-slide">
     <div class="slide-frame">
-      <div class="eyebrow"><span class="dot"></span><span class="num">15</span><span>Discussion · part 1</span></div>
+      <div class="eyebrow"><span class="dot"></span><span class="num">17</span><span>Discussion · part 1</span></div>
       <h2 class="slide-title">Education.</h2>
       <p class="body-text" style="margin-top: 24px; color: var(--maroon-deep); font-style: italic; max-width: 1500px;">
         Open questions for the room. The system is built; the conversation about <em>how</em> it should be used is just starting.
@@ -934,14 +1109,14 @@
         <span class="ml-mode">(Org · Q&amp;A)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">15 / 17</div>
+      <div class="ml-pos">17 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 16 — DISCUSSION: SCHOLARSHIP ═══════════ -->
-  <section data-label="16 Discussion Scholarship" class="section-slide">
+  <!-- ═══════════ 18 — DISCUSSION: SCHOLARSHIP ═══════════ -->
+  <section data-label="18 Discussion Scholarship" class="section-slide">
     <div class="slide-frame">
-      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">16</span><span>Discussion · part 2</span></div>
+      <div class="eyebrow" style="color: var(--saffron-soft);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">18</span><span>Discussion · part 2</span></div>
       <h2 class="slide-title">Scholarship &amp; translation.</h2>
       <p class="body-text" style="margin-top: 24px; color: var(--parchment-warm); font-style: italic; max-width: 1500px;">
         And for the working translator and the philologist &mdash; what does this change, and what should it not?
@@ -974,14 +1149,14 @@
         <span class="ml-mode">(Org · Q&amp;A)</span>
       </div>
       <div class="ml-spacer"></div>
-      <div class="ml-pos">16 / 17</div>
+      <div class="ml-pos">18 / 19</div>
     </div>
   </section>
 
-  <!-- ═══════════ 17 — CLOSING ═══════════ -->
-  <section data-label="17 Closing" class="closing-slide">
+  <!-- ═══════════ 19 — CLOSING ═══════════ -->
+  <section data-label="19 Closing" class="closing-slide">
     <div class="slide-frame" style="justify-content: space-between;">
-      <div class="eyebrow" style="color: var(--saffron);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">17</span><span>Thank you</span></div>
+      <div class="eyebrow" style="color: var(--saffron);"><span class="dot"></span><span class="num" style="color: var(--gold-soft);">19</span><span>Thank you</span></div>
 
       <div>
         <div class="tibetan" style="font-size: 200px; color: var(--saffron); line-height: 1; letter-spacing: 0.05em;">སྒྲོན་མེ།</div>

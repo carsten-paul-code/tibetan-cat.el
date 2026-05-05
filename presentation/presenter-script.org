@@ -1,0 +1,845 @@
+#+TITLE: Tibetan-CAT-Tool — Speaker Script
+#+AUTHOR: Carsten Paul
+#+DATE: Buddhist Studies · Colloquium 2026
+#+OPTIONS: toc:2 num:nil
+
+* How to use this file
+
+Open this file in Emacs alongside the deck (browser tab at
+=presentation/Tibetan-CAT-Tool.html=). Each top-level section
+corresponds to one slide. Read the *Spoken* prose aloud at a
+natural pace; advance the slide on the cue when present. Cues in
+[brackets] are stage directions, not to be spoken.
+
+Target: ≈45 min total. Spoken portions ≈37 min, discussion ≈8 min.
+
+** Pacing reference
+- Read at ~150 words per minute (slower than reading silently).
+- The bracketed (≈X min) on each section is the budget; use the
+  modeline counter on each slide to check pace mid-talk.
+
+** Notes on tone
+- This is a personal-journey talk. The story carries weight; the
+  technical detail is in service of the story.
+- Two scholars in the room — Prof. Jowita Kramer and Dr. Sebastian
+  Nehrdich — have shaped what the tool does. Where their work is
+  load-bearing, name it. Don't drop names for effect.
+- =DharmaMitra=, in particular, is Sebastian Nehrdich's project. The
+  tool integrates it; on Slide 12 this is acknowledged on-screen.
+  Don't introduce it without attribution.
+
+* Slide 01 — Title (≈1 min)
+
+[Slide is up before you begin speaking. Take a breath, look at the
+audience, then start.]
+
+** Spoken
+
+Good [morning / afternoon], everyone. Thank you for being here.
+
+My name is Carsten Paul. I'm an M.A. candidate in Religious
+Studies here at Leipzig, working with Professor Schwerk. I'd
+particularly like to thank Professor Kramer and Dr. Nehrdich for
+making time to be here today — the work I'm presenting is built on
+ground that both of you have laid, in different ways, and I'll
+come to that.
+
+The talk is an introduction to a tool I've been developing over
+the last five months: =Tibetan-CAT-Tool=, a translator's
+environment for classical Tibetan and Sanskrit, built on Emacs.
+It is in alpha. I'll be honest about what's shipped, what isn't,
+and where I think the limits are.
+
+Forty-five minutes, structured as: a brief primer on what a
+CAT-Tool and Emacs are, since not everyone uses either; my
+personal arc into building this; six features in roughly the order
+I encountered the need for them; the technical state today; and
+two short open discussions — one on pedagogy, one on scholarship
+and translation. I'd very much like the discussions to actually
+happen, so I'll keep the technical content tight.
+
+[Advance to Slide 02.]
+
+* Slide 02 — Origin (≈3 min)
+
+** Spoken
+
+This is where the tool begins.
+
+The first time the gap really became obvious wasn't in a reading
+session. It was while I was working through the particle drills in
+Joanna Bialek's textbook, by hand. I had — [count off on fingers,
+slowly] — the textbook open on the desk; a PDF reader with a
+Tibetan dictionary in another window; Wilson's grammar in a third;
+my own notes in a fourth; and the document I was supposed to be
+producing in a fifth.
+
+Each tool was good. The seams between them were where the time
+went. An exercise that should have taken an evening took a
+weekend. I would lose the thread between looking up a particle
+and writing down what I'd just understood about it.
+
+[Brief pause.]
+
+Now — Computer-Assisted Translation tools exist, of course. They
+were a natural place to look. So I tried two of the major
+open-ones. =Wordfast= and =OmegaT=. Both are excellent. Neither
+one understood Tibetan. They didn't render Uchen, didn't have
+Wylie, didn't know what a tsheg or a shad was, and certainly had
+no concept of a per-text vocabulary list curated by hand alongside
+a Steinert SQLite database.
+
+That's not their fault. They were built for European-language
+commercial translation, and they do that very well.
+
+So I made a small, somewhat reckless decision. I would build one
+that did fit the work. Native to Emacs — because the rest of my
+scholarly work was already there, and because Emacs is the place
+where small, focused tools like this one are easiest to grow.
+
+That's the seed. Everything you'll see for the next thirty
+minutes is the consequence of that one weekend with the textbook.
+
+[Advance to Slide 03.]
+
+* Slide 03 — Primer · What is a CAT-Tool? (≈2 min)
+
+** Spoken
+
+Before I go further, two short primers — for those who haven't
+worked with these categories of tool before, or who use them
+differently.
+
+A CAT-Tool — and the C stands for *computer-assisted*, not
+*machine* — is a tool where the human translator stays in the
+chair. The point is not for the tool to translate the text. The
+point is for the tool to handle the bookkeeping around the
+translation, so the translator can spend their attention on the
+language.
+
+Three classic pillars. [Point to the slide.]
+
+[01] *Segmentation*. The tool chops the source into translatable
+units — a sentence, a clause, in our case a shad-bounded segment.
+
+[02] *Translation memory*. The tool remembers every pair you've
+ever produced — source goes to target, source goes to target —
+and when something similar comes back, it offers you the previous
+translation as a suggestion.
+
+[03] *Termbase*. A project-specific glossary, hand-curated,
+consulted at every token.
+
+These are mature ideas. The existing tools — Wordfast, OmegaT,
+Trados, MemoQ — implement them very well, *for European-language
+commercial translation*. Tibetan, as we'll see, breaks all three
+pillars at once: the segmenter has nothing to bite on, the memory
+needs morphology rather than surface form, and the termbase has
+no place for Wylie or scholarly source attribution. So a Tibetan
+CAT tool is a different category — not a localised version of the
+generic one.
+
+[Advance to Slide 04.]
+
+* Slide 04 — Primer · What is Emacs? (≈2 min)
+
+** Spoken
+
+The second primer is about Emacs.
+
+Emacs is — depending on who you ask — a forty-nine-year-old text
+editor, or a Lisp environment, or an operating system with one
+working application. All three descriptions are accurate.
+
+What makes it relevant for this talk is that Emacs is the
+environment where, for many academics, *most of their working day
+already happens*. [Point to the buffer mock.] Source texts in
+=.org= format. Outlining and notes in org-mode. A Zettelkasten in
+org-roam. Bibliography in BibTeX, citations through citar. Paper
+writing — Hausarbeiten, drafts, theses — in =.org= and exported
+through LuaLaTeX to PDF. An agenda, mail, a shell — all native.
+
+If org-mode is the document, Emacs is the desk it sits on.
+
+The relevance for our story is this: when I decided to build a
+CAT-Tool, I was not asking myself "where shall I host this new
+application?" I was asking, "how do I add the missing tile to the
+desk that already has my Zettelkasten and my LaTeX pipeline on it?"
+
+The answer was Emacs Lisp. Forty-nine years of editor evolution
+has produced a language and a runtime designed for exactly this:
+adding small, focused capabilities to a working environment
+without needing to rebuild it.
+
+[Advance to Slide 05.]
+
+* Slide 05 — Why Emacs (personal) (≈2 min)
+
+** Spoken
+
+So — slightly more concretely — *why this Emacs, for me*.
+
+Four points, brief. [Point to slide.]
+
+*One.* My daily workflow is already here. The Beorg agenda — that
+syncs to my phone — comes from this Emacs. The Zettelkasten of
+secondary literature, where every piece of scholarship I read
+gets a node, is here. I don't want to context-switch out of this
+to translate.
+
+*Two.* Every paper I've written for this M.A., every Hausarbeit,
+every draft, has been written in =.org= and exported through
+LuaLaTeX to PDF. The translation work needs to feed *into* that
+pipeline, not run alongside it.
+
+*Three.* And specifically relevant to this tool — DharmaMitra had
+already been wired into Emacs by Sebastian, in =DharmaMitra.el=,
+before I started this project. Which means a state-of-the-art
+neural translation engine for Sanskrit and Tibetan was already
+*in my editor* — I just needed the surrounding workflow to use it
+properly.
+
+*Four.* And finally — Emacs is extensible. A few lines of Lisp
+away from your own dictionary, your own keybinding, your own
+glossary format. This is not a theoretical extensibility. It's
+the kind that lets one M.A. student build a system like this in
+five months in his spare time.
+
+So the CAT layer isn't a new home. It's the missing tile.
+
+[Advance to Slide 06.]
+
+* Slide 06 — Wylie alongside Uchen (≈2 min)
+
+** Spoken
+
+[Slide 06 is up. The wall headline reads: "I couldn't read Uchen
+fluently."]
+
+So with that decided, the question is — *where do you start?*
+What's the first feature?
+
+The first feature was Wylie alongside Uchen. And the reason is
+honest and personal: when I started learning Classical Tibetan, I
+couldn't read Uchen fluently. My eye hadn't been trained on it
+yet. For a European learner, Wylie is far easier to recognise.
+You can read Wylie without retraining your visual cortex.
+
+But every CAT-style tool I tried — and every reading edition I
+had — showed me one or the other, never both. So the first thing
+the tool does, everywhere, is render *both at once*. [Point to
+the panels on screen.] One source of truth — a single helper
+function that converts Unicode Tibetan to Wylie — drives the
+display in every section that touches a token. Word lists.
+Particle map. Detailed dictionary. Interlinear gloss.
+
+Coverage is solid: pure Tibetan syllables, EWTS extensions,
+Sanskrit-derived stacks, the implicit-'a' rule. The conversion
+is one-way — Unicode to Wylie — embedded in the renderers. There
+is no live two-way conversion. That was not the priority; the
+priority was *seeing both at the same time, everywhere*.
+
+And then — the texts I most wanted to read were scanned PDFs of
+pecha. Which meant the next wall was OCR.
+
+[Advance to Slide 07.]
+
+* Slide 07 — OCR & validation (≈2.5 min)
+
+** Spoken
+
+OCR for Tibetan is unreliable. Anyone who has tried this knows.
+Stack splittings, missing tshegs, confused letters — ག for ད for
+བ for པ. So the question wasn't whether I needed cleanup; the
+question was *what kind of cleanup I trusted*.
+
+I did not want a model that would rewrite whole lines based on
+its guess at what was probably there. That's the kind of fix
+that's invisibly wrong. What I wanted was a *checker* — something
+that flagged the suspicious syllables and asked me before
+changing anything.
+
+So the validator is local — entirely in Emacs Lisp, no network
+call. [Point to the validator panel.] It checks each syllable
+against three sources: about seventeen-thousand vocabulary
+entries — root and particle aware; about three thousand compound
+terms; and a list of proper nouns, places, people, deities.
+
+The flag has two levels. =:unknown= means the syllable is
+structurally valid Tibetan but isn't in the dictionary —
+something legitimate may have been missed. =:suspicious= means
+the syllable violates Tibetan syllable structure — multiple
+vowels, leading subscripts, that kind of thing. Real OCR errors.
+
+Only what the local validator flags goes to Claude, and the
+prompt is explicitly conservative: "only change syllables that
+are clearly erroneous." [Indicate the reproducer.] Here's a real
+example from the test suite — =sem-kyi= with the tsheg missing,
+becomes =sem · kyi= with the tsheg restored, and Claude returns
+the reason as "missing tsheg".
+
+You can apply the corrections silently if you trust the run, or
+ask per syllable. There's a defcustom for that.
+
+[Indicate the screenshot slot.] What you'll see in the screenshot
+once I've captured it for the final version — is the OCR review
+session running on a real pecha scan. Highlighted syllables in
+the buffer, suggestions in a side window.
+
+And then — once I had clean text, the next wall: Tibetan has no
+spaces. Where does a sentence start?
+
+[Advance to Slide 08.]
+
+* Slide 08 — Segmentation (≈2.5 min)
+
+** Spoken
+
+[Slide 08, saffron background.]
+
+Tibetan does not punctuate the way European languages do. There
+are *tsheg* between syllables, *shad* to mark some clause-ends,
+sometimes a line break instead of a full stop, and sometimes
+nothing at all where a sentence ends.
+
+For a generic CAT-Tool segmenter — built on full-stops and
+sentence boundaries — this is fatal. There's nothing to bite on.
+
+So the segmenter is what we call Round-2 — meaning it's the
+second iteration, after the first proved that surface-pattern
+splitting wasn't enough. [Point to the input on screen.] It reads
+*tsheg* and *shad*, finds verb endings, finds converbs, finds
+final particles — and it assigns argument structure using
+case-frames from Hill 2010.
+
+Here's a concrete example. The input is six words —
+=de la ma nyan pas khros=, "because (he) didn't listen to that, he
+got angry." [Point.] The segmenter splits this into two clauses.
+Clause one is the dependent, marked causal by the converb =pas=.
+Clause two is the main clause, with =khro= — "to be angry" — as
+its verb.
+
+The system also chunks noun phrases and tags them with case —
+ergative, genitive, dative-locative, terminative, ablative,
+comitative — using a single Bialek-grounded helper that I'll come
+to in the next slide.
+
+Three keybindings expose this from any document. =C-c u B= runs
+auto-analyze on the whole document. =C-c s N= creates one
+sentence-level analysis file per sentence. =C-c s Z= re-segments
+when the source has been edited.
+
+This is the layer that produces the per-segment files I'll show
+later. Without segmentation that you can trust, none of the rest
+of the tool would work.
+
+And then — once I had clauses, I noticed that the particles
+inside them weren't always separate syllables.
+
+[Advance to Slide 09.]
+
+* Slide 09 — Particle recognition (≈3 min)
+
+** Spoken
+
+[Slide 09, indigo background.]
+
+This is the slide where Bialek's textbook re-enters the story —
+because she is exactly where this problem is most clearly
+described.
+
+The easy case for a particle is when it's its own syllable —
+=gis=, =la=, =na=, you can see them with your eye. The hard case
+is when a particle is *agglutinated* to its stem. One syllable on
+the page, two morphemes in the grammar — and only context tells
+you which.
+
+[Point to the example.] =deys=. To the eye, this looks like a
+single syllable. But it isn't. It's =de= — the demonstrative
+"that" — plus the ergative particle =-s=. If you treat =deys= as
+a single unit, the whole clause analysis breaks. =de= will look
+like a verb stem, the ergative will be missing, and the
+case-frame won't resolve.
+
+The disambiguation needs grammar, not surface form. So the system
+maintains a *whitelist* — also drawn from Bialek's textbook — of
+the eight pronouns and demonstratives that canonically take a
+bare =-s= ergative in Classical Tibetan. [Point to the
+whitelist.] =de=, ='di=, =kho=, =mo=, =nga=, =su=, =bu=, =mthu=.
+Outside that whitelist, a final =-s= belongs to the syllable.
+Inside it, the =-s= is the particle. There's a regression test
+asserting this behaviour for every entry on the whitelist.
+
+The reference is *Joanna Bialek's "A Textbook in Classical
+Tibetan"* — and that reference travels deeper than the
+whitelist. The relevant Bialek Portfolio sections, the same
+sections a student would read for a particle exercise, are
+inlined into Claude's system prompt every time the tool calls
+Claude on a clause. So the model sees the same grammar reference
+the human does. This isn't because Claude needs the help — it's
+because the analysis should be *answerable* to the same source
+the human translator is using.
+
+And then — grammar was now legible. But every unfamiliar word
+still had to be looked up, in every dictionary, every time.
+
+[Advance to Slide 10.]
+
+* Slide 10 — Multi-source dictionary (≈2 min)
+
+** Spoken
+
+Tibetan philology depends on multiple dictionaries that disagree
+productively. Steinert's aggregated SQLite — which inside it has
+Hopkins, Valby, Waldo, Bialek, the 84000 glossary; Rangjung Yeshe
+with its 162-thousand entries; Hopkins on its own as a bundled
+local glossary — they all see the same word slightly differently,
+and that difference is information.
+
+Manually consulting four or five dictionaries per token took as
+long as the translation itself. So the dictionary integration is
+*every source, automatic, ranked, deduplicated*. [Point to the
+list.]
+
+The hand-curated *Resources* for the specific text being read
+leads — that's bilingual German-English glosses I write myself
+for the document I'm working on. Then the optional per-document
+=#+TIBETAN_VOCAB_FILE= for one-off vocabulary. Then Steinert's
+SQLite. Then Rangjung Yeshe. Then bundled Hopkins. And finally
+DharmaMitra as an online AI fallback.
+
+Deduplication is by gloss fingerprint — a normalised form of the
+gloss itself — so when Hopkins and Rangjung Yeshe say roughly
+the same thing in different words, the second one drops. When
+they actually disagree, both stay.
+
+Sanskrit only surfaces when an entry natively carries it. The
+tool does not synthesise Sanskrit by reverse lookup. If
+Steinert's Hopkins entry for =byang chub= carries =bodhi=, you
+see it. If a Rangjung Yeshe entry doesn't carry Sanskrit, no
+Sanskrit appears.
+
+And then — I noticed something. I was redoing the same analysis
+whenever I came back to a passage. The work needed to *persist*.
+
+[Advance to Slide 11.]
+
+* Slide 11 — Per-segment Org file (≈2.5 min)
+
+** Spoken
+
+This is the central artifact of the system. If there is one
+slide where I want both Professor Kramer and Dr. Nehrdich to
+look closely, it's this one.
+
+[Point to the buffer mockup.] One file per shad-bounded clause —
+=seg-014.org=, on screen. The file has two halves. The top half,
+under =* Tibetan Analysis=, is *generated* and *regenerated*.
+Wylie transliteration. Interlinear gloss. The Claude translation.
+Grammar — including the Particle Map. Sentence structure. Verb
+classification. The detailed multi-source dictionary entry.
+
+The bottom half — =* My Notes=, =* Working Translation=, =*
+Footnotes= — is *mine*. Written by hand. The translation I'm
+actually producing. The footnote where I've decided how to
+disambiguate a verse. The notes where I'm tracking unresolved
+problems.
+
+The contract is simple, and it's enforced in code. Re-running
+the analyzer regenerates the =* Tibetan Analysis= tree — every
+sub-section. It must *never* overwrite a sentence I wrote by
+hand.
+
+This contract is the thing that makes the system *trustable* for
+real philological work. If I edit a footnote at midnight, and at
+nine in the morning I batch-reanalyze two-hundred segments
+because I've added a new dictionary entry, my footnote must
+still be there. There is a regression test that asserts this for
+every preserved section, on every reanalyze path. If the test
+fails, the build fails. If the contract were ever to break, I
+would catch it before shipping.
+
+[Indicate the screenshot slot.] In the final version, the
+screenshot here will be a real Emacs frame: source on the left,
+the per-segment file on the right with all seven Tibetan-Analysis
+subsections expanded.
+
+And then — even with all this, draft translations still ate
+hours. So I wired in two AI bridges. Very carefully.
+
+[Advance to Slide 12.]
+
+* Slide 12 — AI bridges (≈3 min)
+
+** Spoken
+
+[Slide 12, indigo background. The two cards are side by side.]
+
+Drafting an English translation of every clause — even with the
+dictionary right there — was the slowest part of the workflow.
+The temptation to use AI is obvious. The risk is also obvious:
+an unaccountable, unattributable text, the kind that could end up
+in a footnote masquerading as scholarship.
+
+So both AI bridges are wired with care.
+
+[Point to the left card.] The first is *DharmaMitra*. And here I
+want to be explicit: DharmaMitra is Sebastian Nehrdich's project
+— neural translation models trained for Sanskrit and Tibetan
+domain text. The HTTP-and-server-sent-events client in this tool
+talks to that infrastructure. It does not reproduce it. There
+are two paths. A direct translation path: two parallel calls,
+one for Tibetan, one for Sanskrit, both arriving as their own
+top-level sections in the per-segment file. And a search-API
+path, for parallel-text alignment: DharmaMitra returns candidate
+Sanskrit parallels, Claude picks the best fit using a structured
+=## Choice / ## Reason= schema, and the picked candidate lands
+in the file with both the choice and the reasoning preserved.
+
+[Point to the right card.] The second bridge is *Claude*, used
+for general reasoning over the analysed segment. Claude is
+queued — three concurrent at most, exponential backoff on rate
+limits — and the system prompt is cached at ten percent of input
+cost. Concretely: the dictionary entries, the Bialek Portfolio
+sections, the verb classifier output — this whole context is
+sent once, cached, and reused for every segment in a session.
+Without that, long sessions would cost real money. With it, they
+don't.
+
+What both bridges share is *accountability*. Every output lands
+in the per-segment file. Every output is replaceable — it's a
+draft, not a verdict. And every output sits next to *my own*
+working translation, which is the one that ends up in the paper.
+The AI is in the workflow. It is not the workflow.
+
+And then — Sanskrit and Tibetan often arrive together. Kāvya,
+abhidharma, tantra — the meaning lives in *both* sources at
+once. Which is the next slide.
+
+[Advance to Slide 13.]
+
+* Slide 13 — Bilingual mode (≈3 min)
+
+** Spoken
+
+[Slide 13, maroon background.]
+
+The texts that matter most for the kind of scholarship Professor
+Kramer and Professor Schwerk supervise — abhidharma, tantra,
+kāvya — exist in Sanskrit and Tibetan together. Working from one
+without the other loses too much. The Tibetan translation is
+itself a philological act; reading it without the Sanskrit
+discards half the data.
+
+So the parallel-Sanskrit mode is a proper top-level concept in
+the tool. [Point to the source-mode header.] You toggle =#+SOURCE_MODE: parallel-sanskrit= on a document — there's a binding for
+it, =C-c u z P= — and from that point, every per-segment file in
+that document emits *six independent sections* per segment.
+
+[Indicate the section list.] Three are Claude analyses. The
+*Sanskrit Analysis* runs a Claude prompt configured for the
+philological role of the Sanskrit. The *Tibetan Analysis* runs
+the standard Tibetan-side prompt. And the *Combined Analysis* —
+this is the one the audience may find most interesting — runs a
+synthesis prompt that has read both prior outputs and produces a
+combined translation, with an optional =** Sanskrit-Tibetan
+Comparison= sub-section that surfaces points where the Tibetan
+translator's choices were faithful, expansive, or interpretive.
+
+Three more sections come from DharmaMitra. The Sanskrit and
+Tibetan translations land as their own top-level sections — they
+sit *outside* the Claude analyses, not inside, so they can be
+referenced separately. The third DharmaMitra section is the
+search-driven Sanskrit realignment from the previous slide:
+*Sanskrit (DharmaMitra)*.
+
+Six independent results, in one Org buffer, for one segment.
+Sanskrit-first reading layout. All of them queued, all of them
+respecting the prompt cache. User notes preserved on reanalyze.
+
+[Indicate the screenshot slot.] Final version: a real
+parallel-Sanskrit per-segment file in Emacs, all six sections
+visible, both Devanagari and Uchen rendered.
+
+And then — the question is no longer "what does this feature
+do?", but "how does it all fit into one editor?" Which brings me
+to the workflow.
+
+[Advance to Slide 14.]
+
+* Slide 14 — The scholar's workflow (≈1.5 min)
+
+** Spoken
+
+This is the loop. [Point to the diagram.]
+
+You start with a source — Tibetan or Sanskrit, in =.org= format.
+=C-c u P= prepares the document — applies the segmenter,
+inserts the proper heading structure. =C-c u B= runs
+auto-analyze on the prepared document, creating one
+=seg-NNN.org= file per segment, and immediately fires the
+async-queued Claude and DharmaMitra calls.
+
+While those are coming back, you read. Uchen, Wylie, the
+interlinear gloss, the grammar with the Particle Map, the
+detailed dictionary. By the time you've read the segment, the
+draft translation has usually arrived in the file already.
+
+You refine. You write your working translation. You add notes,
+add footnotes. None of this is overwritten when you reanalyze.
+
+You combine — =C-c u C= stitches all the per-segment files into
+a single combined document with all your working translations
+threaded together. And you export. =Org= to LuaLaTeX to PDF, the
+same pipeline I use for every paper.
+
+Eight stages, one editor. The translator never has to leave the
+buffer. Everything that you write by hand survives every
+regeneration. That's the design.
+
+[Advance to Slide 15.]
+
+* Slide 15 — By the numbers (≈1.5 min)
+
+** Spoken
+
+A short technical aside, because the audience deserves to know
+what kind of object the system actually is.
+
+[Point to the metric tiles.] Live numbers, as of yesterday.
+
+About 744 top-level functions across 49 source modules. 104 of
+those are interactive commands — that is, they're directly
+callable by the user from the keyboard. 51 are user-configurable
+settings — what Emacs calls =defcustoms=.
+
+Production code is about 33 thousand lines of Emacs Lisp. The
+test suite — 1,839 ERT tests, zero unexpected failures — is
+about 29 thousand lines. Tests-to-code ratio of 0.88. That's a
+ratio I'm comfortable defending — every behaviour in the tool
+that matters is pinned down by a regression test. The rule is
+that bug fixes ship a failing test first, then the fix.
+
+Five months of development. 217 commits. [Point to the timeline
+strip.] The arc moves from a foundation of particle and verb
+analysis in December, through the multi-source dictionary in
+January, OCR pipeline in February, the Round-2 segmenter and
+Steinert SQLite in early April, vocabulary polish and
+Zettelkasten through late April, into the Sanskrit-parallel
+architecture you saw on the previous slide.
+
+This is not a finished system. It is a working one.
+
+[Advance to Slide 16.]
+
+* Slide 16 — Roadmap (≈2 min)
+
+** Spoken
+
+So — what's shipped, what's next, and what's the actual ship
+target.
+
+[Point to the *shipped* column.] On the shipped side, in
+broad terms: the Round-2 clause segmenter; Bialek terminology
+unified across every analysis section so they all use the same
+case names; the multi-source dictionary; the Claude and
+DharmaMitra bridges with caching and queueing; the
+Sanskrit-Tibetan parallel architecture you saw; the
+Zettelkasten and thesaurus integration; and the test suite as
+described.
+
+[Point to the *next* column.] On the next side — and these are
+the things blocking what I think of as a real release: a small
+fix to the clause segmenter for cases where a multi-position
+multi-word-unit verb is followed by a converb that should
+extend the clause; a sub-source ranking polish for entries like
+=པའི= where the wrong gloss currently wins; the public
+documentation — a user guide and a one-page reference card; and
+the MELPA package metadata, autoloads, and a test on stock
+Emacs without my own configuration.
+
+But the actual ship target — [point to the highlighted line] —
+is the *distribution bundle for students and scholars*. What I
+want to deliver by the end of the semester is not a library on
+MELPA — it's a configured Emacs distribution. Open it, point it
+at a Tibetan PDF, and start translating. The library is
+finished; the *delivery* is the work.
+
+That's where I'd particularly value the room's input — what
+that distribution should look like, what it should be called,
+who it should be for. Which is the discussion that comes next.
+
+[Advance to Slide 17.]
+
+* Slide 17 — Discussion · Pedagogy (≈1 min lead + ≈4 min audience)
+
+** Spoken
+
+The system is built. The conversation about *how it should be
+used* is just starting, and I would like the next eight or nine
+minutes to actually be that conversation.
+
+I have two clusters of questions, one for education and one for
+scholarship and translation. We'll do them separately. Education
+first.
+
+[Read the questions on screen, slowly. Take a breath after each.]
+
+*One.* Could a tool like this lower the barrier into Classical
+Tibetan or Sanskrit for first-year students — or does it skip
+the slow work that builds intuition?
+
+*Two.* Bialek-style exercise drilling, *with* the tool: aid or
+crutch? Where is the line between scaffolding and shortcut?
+
+*Three.* Every analysis file shows its work — interlinear,
+particle map, grammar reasoning. Does seeing the reasoning
+matter to the learner, or only the answer?
+
+*Four.* A shared corpus of analysis files: what would a
+reading-group infrastructure look like, and who would maintain
+it?
+
+[Then, to the room:] I'd genuinely like to hear from anyone who
+teaches the language — what would help, what would hurt.
+
+[Open the floor. Listen. Note responses if helpful.]
+
+[When discussion is winding down, advance to Slide 18.]
+
+* Slide 18 — Discussion · Scholarship & translation (≈1 min lead + ≈5 min audience)
+
+** Spoken
+
+Second cluster. For the working translator and the philologist —
+what does this change, and what should it not.
+
+[Read the questions on screen.]
+
+*One.* Variant readings and apparatus: where does this tool sit
+between the manuscript witnesses and a critical edition? It
+isn't a critical-edition tool. Should it become one? Or does
+that confuse roles?
+
+*Two.* Translation memory across projects: useful continuity —
+or homogenisation of vocabulary that should stay text-specific?
+
+*Three.* Citation export to LaTeX is in the pipeline. What's the
+right format for shareable analysis files between scholars?
+=.org= works for me; what about for the field?
+
+*Four.* AI-assisted translation: methodological and ethical
+implications for footnotes, accountability, and publication
+norms. This one is the hardest, and probably the one we'll
+finish on.
+
+[To the room:] I'd particularly like Dr. Nehrdich's perspective
+on the alignment side, and Professor Kramer's on the
+philological side — but please don't let me put either of you on
+the spot.
+
+[Open the floor. This is the longest discussion segment.]
+
+[When time is nearly up, advance to Slide 19.]
+
+* Slide 19 — Closing (≈1 min)
+
+** Spoken
+
+[Slide 19. Black background, the syllable =sgron-me= in saffron.]
+
+One word, in closing.
+
+=sgron-me=. /sgron-me/. A lamp.
+
+What I'd like Tibetan-CAT-Tool to be is a lamp on the desk of
+anyone reading these texts. A small, steady light. Not an
+oracle, not a replacement, not a critical edition — a *lamp*.
+Bright enough to read by. Honest enough that you can tell which
+parts of the page it's lighting and which parts you still have
+to find your own way through.
+
+Built in the editor where the work already happens.
+
+Thank you very much for your time, and for the trust of having
+me present this in front of an audience like this one. I'm
+ready for more questions.
+
+[Stay on Slide 19 for the remaining Q&A.]
+
+* Appendix · Screenshots to capture
+
+These are the screenshot slots in the deck. Capture each as a PNG
+sized roughly 1280×800 (the slot will scale), drop into
+=presentation/screenshots/= with the suggested filename, and
+replace the corresponding =<div class="shot">…</div>= block in
+=Tibetan-CAT-Tool.html= with =<img class="shot" src="…" alt="…">=.
+
+** 07-OCR (slide 07)
+
+- *Filename:* =screenshots/07-ocr-correct-buffer.png=
+- *Capture:* M-x =tibetan-ocr-correct-buffer= running on a real
+  pecha scan. Show the source buffer with =:unknown= or
+  =:suspicious= syllables highlighted, and Claude's proposed
+  corrections in a side window. Ideally a real Kangyur folio.
+
+** 11-Per-segment (slide 11)
+
+- *Filename:* =screenshots/11-seg-014.png=
+- *Capture:* Full Emacs frame, two windows: source =.org= file
+  on the left (Tibetan visible), =seg-014.org= on the right with
+  all seven =* Tibetan Analysis= subsections expanded —
+  Wylie, Interlinear, Translation, Grammar, Sentence Structure,
+  Verb Classification, Detailed Dictionary. Scroll so =* My
+  Notes= is visible too. This is the centerpiece screenshot.
+
+** 13-Parallel (slide 13)
+
+- *Filename:* =screenshots/13-parallel-skt-tib.png=
+- *Capture:* A real per-segment file with =#+SOURCE_MODE:
+  parallel-sanskrit= active. All six top-level sections visible
+  (=* Sanskrit Analysis=, =* Tibetan Analysis=, =* Combined
+  Analysis=, =* DharmaMitra Translation (Sanskrit)=, =*
+  DharmaMitra Translation (Tibetan)=, =* Sanskrit
+  (DharmaMitra)=). Pick a segment that has both Devanagari and
+  Uchen rendered, ideally a kāvya line.
+
+** Optional · cover screenshot for the README / future blog
+
+A wide-aspect screenshot of the Emacs frame mid-translation —
+the workflow in action — would also be useful for the eventual
+distribution bundle README. Not needed for the talk.
+
+* Appendix · Pre-talk checklist
+
+The day of the talk:
+
+- [ ] Open the deck in a browser tab — confirm 19 slides,
+  =Cmd-R= refreshes
+- [ ] Open this script in Emacs alongside (org-mode auto-folding
+  helps — collapse all but current slide)
+- [ ] Try keyboard nav once: =→= advances, =R= resets, =1..9=
+  jump
+- [ ] Confirm modeline counter on slide 19 reads =End=
+- [ ] Print this script if you'd rather have paper than a second
+  screen — it's ≈18 pages
+- [ ] Bring water
+- [ ] If running over, the Roadmap (slide 16) is the most
+  compressible; the discussion slides should not be cut
+
+* Appendix · If something goes wrong
+
+- *Slide doesn't advance:* click on the deck area first to give
+  it focus, then press =→=.
+- *Browser crashes:* open the file directly, =file:///…/Tibetan-CAT-Tool.html=
+  works; you may need =Cmd-Shift-R= once for fonts.
+- *Forgot a number:* on Slide 15, the numbers are stable enough
+  that you can paraphrase — say "around 740 functions, around
+  100 commands, just under 2,000 tests" if the exact figure
+  escapes you.
+- *Lost on a feature slide:* go back to "the wall" headline at
+  the top — that anchors you. Read it as written and continue.
+- *A question you can't answer:* "I don't know — but I'd like to
+  hear what you think" is a complete answer. Both Kramer and
+  Nehrdich know more about their respective domains than I do
+  about mine.
