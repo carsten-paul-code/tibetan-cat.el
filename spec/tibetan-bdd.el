@@ -31,6 +31,7 @@
   given          ; Setup/preconditions (string or form)
   when           ; Action to perform (form)
   then           ; Expected outcomes (list of assertions)
+  skip-unless    ; Optional predicate form; spec is skipped when it evaluates nil
   example-source ; Where this example came from (file, segment, etc.)
   tags)          ; Tags for filtering (:regression, :critical, etc.)
 
@@ -60,11 +61,24 @@ BODY contains spec definitions."
 
 (defmacro spec (name &rest clauses)
   "Define a spec NAME with GIVEN/WHEN/THEN clauses.
-Adds to the current suite being defined."
+Adds to the current suite being defined.
+
+Supported clauses:
+  :given        — setup form (executed before WHEN)
+  :when         — action form (its return value is bound to `result' in THEN)
+  :then         — assertion form or list of assertion forms
+  :skip-unless  — optional predicate;  when it evaluates to nil at run
+                  time, the spec is recorded as `skipped' and neither
+                  GIVEN nor WHEN nor THEN runs.  Use for environment-
+                  dependent specs (e.g. `(tibetan-steinert-available-p)'
+                  on Emacs versions without bundled SQLite).
+  :example      — provenance string for documentation
+  :tags         — list of keyword tags"
   (declare (indent 1))
   (let ((given nil)
         (when-form nil)
         (then-forms nil)
+        (skip-unless-form nil)
         (example-source nil)
         (tags nil))
     ;; Parse clauses
@@ -75,6 +89,7 @@ Adds to the current suite being defined."
           (:given (setq given val))
           (:when (setq when-form val))
           (:then (setq then-forms (if (listp (car val)) val (list val))))
+          (:skip-unless (setq skip-unless-form val))
           (:example (setq example-source val))
           (:tags (setq tags val)))))
     `(push (make-tibetan-bdd-spec
@@ -82,6 +97,7 @@ Adds to the current suite being defined."
             :given ',given
             :when ',when-form
             :then ',then-forms
+            :skip-unless ',skip-unless-form
             :example-source ,example-source
             :tags ',tags)
            (tibetan-bdd-suite-specs suite))))
@@ -180,25 +196,39 @@ Adds to the current suite being defined."
   "Holds the result of the WHEN clause for use in THEN assertions.")
 
 (defun tibetan-bdd-run-spec (spec)
-  "Run a single SPEC, returning (name . result)."
+  "Run a single SPEC, returning (name . result).
+
+The result symbol is one of:
+  `passed'    — all assertions held
+  `skipped'   — `:skip-unless' predicate evaluated to nil
+  `(failed REASON)' — an assertion or evaluation raised an error"
   (let ((name (tibetan-bdd-spec-name spec))
-        (result nil))
-    (condition-case err
-        (progn
-          ;; Execute GIVEN (setup)
-          (when (tibetan-bdd-spec-given spec)
-            (eval (tibetan-bdd-spec-given spec)))
-          ;; Execute WHEN (action) and capture result
-          (setq result (eval (tibetan-bdd-spec-when spec)))
-          (setq tibetan-bdd--current-result result)
-          ;; Execute THEN (assertions) with result bound
-          (dolist (assertion (tibetan-bdd-spec-then spec))
-            ;; Substitute 'result' symbol with actual value in assertion
-            (eval `(let ((result ',result))
-                     ,assertion)))
-          (cons name 'passed))
-      (error
-       (cons name (list 'failed (error-message-string err)))))))
+        (result nil)
+        (skip-unless (tibetan-bdd-spec-skip-unless spec)))
+    ;; Honour :skip-unless before running anything else.  Errors inside
+    ;; the predicate are treated as "cannot determine" → skip (safer
+    ;; than running and getting a confusing failure).
+    (cond
+     ((and skip-unless
+           (not (condition-case nil (eval skip-unless) (error nil))))
+      (cons name 'skipped))
+     (t
+      (condition-case err
+          (progn
+            ;; Execute GIVEN (setup)
+            (when (tibetan-bdd-spec-given spec)
+              (eval (tibetan-bdd-spec-given spec)))
+            ;; Execute WHEN (action) and capture result
+            (setq result (eval (tibetan-bdd-spec-when spec)))
+            (setq tibetan-bdd--current-result result)
+            ;; Execute THEN (assertions) with result bound
+            (dolist (assertion (tibetan-bdd-spec-then spec))
+              ;; Substitute 'result' symbol with actual value in assertion
+              (eval `(let ((result ',result))
+                       ,assertion)))
+            (cons name 'passed))
+        (error
+         (cons name (list 'failed (error-message-string err)))))))))
 
 (defun tibetan-bdd-run-suite (suite-name)
   "Run all specs in SUITE-NAME, returning results."
@@ -221,18 +251,21 @@ Adds to the current suite being defined."
   "Run all defined specs, returning summary."
   (let ((all-results nil)
         (passed 0)
-        (failed 0))
+        (failed 0)
+        (skipped 0))
     (maphash
      (lambda (name suite)
        (let ((suite-results (tibetan-bdd-run-suite name)))
          (dolist (r suite-results)
            (push (cons name r) all-results)
-           (if (eq (cdr r) 'passed)
-               (cl-incf passed)
-             (cl-incf failed)))))
+           (cond
+            ((eq (cdr r) 'passed) (cl-incf passed))
+            ((eq (cdr r) 'skipped) (cl-incf skipped))
+            (t (cl-incf failed))))))
      tibetan-bdd-suites)
     (setq tibetan-bdd-results (nreverse all-results))
-    (list :passed passed :failed failed :results tibetan-bdd-results)))
+    (list :passed passed :failed failed :skipped skipped
+          :results tibetan-bdd-results)))
 
 ;; ============================================================================
 ;; REPORTING
@@ -241,7 +274,8 @@ Adds to the current suite being defined."
 (defun tibetan-bdd-report (results)
   "Print a report of RESULTS."
   (let ((passed (plist-get results :passed))
-        (failed (plist-get results :failed)))
+        (failed (plist-get results :failed))
+        (skipped (or (plist-get results :skipped) 0)))
     (princ "\n")
     (princ "=========================================\n")
     (princ "BDD Specification Results\n")
@@ -254,15 +288,17 @@ Adds to the current suite being defined."
         (let ((suite (car r))
               (spec-name (cadr r))
               (result (cddr r)))
-          (when (listp result)
+          (when (and (listp result) (eq (car-safe result) 'failed))
             (princ (format "\n  [%s] %s\n" suite spec-name))
             (princ (format "    %s\n" (cadr result))))))
       (princ "\n"))
 
     ;; Summary
-    (princ (format "Passed: %d\n" passed))
-    (princ (format "Failed: %d\n" failed))
-    (princ (format "Total:  %d\n" (+ passed failed)))
+    (princ (format "Passed:  %d\n" passed))
+    (princ (format "Failed:  %d\n" failed))
+    (when (> skipped 0)
+      (princ (format "Skipped: %d\n" skipped)))
+    (princ (format "Total:   %d\n" (+ passed failed skipped)))
     (princ "=========================================\n")
 
     (if (= failed 0)
