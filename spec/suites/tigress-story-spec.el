@@ -13,6 +13,7 @@
 ;;; Code:
 
 (require 'tibetan-bdd)
+(require 'tibetan-steinert nil t)
 
 ;; ============================================================================
 ;; TIGRESS STORY ANALYSIS SUITE
@@ -27,6 +28,8 @@
   ;; ==========================================================================
 
   (spec "seg-026: Recognize ངོ་མཚར as compound"
+    :skip-unless (and (fboundp 'tibetan-steinert-available-p)
+                      (tibetan-steinert-available-p))
     :given (setq test-text "ངོ་མཚར་དུ་གྱུར")
     :when (when (fboundp 'tibetan-parse-enhanced)
             (let* ((parsed (tibetan-parse-enhanced test-text))
@@ -107,6 +110,8 @@
   ;; ==========================================================================
 
   (spec "seg-027: Recognize མ་སྨད as compound"
+    :skip-unless (and (fboundp 'tibetan-steinert-available-p)
+                      (tibetan-steinert-available-p))
     :given (setq test-text "མ་སྨད་གསུམ་པོ")
     :when (when (fboundp 'tibetan-parse-enhanced)
             (let* ((parsed (tibetan-parse-enhanced test-text))
@@ -118,6 +123,8 @@
     :tags (:tigress :segmentation :critical))
 
   (spec "seg-027: Recognize ད་ལྟར as compound"
+    :skip-unless (and (fboundp 'tibetan-steinert-available-p)
+                      (tibetan-steinert-available-p))
     :given (setq test-text "ད་ལྟར་འདི")
     :when (when (fboundp 'tibetan-parse-enhanced)
             (let* ((parsed (tibetan-parse-enhanced test-text))
@@ -129,6 +136,8 @@
     :tags (:tigress :segmentation :critical))
 
   (spec "seg-027: Recognize འབའ་ཞིག as compound"
+    :skip-unless (and (fboundp 'tibetan-steinert-available-p)
+                      (tibetan-steinert-available-p))
     :given (setq test-text "འདི་འབའ་ཞིག་ཏུ")
     :when (when (fboundp 'tibetan-parse-enhanced)
             (let* ((parsed (tibetan-parse-enhanced test-text))
@@ -211,6 +220,8 @@
   ;; ==========================================================================
 
   (spec "seg-032: Recognize ཕ་རོལ་ན as compound"
+    :skip-unless (and (fboundp 'tibetan-steinert-available-p)
+                      (tibetan-steinert-available-p))
     :given (setq test-text "པའི་ཕ་རོལ་ན")
     :when (when (fboundp 'tibetan-parse-enhanced)
             (let* ((parsed (tibetan-parse-enhanced test-text))
@@ -222,6 +233,8 @@
     :tags (:tigress :segmentation :critical))
 
   (spec "seg-032: Recognize བསྐལ་པ as compound (kalpa)"
+    :skip-unless (and (fboundp 'tibetan-steinert-available-p)
+                      (tibetan-steinert-available-p))
     :given (setq test-text "དུས་བསྐལ་པ་གྲངས")
     :when (when (fboundp 'tibetan-parse-enhanced)
             (let* ((parsed (tibetan-parse-enhanced test-text))

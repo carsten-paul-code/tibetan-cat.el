@@ -50,9 +50,28 @@
          (units (alist-get 'multiword-units parsed)))
     (mapcar (lambda (u) (nth 2 u)) units)))
 
+(defun tibetan-tigress-test--steinert-available-p ()
+  "Return t when Steinert SQLite lookup is usable.
+
+These tigress tests cover MWU detection that depends on the
+Steinert fallback inside `tibetan-find-multiword-units' (the
+target words `ངོ་མཚར' / `འབའ་ཞིག' / `བསྐལ་པ' all live in
+RangjungYeshe / IvesWaldo, which the parser reaches via
+Steinert).  Emacs versions without bundled SQLite (28 and
+earlier) cannot open the DB, the fallback is silently
+disabled, and the parser legitimately returns no MWU — so the
+test would fail on Emacs 28 even though no regression has
+been introduced.
+
+The CI matrix runs Emacs 27.1 / 28.2 / 29.4;  29.4 has SQLite
+support and exercises the real fallback.  27.1 / 28.2 skip."
+  (and (fboundp 'tibetan-steinert-available-p)
+       (tibetan-steinert-available-p)))
+
 (ert-deftest tibetan-tigress-mwu-ngo-mtshar-not-swallowed ()
   "`ངོ་མཚར' must be an MWU in `ངོ་མཚར་དུ་གྱུར' — Steinert's 4-syll
 `ངོ་མཚར་དུ་གྱུར' phrasal entry must NOT swallow the whole span."
+  (skip-unless (tibetan-tigress-test--steinert-available-p))
   (let ((forms (tibetan-tigress-test--mwu-forms "ངོ་མཚར་དུ་གྱུར")))
     (should (member "ངོ་མཚར" forms))
     (should-not (member "ངོ་མཚར་དུ་གྱུར" forms))))
@@ -60,6 +79,7 @@
 (ert-deftest tibetan-tigress-mwu-ba-zhig-not-swallowed ()
   "`འབའ་ཞིག' must be an MWU in `འདི་འབའ་ཞིག་ཏུ' — `འདི་འབའ་ཞིག' from
 IvesWaldo must NOT swallow the demonstrative."
+  (skip-unless (tibetan-tigress-test--steinert-available-p))
   (let ((forms (tibetan-tigress-test--mwu-forms "འདི་འབའ་ཞིག་ཏུ")))
     (should (member "འབའ་ཞིག" forms))
     (should-not (member "འདི་འབའ་ཞིག" forms))))
@@ -68,6 +88,7 @@ IvesWaldo must NOT swallow the demonstrative."
   "`བསྐལ་པ' (kalpa) must be an MWU in `དུས་བསྐལ་པ་གྲངས'.
 The IvesWaldo `དུས་བསྐལ' (\"kalpa of destruction\") entry must not
 shadow the canonical `བསྐལ་པ' compound at position 1."
+  (skip-unless (tibetan-tigress-test--steinert-available-p))
   (let ((forms (tibetan-tigress-test--mwu-forms "དུས་བསྐལ་པ་གྲངས")))
     (should (member "བསྐལ་པ" forms))
     (should-not (member "དུས་བསྐལ" forms))))
