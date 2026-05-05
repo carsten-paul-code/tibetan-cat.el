@@ -18,7 +18,6 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'package)  ; for package-installed-p (lint cleanliness on Emacs 28)
 
 ;; ============================================================================
 ;; CONSTANTS
