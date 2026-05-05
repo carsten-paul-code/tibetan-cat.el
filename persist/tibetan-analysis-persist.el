@@ -633,11 +633,19 @@ written filepath."
       (insert "* Footnotes\n\n"))
     filepath))
 
-(defun tibetan-analysis-create-file (seg-id tibetan-text source-file auto-content)
+(defun tibetan-analysis-create-file
+    (seg-id tibetan-text source-file auto-content &optional folio)
   "Create a new analysis file for SEG-ID.
 TIBETAN-TEXT is the Tibetan content.
 SOURCE-FILE is the path to the source document.
-AUTO-CONTENT is the generated analysis content (string)."
+AUTO-CONTENT is the generated analysis content (string).
+
+FOLIO (optional) is a folio reference (e.g. \"D3a3\" for
+Yogācārabhūmi sources).  When non-nil, written as a `:PROPERTIES:'
+drawer under the `* Tibetan Text' heading so the reader can see
+which folio they're on.  P6 (CLAUDE.md §6, addressed 2026-05-05)
+restores the folio that §5.8.2's drawer-aware extractor was
+correctly stripping from the source segment body."
   (let* ((filepath (tibetan-analysis-get-filepath seg-id))
          (hash (tibetan-analysis-compute-hash tibetan-text))
          (date (format-time-string "%Y-%m-%d"))
@@ -674,6 +682,15 @@ AUTO-CONTENT is the generated analysis content (string)."
                tibetan-analysis--sanskrit-text-for-render))
       ;; Tibetan Text follows the Sanskrit pair (Phase 2.1 reorder).
       (insert "* Tibetan Text\n")
+      ;; P6 (2026-05-05):  preserve the source segment's `:FOLIO:'
+      ;; reference as a `:PROPERTIES:' drawer under `* Tibetan Text'
+      ;; when the caller threads one through.  Backwards-compatible:
+      ;; without FOLIO the heading stays plain.
+      (when (and folio (stringp folio)
+                 (not (string-empty-p (string-trim folio))))
+        (insert ":PROPERTIES:\n")
+        (insert (format ":FOLIO: %s\n" (string-trim folio)))
+        (insert ":END:\n"))
       (insert tibetan-text)
       (insert "\n\n")
       ;; Phase 1.2 of layout-revision (2026-05-04):  the parent
@@ -3796,6 +3813,12 @@ sentence."
   (let* ((seg-data (tibetan-get-current-segment-any-format))
          (seg-id (car seg-data))
          (tibetan-text (cdr seg-data))
+         ;; P6 (2026-05-05): grab the source segment's `:FOLIO:'
+         ;; before any extractor strips the drawer, so it can be
+         ;; threaded into the new analysis file's `* Tibetan Text'
+         ;; heading.  nil for non-YBh sources without a folio drawer.
+         (segment-folio (and (fboundp 'tibetan-org-get-segment-folio)
+                             (tibetan-org-get-segment-folio)))
          ;; Capture full source buffer text so inline 〔trans:N〕
          ;; blocks from the class file can be surfaced as reference
          ;; translations.
@@ -3901,7 +3924,9 @@ sentence."
                        (error nil))))
                (auto-content (tibetan-analysis-generate-content
                               tibetan-text seg-id source-text))
-               (new-filepath (tibetan-analysis-create-file seg-id tibetan-text source-file auto-content)))
+               (new-filepath (tibetan-analysis-create-file
+                              seg-id tibetan-text source-file
+                              auto-content segment-folio)))
           (message "Created analysis file: %s" new-filepath)
           (let ((buf (find-file-noselect new-filepath)))
             (with-current-buffer buf

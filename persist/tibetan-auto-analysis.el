@@ -129,18 +129,41 @@ The heading regex is `^\\*+ Segment ' so both `*** Segment 1' and
 `**** Segment 1' are picked up.  Sentence wrappers (`*** Sentence N')
 are NOT matched because the literal word differs.
 
-Returns alist of (SEGMENT-NUMBER . TIBETAN-TEXT)."
+Returns alist of (SEGMENT-NUMBER . TIBETAN-TEXT) for the
+hierarchical form, or — when at least one segment carries a
+`:FOLIO:' drawer (Yogācārabhūmi-style sources) — a list of
+\(SEGMENT-NUMBER TIBETAN-TEXT FOLIO) triples so the create-file
+caller can preserve the folio reference (P6, 2026-05-05).  The
+inline-marker fallback always returns the cons-pair shape.
+
+Mixed shape (pair vs triple) is fine for downstream:  callers
+that want folio peek at the third element via `nth' / `caddr',
+those that don't are unaware of it."
   (let ((org-segs
          (save-excursion
            (goto-char (point-min))
-           (let ((segments '()))
+           (let ((segments '())
+                 (any-folio nil))
              (while (re-search-forward "^\\*+ Segment \\([0-9]+\\)" nil t)
                (let* ((seg-num (string-to-number (match-string 1)))
                       (text (when (fboundp 'tibetan-org-get-segment-text)
-                              (tibetan-org-get-segment-text))))
+                              (tibetan-org-get-segment-text)))
+                      (folio (when (fboundp 'tibetan-org-get-segment-folio)
+                               (tibetan-org-get-segment-folio))))
                  (when text
-                   (push (cons seg-num text) segments))))
-             (nreverse segments)))))
+                   (when folio (setq any-folio t))
+                   (push (list seg-num text folio) segments))))
+             (let ((ordered (nreverse segments)))
+               (if any-folio
+                   ordered
+                 ;; Backwards-compatible cons-pair shape when no
+                 ;; segment in the document carries a folio (the
+                 ;; common Milarepa / non-YBh case).  Keeps the
+                 ;; downstream `(car seg)' / `(cdr seg)' destructuring
+                 ;; in older / external callers working unchanged.
+                 (mapcar (lambda (triple)
+                           (cons (nth 0 triple) (nth 1 triple)))
+                         ordered)))))))
     (if org-segs
         org-segs
       (tibetan-auto--collect-inline-segments))))
@@ -359,8 +382,14 @@ Progress is shown in the echo area."
     ;; Process segments
     (dolist (seg segments)
       (setq current (1+ current))
-      (let* ((seg-num (car seg))
-             (seg-text (cdr seg))
+      (let* ((triple-p (and (listp seg) (= 3 (safe-length seg))))
+             (seg-num (if triple-p (nth 0 seg) (car seg)))
+             (seg-text (if triple-p (nth 1 seg) (cdr seg)))
+             ;; P6 (2026-05-05):  YBh-style sources surface a `:FOLIO:'
+             ;; here from `--collect-segments';  Milarepa / non-YBh
+             ;; sources return cons-pairs and folio is nil.  Threaded
+             ;; into create-file below.
+             (seg-folio (when triple-p (nth 2 seg)))
              ;; IMPORTANT: do NOT pass source-file here.
              ;; `tibetan-analysis-get-filepath' with a source-file arg
              ;; returns `seg-NNN-<shortname>.org' (suffixed), but
@@ -393,7 +422,8 @@ Progress is shown in the echo area."
                             source-file seg-num)
                          (error nil))))
                  (auto-content (tibetan-analysis-generate-content seg-text)))
-            (tibetan-analysis-create-file seg-num seg-text source-file auto-content)
+            (tibetan-analysis-create-file
+             seg-num seg-text source-file auto-content seg-folio)
             (setq created-segs (1+ created-segs))
             ;; Track for the Claude-fire pass below.  Store (filepath . text)
             ;; so we don't have to re-extract Tibetan from disk.

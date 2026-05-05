@@ -212,6 +212,73 @@ so a `**** Working Translation' sibling subheading is not included."
     (should-not (tibetan-org-get-segment-text))))
 
 ;; ============================================================================
+;; SEGMENT FOLIO TESTS  (P6 — :FOLIO: drawer preservation, 2026-05-05)
+;; ============================================================================
+
+(ert-deftest tibetan-org-get-segment-folio-reads-folio-property ()
+  "When the segment's `:PROPERTIES:' drawer carries `:FOLIO: D3a3',
+the new helper returns the folio string.
+
+This pairs with §5.8.2's drawer-skip extractor:  the drawer is
+correctly stripped from the returned Tibetan TEXT, but the folio
+itself is preserved separately so callers can thread it into the
+analysis-file `* Tibetan Text' heading (P6 from CLAUDE.md §6)."
+  (skip-unless (fboundp 'tibetan-org-get-segment-folio))
+  (with-temp-buffer
+    (org-mode)
+    (insert "*** Segment 30\n"
+            ":PROPERTIES:\n"
+            ":FOLIO: D3a3\n"
+            ":END:\n"
+            "གཞན་ཡང་\n")
+    (goto-char (point-min))
+    (search-forward "*** Segment 30")
+    (should (string= "D3a3" (tibetan-org-get-segment-folio)))))
+
+(ert-deftest tibetan-org-get-segment-folio-nil-without-drawer ()
+  "Segment without a `:PROPERTIES:' drawer → nil."
+  (skip-unless (fboundp 'tibetan-org-get-segment-folio))
+  (with-temp-buffer
+    (org-mode)
+    (insert "*** Segment 1\n"
+            "Body without any drawer.\n")
+    (goto-char (point-min))
+    (search-forward "*** Segment 1")
+    (should-not (tibetan-org-get-segment-folio))))
+
+(ert-deftest tibetan-org-get-segment-folio-nil-without-folio-key ()
+  "Drawer present but `:FOLIO:' key absent → nil.
+
+A segment may have other property drawer entries (e.g. arbitrary
+metadata) without a folio reference."
+  (skip-unless (fboundp 'tibetan-org-get-segment-folio))
+  (with-temp-buffer
+    (org-mode)
+    (insert "*** Segment 1\n"
+            ":PROPERTIES:\n"
+            ":CUSTOM_ID: seg-1\n"
+            ":END:\n"
+            "Body.\n")
+    (goto-char (point-min))
+    (search-forward "*** Segment 1")
+    (should-not (tibetan-org-get-segment-folio))))
+
+(ert-deftest tibetan-org-get-segment-folio-nil-outside-segment ()
+  "Cursor not under a `*** Segment' heading → nil (no error)."
+  (skip-unless (fboundp 'tibetan-org-get-segment-folio))
+  (with-temp-buffer
+    (org-mode)
+    (insert "* Tibetan Text\n"
+            "** Sentence 1\n"
+            ":PROPERTIES:\n"
+            ":FOLIO: D3a3\n"
+            ":END:\n"
+            "Body.\n")
+    (goto-char (point-min))
+    (search-forward "** Sentence 1")
+    (should-not (tibetan-org-get-segment-folio))))
+
+;; ============================================================================
 ;; SEGMENT ID TESTS
 ;; ============================================================================
 

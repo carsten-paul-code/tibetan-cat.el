@@ -729,6 +729,76 @@ file only]' fallback template."
   "Test that file creation function exists."
   (should (fboundp 'tibetan-analysis-create-file)))
 
+(ert-deftest tibetan-analysis-create-file-writes-folio-drawer-when-passed ()
+  "P6 — when the optional FOLIO argument is passed, the analysis
+file's `* Tibetan Text' heading carries a `:PROPERTIES:' drawer
+with `:FOLIO: <folio>'.  This preserves the folio reference from
+the source segment so the YBh class can scroll the analysis file
+and see which folio they're on without leaving the buffer.
+
+Before this fix, §5.8.2's drawer-skip extractor stripped `:FOLIO:'
+from the source segment body before passing the text on, with the
+side-effect that the new analysis file lost the folio entirely
+(low-priority bug parked as P6 in CLAUDE.md §6, addressed
+2026-05-05)."
+  (skip-unless (fboundp 'tibetan-analysis-create-file))
+  (let* ((dir (make-temp-file "ttest-folio-" t))
+         (source-file (expand-file-name "src.org" dir))
+         (buf nil))
+    (unwind-protect
+        (progn
+          (with-temp-file source-file (insert "#+TITLE: Source\n"))
+          ;; `tibetan-analysis-get-folder' uses `(buffer-file-name)' —
+          ;; visit the source so the analysis dir resolves under it.
+          (setq buf (find-file-noselect source-file))
+          (with-current-buffer buf
+            (let ((path (tibetan-analysis-create-file
+                         42 "བདག་ལ" source-file "* Tibetan Analysis\nbody\n"
+                         "D3a3")))
+              (should (file-exists-p path))
+              (with-temp-buffer
+                (insert-file-contents path)
+                (let ((s (buffer-string)))
+                  ;; Drawer attached to the * Tibetan Text heading.
+                  (should (string-match-p "^\\* Tibetan Text\n:PROPERTIES:" s))
+                  (should (string-match-p ":FOLIO: D3a3" s))
+                  (should (string-match-p ":END:" s))
+                  ;; Tibetan body still follows the drawer.
+                  (should (string-match-p "བདག་ལ" s)))))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-analysis-create-file-no-drawer-when-folio-nil ()
+  "When the optional FOLIO argument is nil (the common case for
+non-YBh sources), the `* Tibetan Text' heading is emitted plain —
+no `:PROPERTIES:' drawer.  Backwards-compatible default."
+  (skip-unless (fboundp 'tibetan-analysis-create-file))
+  (let* ((dir (make-temp-file "ttest-folio-nil-" t))
+         (source-file (expand-file-name "src.org" dir))
+         (buf nil))
+    (unwind-protect
+        (progn
+          (with-temp-file source-file (insert "#+TITLE: Source\n"))
+          (setq buf (find-file-noselect source-file))
+          (with-current-buffer buf
+            ;; Call without the FOLIO arg (4-positional form).
+            (let ((path (tibetan-analysis-create-file
+                         7 "བདག" source-file
+                         "* Tibetan Analysis\nbody\n")))
+              (should (file-exists-p path))
+              (with-temp-buffer
+                (insert-file-contents path)
+                (let ((s (buffer-string)))
+                  ;; * Tibetan Text appears as a plain heading.
+                  (should (string-match-p "^\\* Tibetan Text\n[^:]" s))
+                  (should-not (string-match-p ":FOLIO:" s)))))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-analysis-get-filepath-callable ()
   "Test that filepath function exists."
   (should (fboundp 'tibetan-analysis-get-filepath)))

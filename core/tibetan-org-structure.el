@@ -176,6 +176,39 @@ pattern."
           (tibetan-org--read-subtree-body)))
     (error nil)))
 
+(defun tibetan-org-get-segment-folio ()
+  "Return the `:FOLIO:' property of the current segment, or nil.
+
+Pairs with `tibetan-org-get-segment-text' (the §5.8.2 drawer-aware
+extractor):  the drawer is correctly stripped from the returned
+Tibetan TEXT, but the folio reference itself is read here so
+callers (e.g. `tibetan-analysis-create-file') can thread it into
+the analysis file's `* Tibetan Text' heading.
+
+Drawer-skip side-effect P6 (CLAUDE.md §6, addressed 2026-05-05):
+without this helper, newly-created analysis files for YBh
+segments lost the `:FOLIO:' reference because the source's
+drawer was stripped during text extraction.
+
+Returns nil cleanly when:
+  - cursor is not under a `*** Segment' heading,
+  - the segment has no `:PROPERTIES:' drawer,
+  - the drawer exists but lacks a `:FOLIO:' key."
+  (condition-case nil
+      (save-excursion
+        (when (tibetan-org-at-segment-p)
+          (unless (org-at-heading-p)
+            (org-back-to-heading t))
+          ;; Use Org's API rather than rolling our own regex —
+          ;; `org-entry-get' walks the property drawer and returns nil
+          ;; on missing key.  No INHERITED arg → strictly the segment's
+          ;; own drawer.
+          (let ((val (org-entry-get (point) "FOLIO")))
+            (and val (stringp val)
+                 (not (string-empty-p (string-trim val)))
+                 (string-trim val)))))
+    (error nil)))
+
 (defun tibetan-org-get-segment-id ()
   "Get segment ID (number) from current segment."
   (save-excursion
