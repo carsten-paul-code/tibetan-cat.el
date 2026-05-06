@@ -14,6 +14,8 @@
 (require 'cl-lib)
 
 (declare-function gptel-request "gptel" (prompt &rest args))
+(declare-function tibetan-analysis--ensure-gptel-ready
+                  "tibetan-analysis-claude" ())
 
 ;; ============================================================================
 ;; CONFIGURATION
@@ -168,7 +170,14 @@ Returns plist: (:text \"...\" :changes (list of plists))"
 ;; ============================================================================
 
 (defun tibetan-ocr-correct--gptel-available-p ()
-  "Check if gptel is available and configured."
+  "Check if gptel is available and configured.
+Self-loads the API key from `~/.authinfo' (or `$ANTHROPIC_API_KEY')
+via `tibetan-analysis--ensure-gptel-ready' if persist module is
+loaded -- so a fresh Emacs session need not have run an analysis
+command first.  Same pattern as
+`tibetan-sanskrit-parallel-dharmamitra'."
+  (when (fboundp 'tibetan-analysis--ensure-gptel-ready)
+    (ignore-errors (tibetan-analysis--ensure-gptel-ready)))
   (and (featurep 'gptel)
        (boundp 'gptel-api-key)
        gptel-api-key))

@@ -58,23 +58,45 @@
 so we resolve the path here and refer to it from the test below.")
 
 (ert-deftest tibetan-cat-loader-requires-ocr-modules ()
-  "The top-level loader (`tibetan-cat.el') must `(require)' both
-`tibetan-ocr-validate' and `tibetan-ocr-correct', so that a fresh
-Emacs session loading the package via `(require \\='tibetan-cat)' has
-M-x `tibetan-ocr-correct-buffer' callable without a manual
-`load-library'.
+  "The top-level loader (`tibetan-cat.el') must `(require)' the OCR
+trio -- validator, corrector, and runner -- so that a fresh Emacs
+session loading the package via `(require \\='tibetan-cat)' has
+the OCR commands callable without a manual `load-library'.
 
 Regression: before this test the loader added `doc-prep/' to load-path
-but did not require the OCR pair, so on a clean restart
+but did not require the OCR modules, so on a clean restart
 `tibetan-ocr-correct-buffer' silently fell back to its
 `fboundp'-guarded \"no issues\" branch -- looking like the corrector
-had run when actually the validator was never called."
+had run when actually the validator was never called.  The runner had
+the same orphan symptom: `tibetan-doc-prep' only `declare-function's
+the runner entry points and never required the module."
   (should (file-exists-p tibetan-ocr-correct-test--loader-path))
   (with-temp-buffer
     (insert-file-contents tibetan-ocr-correct-test--loader-path)
     (let ((src (buffer-string)))
       (should (string-match-p "(require 'tibetan-ocr-validate" src))
-      (should (string-match-p "(require 'tibetan-ocr-correct" src)))))
+      (should (string-match-p "(require 'tibetan-ocr-correct" src))
+      (should (string-match-p "(require 'tibetan-ocr-runner" src)))))
+
+(ert-deftest tibetan-ocr-correct-self-loads-gptel-key ()
+  "`tibetan-ocr-correct--gptel-available-p' must invoke
+`tibetan-analysis--ensure-gptel-ready' before checking
+`gptel-api-key', so that a fresh Emacs session running OCR
+correction first (without having run any analysis command yet)
+auto-loads the API key from ~/.authinfo / $ANTHROPIC_API_KEY.
+
+Regression: before this test the predicate was
+   (and (featurep 'gptel) (boundp 'gptel-api-key) gptel-api-key)
+with no key-resolution -- so the corrector errored with
+\"No `gptel-api-key' found in the auth source\" on first use after
+restart, even though ~/.authinfo had a perfectly valid key."
+  (let* ((src-path (expand-file-name
+                    "doc-prep/tibetan-ocr-correct.el"
+                    (file-name-directory tibetan-ocr-correct-test--loader-path)))
+         (src (with-temp-buffer
+                (insert-file-contents src-path)
+                (buffer-string))))
+    (should (string-match-p "tibetan-analysis--ensure-gptel-ready" src))))
 
 ;; ============================================================================
 ;; PROMPT CONSTRUCTION
