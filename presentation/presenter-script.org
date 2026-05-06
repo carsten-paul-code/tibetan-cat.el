@@ -11,7 +11,7 @@ corresponds to one slide. Read the *Spoken* prose aloud at a
 natural pace; advance the slide on the cue when present. Cues in
 [brackets] are stage directions, not to be spoken.
 
-Target: ≈45 min total. Spoken portions ≈37 min, discussion ≈8 min.
+Target: ≈45 min total. Spoken portions ≈44 min, discussion ≈8 min — with 22 slides there's no comfortable buffer; if you read slowly, the Roadmap (slide 19) and the workflow (slide 17) are the natural places to compress.
 
 ** Pacing reference
 - Read at ~150 words per minute (slower than reading silently).
@@ -66,13 +66,21 @@ happen, so I'll keep the technical content tight.
 
 This is where the tool begins.
 
-The first time the gap really became obvious wasn't in a reading
-session. It was while I was working through the particle drills in
-Joanna Bialek's textbook, by hand. I had — [count off on fingers,
-slowly] — the textbook open on the desk; a PDF reader with a
-Tibetan dictionary in another window; Wilson's grammar in a third;
-my own notes in a fourth; and the document I was supposed to be
-producing in a fifth.
+[Point to the photo on the left of the screen.]
+
+What you're looking at is one of those exercises, exactly as I
+worked it on paper. Eight reading questions, color-coded by part
+of speech. English glosses written under each Tibetan line.
+Particle breakdowns in the margins. Folio references where I'd
+chased a word back to its source. The photo here is from a
+later exercise — but the setup was the same one I'd had in the
+second semester of my M.A., working through the particle drills
+in Joanna Bialek's textbook by hand.
+
+I had — [count off on fingers, slowly] — the textbook open on
+the desk; a PDF reader with a Tibetan dictionary in another
+window; Wilson's grammar in a third; my own notes in a fourth;
+and the document I was supposed to be producing in a fifth.
 
 Each tool was good. The seams between them were where the time
 went. An exercise that should have taken an evening took a
@@ -220,10 +228,11 @@ So with that decided, the question is — *where do you start?*
 What's the first feature?
 
 The first feature was Wylie alongside Uchen. And the reason is
-honest and personal: when I started learning Classical Tibetan, I
-couldn't read Uchen fluently. My eye hadn't been trained on it
-yet. For a European learner, Wylie is far easier to recognise.
-You can read Wylie without retraining your visual cortex.
+honest and personal: in that same second semester, doing Bialek's
+exercises by hand, I couldn't read Uchen fluently. My eye hadn't
+been trained on it yet. For a European learner, Wylie is far
+easier to recognise. You can read Wylie without retraining your
+visual cortex.
 
 But every CAT-style tool I tried — and every reading edition I
 had — showed me one or the other, never both. So the first thing
@@ -286,84 +295,38 @@ once I've captured it for the final version — is the OCR review
 session running on a real pecha scan. Highlighted syllables in
 the buffer, suggestions in a side window.
 
-And then — once I had clean text, the next wall: Tibetan has no
-spaces. Where does a sentence start?
+And then — with clean text in hand, the harder problem was
+inside the syllables themselves. Bialek's exercises were full of
+cases where a particle is glued onto its stem.
 
 [Advance to Slide 08.]
 
-* Slide 08 — Segmentation (≈2.5 min)
+* Slide 08 — Particle recognition (≈3 min)
 
 ** Spoken
 
-[Slide 08, saffron background.]
+[Slide 08, indigo background.]
 
-Tibetan does not punctuate the way European languages do. There
-are *tsheg* between syllables, *shad* to mark some clause-ends,
-sometimes a line break instead of a full stop, and sometimes
-nothing at all where a sentence ends.
-
-For a generic CAT-Tool segmenter — built on full-stops and
-sentence boundaries — this is fatal. There's nothing to bite on.
-
-So the segmenter is what we call Round-2 — meaning it's the
-second iteration, after the first proved that surface-pattern
-splitting wasn't enough. [Point to the input on screen.] It reads
-*tsheg* and *shad*, finds verb endings, finds converbs, finds
-final particles — and it assigns argument structure using
-case-frames from Hill 2010.
-
-Here's a concrete example. The input is six words —
-=de la ma nyan pas khros=, "because (he) didn't listen to that, he
-got angry." [Point.] The segmenter splits this into two clauses.
-Clause one is the dependent, marked causal by the converb =pas=.
-Clause two is the main clause, with =khro= — "to be angry" — as
-its verb.
-
-The system also chunks noun phrases and tags them with case —
-ergative, genitive, dative-locative, terminative, ablative,
-comitative — using a single Bialek-grounded helper that I'll come
-to in the next slide.
-
-Three keybindings expose this from any document. =C-c u B= runs
-auto-analyze on the whole document. =C-c s N= creates one
-sentence-level analysis file per sentence. =C-c s Z= re-segments
-when the source has been edited.
-
-This is the layer that produces the per-segment files I'll show
-later. Without segmentation that you can trust, none of the rest
-of the tool would work.
-
-And then — once I had clauses, I noticed that the particles
-inside them weren't always separate syllables.
-
-[Advance to Slide 09.]
-
-* Slide 09 — Particle recognition (≈3 min)
-
-** Spoken
-
-[Slide 09, indigo background.]
-
-This is the slide where Bialek's textbook re-enters the story —
-because she is exactly where this problem is most clearly
-described.
+This is the slide where Bialek's textbook earns its keep —
+because the textbook's exercises are exactly where this problem
+is most clearly described.
 
 The easy case for a particle is when it's its own syllable —
 =gis=, =la=, =na=, you can see them with your eye. The hard case
-is when a particle is *agglutinated* to its stem. One syllable on
-the page, two morphemes in the grammar — and only context tells
-you which.
+is when a particle is *agglutinated* to its stem. One syllable
+on the page, two morphemes in the grammar — and only context
+tells you which.
 
 [Point to the example.] =deys=. To the eye, this looks like a
 single syllable. But it isn't. It's =de= — the demonstrative
 "that" — plus the ergative particle =-s=. If you treat =deys= as
-a single unit, the whole clause analysis breaks. =de= will look
-like a verb stem, the ergative will be missing, and the
-case-frame won't resolve.
+a single unit, every later layer collapses: clause segmentation,
+argument structure, translation. Particle recognition is the
+*preposition*; everything else builds on it.
 
-The disambiguation needs grammar, not surface form. So the system
-maintains a *whitelist* — also drawn from Bialek's textbook — of
-the eight pronouns and demonstratives that canonically take a
+The disambiguation needs grammar, not surface form. So the
+system maintains a *whitelist* — drawn from Bialek's textbook —
+of the eight pronouns and demonstratives that canonically take a
 bare =-s= ergative in Classical Tibetan. [Point to the
 whitelist.] =de=, ='di=, =kho=, =mo=, =nga=, =su=, =bu=, =mthu=.
 Outside that whitelist, a final =-s= belongs to the syllable.
@@ -380,14 +343,109 @@ the human does. This isn't because Claude needs the help — it's
 because the analysis should be *answerable* to the same source
 the human translator is using.
 
-And then — grammar was now legible. But every unfamiliar word
-still had to be looked up, in every dictionary, every time.
+And then — particles are one half of clause-level grammar. The
+other half — the markers that *bind* clauses together — came in
+the third semester, with deeper texts and the Bialek *Portfolio*.
+
+[Advance to Slide 09.]
+
+* Slide 09 — Converb recognition (≈2.5 min)
+
+** Spoken
+
+[Slide 09.]
+
+Third semester. We started reading the Tigress jātaka. I was
+also taking part in a Tibetan Buddhist texts reading group —
+longer texts, more complex syntax than the textbook drills. And
+that's where I hit the second half of clause-level grammar.
+
+A converb isn't a standalone word. It's a suffix on a verb stem
+that tells you *how* this clause connects to the next. Causally.
+Conditionally. Simultaneously. Sequentially. Without converb
+recognition, the segmenter has no clause boundaries to work
+with — it can find a verb, but it doesn't know where the clause
+that verb belongs to actually ends.
+
+[Point to the suffix list on screen.] These are the workhorses,
+straight from Bialek's *Portfolio*. =nas= — for sequential and
+ablative — "having gone, then…". =te=, =ste=, =de= — coordinative
+— a simple "and". =zhing=, =cing=, =shing= — simultaneous,
+"while". =pas= and =bas= — causal, "because". =na= — conditional,
+"if" or "when".
+
+Each match attaches a *type* label to the clause: =causal=,
+=conditional=, =simultaneous=, =sequential=. That label flows
+into argument structure: a causal clause's subject often carries
+the ergative; a conditional clause might lack a stated subject
+entirely. The grammar bookkeeping isn't decoration — it's what
+lets the segmenter make the right cuts.
+
+And — same as with particles — the same *Portfolio* sections
+that document each converb get inlined into Claude's system
+prompt. The model sees the definition the human translator just
+read.
+
+And then — particles legible, converbs legible. Now the
+segmenter has both halves, and can put a sentence together.
 
 [Advance to Slide 10.]
 
-* Slide 10 — Multi-source dictionary (≈2 min)
+* Slide 10 — Segmentation (≈2.5 min)
 
 ** Spoken
+
+[Slide 10, saffron background.]
+
+Tibetan does not punctuate the way European languages do.
+*Tsheg* between syllables, *shad* to mark some clause ends,
+sometimes a line break instead of a full stop, sometimes nothing
+at all. For a generic CAT-Tool segmenter — built on full-stops
+and sentence boundaries — this is fatal.
+
+But with particles and converbs both legible, the segmenter has
+something to work with. We call it *Round-2* — meaning the
+second iteration, after the first proved that surface-pattern
+splitting wasn't enough. It reads tsheg and shad, finds verb
+endings, finds the converbs we just talked about, finds final
+particles — and assigns argument structure using case-frames
+from Hill 2010.
+
+Here's the concrete example. Six words, =de la ma nyan pas
+khros=. "Because (he) didn't listen to that, he got angry."
+[Point.] The segmenter splits this into two clauses. Clause one
+— =de la ma nyan pas= — is dependent, marked causal by the
+converb =pas=. Clause two — =khros= — is the main clause, with
+=khro= "to be angry" as its verb.
+
+The system also chunks noun phrases and tags them with case:
+ergative, genitive, dative-locative, terminative, ablative,
+comitative.
+
+Three keybindings expose this from any document. =C-c u B= runs
+auto-analyze on the whole document. =C-c s N= creates one
+sentence-level analysis file per sentence. =C-c s Z= re-segments
+when the source has been edited.
+
+This is the layer that produces the per-segment files I'll show
+in a moment. Without segmentation that you can trust, none of
+the rest of the tool would work.
+
+And then — grammar was now legible end-to-end. But every
+unfamiliar word still had to be looked up, in every dictionary,
+every time.
+
+[Advance to Slide 11.]
+
+* Slide 11 — Multi-source dictionary (≈2 min)
+
+** Spoken
+
+Third semester. We started reading the vyāghrī-parivarta — the
+Tigress jātaka — and I was also taking part in the Tibetan
+Buddhist texts reading group. A new text every week, new
+vocabulary every week. The bottleneck shifted from grammar to
+*lookup*.
 
 Tibetan philology depends on multiple dictionaries that disagree
 productively. Steinert's aggregated SQLite — which inside it has
@@ -424,13 +482,18 @@ whenever I came back to a passage. The work needed to *persist*.
 
 [Advance to Slide 11.]
 
-* Slide 11 — Per-segment Org file (≈2.5 min)
+* Slide 12 — Per-segment Org file (≈2.5 min)
 
 ** Spoken
 
-This is the central artifact of the system. If there is one
-slide where I want both Professor Kramer and Dr. Nehrdich to
-look closely, it's this one.
+By the middle of the third semester I was reading several texts
+in parallel — the Tigress, the texts in the reading group, my
+own background reading — and I noticed I was redoing the same
+analysis every time I came back to a passage. The work needed to
+*persist*. This is the central artifact that came out of that.
+
+If there is one slide where I want both Professor Kramer and Dr.
+Nehrdich to look closely, it's this one.
 
 [Point to the buffer mockup.] One file per shad-bounded clause —
 =seg-014.org=, on screen. The file has two halves. The top half,
@@ -469,14 +532,18 @@ hours. So I wired in two AI bridges. Very carefully.
 
 [Advance to Slide 12.]
 
-* Slide 12 — AI bridges (≈3 min)
+* Slide 13 — AI bridges (≈3 min)
 
 ** Spoken
 
 [Slide 12, indigo background. The two cards are side by side.]
 
-Drafting an English translation of every clause — even with the
-dictionary right there — was the slowest part of the workflow.
+Fourth semester. We started reading the Yogācārabhūmi —
+Asaṅga's compendium of Yogācāra path doctrine. The text is
+dense, technical, very long. Drafting an English translation of
+every clause by hand — even with the dictionary right there —
+was no longer realistic.
+
 The temptation to use AI is obvious. The risk is also obvious:
 an unaccountable, unattributable text, the kind that could end up
 in a footnote masquerading as scholarship.
@@ -512,24 +579,106 @@ draft, not a verdict. And every output sits next to *my own*
 working translation, which is the one that ends up in the paper.
 The AI is in the workflow. It is not the workflow.
 
-And then — Sanskrit and Tibetan often arrive together. Kāvya,
-abhidharma, tantra — the meaning lives in *both* sources at
-once. Which is the next slide.
+And then — for any of this to be scholarship-grade, the next
+question is what Claude actually *sees*. That's the next slide.
 
 [Advance to Slide 13.]
 
-* Slide 13 — Bilingual mode (≈3 min)
+* Slide 14 — Claude context provision (≈2.5 min)
+
+** Spoken
+
+[Slide 13, indigo background.]
+
+Before I show what came next, a moment on what Claude actually
+*sees* when it's asked for a translation. Because an AI
+suggestion is only as accountable as its inputs.
+
+If Claude sees nothing — just the Tibetan source line — its
+output is a guess. Plausible, often correct, but not
+*answerable*. You can't argue with it on scholarly grounds; you
+can only trust it or reject it.
+
+So the system prompt for every Claude call bundles — [point to
+slide] — the same scholarly references a human translator would
+open. Bialek Portfolio sections, the relevant ones for the
+particles in this segment. The multi-source dictionary entries
+for every token. The Hill-2010 verb classification for every
+verb. The Particle Map with case tags. In parallel-Sanskrit
+mode, the Sanskrit text and its analysis. And the user's own
+Working Translation, if I've been editing one.
+
+[Brief pause.]
+
+This bundle is large. Sending it for every segment would be
+prohibitive. So the system prompt is wrapped in =gptel-cache= —
+[point] — Anthropic's prompt caching. The full context is sent
+once per session, then *cached at about ten percent of normal
+input cost* for every subsequent call. Long sessions cost cents
+instead of dollars.
+
+The result, on the page, is what matters: a translation
+suggestion that names the particles it relied on, the dictionary
+sense it picked, the grammatical analysis it followed.
+Replaceable. Argued with. Not a black box.
+
+And then — the next layer of calibration: *which* language
+Claude answers in.
+
+[Advance to Slide 14.]
+
+* Slide 15 — Target language (≈2 min)
+
+** Spoken
+
+[Slide 14.]
+
+I'm writing my M.A. thesis in German.
+
+Which sounds trivial — pick German, get German output — but for
+a CAT tool wired through Claude with a Bialek-grounded prompt
+and a multi-source dictionary, every layer needs to know what
+language the *output* should be in. Translation, interlinear
+gloss, CAT gloss, Claude prompt — all switch.
+
+[Point to the file mock.] One line at the top of every
+document: =#+TIBETAN_TARGET_LANG: de=. Or =en=. The toggle is
+=C-c u z L=.
+
+[Point to the right column.] Four sections switch with the
+header: Translation, Interlinear Gloss, CAT Gloss, Claude
+Translation. The Claude system prompt adapts — the model is
+asked to produce German output, with German morphological
+glossing, in a German philological register.
+
+But — [point] — the Detailed Dictionary stays bilingual. Every
+entry shows DE // EN. The hand-curated Resources entries are
+bilingual by construction; they're never collapsed. So even
+working in German mode, the English remains visible for
+cross-reference and argument.
+
+For my M.A. thesis the target is German. For a future paper in
+an English-language journal, I would flip one header — and the
+whole tool would follow.
+
+And then — beyond target language, the source side too has more
+than one language at once.
+
+[Advance to Slide 15.]
+
+* Slide 16 — Bilingual mode (≈3 min)
 
 ** Spoken
 
 [Slide 13, maroon background.]
 
-The texts that matter most for the kind of scholarship Professor
-Kramer and Professor Schwerk supervise — abhidharma, tantra,
-kāvya — exist in Sanskrit and Tibetan together. Working from one
-without the other loses too much. The Tibetan translation is
-itself a philological act; reading it without the Sanskrit
-discards half the data.
+And the Yogācārabhūmi, of course, exists in Sanskrit *and* in
+Tibetan. The texts that matter most for the kind of scholarship
+Professor Kramer and Professor Schwerk supervise — abhidharma,
+tantra, kāvya — almost always exist in both languages together.
+Working from one without the other loses too much. The Tibetan
+translation is itself a philological act; reading it without the
+Sanskrit discards half the data.
 
 So the parallel-Sanskrit mode is a proper top-level concept in
 the tool. [Point to the source-mode header.] You toggle =#+SOURCE_MODE: parallel-sanskrit= on a document — there's a binding for
@@ -567,7 +716,7 @@ to the workflow.
 
 [Advance to Slide 14.]
 
-* Slide 14 — The scholar's workflow (≈1.5 min)
+* Slide 17 — The scholar's workflow (≈1.5 min)
 
 ** Spoken
 
@@ -599,7 +748,7 @@ regeneration. That's the design.
 
 [Advance to Slide 15.]
 
-* Slide 15 — By the numbers (≈1.5 min)
+* Slide 18 — By the numbers (≈1.5 min)
 
 ** Spoken
 
@@ -632,7 +781,7 @@ This is not a finished system. It is a working one.
 
 [Advance to Slide 16.]
 
-* Slide 16 — Roadmap (≈2 min)
+* Slide 19 — Roadmap (≈2 min)
 
 ** Spoken
 
@@ -671,7 +820,7 @@ who it should be for. Which is the discussion that comes next.
 
 [Advance to Slide 17.]
 
-* Slide 17 — Discussion · Pedagogy (≈1 min lead + ≈4 min audience)
+* Slide 20 — Discussion · Pedagogy (≈1 min lead + ≈4 min audience)
 
 ** Spoken
 
@@ -707,7 +856,7 @@ teaches the language — what would help, what would hurt.
 
 [When discussion is winding down, advance to Slide 18.]
 
-* Slide 18 — Discussion · Scholarship & translation (≈1 min lead + ≈5 min audience)
+* Slide 21 — Discussion · Scholarship & translation (≈1 min lead + ≈5 min audience)
 
 ** Spoken
 
@@ -742,7 +891,7 @@ the spot.
 
 [When time is nearly up, advance to Slide 19.]
 
-* Slide 19 — Closing (≈1 min)
+* Slide 22 — Closing (≈1 min)
 
 ** Spoken
 
@@ -775,6 +924,20 @@ sized roughly 1280×800 (the slot will scale), drop into
 replace the corresponding =<div class="shot">…</div>= block in
 =Tibetan-CAT-Tool.html= with =<img class="shot" src="…" alt="…">=.
 
+** 02-Origin (slide 02) — handwritten exercise
+
+- *Filename:* =screenshots/02-origin-handwritten.jpg=
+- *Source:* the photo Carsten took of his pre-CAT-Tool textbook
+  exercise sheet. Eight reading questions from a Tibetan reading
+  source (MB D / GLR folios), color-coded by part of speech,
+  with English glosses and particle breakdowns in the margins.
+- *Action:* save the photo to that filename. The deck's slide 02
+  already contains an =<img>= tag pointing at this path with an
+  =onerror= fallback — once the file lands, the slide picks it
+  up automatically. No further HTML edit needed.
+- *Recommended size:* whatever you have. Browser will scale.
+  Higher resolution is better for projection.
+
 ** 07-OCR (slide 07)
 
 - *Filename:* =screenshots/07-ocr-correct-buffer.png=
@@ -783,9 +946,9 @@ replace the corresponding =<div class="shot">…</div>= block in
   =:suspicious= syllables highlighted, and Claude's proposed
   corrections in a side window. Ideally a real Kangyur folio.
 
-** 11-Per-segment (slide 11)
+** 12-Per-segment (slide 12)
 
-- *Filename:* =screenshots/11-seg-014.png=
+- *Filename:* =screenshots/12-seg-014.png=
 - *Capture:* Full Emacs frame, two windows: source =.org= file
   on the left (Tibetan visible), =seg-014.org= on the right with
   all seven =* Tibetan Analysis= subsections expanded —
@@ -793,9 +956,9 @@ replace the corresponding =<div class="shot">…</div>= block in
   Verb Classification, Detailed Dictionary. Scroll so =* My
   Notes= is visible too. This is the centerpiece screenshot.
 
-** 13-Parallel (slide 13)
+** 16-Parallel (slide 16)
 
-- *Filename:* =screenshots/13-parallel-skt-tib.png=
+- *Filename:* =screenshots/16-parallel-skt-tib.png=
 - *Capture:* A real per-segment file with =#+SOURCE_MODE:
   parallel-sanskrit= active. All six top-level sections visible
   (=* Sanskrit Analysis=, =* Tibetan Analysis=, =* Combined
@@ -814,17 +977,17 @@ distribution bundle README. Not needed for the talk.
 
 The day of the talk:
 
-- [ ] Open the deck in a browser tab — confirm 19 slides,
+- [ ] Open the deck in a browser tab — confirm 22 slides,
   =Cmd-R= refreshes
 - [ ] Open this script in Emacs alongside (org-mode auto-folding
   helps — collapse all but current slide)
 - [ ] Try keyboard nav once: =→= advances, =R= resets, =1..9=
   jump
-- [ ] Confirm modeline counter on slide 19 reads =End=
+- [ ] Confirm modeline counter on slide 22 reads =End=
 - [ ] Print this script if you'd rather have paper than a second
   screen — it's ≈18 pages
 - [ ] Bring water
-- [ ] If running over, the Roadmap (slide 16) is the most
+- [ ] If running over, the Roadmap (slide 19) is the most
   compressible; the discussion slides should not be cut
 
 * Appendix · If something goes wrong
@@ -833,7 +996,7 @@ The day of the talk:
   it focus, then press =→=.
 - *Browser crashes:* open the file directly, =file:///…/Tibetan-CAT-Tool.html=
   works; you may need =Cmd-Shift-R= once for fonts.
-- *Forgot a number:* on Slide 15, the numbers are stable enough
+- *Forgot a number:* on Slide 18, the numbers are stable enough
   that you can paraphrase — say "around 740 functions, around
   100 commands, just under 2,000 tests" if the exact figure
   escapes you.
