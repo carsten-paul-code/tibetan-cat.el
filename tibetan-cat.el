@@ -172,6 +172,8 @@
 
 (require 'tibetan-doc-display)         ; Display settings for prepared documents
 (require 'tibetan-doc-format nil t)    ; Document formatting (segmentation at shad)
+(require 'tibetan-ocr-validate nil t)  ; OCR syllable validator (depends on data/dictionaries)
+(require 'tibetan-ocr-correct nil t)   ; Claude-driven OCR correction
 (condition-case err
     (require 'tibetan-doc-prep)        ; Document preparation wizard (OCR, validate, format)
   (error (message "⚠ tibetan-doc-prep failed: %s" (error-message-string err))))

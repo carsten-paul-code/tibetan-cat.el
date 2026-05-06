@@ -49,6 +49,33 @@
   (should (fboundp 'tibetan-ocr-correct-region))
   (should (commandp 'tibetan-ocr-correct-region)))
 
+(defconst tibetan-ocr-correct-test--loader-path
+  (expand-file-name
+   "../tibetan-cat.el"
+   (file-name-directory (or load-file-name buffer-file-name)))
+  "Absolute path to the top-level loader, captured at file-load time.
+`load-file-name' is nil when ERT runs the test body in batch mode,
+so we resolve the path here and refer to it from the test below.")
+
+(ert-deftest tibetan-cat-loader-requires-ocr-modules ()
+  "The top-level loader (`tibetan-cat.el') must `(require)' both
+`tibetan-ocr-validate' and `tibetan-ocr-correct', so that a fresh
+Emacs session loading the package via `(require \\='tibetan-cat)' has
+M-x `tibetan-ocr-correct-buffer' callable without a manual
+`load-library'.
+
+Regression: before this test the loader added `doc-prep/' to load-path
+but did not require the OCR pair, so on a clean restart
+`tibetan-ocr-correct-buffer' silently fell back to its
+`fboundp'-guarded \"no issues\" branch -- looking like the corrector
+had run when actually the validator was never called."
+  (should (file-exists-p tibetan-ocr-correct-test--loader-path))
+  (with-temp-buffer
+    (insert-file-contents tibetan-ocr-correct-test--loader-path)
+    (let ((src (buffer-string)))
+      (should (string-match-p "(require 'tibetan-ocr-validate" src))
+      (should (string-match-p "(require 'tibetan-ocr-correct" src)))))
+
 ;; ============================================================================
 ;; PROMPT CONSTRUCTION
 ;; ============================================================================
