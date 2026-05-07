@@ -11,7 +11,7 @@ corresponds to one slide. Read the *Spoken* prose aloud at a
 natural pace; advance the slide on the cue when present. Cues in
 [brackets] are stage directions, not to be spoken.
 
-Target: ≈45 min total. Spoken portions ≈44 min, discussion ≈8 min — with 22 slides there's no comfortable buffer; if you read slowly, the Roadmap (slide 19) and the workflow (slide 17) are the natural places to compress.
+Target: ≈45 min total. Spoken portions ≈44 min, discussion ≈8 min — with 23 slides there's no comfortable buffer.  The new catalogue slide (19) is deliberately under-spoken (~15 sec); if you read slowly elsewhere, the Roadmap (slide 20) and the workflow (slide 17) are the natural places to compress further.
 
 ** Pacing reference
 - Read at ~150 words per minute (slower than reading silently).
@@ -779,9 +779,30 @@ architecture you saw on the previous slide.
 
 This is not a finished system. It is a working one.
 
-[Advance to Slide 16.]
+[Advance to Slide 19.]
 
-* Slide 19 — Roadmap (≈2 min)
+* Slide 19 — What's shipped · the catalogue (≈45 sec total — ~15 sec spoken)
+
+** Spoken
+
+[Slide 19 is up. Pause; look at the audience; let them start
+reading.]
+
+This is what's shipped. Six categories. Around thirty distinct
+capabilities.
+
+I won't read it.
+
+If anything on this slide is something you'd like to come back
+to in the discussion, mark it now and we'll pick it up there.
+
+[Wait 20–30 seconds. Don't fill the silence — the visual is
+doing the work.  Watch the room: when most people have stopped
+scanning, advance.]
+
+[Advance to Slide 20.]
+
+* Slide 20 — Roadmap (≈2 min)
 
 ** Spoken
 
@@ -820,7 +841,7 @@ who it should be for. Which is the discussion that comes next.
 
 [Advance to Slide 17.]
 
-* Slide 20 — Discussion · Pedagogy (≈1 min lead + ≈4 min audience)
+* Slide 21 — Discussion · Pedagogy (≈1 min lead + ≈4 min audience)
 
 ** Spoken
 
@@ -856,7 +877,7 @@ teaches the language — what would help, what would hurt.
 
 [When discussion is winding down, advance to Slide 18.]
 
-* Slide 21 — Discussion · Scholarship & translation (≈1 min lead + ≈5 min audience)
+* Slide 22 — Discussion · Scholarship & translation (≈1 min lead + ≈5 min audience)
 
 ** Spoken
 
@@ -891,7 +912,7 @@ the spot.
 
 [When time is nearly up, advance to Slide 19.]
 
-* Slide 22 — Closing (≈1 min)
+* Slide 23 — Closing (≈1 min)
 
 ** Spoken
 
@@ -977,17 +998,17 @@ distribution bundle README. Not needed for the talk.
 
 The day of the talk:
 
-- [ ] Open the deck in a browser tab — confirm 22 slides,
+- [ ] Open the deck in a browser tab — confirm 23 slides,
   =Cmd-R= refreshes
 - [ ] Open this script in Emacs alongside (org-mode auto-folding
   helps — collapse all but current slide)
 - [ ] Try keyboard nav once: =→= advances, =R= resets, =1..9=
   jump
-- [ ] Confirm modeline counter on slide 22 reads =End=
+- [ ] Confirm modeline counter on slide 23 reads =End=
 - [ ] Print this script if you'd rather have paper than a second
   screen — it's ≈18 pages
 - [ ] Bring water
-- [ ] If running over, the Roadmap (slide 19) is the most
+- [ ] If running over, the Roadmap (slide 20) is the most
   compressible; the discussion slides should not be cut
 
 * Appendix · If something goes wrong
