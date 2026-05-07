@@ -5,108 +5,58 @@
 
 * How to use this file
 
-Open this file in Emacs alongside the deck (browser tab at
-=presentation/Tibetan-CAT-Tool.html=). Each top-level section
-corresponds to one slide. Read the *Spoken* prose aloud at a
-natural pace; advance the slide on the cue when present. Cues in
-[brackets] are stage directions, not to be spoken.
+Open this file in Emacs alongside the deck (browser tab at =presentation/Tibetan-CAT-Tool.html=). Each top-level section corresponds to one slide. Read the *Spoken* prose aloud at a natural pace; advance the slide on the cue when present. Cues in [brackets] are stage directions, not to be spoken.
 
 Target: ≈45 min total. Spoken portions ≈44 min, discussion ≈8 min — with 23 slides there's no comfortable buffer.  The new catalogue slide (19) is deliberately under-spoken (~15 sec); if you read slowly elsewhere, the Roadmap (slide 20) and the workflow (slide 17) are the natural places to compress further.
 
 ** Pacing reference
 - Read at ~150 words per minute (slower than reading silently).
-- The bracketed (≈X min) on each section is the budget; use the
-  modeline counter on each slide to check pace mid-talk.
+- The bracketed (≈X min) on each section is the budget; use the modeline counter on each slide to check pace mid-talk.
 
 ** Notes on tone
-- This is a personal-journey talk. The story carries weight; the
-  technical detail is in service of the story.
-- Two scholars in the room — Prof. Jowita Kramer and Dr. Sebastian
-  Nehrdich — have shaped what the tool does. Where their work is
-  load-bearing, name it. Don't drop names for effect.
-- =DharmaMitra=, in particular, is Sebastian Nehrdich's project. The
-  tool integrates it; on Slide 12 this is acknowledged on-screen.
-  Don't introduce it without attribution.
+- This is a personal-journey talk. The story carries weight; the technical detail is in service of the story.
+- Two scholars in the room — Prof. Jowita Kramer and Dr. Sebastian Nehrdich — have shaped what the tool does. Where their work is load-bearing, name it. Don't drop names for effect.
+- =DharmaMitra=, in particular, is Sebastian Nehrdich's project. The tool integrates it; on Slide 12 this is acknowledged on-screen. Don't introduce it without attribution.
 
 * Slide 01 — Title (≈1 min)
 
-[Slide is up before you begin speaking. Take a breath, look at the
-audience, then start.]
+[Slide is up before you begin speaking. Take a breath, look at the audience, then start.]
 
 ** Spoken
 
-Good [morning / afternoon], everyone. Thank you for being here.
+Good afternoon, everyone. Thank you for being here.
 
-My name is Carsten Paul. I'm an M.A. candidate in Religious
-Studies here at Leipzig, working with Professor Schwerk. I'd
-particularly like to thank Professor Kramer and Dr. Nehrdich for
-making time to be here today — the work I'm presenting is built on
-ground that both of you have laid, in different ways, and I'll
-come to that.
+In my earlier career, I trained as a locomotive mechanic, earned degrees in philosophy and education, and completed postgraduate training as a software developer. I then worked in IT for many years before starting my studies here.
 
-The talk is an introduction to a tool I've been developing over
-the last five months: =Tibetan-CAT-Tool=, a translator's
-environment for classical Tibetan and Sanskrit, built on Emacs.
-It is in alpha. I'll be honest about what's shipped, what isn't,
-and where I think the limits are.
+The talk is an introduction to a tool I've been developing over the last three semesters and I call it: =Tibetan-CAT-Tool=, a translator's environment for classical Tibetan and Sanskrit, built on Emacs. It is in alpha. I'll be honest about what's built, what isn't, and where I think the limits are.
 
-Forty-five minutes, structured as: a brief primer on what a
-CAT-Tool and Emacs are, since not everyone uses either; my
-personal arc into building this; six features in roughly the order
-I encountered the need for them; the technical state today; and
-two short open discussions — one on pedagogy, one on scholarship
-and translation. I'd very much like the discussions to actually
-happen, so I'll keep the technical content tight.
+The next  minutes, structured as: a brief primer on what a CAT-Tool and Emacs are, since not everyone uses either; my personal arc into building this; six features in roughly the order I encountered the need for them; the technical state today; and two short open discussions — one on learning, one on scholarship and translation. I'd very much like the discussions to actually happen, so I'll keep the technical content tight.
 
 [Advance to Slide 02.]
 
 * Slide 02 — Origin (≈3 min)
 
-** Spoken
+** Spoke
 
 This is where the tool begins.
 
 [Point to the photo on the left of the screen.]
 
-What you're looking at is one of those exercises, exactly as I
-worked it on paper. Eight reading questions, color-coded by part
-of speech. English glosses written under each Tibetan line.
-Particle breakdowns in the margins. Folio references where I'd
-chased a word back to its source. The photo here is from a
-later exercise — but the setup was the same one I'd had in the
-second semester of my M.A., working through the particle drills
-in Joanna Bialek's textbook by hand.
+What you're looking at is one of those exercises, exactly as I worked it on paper. Eight reading questions, color-coded by parts of speech. English glosses written under each Tibetan line. Particle breakdowns in the margins. Folio references where I'd chased a word back to its source. The photo here is from a later exercise — but the setup was the same one I'd had in Tibtan II, working through the particle drills in Joanna Bialek's textbook by hand.
 
-I had — [count off on fingers, slowly] — the textbook open on
-the desk; a PDF reader with a Tibetan dictionary in another
-window; Wilson's grammar in a third; my own notes in a fourth;
-and the document I was supposed to be producing in a fifth.
+I had — [count off on fingers, slowly] — the textbook open on the desk; a PDF reader with a Tibetan dictionary in another window; Schwiegers's grammar in a third; my own notes in a fourth; and the document I was supposed to be producing in a fifth.
 
-Each tool was good. The seams between them were where the time
-went. An exercise that should have taken an evening took a
-weekend. I would lose the thread between looking up a particle
-and writing down what I'd just understood about it.
+Each tool was good. The seams between them were where the time went. An exercise that should have taken an evening took a weekend. I would lose the thread between looking up a particle and writing down what I'd just understood about it.
 
 [Brief pause.]
 
-Now — Computer-Assisted Translation tools exist, of course. They
-were a natural place to look. So I tried two of the major
-open-ones. =Wordfast= and =OmegaT=. Both are excellent. Neither
-one understood Tibetan. They didn't render Uchen, didn't have
-Wylie, didn't know what a tsheg or a shad was, and certainly had
-no concept of a per-text vocabulary list curated by hand alongside
-a Steinert SQLite database.
+Now — Computer-Assisted Translation tools exist, of course. They were a natural place to look. So I tried two of the major open-ones. =Wordfast= and =OmegaT=. Both are excellent. Neither one understood Tibetan. They didn't render Uchen, didn't have Wylie, didn't know what a tsheg or a shad was, and certainly had no concept of a per-text vocabulary list curated by hand alongside a Steinert SQLite database.
 
-That's not their fault. They were built for European-language
-commercial translation, and they do that very well.
+That's not their fault. They were built for European-language commercial translation, and they do that very well.
 
-So I made a small, somewhat reckless decision. I would build one
-that did fit the work. Native to Emacs — because the rest of my
-scholarly work was already there, and because Emacs is the place
-where small, focused tools like this one are easiest to grow.
+So I made a small, somewhat reckless decision. I would build one that did fit the work. Native to Emacs — because the rest of my scholarly work was already there, and because Emacs is the place where small, focused tools like this one are easiest to grow.
 
-That's the seed. Everything you'll see for the next thirty
-minutes is the consequence of that one weekend with the textbook.
+That's the seed. Everything you'll see for the next minutes is the consequence of that one weekend with the textbook.
 
 [Advance to Slide 03.]
 
@@ -114,38 +64,19 @@ minutes is the consequence of that one weekend with the textbook.
 
 ** Spoken
 
-Before I go further, two short primers — for those who haven't
-worked with these categories of tool before, or who use them
-differently.
+Before I go further, two short primers — for those who haven't worked with these categories of tool before, or who use them differently.
 
-A CAT-Tool — and the C stands for *computer-assisted*, not
-*machine* — is a tool where the human translator stays in the
-chair. The point is not for the tool to translate the text. The
-point is for the tool to handle the bookkeeping around the
-translation, so the translator can spend their attention on the
-language.
+A CAT-Tool — and the C stands for *computer-assisted*, not *machine* — is a tool where the human translator stays in the chair. The point is not for the tool to translate the text. The point is for the tool to handle the bookkeeping around the translation, so the translator can spend their attention on the language.
 
 Three classic pillars. [Point to the slide.]
 
-[01] *Segmentation*. The tool chops the source into translatable
-units — a sentence, a clause, in our case a shad-bounded segment.
+[01] *Segmentation*. The tool chops the source into translatable units — a sentence, a clause, in our case a shad-bounded segment.
 
-[02] *Translation memory*. The tool remembers every pair you've
-ever produced — source goes to target, source goes to target —
-and when something similar comes back, it offers you the previous
-translation as a suggestion.
+[02] *Translation memory*. The tool remembers every pair you've ever produced — source goes to target, target goes to source — and when something similar comes back, it offers you the previous translation as a suggestion.
 
-[03] *Termbase*. A project-specific glossary, hand-curated,
-consulted at every token.
+[03] *Termbase*. A project-specific glossary, hand-curated, consulted at every token.
 
-These are mature ideas. The existing tools — Wordfast, OmegaT,
-Trados, MemoQ — implement them very well, *for European-language
-commercial translation*. Tibetan, as we'll see, breaks all three
-pillars at once: the segmenter has nothing to bite on, the memory
-needs morphology rather than surface form, and the termbase has
-no place for Wylie or scholarly source attribution. So a Tibetan
-CAT tool is a different category — not a localised version of the
-generic one.
+These are mature ideas. The existing tools — Wordfast, OmegaT, Trados, MemoQ — implement them very well, *for European-language commercial translation*. Tibetan, as we'll see, breaks all three pillars at once: the segmenter has nothing to bite on, the memory needs morphology rather than surface form, and the termbase has no place for Wylie or scholarly source attribution. So a Tibetan CAT tool is a different category — not a localised version of the generic one.
 
 [Advance to Slide 04.]
 
@@ -155,29 +86,15 @@ generic one.
 
 The second primer is about Emacs.
 
-Emacs is — depending on who you ask — a forty-nine-year-old text
-editor, or a Lisp environment, or an operating system with one
-working application. All three descriptions are accurate.
+Emacs is — depending on who you ask — a forty-nine-year-old text editor, or a Lisp environment, or an operating system with one working application. All three descriptions are accurate.
 
-What makes it relevant for this talk is that Emacs is the
-environment where, for many academics, *most of their working day
-already happens*. [Point to the buffer mock.] Source texts in
-=.org= format. Outlining and notes in org-mode. A Zettelkasten in
-org-roam. Bibliography in BibTeX, citations through citar. Paper
-writing — Hausarbeiten, drafts, theses — in =.org= and exported
-through LuaLaTeX to PDF. An agenda, mail, a shell — all native.
+What makes it relevant for this talk is that Emacs is the environment where, for many academics, *most of their working day already happens*. [Point to the buffer mock.] Source texts in =.org= format, you can imagine it like markdown. Outlining and notes in org-mode. A Zettelkasten in org-roam. Bibliography in BibTeX, citations through citar. Paper writing — Hausarbeiten, drafts, theses — in =.org= and exported through LuaLaTeX to PDF. An agenda, mail, a shell — all native.
 
 If org-mode is the document, Emacs is the desk it sits on.
 
-The relevance for our story is this: when I decided to build a
-CAT-Tool, I was not asking myself "where shall I host this new
-application?" I was asking, "how do I add the missing tile to the
-desk that already has my Zettelkasten and my LaTeX pipeline on it?"
+The relevance for our story is this: when I decided to build a CAT-Tool, I was not asking myself "where shall I host this new application?" I was asking, "how do I add the missing tile to the desk that already has my Zettelkasten and my LaTeX pipeline on it?"
 
-The answer was Emacs Lisp. Forty-nine years of editor evolution
-has produced a language and a runtime designed for exactly this:
-adding small, focused capabilities to a working environment
-without needing to rebuild it.
+The answer was Emacs Lisp. Forty-nine years of editor evolution has produced a language and a runtime designed for exactly this: adding small, focused capabilities to a working environment without needing to rebuild it.
 
 [Advance to Slide 05.]
 
@@ -189,31 +106,17 @@ So — slightly more concretely — *why this Emacs, for me*.
 
 Four points, brief. [Point to slide.]
 
-*One.* My daily workflow is already here. The Beorg agenda — that
-syncs to my phone — comes from this Emacs. The Zettelkasten of
-secondary literature, where every piece of scholarship I read
-gets a node, is here. I don't want to context-switch out of this
-to translate.
+*One.* My daily workflow is already here. The Beorg agenda — that syncs to my phone — comes from this Emacs. The Zettelkasten of secondary literature, where every piece of scholarship I read gets a node, is here. I don't want to context-switch out of this to translate.
 
-*Two.* Every paper I've written for this M.A., every Hausarbeit,
-every draft, has been written in =.org= and exported through
-LuaLaTeX to PDF. The translation work needs to feed *into* that
-pipeline, not run alongside it.
+*Two.* Every paper I've written for this M.A., every Hausarbeit, every draft, has been written in =.org= and exported through LuaLaTeX to PDF. The translation work needs to feed *into* that pipeline, not run alongside it.
 
-*Three.* And specifically relevant to this tool — DharmaMitra had
-already been wired into Emacs by Sebastian, in =DharmaMitra.el=,
-before I started this project. Which means a state-of-the-art
-neural translation engine for Sanskrit and Tibetan was already
-*in my editor* — I just needed the surrounding workflow to use it
-properly.
+*Three.* And specifically relevant to this tool — DharmaMitra had already been wired into Emacs by Sebastian, in =DharmaMitra.el=, before I started this project. Which means a state-of-the-art neural translation engine for Sanskrit and Tibetan was already *in my editor* — I just needed the surrounding workflow to use it properly.
 
-*Four.* And finally — Emacs is extensible. A few lines of Lisp
-away from your own dictionary, your own keybinding, your own
-glossary format. This is not a theoretical extensibility. It's
-the kind that lets one M.A. student build a system like this in
-five months in his spare time.
+*Four.* And finally — Emacs is extensible. A few lines of Lisp away from your own dictionary, your own keybinding, your own glossary format. This is not a theoretical extensibility. It's the kind that lets one M.A. student build a system like this in five months in his spare time.
 
 So the CAT layer isn't a new home. It's the missing tile.
+
+By the way: this presentation was also built in Emacs.
 
 [Advance to Slide 06.]
 
@@ -221,35 +124,17 @@ So the CAT layer isn't a new home. It's the missing tile.
 
 ** Spoken
 
-[Slide 06 is up. The wall headline reads: "I couldn't read Uchen
-fluently."]
+[Slide 06 is up. The wall headline reads: "I couldn't read Uchen fluently."]
 
-So with that decided, the question is — *where do you start?*
-What's the first feature?
+So with that decided, the question is — *where do you start?* What's the first feature?
 
-The first feature was Wylie alongside Uchen. And the reason is
-honest and personal: in that same second semester, doing Bialek's
-exercises by hand, I couldn't read Uchen fluently. My eye hadn't
-been trained on it yet. For a European learner, Wylie is far
-easier to recognise. You can read Wylie without retraining your
-visual cortex.
+The first feature was Wylie alongside Uchen. And the reason is honest and personal: in that same second semester, doing Bialek's exercises by hand, I couldn't read Uchen fluently. My eye hadn't been trained on it yet. For a European learner, Wylie is far easier to recognise. You can read Wylie without retraining your visual cortex.
 
-But every CAT-style tool I tried — and every reading edition I
-had — showed me one or the other, never both. So the first thing
-the tool does, everywhere, is render *both at once*. [Point to
-the panels on screen.] One source of truth — a single helper
-function that converts Unicode Tibetan to Wylie — drives the
-display in every section that touches a token. Word lists.
-Particle map. Detailed dictionary. Interlinear gloss.
+But every CAT-style tool I tried — and every reading edition I had — showed me one or the other, never both. So the first thing the tool does, everywhere, is render *both at once*. [Point to the panels on screen.] One source of truth — a single helper function that converts Unicode Tibetan to Wylie — drives the display in every section that touches a token. Word lists. Particle map. Detailed dictionary. Interlinear gloss.
 
-Coverage is solid: pure Tibetan syllables, EWTS extensions,
-Sanskrit-derived stacks, the implicit-'a' rule. The conversion
-is one-way — Unicode to Wylie — embedded in the renderers. There
-is no live two-way conversion. That was not the priority; the
-priority was *seeing both at the same time, everywhere*.
+Coverage is solid: pure Tibetan syllables, Extended Wylie Transliteration System (EWTS) extensions, Sanskrit-derived stacks, the implicit-'a' rule. The conversion is one-way — Unicode to Wylie — embedded in the renderers. There is no live two-way conversion. That was not the priority; the priority was *seeing both at the same time, everywhere*.
 
-And then — the texts I most wanted to read were scanned PDFs of
-pecha. Which meant the next wall was OCR.
+And then — the texts I most wanted to read were scanned PDFs of pecha. Which meant the next wall was OCR.
 
 [Advance to Slide 07.]
 
