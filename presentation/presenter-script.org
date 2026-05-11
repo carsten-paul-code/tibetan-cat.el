@@ -7,7 +7,7 @@
 
 Open this file in Emacs alongside the deck (browser tab at =presentation/Tibetan-CAT-Tool.html=). Each top-level section corresponds to one slide. Read the *Spoken* prose aloud at a natural pace; advance the slide on the cue when present. Cues in [brackets] are stage directions, not to be spoken.
 
-Target: ≈45 min total. Spoken portions ≈44 min, discussion ≈8 min — with 23 slides there's no comfortable buffer.  The new catalogue slide (19) is deliberately under-spoken (~15 sec); if you read slowly elsewhere, the Roadmap (slide 20) and the workflow (slide 17) are the natural places to compress further.
+Target: ≈45 min total. Spoken portions ≈43 min, discussion ≈8–10 min — discussion is now at the END (slide 23), after the closing. With 23 slides there's no comfortable buffer.  The catalogue slide (20) is deliberately under-spoken (~15 sec); if you read slowly elsewhere, the Roadmap (slide 21) and the workflow (slide 18) are the natural places to compress further. Slide 17 (Extending DharmaMitra) is the strategic centrepiece for this DM-workshop audience — don't compress that one.
 
 ** Pacing reference
 - Read at ~150 words per minute (slower than reading silently).
@@ -417,100 +417,85 @@ hours. So I wired in two AI bridges. Very carefully.
 
 [Advance to Slide 12.]
 
-* Slide 13 — AI bridges (≈3 min)
+* Slide 13 — AI bridges · DM-primary (≈2.5 min)
 
 ** Spoken
 
-[Slide 12, indigo background. The two cards are side by side.]
+[Slide 13, indigo background. DM card large, top. Claude card
+small, dark, bottom — labelled "scaffold · interim".]
 
-Fourth semester. We started reading the Yogācārabhūmi —
-Asaṅga's compendium of Yogācāra path doctrine. The text is
-dense, technical, very long. Drafting an English translation of
-every clause by hand — even with the dictionary right there —
-was no longer realistic.
+Fourth semester. The Yogācārabhūmi reading begins — Asaṅga's
+compendium of Yogācāra path doctrine, dense and technical and
+very long. Drafting an English translation of every clause by
+hand was no longer realistic.
 
-The temptation to use AI is obvious. The risk is also obvious:
-an unaccountable, unattributable text, the kind that could end up
-in a footnote masquerading as scholarship.
+This is a *DharmaMitra workshop*, so I want to be clear about
+the framing on this slide and the next four. [Point to the DM
+card.] **DharmaMitra** is the AI engine this tool is built
+around. Sebastian's project. Neural translation models trained
+for Sanskrit and Tibetan domain text. The HTTP-and-SSE client
+in this tool talks to that infrastructure; it doesn't reproduce
+it. Two paths today: a direct translation path — two parallel
+calls, Tibetan and Sanskrit, each landing as a top-level
+section in the per-segment file. And a search-API path for
+parallel-text alignment — DM returns candidate Sanskrit
+parallels for a Tibetan segment.
 
-So both AI bridges are wired with care.
+[Point to the Claude card, lower-right.] Claude is here too —
+but I want to call it what it is on this slide: a *scaffold*.
+Currently doing work that, in principle, belongs in DharmaMitra:
+context-aware translation, grammar explanation, particle
+prompts, combined synthesis. Queued through a three-concurrent
+queue with exponential backoff, prompt-cached at about ten
+percent of input cost, but — *interim*. As long as Claude is
+here, the system has two AI dependencies. The goal is one.
 
-[Point to the left card.] The first is *DharmaMitra*. And here I
-want to be explicit: DharmaMitra is Sebastian Nehrdich's project
-— neural translation models trained for Sanskrit and Tibetan
-domain text. The HTTP-and-server-sent-events client in this tool
-talks to that infrastructure. It does not reproduce it. There
-are two paths. A direct translation path: two parallel calls,
-one for Tibetan, one for Sanskrit, both arriving as their own
-top-level sections in the per-segment file. And a search-API
-path, for parallel-text alignment: DharmaMitra returns candidate
-Sanskrit parallels, Claude picks the best fit using a structured
-=## Choice / ## Reason= schema, and the picked candidate lands
-in the file with both the choice and the reasoning preserved.
+I'll show you exactly which Claude functions I think should
+migrate into the DM API on slide 17.
 
-[Point to the right card.] The second bridge is *Claude*, used
-for general reasoning over the analysed segment. Claude is
-queued — three concurrent at most, exponential backoff on rate
-limits — and the system prompt is cached at ten percent of input
-cost. Concretely: the dictionary entries, the Bialek Portfolio
-sections, the verb classifier output — this whole context is
-sent once, cached, and reused for every segment in a session.
-Without that, long sessions would cost real money. With it, they
-don't.
-
-What both bridges share is *accountability*. Every output lands
-in the per-segment file. Every output is replaceable — it's a
-draft, not a verdict. And every output sits next to *my own*
-working translation, which is the one that ends up in the paper.
-The AI is in the workflow. It is not the workflow.
-
-And then — for any of this to be scholarship-grade, the next
-question is what Claude actually *sees*. That's the next slide.
-
-[Advance to Slide 13.]
-
-* Slide 14 — Claude context provision (≈2.5 min)
-
-** Spoken
-
-[Slide 13, indigo background.]
-
-Before I show what came next, a moment on what Claude actually
-*sees* when it's asked for a translation. Because an AI
-suggestion is only as accountable as its inputs.
-
-If Claude sees nothing — just the Tibetan source line — its
-output is a guess. Plausible, often correct, but not
-*answerable*. You can't argue with it on scholarly grounds; you
-can only trust it or reject it.
-
-So the system prompt for every Claude call bundles — [point to
-slide] — the same scholarly references a human translator would
-open. Bialek Portfolio sections, the relevant ones for the
-particles in this segment. The multi-source dictionary entries
-for every token. The Hill-2010 verb classification for every
-verb. The Particle Map with case tags. In parallel-Sanskrit
-mode, the Sanskrit text and its analysis. And the user's own
-Working Translation, if I've been editing one.
-
-[Brief pause.]
-
-This bundle is large. Sending it for every segment would be
-prohibitive. So the system prompt is wrapped in =gptel-cache= —
-[point] — Anthropic's prompt caching. The full context is sent
-once per session, then *cached at about ten percent of normal
-input cost* for every subsequent call. Long sessions cost cents
-instead of dollars.
-
-The result, on the page, is what matters: a translation
-suggestion that names the particles it relied on, the dictionary
-sense it picked, the grammatical analysis it followed.
-Replaceable. Argued with. Not a black box.
-
-And then — the next layer of calibration: *which* language
-Claude answers in.
+And then — before any of this is accountable as scholarship,
+the question is what context we hand to the AI at all. That's
+the next slide.
 
 [Advance to Slide 14.]
+
+* Slide 14 — Context for AI translation (≈2 min)
+
+** Spoken
+
+[Slide 14, indigo background.]
+
+A moment on what an AI *sees* when it's asked for a translation,
+because — to repeat — an AI suggestion is only as accountable
+as its inputs.
+
+If the AI sees nothing but the Tibetan source line, its output
+is a guess. Plausible, often correct, but not *answerable*. You
+can't argue with it on scholarly grounds.
+
+So the system bundles — [point to slide] — the same scholarly
+references a human translator would open. Bialek Portfolio
+sections, the relevant ones for the particles in this segment.
+Multi-source dictionary entries for every token. The Hill-2010
+verb classification. The Particle Map with case tags. In
+parallel-Sanskrit mode, the Sanskrit text and its analysis. And
+the user's own Working Translation, if there is one.
+
+The framing point for this audience: this *context architecture*
+is the durable contribution. Claude consumes it today, via
+Anthropic's prompt caching at about ten percent input cost. The
+same context block is exactly what an extended DharmaMitra
+endpoint would consume tomorrow. The plumbing is AI-agnostic.
+
+The result, on the page: a translation suggestion that names the
+particles it relied on, the dictionary sense it picked, the
+grammatical analysis it followed. Replaceable. Argued with. Not
+a black box.
+
+And then — the next layer of calibration: which language the AI
+answers in.
+
+[Advance to Slide 15.]
 
 * Slide 15 — Target language (≈2 min)
 
@@ -551,57 +536,104 @@ than one language at once.
 
 [Advance to Slide 15.]
 
-* Slide 16 — Bilingual mode (≈3 min)
+* Slide 16 — Bilingual mode · DM-first (≈2.5 min)
 
 ** Spoken
 
-[Slide 13, maroon background.]
+[Slide 16, maroon background.]
 
-And the Yogācārabhūmi, of course, exists in Sanskrit *and* in
-Tibetan. The texts that matter most for the kind of scholarship
-Professor Kramer and Professor Schwerk supervise — abhidharma,
-tantra, kāvya — almost always exist in both languages together.
-Working from one without the other loses too much. The Tibetan
-translation is itself a philological act; reading it without the
-Sanskrit discards half the data.
+The Yogācārabhūmi, of course, exists in Sanskrit *and* in
+Tibetan — as do the texts that matter most for the kind of
+scholarship Professor Kramer and Professor Schwerk supervise:
+abhidharma, tantra, kāvya. Working from one without the other
+loses too much.
 
 So the parallel-Sanskrit mode is a proper top-level concept in
-the tool. [Point to the source-mode header.] You toggle =#+SOURCE_MODE: parallel-sanskrit= on a document — there's a binding for
-it, =C-c u z P= — and from that point, every per-segment file in
-that document emits *six independent sections* per segment.
+the tool. [Point to the source-mode header.] You toggle
+=#+SOURCE_MODE: parallel-sanskrit= on a document — there's a
+binding for it, =C-c u z P= — and from that point every
+per-segment file emits six top-level sections.
 
-[Indicate the section list.] Three are Claude analyses. The
-*Sanskrit Analysis* runs a Claude prompt configured for the
-philological role of the Sanskrit. The *Tibetan Analysis* runs
-the standard Tibetan-side prompt. And the *Combined Analysis* —
-this is the one the audience may find most interesting — runs a
-synthesis prompt that has read both prior outputs and produces a
-combined translation, with an optional =** Sanskrit-Tibetan
-Comparison= sub-section that surfaces points where the Tibetan
-translator's choices were faithful, expansive, or interpretive.
+[Indicate the section list, top down.] *Three come from
+DharmaMitra* — and these are the foundation. A Sanskrit
+translation, a Tibetan translation, and the search-driven
+Sanskrit realignment we saw on the previous AI slide. Top-level,
+referenceable, not nested inside any analysis.
 
-Three more sections come from DharmaMitra. The Sanskrit and
-Tibetan translations land as their own top-level sections — they
-sit *outside* the Claude analyses, not inside, so they can be
-referenced separately. The third DharmaMitra section is the
-search-driven Sanskrit realignment from the previous slide:
-*Sanskrit (DharmaMitra)*.
+[Indicate the lower three.] *Three more come from Claude* — and
+these are the interim layer. A Sanskrit Analysis section with
+the philological role of the Sanskrit unpacked. A Tibetan
+Analysis section running the standard Tibetan-side prompt. And
+a Combined Analysis that has read both prior outputs and
+produces a comparative reading, with an always-emitted
+=** Sanskrit-Tibetan Comparison= sub-section flagging where
+the Tibetan translator's choices were faithful, expansive, or
+interpretive.
 
-Six independent results, in one Org buffer, for one segment.
-Sanskrit-first reading layout. All of them queued, all of them
-respecting the prompt cache. User notes preserved on reanalyze.
+Each of those three Claude sections is, again, a candidate for
+migration into the DM API. The point of layering them this way
+is precisely that the DM foundation stands on its own; the
+Claude scaffold sits on top, replaceable.
 
 [Indicate the screenshot slot.] Final version: a real
 parallel-Sanskrit per-segment file in Emacs, all six sections
 visible, both Devanagari and Uchen rendered.
 
 And then — the question is no longer "what does this feature
-do?", but "how does it all fit into one editor?" Which brings me
-to the workflow.
+do?", but "*what should the DM API look like* once these
+scaffolds migrate?" Which is the next slide.
 
-[Advance to Slide 14.]
+[Advance to Slide 17.]
 
-* Slide 17 — The scholar's workflow (≈1.5 min)
+* Slide 17 — Extending DharmaMitra (≈2.5 min)
+
+** Spoken
+
+[Slide 17. Three-column proposal table: TODAY · CLAUDE → could
+migrate to → TOMORROW · DHARMAMITRA. Pause for a beat before
+speaking — this is the slide I most want the room to react to.]
+
+This is the proposal. And since Dr. Nehrdich is in the room I
+want to be careful and concrete here, not aspirational.
+
+Claude is currently doing work that, in principle, belongs in
+DharmaMitra. As long as it's there, the system has two AI
+dependencies, two APIs, two failure modes, two billing surfaces.
+The goal is one.
+
+[Indicate the left column.] What Claude does today, six things:
+context-aware translation — meaning a translation request that
+arrives with grammar context and dictionary entries bundled in,
+not just the source line. Grammar explanation — particle
+functions, case-frame analysis. Particle Map prompts with
+Bialek Portfolio sections inlined. Sanskrit-Tibetan combined
+synthesis with the comparative reading. Faithful-versus-
+interpretive flagging. And footnote-grade reasoning that's
+verbose enough to be argued with.
+
+[Indicate the right column.] What I'd hope DharmaMitra could
+add, six endpoints. A context-aware translation endpoint that
+takes source plus a grammar context plus a dictionary block
+and returns a translation calibrated to those. A grammar
+endpoint returning particle map plus case tags plus functions
+in a structured format. A combined-analysis endpoint that takes
+Sanskrit and Tibetan as inputs and returns the comparative
+reading. Confidence and provenance metadata per output — so
+the tool can render the same accountability markers we have
+today. Configurable target language. And — most importantly —
+open to collaboration on the API surface.
+
+[Indicate the open-invitation banner at the bottom.] This isn't
+a fixed spec. It's the shortest possible description of what
+would let the tool drop Claude. I'd genuinely value some
+discussion later about what shape those endpoints should take,
+what's already on the DM roadmap, what's out of scope.
+
+And then — the editor that integrates all of this. The workflow.
+
+[Advance to Slide 18.]
+
+* Slide 18 — The scholar's workflow (≈1.5 min)
 
 ** Spoken
 
@@ -631,9 +663,9 @@ Eight stages, one editor. The translator never has to leave the
 buffer. Everything that you write by hand survives every
 regeneration. That's the design.
 
-[Advance to Slide 15.]
+[Advance to Slide 19.]
 
-* Slide 18 — By the numbers (≈1.5 min)
+* Slide 19 — By the numbers (≈1.5 min)
 
 ** Spoken
 
@@ -664,13 +696,13 @@ architecture you saw on the previous slide.
 
 This is not a finished system. It is a working one.
 
-[Advance to Slide 19.]
+[Advance to Slide 20.]
 
-* Slide 19 — What's shipped · the catalogue (≈45 sec total — ~15 sec spoken)
+* Slide 20 — What's shipped · the catalogue (≈45 sec total — ~15 sec spoken)
 
 ** Spoken
 
-[Slide 19 is up. Pause; look at the audience; let them start
+[Slide 20 is up. Pause; look at the audience; let them start
 reading.]
 
 This is what's shipped. Six categories. Around thirty distinct
@@ -685,9 +717,9 @@ to in the discussion, mark it now and we'll pick it up there.
 doing the work.  Watch the room: when most people have stopped
 scanning, advance.]
 
-[Advance to Slide 20.]
+[Advance to Slide 21.]
 
-* Slide 20 — Roadmap (≈2 min)
+* Slide 21 — Roadmap (≈2 min)
 
 ** Spoken
 
@@ -724,84 +756,13 @@ That's where I'd particularly value the room's input — what
 that distribution should look like, what it should be called,
 who it should be for. Which is the discussion that comes next.
 
-[Advance to Slide 17.]
+[Advance to Slide 22.]
 
-* Slide 21 — Discussion · Pedagogy (≈1 min lead + ≈4 min audience)
-
-** Spoken
-
-The system is built. The conversation about *how it should be
-used* is just starting, and I would like the next eight or nine
-minutes to actually be that conversation.
-
-I have two clusters of questions, one for education and one for
-scholarship and translation. We'll do them separately. Education
-first.
-
-[Read the questions on screen, slowly. Take a breath after each.]
-
-*One.* Could a tool like this lower the barrier into Classical
-Tibetan or Sanskrit for first-year students — or does it skip
-the slow work that builds intuition?
-
-*Two.* Bialek-style exercise drilling, *with* the tool: aid or
-crutch? Where is the line between scaffolding and shortcut?
-
-*Three.* Every analysis file shows its work — interlinear,
-particle map, grammar reasoning. Does seeing the reasoning
-matter to the learner, or only the answer?
-
-*Four.* A shared corpus of analysis files: what would a
-reading-group infrastructure look like, and who would maintain
-it?
-
-[Then, to the room:] I'd genuinely like to hear from anyone who
-teaches the language — what would help, what would hurt.
-
-[Open the floor. Listen. Note responses if helpful.]
-
-[When discussion is winding down, advance to Slide 18.]
-
-* Slide 22 — Discussion · Scholarship & translation (≈1 min lead + ≈5 min audience)
+* Slide 22 — Closing (≈1 min)
 
 ** Spoken
 
-Second cluster. For the working translator and the philologist —
-what does this change, and what should it not.
-
-[Read the questions on screen.]
-
-*One.* Variant readings and apparatus: where does this tool sit
-between the manuscript witnesses and a critical edition? It
-isn't a critical-edition tool. Should it become one? Or does
-that confuse roles?
-
-*Two.* Translation memory across projects: useful continuity —
-or homogenisation of vocabulary that should stay text-specific?
-
-*Three.* Citation export to LaTeX is in the pipeline. What's the
-right format for shareable analysis files between scholars?
-=.org= works for me; what about for the field?
-
-*Four.* AI-assisted translation: methodological and ethical
-implications for footnotes, accountability, and publication
-norms. This one is the hardest, and probably the one we'll
-finish on.
-
-[To the room:] I'd particularly like Dr. Nehrdich's perspective
-on the alignment side, and Professor Kramer's on the
-philological side — but please don't let me put either of you on
-the spot.
-
-[Open the floor. This is the longest discussion segment.]
-
-[When time is nearly up, advance to Slide 19.]
-
-* Slide 23 — Closing (≈1 min)
-
-** Spoken
-
-[Slide 19. Black background, the syllable =sgron-me= in saffron.]
+[Slide 22. Black background, the syllable =sgron-me= in saffron.]
 
 One word, in closing.
 
@@ -816,11 +777,46 @@ to find your own way through.
 
 Built in the editor where the work already happens.
 
-Thank you very much for your time, and for the trust of having
-me present this in front of an audience like this one. I'm
-ready for more questions.
+Thank you very much for your time. The talk itself is finished
+— and on the next slide I'll open the floor for discussion.
 
-[Stay on Slide 19 for the remaining Q&A.]
+[Advance to Slide 23.]
+
+* Slide 23 — Discussion · open floor (≈1 min lead + 8–10 min audience)
+
+** Spoken
+
+[Slide 23 is up. Two columns: EDUCATION on the left, SCHOLARSHIP
+& TRANSLATION on the right. Eight questions total.]
+
+The talk is done; the discussion isn't.
+
+Two clusters on the screen. Education on the left — four
+questions. Scholarship and translation on the right — another
+four. They're open. We can take them in any order, or skip any
+of them, or ignore the slide entirely and talk about something I
+haven't put up here.
+
+[Read briefly through each column, slowly enough that the room
+can scan. Do NOT speak each question in full — they're written
+on the slide. Just signal what's there.]
+
+On the education side: the first-year barrier question, the
+aid-vs-crutch question, the show-your-work question, the
+shared-corpus-reading-group question.
+
+On the scholarship side: variant readings and apparatus,
+translation memory across projects, the shareable analysis-file
+format, and AI-assisted translation's implications for
+footnotes and publication.
+
+[To the room:] I'd particularly value Dr. Nehrdich's perspective
+on the alignment side and the DM-extension proposal from slide
+17, and Professor Kramer's on the philological side — but
+please don't let me put either of you on the spot. Anyone.
+
+[Open the floor. This is the rest of the session. Stay on Slide
+23 for the duration.]
 
 * Appendix · Screenshots to capture
 
@@ -893,7 +889,7 @@ The day of the talk:
 - [ ] Print this script if you'd rather have paper than a second
   screen — it's ≈18 pages
 - [ ] Bring water
-- [ ] If running over, the Roadmap (slide 20) is the most
+- [ ] If running over, the Roadmap (slide 21) is the most
   compressible; the discussion slides should not be cut
 
 * Appendix · If something goes wrong
@@ -902,7 +898,7 @@ The day of the talk:
   it focus, then press =→=.
 - *Browser crashes:* open the file directly, =file:///…/Tibetan-CAT-Tool.html=
   works; you may need =Cmd-Shift-R= once for fonts.
-- *Forgot a number:* on Slide 18, the numbers are stable enough
+- *Forgot a number:* on Slide 19, the numbers are stable enough
   that you can paraphrase — say "around 740 functions, around
   100 commands, just under 2,000 tests" if the exact figure
   escapes you.
