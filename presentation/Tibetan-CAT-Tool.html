@@ -1305,15 +1305,18 @@
               </div>
             </div>
 
-            <div class="shot">
-              <div class="tag">Screenshot · 07-OCR</div>
-              <div>OCR review session</div>
-              <div class="cap">
-                M-x tibetan-ocr-correct-buffer running on a real pecha scan
-                &mdash; flagged syllables highlighted, Claude-suggested
-                corrections in a side window.
-              </div>
-            </div>
+            <img
+              src="screenshots/07-ocr-correct-buffer.png"
+              alt="OCR review session: source buffer with corrupted Tibetan, flagged syllables (Unknown / Suspicious), Claude correction diff (Was / Should be / Reason)"
+              style="
+                flex: 1;
+                min-height: 0;
+                width: 100%;
+                object-fit: contain;
+                background: rgba(0, 0, 0, 0.25);
+                border: 1px solid var(--gold-soft);
+              "
+            />
           </div>
 
           <div class="then-arrow">
@@ -2119,15 +2122,19 @@
               </div>
             </div>
 
-            <div class="shot">
-              <div class="tag">Screenshot · 12-Per-segment</div>
-              <div>seg-014.org open in Emacs</div>
-              <div class="cap">
-                Full Emacs frame: source on the left, the per-segment analysis
-                file on the right with all seven Tibetan-Analysis subsections
-                expanded.
-              </div>
-            </div>
+            <img
+              src="screenshots/seg-014.png"
+              alt="seg-014.org open in Emacs: source on the left, per-segment analysis file on the right with Tibetan-Analysis subsections expanded"
+              style="
+                flex: 1;
+                min-height: 0;
+                width: 180%;
+                object-position: -350px -20px;
+                object-fit: fill;
+                background: rgba(0, 0, 0, 0.25);
+                border: 1px solid var(--gold-soft);
+              "
+            />
           </div>
 
           <div
@@ -2169,29 +2176,113 @@
             ><span class="num" style="color: var(--gold-soft)">13</span
             ><span>Feature 07 · 4th sem · Yogācārabhūmi</span>
           </div>
-          <h2 class="slide-title">DharmaMitra &mdash; with Claude as scaffold.</h2>
+          <h2 class="slide-title">
+            DharmaMitra &mdash; with Claude as scaffold.
+          </h2>
 
           <div class="wall" style="margin-top: 24px">
-            <span class="lbl">The wall</span>Fourth semester. Yogācārabhūmi reading begins &mdash; dense, technical, very long. Translation drafts ate hours. <strong>DharmaMitra</strong> provides domain-trained neural translation for Sanskrit and Tibetan; for what DM doesn't yet do &mdash; context-aware translation, grammar explanation &mdash; Claude is currently scaffolding. The endgame is to extend DM.
+            <span class="lbl">The wall</span>Fourth semester. Yogācārabhūmi
+            reading begins &mdash; dense, technical, very long. Translation
+            drafts ate hours. <strong>DharmaMitra</strong> provides
+            domain-trained neural translation for Sanskrit and Tibetan; for what
+            DM doesn't yet do &mdash; context-aware translation, grammar
+            explanation &mdash; Claude is currently scaffolding. The endgame is
+            to extend DM.
           </div>
 
-          <div style="margin-top: 22px; flex: 1; display: flex; flex-direction: column; gap: 18px;">
+          <div
+            style="
+              margin-top: 22px;
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+              gap: 18px;
+            "
+          >
             <!-- DM card: primary, large -->
-            <div style="background: var(--parchment-warm); border-top: 6px solid var(--saffron); padding: 22px 28px; display: flex; gap: 28px; align-items: stretch; flex: 1;">
-              <div style="flex: 0 0 280px;">
-                <span style="font-family: var(--mono); color: var(--maroon); font-size: 20px; letter-spacing: 0.18em;">PRIMARY · DOMAIN-TRAINED</span>
-                <div style="font-family: var(--serif); font-size: 50px; color: var(--ink); line-height: 1; margin-top: 8px;">DharmaMitra</div>
-                <div style="font-family: var(--mono); font-size: 17px; color: var(--gold); letter-spacing: 0.06em; margin-top: 8px; line-height: 1.4;">
-                  by Sebastian Nehrdich<br />et al. &mdash; the AI engine<br />this tool is built around.
+            <div
+              style="
+                background: var(--parchment-warm);
+                border-top: 6px solid var(--saffron);
+                padding: 22px 28px;
+                display: flex;
+                gap: 28px;
+                align-items: stretch;
+                flex: 1;
+              "
+            >
+              <div style="flex: 0 0 280px">
+                <span
+                  style="
+                    font-family: var(--mono);
+                    color: var(--maroon);
+                    font-size: 20px;
+                    letter-spacing: 0.18em;
+                  "
+                  >PRIMARY · DOMAIN-TRAINED</span
+                >
+                <div
+                  style="
+                    font-family: var(--serif);
+                    font-size: 50px;
+                    color: var(--ink);
+                    line-height: 1;
+                    margin-top: 8px;
+                  "
+                >
+                  DharmaMitra
+                </div>
+                <div
+                  style="
+                    font-family: var(--mono);
+                    font-size: 17px;
+                    color: var(--gold);
+                    letter-spacing: 0.06em;
+                    margin-top: 8px;
+                    line-height: 1.4;
+                  "
+                >
+                  by Sebastian Nehrdich<br />et al. &mdash; the AI engine<br />this
+                  tool is built around.
                 </div>
               </div>
-              <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px;">
-                <div class="body-text" style="font-size: 22px; margin: 0; color: var(--ink-soft); line-height: 1.45;">
-                  HTTP + SSE client. Two parallel translation calls (Tibetan + Sanskrit). A search-API path proposes Sanskrit candidates for parallel-text alignment.
-                  <span style="font-family: var(--mono); font-size: 19px">## Choice / ## Reason</span>
+              <div
+                style="
+                  flex: 1;
+                  display: flex;
+                  flex-direction: column;
+                  justify-content: center;
+                  gap: 12px;
+                "
+              >
+                <div
+                  class="body-text"
+                  style="
+                    font-size: 22px;
+                    margin: 0;
+                    color: var(--ink-soft);
+                    line-height: 1.45;
+                  "
+                >
+                  HTTP + SSE client. Two parallel translation calls (Tibetan +
+                  Sanskrit). A search-API path proposes Sanskrit candidates for
+                  parallel-text alignment.
+                  <span style="font-family: var(--mono); font-size: 19px"
+                    >## Choice / ## Reason</span
+                  >
                   schema; SHA-256 cache.
                 </div>
-                <div style="display: flex; gap: 20px; font-family: var(--mono); font-size: 18px; color: var(--gold); letter-spacing: 0.06em; flex-wrap: wrap;">
+                <div
+                  style="
+                    display: flex;
+                    gap: 20px;
+                    font-family: var(--mono);
+                    font-size: 18px;
+                    color: var(--gold);
+                    letter-spacing: 0.06em;
+                    flex-wrap: wrap;
+                  "
+                >
                   <span>C-c u m &nbsp;·&nbsp; mitra-translate-dwim</span>
                   <span>C-c u D &nbsp;·&nbsp; refresh-translation</span>
                   <span>C-c u z d / D &nbsp;·&nbsp; Sanskrit realignment</span>
@@ -2200,22 +2291,65 @@
             </div>
 
             <!-- Claude scaffold card: small, dark, marked scaffold -->
-            <div style="background: var(--ink); color: var(--parchment); border-left: 4px solid var(--gold-soft); padding: 16px 22px; display: flex; gap: 24px; align-items: center;">
-              <div style="flex: 0 0 220px;">
-                <span style="font-family: var(--mono); color: var(--saffron); font-size: 18px; letter-spacing: 0.18em;">SCAFFOLD · INTERIM</span>
-                <div style="font-family: var(--serif); font-size: 32px; color: var(--parchment); line-height: 1; margin-top: 4px;">Claude</div>
+            <div
+              style="
+                background: var(--ink);
+                color: var(--parchment);
+                border-left: 4px solid var(--gold-soft);
+                padding: 16px 22px;
+                display: flex;
+                gap: 24px;
+                align-items: center;
+              "
+            >
+              <div style="flex: 0 0 220px">
+                <span
+                  style="
+                    font-family: var(--mono);
+                    color: var(--saffron);
+                    font-size: 18px;
+                    letter-spacing: 0.18em;
+                  "
+                  >SCAFFOLD · INTERIM</span
+                >
+                <div
+                  style="
+                    font-family: var(--serif);
+                    font-size: 32px;
+                    color: var(--parchment);
+                    line-height: 1;
+                    margin-top: 4px;
+                  "
+                >
+                  Claude
+                </div>
               </div>
-              <div style="flex: 1;">
-                <div class="body-text" style="font-size: 19px; margin: 0; color: var(--parchment-warm); line-height: 1.4;">
-                  Doing work that should live in DharmaMitra &mdash; until the DM API extends. Currently handles: context-aware translation, grammar explanation, particle prompts, combined Sanskrit-Tibetan synthesis. Queued, prompt-cached.
-                  <strong style="color: var(--saffron)">See slide 17 for the migration plan.</strong>
+              <div style="flex: 1">
+                <div
+                  class="body-text"
+                  style="
+                    font-size: 19px;
+                    margin: 0;
+                    color: var(--parchment-warm);
+                    line-height: 1.4;
+                  "
+                >
+                  Doing work that should live in DharmaMitra &mdash; until the
+                  DM API extends. Currently handles: context-aware translation,
+                  grammar explanation, particle prompts, combined
+                  Sanskrit-Tibetan synthesis. Queued, prompt-cached.
+                  <strong style="color: var(--saffron)"
+                    >See slide 17 for the migration plan.</strong
+                  >
                 </div>
               </div>
             </div>
           </div>
 
           <div class="then-arrow">
-            <span class="lbl">And then →</span> before any of this is accountable as scholarship, the question is what context we hand to the AI.
+            <span class="lbl">And then →</span> before any of this is
+            accountable as scholarship, the question is what context we hand to
+            the AI.
           </div>
         </div>
 
@@ -2241,7 +2375,13 @@
           <h2 class="slide-title">Context for AI translation.</h2>
 
           <div class="wall" style="margin-top: 28px">
-            <span class="lbl">The wall</span>An AI translation is only as accountable as its inputs. The system bundles a context block &mdash; Bialek Portfolio sections, multi-source dictionary entries, verb classification, Particle Map &mdash; into every AI request. Claude consumes this today (Anthropic prompt cache at ~10% input cost). The same context block is what an extended DharmaMitra would consume.
+            <span class="lbl">The wall</span>An AI translation is only as
+            accountable as its inputs. The system bundles a context block
+            &mdash; Bialek Portfolio sections, multi-source dictionary entries,
+            verb classification, Particle Map &mdash; into every AI request.
+            Claude consumes this today (Anthropic prompt cache at ~10% input
+            cost). The same context block is what an extended DharmaMitra would
+            consume.
           </div>
 
           <div
@@ -2376,7 +2516,12 @@
                 "
               >
                 <strong style="color: var(--saffron)">Result:</strong> a
-                translation suggestion (Claude today; an extended DM tomorrow) that names the particles it relied on, the dictionary sense it picked, the grammatical analysis it followed. Replaceable. Argued with. Not a black box. The context architecture is the durable contribution &mdash; it survives whichever AI consumes it.
+                translation suggestion (Claude today; an extended DM tomorrow)
+                that names the particles it relied on, the dictionary sense it
+                picked, the grammatical analysis it followed. Replaceable.
+                Argued with. Not a black box. The context architecture is the
+                durable contribution &mdash; it survives whichever AI consumes
+                it.
               </div>
             </div>
           </div>
@@ -2597,7 +2742,11 @@
           </h2>
 
           <div class="wall" style="margin-top: 28px">
-            <span class="lbl">The wall</span>The Yogācārabhūmi exists in Sanskrit and in Tibetan. <strong>DharmaMitra translates both.</strong> The Sanskrit-Tibetan comparison &mdash; currently a Claude synthesis &mdash; is one more candidate for the DM API.
+            <span class="lbl">The wall</span>The Yogācārabhūmi exists in
+            Sanskrit and in Tibetan.
+            <strong>DharmaMitra translates both.</strong> The Sanskrit-Tibetan
+            comparison &mdash; currently a Claude synthesis &mdash; is one more
+            candidate for the DM API.
           </div>
 
           <div
@@ -2625,7 +2774,11 @@
                   >#+SOURCE_MODE: parallel-sanskrit</span
                 >
                 on a document and every per-segment file emits
-                <em>three DharmaMitra sections</em> as foundation (Sanskrit translation, Tibetan translation, Sanskrit realignment from corpus search), with <em>three interim Claude calls</em> layered on top for analysis and the Sanskrit-Tibetan comparison &mdash; each Claude section a candidate for migration into the DM API.
+                <em>three DharmaMitra sections</em> as foundation (Sanskrit
+                translation, Tibetan translation, Sanskrit realignment from
+                corpus search), with <em>three interim Claude calls</em> layered
+                on top for analysis and the Sanskrit-Tibetan comparison &mdash;
+                each Claude section a candidate for migration into the DM API.
               </p>
               <div
                 style="
@@ -2714,16 +2867,19 @@
                 C-c u z P &nbsp;·&nbsp; toggle parallel-sanskrit mode
               </div>
             </div>
-
-            <div class="shot">
-              <div class="tag">Screenshot · 16-Parallel</div>
-              <div>parallel-sanskrit mode in Emacs</div>
-              <div class="cap">
-                A real seg-NNN.org in parallel-sanskrit mode &mdash; all six
-                sections visible, with both Devanagari and Uchen rendered
-                alongside.
-              </div>
-            </div>
+            <img
+              src="screenshots/16-parallel-skt-tib.png"
+              alt="seg-NNN.org in parallel-sanskrit mode: all six sections visible (Sanskrit/Tibetan/Combined Claude analyses + 3 DharmaMitra sections), Devanagari and Uchen rendered"
+              style="
+                flex: 1;
+                min-height: 0;
+                width: 180%;
+                object-position: -350px -20px;
+                object-fit: fill;
+                background: rgba(0, 0, 0, 0.25);
+                border: 1px solid var(--gold-soft);
+              "
+            />
           </div>
 
           <div class="then-arrow">
@@ -2747,21 +2903,65 @@
       <section data-label="17 Extending DharmaMitra">
         <div class="slide-frame">
           <div class="eyebrow">
-            <span class="dot"></span><span class="num">17</span><span>Future · DharmaMitra Workshop · collaboration</span>
+            <span class="dot"></span><span class="num">17</span
+            ><span>Future · DharmaMitra Workshop · collaboration</span>
           </div>
-          <h2 class="slide-title">Extending DharmaMitra &mdash; the proposal.</h2>
+          <h2 class="slide-title">
+            Extending DharmaMitra &mdash; the proposal.
+          </h2>
 
           <div class="wall" style="margin-top: 24px">
-            <span class="lbl">The wall</span>Claude is currently doing work that, in principle, belongs in DharmaMitra. As long as it's there, the system has two AI dependencies, two APIs, two billing surfaces, two failure modes. The goal is one.
+            <span class="lbl">The wall</span>Claude is currently doing work
+            that, in principle, belongs in DharmaMitra. As long as it's there,
+            the system has two AI dependencies, two APIs, two billing surfaces,
+            two failure modes. The goal is one.
           </div>
 
-          <div style="margin-top: 24px; flex: 1; display: grid; grid-template-columns: 1fr 60px 1fr; gap: 20px; align-items: stretch;">
+          <div
+            style="
+              margin-top: 24px;
+              flex: 1;
+              display: grid;
+              grid-template-columns: 1fr 60px 1fr;
+              gap: 20px;
+              align-items: stretch;
+            "
+          >
             <!-- TODAY · CLAUDE -->
-            <div style="background: var(--ink); color: var(--parchment); border-left: 4px solid var(--gold-soft); padding: 20px 26px; display: flex; flex-direction: column; gap: 8px;">
-              <div style="font-family: var(--mono); font-size: 20px; color: var(--saffron); letter-spacing: 0.18em;">TODAY · CLAUDE</div>
-              <div style="font-family: var(--serif); font-size: 22px; line-height: 1.5; color: var(--parchment-warm);">
+            <div
+              style="
+                background: var(--ink);
+                color: var(--parchment);
+                border-left: 4px solid var(--gold-soft);
+                padding: 20px 26px;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+              "
+            >
+              <div
+                style="
+                  font-family: var(--mono);
+                  font-size: 20px;
+                  color: var(--saffron);
+                  letter-spacing: 0.18em;
+                "
+              >
+                TODAY · CLAUDE
+              </div>
+              <div
+                style="
+                  font-family: var(--serif);
+                  font-size: 22px;
+                  line-height: 1.5;
+                  color: var(--parchment-warm);
+                "
+              >
                 <div>• Context-aware translation</div>
-                <div>• Grammar explanation (particle functions, case-frame analysis)</div>
+                <div>
+                  • Grammar explanation (particle functions, case-frame
+                  analysis)
+                </div>
                 <div>• Particle Map prompt + Bialek Portfolio inlining</div>
                 <div>• Sanskrit-Tibetan combined synthesis</div>
                 <div>• Faithful-vs-interpretive flagging</div>
@@ -2770,17 +2970,62 @@
             </div>
 
             <!-- ARROW -->
-            <div style="display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-style: italic; color: var(--maroon); font-size: 28px; line-height: 1.2; text-align: center;">
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-family: var(--serif);
+                font-style: italic;
+                color: var(--maroon);
+                font-size: 28px;
+                line-height: 1.2;
+                text-align: center;
+              "
+            >
               could<br />migrate<br />to →
             </div>
 
             <!-- TOMORROW · DHARMAMITRA -->
-            <div style="background: var(--parchment-warm); border-left: 4px solid var(--saffron); padding: 20px 26px; display: flex; flex-direction: column; gap: 8px;">
-              <div style="font-family: var(--mono); font-size: 20px; color: var(--maroon); letter-spacing: 0.18em;">TOMORROW · DHARMAMITRA</div>
-              <div style="font-family: var(--serif); font-size: 22px; line-height: 1.5; color: var(--ink-soft);">
-                <div>• Context-aware translation endpoint (source + grammar + dictionary)</div>
-                <div>• Grammar endpoint (particle map + case tags + functions)</div>
-                <div>• Combined-analysis endpoint (Skt + Tib in, comparative reading out)</div>
+            <div
+              style="
+                background: var(--parchment-warm);
+                border-left: 4px solid var(--saffron);
+                padding: 20px 26px;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+              "
+            >
+              <div
+                style="
+                  font-family: var(--mono);
+                  font-size: 20px;
+                  color: var(--maroon);
+                  letter-spacing: 0.18em;
+                "
+              >
+                TOMORROW · DHARMAMITRA
+              </div>
+              <div
+                style="
+                  font-family: var(--serif);
+                  font-size: 22px;
+                  line-height: 1.5;
+                  color: var(--ink-soft);
+                "
+              >
+                <div>
+                  • Context-aware translation endpoint (source + grammar +
+                  dictionary)
+                </div>
+                <div>
+                  • Grammar endpoint (particle map + case tags + functions)
+                </div>
+                <div>
+                  • Combined-analysis endpoint (Skt + Tib in, comparative
+                  reading out)
+                </div>
                 <div>• Confidence + provenance metadata per output</div>
                 <div>• Configurable target language (de / en / …)</div>
                 <div>• Open to collaboration</div>
@@ -2788,12 +3033,25 @@
             </div>
           </div>
 
-          <div style="margin-top: 18px; padding: 14px 20px; background: rgba(217, 122, 31, 0.16); border-left: 4px solid var(--saffron); font-family: var(--serif); font-size: 22px; line-height: 1.35; color: var(--ink);">
-            Open invitation to discuss the API surface for these extensions during the workshop.
+          <div
+            style="
+              margin-top: 18px;
+              padding: 14px 20px;
+              background: rgba(217, 122, 31, 0.16);
+              border-left: 4px solid var(--saffron);
+              font-family: var(--serif);
+              font-size: 22px;
+              line-height: 1.35;
+              color: var(--ink);
+            "
+          >
+            Open invitation to discuss the API surface for these extensions
+            during the workshop.
           </div>
 
           <div class="then-arrow">
-            <span class="lbl">And then →</span> the editor that integrates all of this.
+            <span class="lbl">And then →</span> the editor that integrates all
+            of this.
           </div>
         </div>
 
@@ -2966,7 +3224,7 @@
               letter-spacing: 0.06em;
             "
           >
-            <span>2025-12 &nbsp;Foundation</span>
+            <span>2025-10 &nbsp;Foundation</span>
             <span style="color: var(--gold)">→</span>
             <span>2026-01 &nbsp;Sentence + Vocab</span>
             <span style="color: var(--gold)">→</span>
@@ -3001,7 +3259,12 @@
           <h2 class="slide-title">What's shipped &mdash; the catalogue.</h2>
           <p
             class="body-text"
-            style="margin-top: 14px; font-style: italic; color: var(--maroon); font-size: 24px"
+            style="
+              margin-top: 14px;
+              font-style: italic;
+              color: var(--maroon);
+              font-size: 24px;
+            "
           >
             Six categories. Around thirty distinct capabilities. Mark anything
             you'd like to come back to in the discussion.
@@ -3052,7 +3315,9 @@
                 <li>Wylie ↔ Uchen (EWTS, Sanskrit-derived stacks)</li>
                 <li>Bialek particle grammar; 8-stem single-ས whitelist</li>
                 <li>Bialek Portfolio inlined into Claude system prompt</li>
-                <li>OCR validation: ~17.7k vocab + 3k compounds + proper nouns</li>
+                <li>
+                  OCR validation: ~17.7k vocab + 3k compounds + proper nouns
+                </li>
                 <li>OCR correction (Claude, conservative prompt)</li>
               </ul>
             </div>
@@ -3089,7 +3354,9 @@
                   padding-left: 18px;
                 "
               >
-                <li>Round-2 clause segmenter; NP chunking; argument structure</li>
+                <li>
+                  Round-2 clause segmenter; NP chunking; argument structure
+                </li>
                 <li>Case tags: ERG · GEN · DAT · LOC · TERM · ABL · COM</li>
                 <li>Hill-2010 verb classifier with case frames</li>
                 <li>Three-level dispatch: segment / sentence / paragraph</li>
@@ -3130,10 +3397,17 @@
                 "
               >
                 <li>Resources: per-text hand-curated, bilingual DE//EN</li>
-                <li>Steinert SQLite (Hopkins · Valby · Waldo · Bialek · 84000)</li>
+                <li>
+                  Steinert SQLite (Hopkins · Valby · Waldo · Bialek · 84000)
+                </li>
                 <li>Rangjung Yeshe (162k entries, lazy-loaded)</li>
                 <li>Bundled Hopkins glossary; DharmaMitra fallback</li>
-                <li>User thesaurus zettels + per-document <span style="font-family: var(--mono); font-size: 16px;">#+TIBETAN_TARGET_LANG</span></li>
+                <li>
+                  User thesaurus zettels + per-document
+                  <span style="font-family: var(--mono); font-size: 16px"
+                    >#+TIBETAN_TARGET_LANG</span
+                  >
+                </li>
               </ul>
             </div>
 
@@ -3169,11 +3443,29 @@
                   padding-left: 18px;
                 "
               >
-                <li><strong>DharmaMitra HTTP+SSE client</strong> (Tibetan + Sanskrit translation; Sebastian Nehrdich et al.)</li>
-                <li>DharmaMitra Sanskrit realignment: search-API + Claude pick (<span style="font-family: var(--mono); font-size: 16px;">## Choice</span> / <span style="font-family: var(--mono); font-size: 16px;">## Reason</span>)</li>
-                <li>Context architecture (Bialek + dict + verb classes) &mdash; AI-agnostic</li>
+                <li>
+                  <strong>DharmaMitra HTTP+SSE client</strong> (Tibetan +
+                  Sanskrit translation; Sebastian Nehrdich et al.)
+                </li>
+                <li>
+                  DharmaMitra Sanskrit realignment: search-API + Claude pick
+                  (<span style="font-family: var(--mono); font-size: 16px"
+                    >## Choice</span
+                  >
+                  /
+                  <span style="font-family: var(--mono); font-size: 16px"
+                    >## Reason</span
+                  >)
+                </li>
+                <li>
+                  Context architecture (Bialek + dict + verb classes) &mdash;
+                  AI-agnostic
+                </li>
                 <li>Target-language switch (DE / EN) per document</li>
-                <li><em>Scaffold:</em> Claude queue, prompt caching, 3-call parallel dispatch &mdash; pending DM API extension (slide 17)</li>
+                <li>
+                  <em>Scaffold:</em> Claude queue, prompt caching, 3-call
+                  parallel dispatch &mdash; pending DM API extension (slide 17)
+                </li>
               </ul>
             </div>
 
@@ -3209,11 +3501,25 @@
                   padding-left: 18px;
                 "
               >
-                <li>Per-segment Org files; user content preserved on reanalyze</li>
-                <li>Doc-prep wizard (<span style="font-family: var(--mono); font-size: 16px;">C-c u P</span>); batch reanalyze</li>
-                <li>Translation memory comparison (<span style="font-family: var(--mono); font-size: 16px;">C-c u T</span>)</li>
+                <li>
+                  Per-segment Org files; user content preserved on reanalyze
+                </li>
+                <li>
+                  Doc-prep wizard (<span
+                    style="font-family: var(--mono); font-size: 16px"
+                    >C-c u P</span
+                  >); batch reanalyze
+                </li>
+                <li>
+                  Translation memory comparison (<span
+                    style="font-family: var(--mono); font-size: 16px"
+                    >C-c u T</span
+                  >)
+                </li>
                 <li>Combined synthesis + Sanskrit-Tibetan comparison</li>
-                <li>Org → LuaLaTeX export; Beorg agenda; org-roam zettelkasten</li>
+                <li>
+                  Org → LuaLaTeX export; Beorg agenda; org-roam zettelkasten
+                </li>
               </ul>
             </div>
 
@@ -3337,9 +3643,12 @@
                   >Five months · 230 commits &mdash; full history in
                   <span style="font-family: var(--mono); font-size: 22px"
                     >CHANGELOG.md</span
-                  > and <span style="font-family: var(--mono); font-size: 22px"
+                  >
+                  and
+                  <span style="font-family: var(--mono); font-size: 22px"
                     >CLAUDE.md</span
-                  > §5.1–§5.18.
+                  >
+                  §5.1–§5.18.
                 </div>
               </div>
             </div>
@@ -3425,7 +3734,9 @@
                     "
                     >★</span
                   ><strong>Extend DharmaMitra API</strong>
-                  &mdash; collaborate on context-aware translation, grammar, and combined-analysis endpoints so the tool can drop Claude as a hard dependency. See slide 17.
+                  &mdash; collaborate on context-aware translation, grammar, and
+                  combined-analysis endpoints so the tool can drop Claude as a
+                  hard dependency. See slide 17.
                 </div>
                 <div
                   style="
@@ -3472,24 +3783,65 @@
           </div>
 
           <div>
-            <div class="tibetan" style="font-size: 200px; color: var(--saffron); line-height: 1; letter-spacing: 0.05em;">
+            <div
+              class="tibetan"
+              style="
+                font-size: 200px;
+                color: var(--saffron);
+                line-height: 1;
+                letter-spacing: 0.05em;
+              "
+            >
               སྒྲོན་མེ།
             </div>
-            <div style="font-family: var(--serif); font-style: italic; font-size: 48px; color: var(--gold-soft); margin-top: 24px;">
+            <div
+              style="
+                font-family: var(--serif);
+                font-style: italic;
+                font-size: 48px;
+                color: var(--gold-soft);
+                margin-top: 24px;
+              "
+            >
               <em>sgron-me</em> — a lamp.
             </div>
-            <div style="font-family: var(--serif); font-size: 56px; color: var(--parchment); margin-top: 64px; max-width: 1500px; line-height: 1.3;">
-              Tibetan-CAT-Tool wants to be a lamp on the desk of anyone reading these texts &mdash; a small, steady light, in the editor where the work already happens.
+            <div
+              style="
+                font-family: var(--serif);
+                font-size: 56px;
+                color: var(--parchment);
+                margin-top: 64px;
+                max-width: 1500px;
+                line-height: 1.3;
+              "
+            >
+              Tibetan-CAT-Tool wants to be a lamp on the desk of anyone reading
+              these texts &mdash; a small, steady light, in the editor where the
+              work already happens.
             </div>
           </div>
 
-          <div style="display: flex; justify-content: space-between; align-items: flex-end; font-family: var(--mono); font-size: 24px; color: var(--parchment-deep); letter-spacing: 0.12em;">
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-end;
+              font-family: var(--mono);
+              font-size: 24px;
+              color: var(--parchment-deep);
+              letter-spacing: 0.12em;
+            "
+          >
             <div>
-              <div style="color: var(--saffron); margin-bottom: 8px">CONTACT</div>
+              <div style="color: var(--saffron); margin-bottom: 8px">
+                CONTACT
+              </div>
               <div>tibetan-cat-tool · v0.1 · 2026</div>
             </div>
             <div style="text-align: right">
-              <div style="color: var(--saffron); margin-bottom: 8px">QUESTIONS</div>
+              <div style="color: var(--saffron); margin-bottom: 8px">
+                QUESTIONS
+              </div>
               <div>—</div>
             </div>
           </div>
@@ -3515,69 +3867,131 @@
             ><span>Discussion · open floor</span>
           </div>
           <h2 class="slide-title">Open questions.</h2>
-          <p class="body-text" style="margin-top: 14px; color: var(--parchment-warm); font-style: italic; max-width: 1500px;">
-            Two clusters &mdash; education and scholarship. Eight questions, all open.
+          <p
+            class="body-text"
+            style="
+              margin-top: 14px;
+              color: var(--parchment-warm);
+              font-style: italic;
+              max-width: 1500px;
+            "
+          >
+            Two clusters &mdash; education and scholarship. Eight questions, all
+            open.
           </p>
 
-          <div style="margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; flex: 1; align-items: stretch;">
+          <div
+            style="
+              margin-top: 22px;
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 40px;
+              flex: 1;
+              align-items: stretch;
+            "
+          >
             <!-- EDUCATION column -->
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-              <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--saffron); margin-bottom: 6px;">
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <div
+                style="
+                  font-family: var(--mono);
+                  font-size: 22px;
+                  letter-spacing: 0.18em;
+                  color: var(--saffron);
+                  margin-bottom: 6px;
+                "
+              >
                 EDUCATION
               </div>
-              <div class="q-row" style="padding: 12px 0;">
-                <div class="q-mark" style="font-size: 40px; line-height: 0.9;">?</div>
-                <div class="q-text" style="font-size: 22px; line-height: 1.35;">
-                  Could a tool like this lower the barrier into Classical Tibetan or Sanskrit for first-year students &mdash; or does it skip the slow work that builds intuition?
+              <div class="q-row" style="padding: 12px 0">
+                <div class="q-mark" style="font-size: 40px; line-height: 0.9">
+                  ?
+                </div>
+                <div class="q-text" style="font-size: 22px; line-height: 1.35">
+                  Could a tool like this lower the barrier into Classical
+                  Tibetan or Sanskrit for first-year students &mdash; or does it
+                  skip the slow work that builds intuition?
                 </div>
               </div>
-              <div class="q-row" style="padding: 12px 0;">
-                <div class="q-mark" style="font-size: 40px; line-height: 0.9;">?</div>
-                <div class="q-text" style="font-size: 22px; line-height: 1.35;">
-                  Bialek-style exercise drilling <em>with</em> the tool: aid or crutch? Where is the line between scaffolding and shortcut?
+              <div class="q-row" style="padding: 12px 0">
+                <div class="q-mark" style="font-size: 40px; line-height: 0.9">
+                  ?
+                </div>
+                <div class="q-text" style="font-size: 22px; line-height: 1.35">
+                  Bialek-style exercise drilling <em>with</em> the tool: aid or
+                  crutch? Where is the line between scaffolding and shortcut?
                 </div>
               </div>
-              <div class="q-row" style="padding: 12px 0;">
-                <div class="q-mark" style="font-size: 40px; line-height: 0.9;">?</div>
-                <div class="q-text" style="font-size: 22px; line-height: 1.35;">
-                  Every analysis file shows its work &mdash; interlinear, particle map, grammar reasoning. Does seeing the reasoning matter to the learner, or only the answer?
+              <div class="q-row" style="padding: 12px 0">
+                <div class="q-mark" style="font-size: 40px; line-height: 0.9">
+                  ?
+                </div>
+                <div class="q-text" style="font-size: 22px; line-height: 1.35">
+                  Every analysis file shows its work &mdash; interlinear,
+                  particle map, grammar reasoning. Does seeing the reasoning
+                  matter to the learner, or only the answer?
                 </div>
               </div>
-              <div class="q-row" style="padding: 12px 0;">
-                <div class="q-mark" style="font-size: 40px; line-height: 0.9;">?</div>
-                <div class="q-text" style="font-size: 22px; line-height: 1.35;">
-                  A shared corpus of analysis files: what would a reading-group infrastructure look like, and who would maintain it?
+              <div class="q-row" style="padding: 12px 0">
+                <div class="q-mark" style="font-size: 40px; line-height: 0.9">
+                  ?
+                </div>
+                <div class="q-text" style="font-size: 22px; line-height: 1.35">
+                  A shared corpus of analysis files: what would a reading-group
+                  infrastructure look like, and who would maintain it?
                 </div>
               </div>
             </div>
 
             <!-- SCHOLARSHIP column -->
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-              <div style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.18em; color: var(--saffron); margin-bottom: 6px;">
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <div
+                style="
+                  font-family: var(--mono);
+                  font-size: 22px;
+                  letter-spacing: 0.18em;
+                  color: var(--saffron);
+                  margin-bottom: 6px;
+                "
+              >
                 SCHOLARSHIP &amp; TRANSLATION
               </div>
-              <div class="q-row" style="padding: 12px 0;">
-                <div class="q-mark" style="font-size: 40px; line-height: 0.9;">?</div>
-                <div class="q-text" style="font-size: 22px; line-height: 1.35;">
-                  Variant readings &amp; apparatus: where does this tool sit between the manuscript witnesses and a critical edition?
+              <div class="q-row" style="padding: 12px 0">
+                <div class="q-mark" style="font-size: 40px; line-height: 0.9">
+                  ?
+                </div>
+                <div class="q-text" style="font-size: 22px; line-height: 1.35">
+                  Variant readings &amp; apparatus: where does this tool sit
+                  between the manuscript witnesses and a critical edition?
                 </div>
               </div>
-              <div class="q-row" style="padding: 12px 0;">
-                <div class="q-mark" style="font-size: 40px; line-height: 0.9;">?</div>
-                <div class="q-text" style="font-size: 22px; line-height: 1.35;">
-                  Translation memory across projects: useful continuity &mdash; or homogenisation of vocabulary that should stay text-specific?
+              <div class="q-row" style="padding: 12px 0">
+                <div class="q-mark" style="font-size: 40px; line-height: 0.9">
+                  ?
+                </div>
+                <div class="q-text" style="font-size: 22px; line-height: 1.35">
+                  Translation memory across projects: useful continuity &mdash;
+                  or homogenisation of vocabulary that should stay
+                  text-specific?
                 </div>
               </div>
-              <div class="q-row" style="padding: 12px 0;">
-                <div class="q-mark" style="font-size: 40px; line-height: 0.9;">?</div>
-                <div class="q-text" style="font-size: 22px; line-height: 1.35;">
-                  Citation export to LaTeX is in the pipeline. What's the right format for shareable analysis files between scholars?
+              <div class="q-row" style="padding: 12px 0">
+                <div class="q-mark" style="font-size: 40px; line-height: 0.9">
+                  ?
+                </div>
+                <div class="q-text" style="font-size: 22px; line-height: 1.35">
+                  Citation export to LaTeX is in the pipeline. What's the right
+                  format for shareable analysis files between scholars?
                 </div>
               </div>
-              <div class="q-row" style="padding: 12px 0;">
-                <div class="q-mark" style="font-size: 40px; line-height: 0.9;">?</div>
-                <div class="q-text" style="font-size: 22px; line-height: 1.35;">
-                  AI-assisted translation: methodological &amp; ethical implications for footnotes, accountability, and publication norms.
+              <div class="q-row" style="padding: 12px 0">
+                <div class="q-mark" style="font-size: 40px; line-height: 0.9">
+                  ?
+                </div>
+                <div class="q-text" style="font-size: 22px; line-height: 1.35">
+                  AI-assisted translation: methodological &amp; ethical
+                  implications for footnotes, accountability, and publication
+                  norms.
                 </div>
               </div>
             </div>

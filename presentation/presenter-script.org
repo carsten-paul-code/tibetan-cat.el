@@ -16,7 +16,7 @@ Target: ≈45 min total. Spoken portions ≈43 min, discussion ≈8–10 min —
 ** Notes on tone
 - This is a personal-journey talk. The story carries weight; the technical detail is in service of the story.
 - Two scholars in the room — Prof. Jowita Kramer and Dr. Sebastian Nehrdich — have shaped what the tool does. Where their work is load-bearing, name it. Don't drop names for effect.
-- =DharmaMitra=, in particular, is Sebastian Nehrdich's project. The tool integrates it; on Slide 12 this is acknowledged on-screen. Don't introduce it without attribution.
+- =DharmaMitra=, in particular, is Sebastian Nehrdich's project. The tool integrates it; on Slide 13 this is acknowledged on-screen. Don't introduce it without attribution.
 
 * Slide 01 — Title (≈1 min)
 
@@ -31,20 +31,21 @@ In my earlier career, I trained as a locomotive mechanic, earned degrees in phil
 
 The talk is an introduction to a tool I've been developing over the last three semesters and I call it: =Tibetan-CAT-Tool=, a translator's environment for classical Tibetan and Sanskrit, built on Emacs. It is in alpha. I'll be honest about what's built, what isn't, and where I think the limits are.
 
-The next  minutes, structured as: a brief primer on what a CAT-Tool and Emacs are, since not everyone uses either; my personal arc into building this; six features in roughly the order I encountered the need for them; the technical state today; and two short open discussions — one on learning, one on scholarship and translation. I'd very much like the discussions to actually happen, so I'll keep the technical content tight, at least in my opinon.
+The next forty-five minutes, structured as: a brief primer on what a CAT-Tool and Emacs are, since not everyone uses either; my personal arc into building this; six features in roughly the order I encountered the need for them; the technical state today; and two short open discussions — one on learning, one on scholarship and translation. I'd very much like the discussions to actually happen, so I'll keep the technical content tight, at least in my opinion.
 
 [Advance to Slide 02.]
 
 * Slide 02 — Origin (≈3 min)
-** Spoke
+
+** Spoken
 
 This is where the tool begins.
 
 [Point to the photo on the left of the screen.]
 
-What you're looking at is one of those exercises, exactly as I worked it on paper. Eight reading questions, color-coded by parts of speech. English glosses written under each Tibetan line. Particle breakdowns in the margins. Folio references where I'd chased a word back to its source. The photo here is from a later exercise — but the setup was the same one I'd had in Tibtan II, working through the particle drills in Joanna Bialek's textbook by hand.
+What you're looking at is one of those exercises, exactly as I worked it on paper. Eight reading questions, color-coded by parts of speech. English glosses written under each Tibetan line. Particle breakdowns in the margins. Folio references where I'd chased a word back to its source. The photo here is from a later exercise — but the setup was the same one I'd had in Tibetisch II, working through the particle drills in Joanna Bialek's textbook by hand.
 
-I had — [count off on fingers, slowly] — the textbook open on the desk; a PDF reader with a Tibetan dictionary in another window; Schwiegers's grammar in a third; my own notes in a fourth; and the document I was supposed to be producing in a fifth.
+I had — [count off on fingers, slowly] — the textbook open on the desk; a PDF reader with a Tibetan dictionary in another window; Schwieger's grammar in a third; my own notes in a fourth; and the document I was supposed to be producing in a fifth.
 
 Each tool was good. The seams between them were where the time went. An exercise that should have taken an evening took a weekend. I would lose the thread between looking up a particle and writing down what I'd just understood about it.
 
@@ -56,7 +57,7 @@ That's not their fault. They were built for European-language commercial transla
 
 So I made a small, somewhat reckless decision. I would build one that did fit the work. Native to Emacs — because the rest of my scholarly work was already there, and because Emacs is the place where small, focused tools like this one are easiest to grow.
 
-That's the seed. Everything you'll see for the next minutes is the consequence of that one weekend with the textbook.
+That's the seed. Everything you'll see for the next forty-five minutes is the consequence of that one weekend with the textbook.
 
 [Advance to Slide 03.]
 
@@ -88,7 +89,7 @@ The second primer is about Emacs.
 
 Emacs is — depending on who you ask — a forty-nine-year-old text editor, or a Lisp environment, or an operating system with one working application. All three descriptions are accurate.
 
-What makes it relevant for this talk is that Emacs is the environment where, for many academics, *most of their working day already happens*. [Point to the buffer mock.] Source texts in =.org= format, you can imagine it like markdown. Outlining and notes in org-mode. A Zettelkasten in org-roam. Bibliography in BibTeX, citations through citar. Paper writing — Hausarbeiten, drafts, theses — in =.org= and exported through LuaLaTeX to PDF. An agenda, mail, a shell — all native. By the way: the standard distribution will shipped with Tetris, Pong, Solitaire etc.
+What makes it relevant for this talk is that Emacs is the environment where, for many academics, *most of their working day already happens*. [Point to the buffer mock.] Source texts in =.org= format, you can imagine it like markdown. Outlining and notes in org-mode. A Zettelkasten in org-roam. Bibliography in BibTeX, citations through citar. Paper writing — Hausarbeiten, drafts, theses — in =.org= and exported through LuaLaTeX to PDF. An agenda, mail, a shell — all native. By the way: the standard distribution ships with Tetris, Pong, Solitaire etc.
 
 If org-mode is the document, Emacs is the desk it sits on.
 
@@ -357,7 +358,7 @@ Sanskrit appears.
 And then — I noticed something. I was redoing the same analysis
 whenever I came back to a passage. The work needed to *persist*.
 
-[Advance to Slide 11.]
+[Advance to Slide 12.]
 
 * Slide 12 — Per-segment Org file (≈2.5 min)
 
@@ -407,7 +408,7 @@ hours. So I wired in two AI bridges.
 
 *Very carefully*.
 
-[Advance to Slide 12.]
+[Advance to Slide 13.]
 
 * Slide 13 — AI bridges · DM-primary (≈2.5 min)
 
@@ -493,7 +494,7 @@ answers in.
 
 ** Spoken
 
-[Slide 14.]
+[Slide 15.]
 
 I'm writing my M.A. thesis in German.
 
@@ -526,7 +527,7 @@ whole tool would follow.
 And then — beyond target language, the source side too has more
 than one language at once.
 
-[Advance to Slide 15.]
+[Advance to Slide 16.]
 
 * Slide 16 — Bilingual mode · DM-first (≈2.5 min)
 
