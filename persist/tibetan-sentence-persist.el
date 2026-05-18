@@ -370,26 +370,26 @@ the corresponding heading has real content, not placeholder text)."
 ;; ============================================================================
 
 (defconst tibetan-sentence--segment-claude-sections
-  '("** Translation"
-    "** Claude Translation"
-    "** Claude Grammar"
-    "** Provided Translations")
+  '()
   "Level-2 headings stripped from segment-level auto-analysis output
-before it is embedded in a sentence file's `* Auto-Analysis' block.
+before it is embedded in a sentence file's `* Tibetan Analysis'
+block.
 
-The segment-level renderer emits its own `** Translation' (Phase
-1.3 of layout-revision §5.18, 2026-05-04 — was `** Claude
-Translation'), `** Claude Grammar', and `** Provided Translations'
-subtrees.  Both the new and legacy Translation heading names are
-listed so the strip-list works whether the embedded segment-level
-output is in old or new shape.
+POST-ALIGNMENT (2026-05-18): this list is EMPTY.  After the
+sentence-file layout was aligned with segment §5.18 layout, the
+segment renderer's `** Translation' and `** Provided Translations'
+subtrees ARE used by the sentence file:  the sentence-level Claude
+translation lands in `** Translation' (level-2 primary slot,
+matching segment), and the sentence-specific Roehrich / Class
+Translation / Claude Context level-3 entries live inside the
+nested `** Provided Translations'.  Stripping them would orphan
+the slots the sentence layer needs to fill.
 
-Sentence files carry their own top-level `* Provided Translations'
-with a discourse-focused Claude pass (different prompt, different
-analysis), so replicating the segment-level Claude scaffolding
-would produce two conflicting Claude conversations in one file.
-Dropping these subtrees keeps the auto-analysis content strictly
-parser-sourced at the sentence level.")
+Kept as an explicit empty defconst so the strip path stays clean
+\(rather than being deleted from `--strip-segment-claude-sections',
+which still uses it as the filter input).  If a future divergence
+requires stripping a particular level-2 heading from the embedded
+segment output, list it here.")
 
 (defun tibetan-sentence--strip-segment-claude-sections (content)
   "Return CONTENT with segment-level Claude sections removed.
@@ -563,6 +563,67 @@ auto-analysis block at all."
                  tibetan-text)))
           (error nil))))))
 
+(defconst tibetan-sentence--scaffold-sentence-only-l3-entries
+  '(("Roehrich" .         "[Hand-paste the published Roehrich English here]")
+    ("Class Translation" . "[Working class translation here]")
+    ("Claude Context" .    "[Awaiting Claude…]"))
+  "Sentence-specific level-3 entries to inject into the nested
+`** Provided Translations' block of a sent-NNN.org file.
+
+Cons cells `(HEADING . PLACEHOLDER-BODY)'.  Heading order is
+preserved — Roehrich (curated reference) before Class Translation
+\(class-paste) before Claude Context (sentence-only discourse
+output).  Together with the segment-renderer's `*** Claude
+Vocabulary' / `*** Claude Particles' placeholders, these complete
+the level-3 inventory under the sentence file's `** Provided
+Translations'.")
+
+(defun tibetan-sentence--inject-sentence-l3-entries (buffer)
+  "Inject sentence-only level-3 entries into the nested
+`** Provided Translations' block inside `* Tibetan Analysis'.
+
+For each `(HEADING . PLACEHOLDER)' in
+`tibetan-sentence--scaffold-sentence-only-l3-entries' that is not
+already present under the nested `** Provided Translations',
+insert a `*** HEADING\\nPLACEHOLDER\\n\\n' block.  Existing
+populated entries are left untouched (idempotent).
+
+When `** Provided Translations' itself is absent (segment renderer
+didn't emit it, e.g. degraded test harness), this is a no-op.
+
+Called from the scaffold (fresh files) and from `--regenerate'
+\(after relocation of preserved bodies, so already-populated
+sentence-only entries don't get clobbered)."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward "^\\*\\* Provided Translations$" nil t)
+        ;; Find the end of this nested ** Provided Translations
+        ;; subtree:  next ^** OR ^* OR end-of-buffer.
+        (let* ((pt-body-start (progn (forward-line 1) (point)))
+               (pt-end (save-excursion
+                         (or (and (re-search-forward "^\\*\\{1,2\\}[^*\n]"
+                                                     nil t)
+                                  (line-beginning-position))
+                             (point-max))))
+               (subtree (buffer-substring-no-properties
+                         pt-body-start pt-end)))
+          (dolist (entry tibetan-sentence--scaffold-sentence-only-l3-entries)
+            (let ((heading (car entry))
+                  (placeholder (cdr entry)))
+              (unless (string-match-p
+                       (format "^\\*\\*\\* %s$" (regexp-quote heading))
+                       subtree)
+                ;; Insert at the END of the ** Provided Translations
+                ;; subtree (just before the next sibling heading).
+                (goto-char pt-end)
+                (insert (format "*** %s\n%s\n\n" heading placeholder))
+                ;; Recalculate bounds because the buffer grew.
+                (setq pt-end (point))
+                (setq subtree
+                      (concat subtree
+                              (format "*** %s\n%s\n\n" heading placeholder)))))))))))
+
 (defun tibetan-sentence--scaffold (sent-num seg-nums tibetan-text wylie source-file)
   "Return the scaffold body for a new sent-NNN.org file (as string).
 SENT-NUM is the sentence number, SEG-NUMS the list of contained
@@ -571,18 +632,31 @@ WYLIE its transliteration (may be nil — retained as a fallback
 when `tibetan-analysis-generate-content' is unavailable),
 SOURCE-FILE the absolute path of the source org buffer.
 
-The scaffold now embeds the segment-level auto-analysis output
-\(minus segment-Claude scaffolding) under `* Auto-Analysis', so
-every sent-NNN.org carries Wylie, Particle Map, Interlinear Gloss,
-Verb Classification, Word/Particle List, Grammatical Markers,
-Sentence Structure (per-clause), Clause Structure, and Detailed
-Dictionary on the concatenated sentence text — the \"extended
-sequence analysis\" view where cross-segment compounds and long
-clause chains surface naturally.  The top-level `* Provided
-Translations' block (Roehrich / Class / Claude Translation /
-Claude Grammar / Claude Context) remains where it was — that's
-the sentence-scoped discourse analysis, not the segment-level
-word-by-word one."
+The scaffold emits the segment-§5.18 aligned layout (2026-05-18):
+
+  * My Notes                          user-edited (top)
+  * Working Translation               user-edited (top)
+  * Tibetan Text                      concatenated child text
+  * Tibetan Analysis                  was `* Auto-Analysis'
+    ** Wylie / Particle Map / Interlinear …
+    ** Translation                    sentence-level Claude lands here
+    ** Grammar (with *** Claude Grammar / *** Particles)
+    ** Verb Classification / Sentence Structure / Clause Structure /
+       Detailed Dictionary / Main Clause
+    ** Provided Translations          NESTED — segment shape
+      *** Roehrich                    sentence-specific
+      *** Class Translation           sentence-specific
+      *** Claude Context              sentence-specific
+      *** Claude Vocabulary           from segment renderer
+      *** Claude Particles            from segment renderer
+  * Footnotes                         user-edited (bottom)
+
+Fallback:  when the segment renderer is unavailable
+\(`tibetan-analysis-generate-content' missing or no Tibetan
+content), the analysis parent gets a minimal `* Wylie' block
+under `* Tibetan Analysis' instead of the rich segment-renderer
+body.  The outer shape (My Notes / Working Translation top,
+Footnotes bottom) is preserved either way."
   (let* ((source-name (and source-file
                            (file-name-nondirectory source-file)))
          (date (format-time-string "%Y-%m-%d"))
@@ -600,41 +674,49 @@ word-by-word one."
       (insert (format "#+CREATED: %s\n" date))
       (insert (format "#+LAST_ANALYZED: %s\n" date))
       (insert "\n")
+      ;; User sections at TOP (segment §5.18 ordering).
+      (insert "* My Notes\n\n\n")
+      (insert "* Working Translation\n\n\n")
+      ;; Tibetan source text.
       (insert "* Tibetan Text\n")
       (insert tibetan-text)
       (insert "\n\n")
-      ;; * Auto-Analysis — extended-segment-analysis output on the
-      ;; concatenated sentence text.  Falls back to a standalone
-      ;; `* Wylie' block on the older layout when the segment
-      ;; renderer is not available (e.g. degraded test harness).
+      ;; `* Tibetan Analysis' (renamed from `* Auto-Analysis' for
+      ;; §5.18 alignment).  Body = full segment-renderer output,
+      ;; including `** Translation' (placeholder — sentence-level
+      ;; Claude lands here), `** Grammar' (with nested `*** Claude
+      ;; Grammar' slot), `** Provided Translations' (with `*** Claude
+      ;; Vocabulary' / `*** Claude Particles' placeholders).
       (let ((auto (tibetan-sentence--render-auto-analysis tibetan-text)))
         (cond
          (auto
-          (insert "* Auto-Analysis\n")
+          (insert "* Tibetan Analysis\n")
           (insert ":PROPERTIES:\n:GENERATED: t\n:END:\n\n")
           (insert auto)
           (unless (string-suffix-p "\n" auto) (insert "\n"))
           (insert "\n"))
          (t
-          (insert "* Wylie\n")
+          (insert "* Tibetan Analysis\n")
+          (insert ":PROPERTIES:\n:GENERATED: t\n:END:\n\n")
+          (insert "** Wylie\n")
           (if (and wylie (not (string-empty-p wylie)))
               (insert wylie)
             (insert "[Wylie transliteration not available]"))
-          (insert "\n\n"))))
-      (insert "* Provided Translations\n")
-      (insert "*** Roehrich\n")
-      (insert "[Hand-paste the published Roehrich English here]\n\n")
-      (insert "*** Class Translation\n")
-      (insert "[Working class translation here]\n\n")
-      (insert "*** Claude Translation\n")
-      (insert "[Awaiting Claude…]\n\n")
-      (insert "*** Claude Grammar\n")
-      (insert "[Awaiting Claude…]\n\n")
-      (insert "*** Claude Context\n")
-      (insert "[Awaiting Claude…]\n\n")
-      (insert "* Working Translation\n\n\n")
-      (insert "* My Notes\n\n\n")
+          (insert "\n\n")
+          ;; Degraded path: emit a `** Provided Translations'
+          ;; placeholder so the injection helper has a parent block
+          ;; to attach the sentence-specific level-3 entries to.
+          (insert "** Provided Translations\n\n"))))
+      ;; * Footnotes goes BEFORE the level-3 injection so the
+      ;; injector's subtree-end detection lands the level-3 entries
+      ;; INSIDE `** Provided Translations' (just before `* Footnotes')
+      ;; rather than after everything else.
       (insert "* Footnotes\n\n")
+      ;; Inject sentence-specific level-3 entries (*** Roehrich,
+      ;; *** Class Translation, *** Claude Context) into the nested
+      ;; `** Provided Translations' block.  No-op when the block is
+      ;; absent.
+      (tibetan-sentence--inject-sentence-l3-entries (current-buffer))
       (buffer-string))))
 
 (defun tibetan-sentence--create-file (sent-num seg-nums tibetan-text source-file)
@@ -654,137 +736,207 @@ word-by-word one."
 ;; REGENERATE — preserves user content and translations
 ;; ============================================================================
 
+(defun tibetan-sentence--read-l2-body (filepath heading)
+  "Read body under `** HEADING' anywhere in FILEPATH.  Returns the
+trimmed string, or nil when heading is absent / body is empty or
+a placeholder."
+  (when (and filepath (file-exists-p filepath))
+    (with-temp-buffer
+      (insert-file-contents filepath)
+      (goto-char (point-min))
+      (when (re-search-forward
+             (format "^\\*\\* %s$" (regexp-quote heading)) nil t)
+        (forward-line 1)
+        (let* ((start (point))
+               (end (save-excursion
+                      (if (re-search-forward
+                           "^\\*\\{1,2\\}[^*\n]\\|^\\* " nil t)
+                          (line-beginning-position)
+                        (point-max))))
+               (body (string-trim
+                      (buffer-substring-no-properties start end))))
+          (unless (or (string-empty-p body)
+                      (string-match-p "\\`\\[Awaiting" body)
+                      (string-match-p "\\`\\[Requesting" body)
+                      (string-match-p "\\`\\[Claude unavailable" body)
+                      (string-match-p "\\`\\[Translation not available" body))
+            body))))))
+
+(defun tibetan-sentence--set-l3-body-in-buffer (buffer heading body)
+  "Set the body under `*** HEADING' in BUFFER to BODY (trimmed).
+Heading must already exist in the buffer."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward
+             (format "^\\*\\*\\* %s$" (regexp-quote heading)) nil t)
+        (forward-line 1)
+        (let ((start (point))
+              (end (save-excursion
+                     (if (re-search-forward
+                          "^\\*\\{1,3\\}[^*\n]\\|^\\* " nil t)
+                         (line-beginning-position)
+                       (point-max)))))
+          (delete-region start end)
+          (goto-char start)
+          (insert (string-trim body) "\n\n"))))))
+
+(defun tibetan-sentence--set-l2-body-in-buffer (buffer heading body)
+  "Set the body under `** HEADING' in BUFFER to BODY (trimmed)."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward
+             (format "^\\*\\* %s$" (regexp-quote heading)) nil t)
+        (forward-line 1)
+        (let ((start (point))
+              (end (save-excursion
+                     (if (re-search-forward
+                          "^\\*\\{1,2\\}[^*\n]\\|^\\* " nil t)
+                         (line-beginning-position)
+                       (point-max)))))
+          (delete-region start end)
+          (goto-char start)
+          (insert (string-trim body) "\n\n"))))))
+
+(defun tibetan-sentence--set-top-level-body-in-buffer (buffer heading body)
+  "Replace the FULL top-level `* HEADING' section in BUFFER with BODY.
+BODY is the verbatim content captured by
+`tibetan-sentence--get-user-sections' (heading line through next
+top-level heading).  Idempotent — only replaces an existing section
+in place;  callers ensure the heading is present first."
+  (with-current-buffer buffer
+    (save-excursion
+      (let ((bounds (tibetan-sentence--find-section-bounds buffer heading)))
+        (when bounds
+          (delete-region (car bounds) (cdr bounds))
+          (goto-char (car bounds))
+          (insert body))))))
+
 (defun tibetan-sentence--regenerate (filepath sent-num seg-nums tibetan-text)
-  "Regenerate metadata + Tibetan/Wylie/scaffold of FILEPATH.
-Preserves: My Notes, Working Translation, Footnotes (top-level
-user sections); Roehrich, Class Translation, Claude Translation,
-Claude Grammar, Claude Context (third-level translation bodies).
-Updates `#+SEGMENTS:', `#+TIBETAN_HASH:', `#+LAST_ANALYZED:' and
-the `* Tibetan Text' / `* Wylie' bodies."
+  "Regenerate FILEPATH in the new segment-§5.18-aligned layout.
+
+PRESERVE phase:  reads all bodies worth keeping:
+  - User sections (My Notes, Working Translation, Footnotes).
+  - Reference bodies (Roehrich, Class Translation).
+  - Sentence-level Claude bodies (Claude Translation @ level-3
+    legacy OR `** Translation' @ level-2 new, Claude Grammar,
+    Claude Context).
+
+REBUILD phase:  scaffolds a fresh file via
+`tibetan-sentence--scaffold' in the NEW layout (My Notes /
+Working Translation top, `* Tibetan Analysis' parent, nested
+`** Provided Translations', Footnotes bottom).
+
+RESTORE phase:  injects each preserved body into its slot in the
+new layout:
+  - Legacy `*** Claude Translation' body → `** Translation'
+    \(level-2 promotion, matches segment §5.18 layout).
+  - Roehrich / Class Translation / Claude Context → level-3
+    inside nested `** Provided Translations'.
+  - Claude Grammar → level-3 under `** Grammar'.
+  - My Notes / Working Translation / Footnotes → top-level
+    sections at their new positions (top / top / bottom).
+
+Idempotent — re-running on an already-migrated file produces
+identical output (modulo `#+LAST_ANALYZED:' timestamp).
+
+Updates `#+SEGMENTS:' / `#+TIBETAN_HASH:' / `#+LAST_ANALYZED:'."
+  ;; ============================================================================
+  ;; PRESERVE phase — read everything we need to keep BEFORE rebuilding.
+  ;; ============================================================================
   (let* ((user-sections (tibetan-sentence--get-user-sections filepath))
-         (trans (tibetan-sentence--read-translation-bodies filepath))
-         (claude
-          (when (fboundp 'tibetan-analysis--read-claude-sections)
-            (tibetan-analysis--read-claude-sections filepath)))
-         (hash  (tibetan-sentence--compute-hash tibetan-text))
-         (date  (format-time-string "%Y-%m-%d"))
+         (trans  (tibetan-sentence--read-translation-bodies filepath))
+         ;; Claude Translation:  try level-2 `** Translation' (new
+         ;; aligned layout) first;  fall back to level-3 `*** Claude
+         ;; Translation' (legacy sentence-only layout).
+         (claude-trans-body
+          (or (tibetan-sentence--read-l2-body filepath "Translation")
+              (tibetan-sentence--read-third-level-body
+               filepath "Claude Translation")))
+         (claude-grammar-body
+          (tibetan-sentence--read-third-level-body filepath "Claude Grammar"))
+         (claude-context-body
+          (tibetan-sentence--read-third-level-body filepath "Claude Context"))
+         (claude-vocabulary-body
+          (tibetan-sentence--read-third-level-body filepath "Claude Vocabulary"))
+         (claude-particles-body
+          (tibetan-sentence--read-third-level-body filepath "Claude Particles"))
+         (source-file (tibetan-sentence--source-file-from-analysis filepath))
          (wylie (condition-case nil
                     (when (fboundp 'tibetan-to-wylie-fixed)
                       (tibetan-to-wylie-fixed tibetan-text))
                   (error nil)))
-         (segs-csv (mapconcat #'number-to-string seg-nums ", ")))
-    (with-current-buffer (find-file-noselect filepath)
-      ;; Update or insert the headers.
-      (goto-char (point-min))
-      (if (re-search-forward "^#\\+SEGMENTS:.*$" nil t)
-          (replace-match (format "#+SEGMENTS: %s" segs-csv) t t)
-        ;; Insert after #+SOURCE if present, else after #+STARTUP.
-        (goto-char (point-min))
-        (when (or (re-search-forward "^#\\+SOURCE:.*$" nil t)
-                  (re-search-forward "^#\\+STARTUP:.*$" nil t))
-          (end-of-line)
-          (insert (format "\n#+SEGMENTS: %s" segs-csv))))
+         ;; ========================================================
+         ;; REBUILD phase — generate the new-layout scaffold body.
+         ;; ========================================================
+         (new-body (tibetan-sentence--scaffold
+                    sent-num seg-nums tibetan-text wylie source-file)))
 
-      (goto-char (point-min))
-      (if (re-search-forward "^#\\+TIBETAN_HASH:.*$" nil t)
-          (replace-match (format "#+TIBETAN_HASH: %s" hash) t t)
-        (goto-char (point-min))
-        (when (re-search-forward "^#\\+SEGMENTS:.*$" nil t)
-          (end-of-line)
-          (insert (format "\n#+TIBETAN_HASH: %s" hash))))
+    ;; Close any open buffer on this file so the write doesn't fight a
+    ;; stale visit.
+    (let ((open (get-file-buffer filepath)))
+      (when open
+        (with-current-buffer open (set-buffer-modified-p nil))
+        (kill-buffer open)))
 
-      (goto-char (point-min))
-      (if (re-search-forward "^#\\+LAST_ANALYZED:.*$" nil t)
-          (replace-match (format "#+LAST_ANALYZED: %s" date) t t)
-        (goto-char (point-min))
-        (when (re-search-forward "^#\\+CREATED:.*$" nil t)
-          (end-of-line)
-          (insert (format "\n#+LAST_ANALYZED: %s" date))))
+    ;; Write the fresh scaffold to disk.
+    (with-temp-file filepath
+      (insert new-body))
 
-      ;; Update the Tibetan Text body.
-      (let ((bounds (tibetan-sentence--find-section-bounds
-                     (current-buffer) "Tibetan Text")))
-        (when bounds
-          (delete-region (car bounds) (cdr bounds))
-          (goto-char (car bounds))
-          (insert "* Tibetan Text\n" tibetan-text "\n\n")))
-
-      ;; Auto-Analysis: remove any legacy `* Wylie' standalone section
-      ;; (pre-extended-analysis layout) and install / replace
-      ;; `* Auto-Analysis' with the segment-level renderer output on
-      ;; the current concatenated text.  Falls back to the standalone
-      ;; Wylie block if the renderer isn't available.
-      (let ((old-wylie (tibetan-sentence--find-section-bounds
-                        (current-buffer) "Wylie")))
-        (when old-wylie
-          (delete-region (car old-wylie) (cdr old-wylie))))
-      (let* ((auto (tibetan-sentence--render-auto-analysis tibetan-text))
-             (bounds (tibetan-sentence--find-section-bounds
-                      (current-buffer) "Auto-Analysis")))
-        (cond
-         ((and auto bounds)
-          (delete-region (car bounds) (cdr bounds))
-          (goto-char (car bounds))
-          (insert "* Auto-Analysis\n"
-                  ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
-                  auto
-                  (if (string-suffix-p "\n" auto) "\n" "\n\n")))
-         (auto
-          ;; Insert fresh after Tibetan Text.
-          (let ((tib (tibetan-sentence--find-section-bounds
-                      (current-buffer) "Tibetan Text")))
-            (when tib
-              (goto-char (cdr tib))
-              (insert "* Auto-Analysis\n"
-                      ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
-                      auto
-                      (if (string-suffix-p "\n" auto) "\n" "\n\n")))))
-         (bounds
-          ;; Renderer unavailable but an Auto-Analysis section exists;
-          ;; leave it alone (nothing valid to replace it with).
-          nil)
-         (t
-          ;; Renderer unavailable and no Auto-Analysis: fall back to
-          ;; inserting a standalone Wylie block (legacy shape) so the
-          ;; file still carries SOMETHING useful.
-          (let ((tib (tibetan-sentence--find-section-bounds
-                      (current-buffer) "Tibetan Text")))
-            (when tib
-              (goto-char (cdr tib))
-              (insert "* Wylie\n"
-                      (if (and wylie (not (string-empty-p wylie)))
-                          wylie
-                        "[Wylie transliteration not available]")
-                      "\n\n"))))))
-
-      ;; Restore Roehrich + Class Translation if we had real bodies.
-      (when (and (fboundp 'tibetan-analysis--ensure-claude-headings))
-        (tibetan-analysis--ensure-claude-headings (current-buffer)))
-      (when (and (plist-get trans :roehrich)
-                 (fboundp 'tibetan-analysis--replace-claude-section-body))
-        (tibetan-analysis--replace-claude-section-body
-         (current-buffer) "Roehrich" (plist-get trans :roehrich)))
-      (when (and (plist-get trans :class)
-                 (fboundp 'tibetan-analysis--replace-claude-section-body))
-        (tibetan-analysis--replace-claude-section-body
-         (current-buffer) "Class Translation" (plist-get trans :class)))
-
-      ;; Restore Claude sections.
-      (when (and claude
-                 (fboundp 'tibetan-analysis--restore-claude-sections))
-        (tibetan-analysis--restore-claude-sections filepath claude))
-
-      ;; Restore user sections (re-add any that got clobbered).
-      (dolist (section user-sections)
-        (let* ((name (car section))
-               (content (cdr section))
-               (bounds (tibetan-sentence--find-section-bounds
-                        (current-buffer) name)))
-          (unless bounds
-            (goto-char (point-max))
-            (insert content))))
-
-      (save-buffer)
+    ;; ========================================================
+    ;; RESTORE phase — inject preserved content into the new file.
+    ;; ========================================================
+    (let ((buf (find-file-noselect filepath)))
+      (with-current-buffer buf
+        ;; Run the §5.18 Phase-1.3 migration in-place:  rename any
+        ;; lingering `** Claude Translation' from the scaffold's
+        ;; embedded segment-renderer output → `** Translation'.  The
+        ;; layout detector (`--claude-segment-layout-p') recognises
+        ;; the new aligned sentence shape (* Tibetan Analysis parent)
+        ;; as segment-layout for migration purposes.
+        (when (fboundp 'tibetan-analysis--migrate-legacy-claude-headings)
+          (tibetan-analysis--migrate-legacy-claude-headings buf))
+        ;; Level-2 ** Translation (claimed primary slot for the
+        ;; sentence-level Claude translation, matching segment).
+        (when claude-trans-body
+          (tibetan-sentence--set-l2-body-in-buffer
+           buf "Translation" claude-trans-body))
+        ;; Level-3 *** Claude Grammar (nested under ** Grammar).
+        (when claude-grammar-body
+          (tibetan-sentence--set-l3-body-in-buffer
+           buf "Claude Grammar" claude-grammar-body))
+        ;; Sentence-specific level-3 entries (nested under
+        ;; ** Provided Translations).
+        (when (plist-get trans :roehrich)
+          (tibetan-sentence--set-l3-body-in-buffer
+           buf "Roehrich" (plist-get trans :roehrich)))
+        (when (plist-get trans :class)
+          (tibetan-sentence--set-l3-body-in-buffer
+           buf "Class Translation" (plist-get trans :class)))
+        (when claude-context-body
+          (tibetan-sentence--set-l3-body-in-buffer
+           buf "Claude Context" claude-context-body))
+        (when claude-vocabulary-body
+          (tibetan-sentence--set-l3-body-in-buffer
+           buf "Claude Vocabulary" claude-vocabulary-body))
+        (when claude-particles-body
+          (tibetan-sentence--set-l3-body-in-buffer
+           buf "Claude Particles" claude-particles-body))
+        ;; Top-level user sections — captured verbatim from the old
+        ;; file (heading line through next ^* heading), re-inserted
+        ;; in place of the scaffold's empty placeholder.
+        (dolist (section user-sections)
+          (tibetan-sentence--set-top-level-body-in-buffer
+           buf (car section) (cdr section)))
+        ;; Export safety:  strip Interlinear→DD dangling term-* links
+        ;; (mirrors `tibetan-analysis-regenerate-auto' for segment
+        ;; files;  the issue is the same — Interlinear emits link
+        ;; targets whose `<<term-X>>' anchors may not exist in DD
+        ;; if the divergence pre-dates the strict MWU detector).
+        (when (fboundp 'tibetan-analysis--strip-dangling-term-links-in-buffer)
+          (tibetan-analysis--strip-dangling-term-links-in-buffer))
+        (save-buffer))
       (message "Re-analyzed sentence %d. User content preserved." sent-num))))
 
 ;; ============================================================================

@@ -1457,7 +1457,8 @@ five-key shape."
   '((:translation "Translation"        2)
     (:vocabulary  "Claude Vocabulary"  3)
     (:grammar     "Claude Grammar"     3)
-    (:particles   "Claude Particles"   3))
+    (:particles   "Claude Particles"   3)
+    (:context     "Claude Context"     3))
   "Canonical order, heading names, and org levels for Claude sections.
 Each entry is (KEY HEADING LEVEL).
 
@@ -1507,30 +1508,39 @@ list so levels stay consistent everywhere.")
 (defun tibetan-analysis--claude-segment-layout-p (buffer)
   "Return non-nil if BUFFER uses the segment-level analysis layout.
 
-Sentence-level files (sent-NNN*.org) carry a `#+SEGMENTS:' header
-listing their child segment numbers — a marker no segment file
-ever has.  We use that as the primary discriminator because the
-older heuristic (`** Wylie Transliteration' at level 2) became
-ambiguous after sentence files grew an embedded `* Auto-Analysis'
-block that reuses the segment-level renderer — both layouts now
-have `** Wylie Transliteration'.
+After the sentence-§5.18 alignment (2026-05-18), both segment
+files AND aligned sentence files share the SAME shape:
+`* Tibetan Analysis' parent, `** Translation' at level-2, nested
+`** Provided Translations'.  We treat any buffer carrying
+`* Tibetan Analysis' as segment-layout — the writer then uses the
+level-2 Translation slot, the renamer migrates legacy `** Claude
+Translation' → `** Translation' in place, etc.
 
-Fallback (pre-`#+SEGMENTS:' files): presence of a top-level
-`* Provided Translations' heading is a sentence-layout marker,
-because segment files keep Provided Translations at level 2
-inside Auto-Analysis.  Brand-new / empty buffers still default
-to segment layout so fresh per-segment scaffolds get Translation
-promoted to level 2."
+Legacy sentence layout (`* Auto-Analysis' parent + top-level
+`* Provided Translations') still returns nil so the writer uses
+the level-3 Claude headings expected by the old shape.
+
+Brand-new / empty buffers still default to segment layout so
+fresh per-segment scaffolds get Translation promoted to level 2."
   (with-current-buffer buffer
     (save-excursion
       (goto-char (point-min))
       (cond
-       ;; Sentence file marker — #+SEGMENTS: header.
-       ((re-search-forward "^#\\+SEGMENTS:" nil t) nil)
-       ;; Sentence file marker — `* Provided Translations' at level 1.
+       ;; Aligned layout marker — `* Tibetan Analysis' parent.  Both
+       ;; segment files AND new-style sentence files have this.
+       ((re-search-forward "^\\* Tibetan Analysis$" nil t) t)
+       ;; Legacy sentence marker — top-level `* Provided Translations'.
        ((progn
           (goto-char (point-min))
           (re-search-forward "^\\* Provided Translations$" nil t))
+        nil)
+       ;; Legacy sentence marker — `#+SEGMENTS:' header without a
+       ;; `* Tibetan Analysis' parent (an old sentence file).  This
+       ;; check ONLY applies when the buffer has the OLD shape;  the
+       ;; new aligned shape is handled by the first clause above.
+       ((progn
+          (goto-char (point-min))
+          (re-search-forward "^#\\+SEGMENTS:" nil t))
         nil)
        ;; Empty buffer or no sentence marker — segment layout.
        (t t)))))

@@ -1060,15 +1060,69 @@ sees the new heading on already-migrated files.
 
 #### Carve-outs (deliberately untouched)
 
-- **Sentence files (`sent-NNN*.org`):** keep `* Auto-Analysis'
-  parent and the legacy `*** Claude Translation' (level-3).
-  Sentence layout is not in the parallel-Sanskrit pipeline.
-  Phase 1.3 strip-list adds `** Translation' so segment-level
-  embedding inside sentence files cleans up correctly.
+- **Sentence files (`sent-NNN*.org`):** ALIGNED with segment
+  shape as of 2026-05-18 (the original §5.18 carve-out is retired
+  — see "Sentence-file alignment" subsection below).  Sentence
+  files now use `* Tibetan Analysis' parent, `** Translation' at
+  level-2, nested `** Provided Translations' with sentence-only
+  `*** Roehrich' / `*** Class Translation' / `*** Claude Context'
+  alongside `*** Claude Vocabulary' / `*** Claude Particles'.
 - **Paragraph files (`par-NNN.org`):** keep `* Auto-Analysis'.
   Different flow; not parallel-Sanskrit.
 - **Compound analysis (`tibetan-compound-analysis.el`):** keeps
   `* Auto-Analysis'.  Multi-verb verse workflow, separate.
+
+#### Sentence-file alignment (2026-05-18 follow-up)
+
+The original §5.18 work carved sentence files out because their
+discourse-level Claude pipeline (3 sections: Translation /
+Grammar / Context) is distinct from the segment-level word-by-
+word pipeline (4 sections: Translation / Vocabulary / Grammar /
+Particles).  A subsequent user request — "I want sentence files
+in the equal form like segment files" — drove a follow-up
+alignment.
+
+What aligned:
+- Parent rename `* Auto-Analysis' → `* Tibetan Analysis'.
+- User sections (My Notes, Working Translation) moved from
+  BOTTOM to TOP (matching segment §5.18 ordering).
+- Top-level `* Provided Translations' DROPPED;  the level-3
+  entries (Roehrich, Class Translation, Claude Context) moved
+  INSIDE a nested `** Provided Translations' under `* Tibetan
+  Analysis'.
+- Sentence-level Claude Translation promoted from level-3
+  (`*** Claude Translation') to level-2 (`** Translation') —
+  matches segment's primary slot.
+- Footnotes stays at the BOTTOM.
+
+Mechanics:
+- `tibetan-sentence--segment-claude-sections' strip-list emptied;
+  the segment-renderer's `** Translation' and `** Provided
+  Translations' subtrees now flow through to the sentence file's
+  `* Tibetan Analysis' body unchanged.
+- `tibetan-sentence--inject-sentence-l3-entries' appends `***
+  Roehrich' / `*** Class Translation' / `*** Claude Context' to
+  the nested `** Provided Translations' block.
+- `tibetan-sentence--regenerate' rebuilt to use a PRESERVE →
+  REBUILD-via-scaffold → RESTORE pattern.  Reads bodies from
+  legacy positions, scaffolds fresh, restores into new positions.
+- `tibetan-analysis--claude-segment-layout-p' detector updated
+  to recognise the new aligned sentence layout (presence of
+  `* Tibetan Analysis' parent) as segment-shape for migration
+  purposes.  Legacy sentence files (with `* Auto-Analysis' or
+  top-level `* Provided Translations') still classify as sentence-
+  shape so the Claude writer uses the level-3 layout expected
+  by the pre-migration files.
+- `tibetan-analysis--claude-section-order' extended with
+  `(:context "Claude Context" 3)' so the writer can place the
+  sentence-only Context body.  Segment Claude responses don't
+  produce Context — the writer just skips it.
+
+Migration:  on first `--regenerate' the old layout (Auto-Analysis
++ top-level Provided Translations + bottom user sections) is
+rewritten into the new layout, preserving user-edited bodies
+verbatim.  Idempotent — re-running on an already-migrated file
+produces identical output.
 
 #### Cache impact
 

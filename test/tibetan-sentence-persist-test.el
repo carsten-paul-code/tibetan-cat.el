@@ -343,28 +343,63 @@ Just some prose, no sentence headings here.
     (should-not (string-match-p "^#\\+SOURCE:" body))))
 
 (ert-deftest tibetan-sentence-scaffold-section-headings ()
-  "Scaffold has all required top-level and Provided-Translations sub-headings.
-The layout is `* Tibetan Text', `* Auto-Analysis' (or legacy `* Wylie'
-fallback when the segment renderer is unavailable), then
-`* Provided Translations' with Roehrich / Class / Claude subsections,
-followed by the user sections (Working Translation / My Notes /
-Footnotes)."
+  "Scaffold mirrors the segment layout (§5.18 alignment, 2026-05-18).
+Top-level shape:
+
+  * My Notes
+  * Working Translation
+  * Tibetan Text
+  * Tibetan Analysis           (was `* Auto-Analysis')
+    ** … segment renderer body …
+    ** Provided Translations   (nested, NOT top-level)
+      *** Roehrich
+      *** Class Translation
+      *** Claude Context
+      *** Claude Vocabulary / *** Claude Particles
+  * Footnotes
+
+The sentence-specific Roehrich / Class Translation / Claude Context
+level-3 entries live INSIDE the nested `** Provided Translations',
+matching the segment file shape.  No top-level `* Provided
+Translations'.  My Notes / Working Translation are AT THE TOP
+\(matches segment §5.18 ordering)."
   (let ((body (tibetan-sentence--scaffold 1 '(1) "x" "x" "/tmp/f.org")))
-    (should (string-match-p "^\\* Tibetan Text$"            body))
-    ;; EITHER `* Auto-Analysis' (renderer active) OR `* Wylie'
-    ;; (renderer unavailable / no Tibetan in test input).  The scaffold
-    ;; MUST carry at least one of the two.
-    (should (or (string-match-p "^\\* Auto-Analysis$" body)
-                (string-match-p "^\\* Wylie$"         body)))
-    (should (string-match-p "^\\* Provided Translations$"   body))
+    (should (string-match-p "^\\* Tibetan Text$"           body))
+    ;; New parent name (alignment with segment §5.18).
+    ;; The fallback `* Wylie' (when renderer unavailable) is acceptable too.
+    (should (or (string-match-p "^\\* Tibetan Analysis$" body)
+                (string-match-p "^\\* Wylie$"            body)))
+    ;; Legacy `* Auto-Analysis' name must NOT appear in fresh scaffolds.
+    (should-not (string-match-p "^\\* Auto-Analysis$" body))
+    ;; No more TOP-LEVEL `* Provided Translations'.  It's a nested
+    ;; level-2 inside `* Tibetan Analysis' (segment shape).
+    (should-not (string-match-p "^\\* Provided Translations$" body))
+    ;; Sentence-specific level-3 entries.
     (should (string-match-p "^\\*\\*\\* Roehrich$"          body))
     (should (string-match-p "^\\*\\*\\* Class Translation$" body))
-    (should (string-match-p "^\\*\\*\\* Claude Translation$" body))
-    (should (string-match-p "^\\*\\*\\* Claude Grammar$"    body))
     (should (string-match-p "^\\*\\*\\* Claude Context$"    body))
+    ;; User sections + Footnotes.
     (should (string-match-p "^\\* Working Translation$"     body))
     (should (string-match-p "^\\* My Notes$"                body))
     (should (string-match-p "^\\* Footnotes$"               body))))
+
+(ert-deftest tibetan-sentence-scaffold-user-sections-at-top ()
+  "My Notes / Working Translation are emitted ABOVE Tibetan Text
+\(segment §5.18 ordering).  Footnotes stays at the BOTTOM."
+  (let* ((body (tibetan-sentence--scaffold 1 '(1) "x" "x" "/tmp/f.org"))
+         (my-notes-pos     (string-match "^\\* My Notes$"            body))
+         (working-pos      (string-match "^\\* Working Translation$" body))
+         (tibetan-text-pos (string-match "^\\* Tibetan Text$"        body))
+         (footnotes-pos    (string-match "^\\* Footnotes$"           body)))
+    (should my-notes-pos)
+    (should working-pos)
+    (should tibetan-text-pos)
+    (should footnotes-pos)
+    ;; My Notes and Working Translation precede Tibetan Text.
+    (should (< my-notes-pos tibetan-text-pos))
+    (should (< working-pos tibetan-text-pos))
+    ;; Footnotes is last (after everything else).
+    (should (> footnotes-pos tibetan-text-pos))))
 
 (ert-deftest tibetan-sentence-scaffold-tibetan-text-embedded ()
   "Scaffold embeds the tibetan-text payload under * Tibetan Text."
@@ -372,24 +407,23 @@ Footnotes)."
                1 '(1) "བཀྲ་ཤིས།" nil "/tmp/f.org")))
     (should (string-match-p "\\* Tibetan Text\nབཀྲ་ཤིས།" body))))
 
-(ert-deftest tibetan-sentence-scaffold-auto-analysis-on-tibetan-input ()
-  "A Tibetan-containing sentence gets a `* Auto-Analysis' block with
-the segment-level renderer output embedded."
+(ert-deftest tibetan-sentence-scaffold-tibetan-analysis-on-tibetan-input ()
+  "A Tibetan-containing sentence gets a `* Tibetan Analysis' block
+with the segment-level renderer output embedded.  The sentence
+scaffold no longer STRIPS the renderer's `** Translation' or
+`** Provided Translations' subtrees — those slots now hold the
+sentence-level Claude content (matching segment §5.18 layout).
+What used to be the top-level `* Provided Translations' block is
+nested inside `* Tibetan Analysis' as `** Provided Translations'."
   (skip-unless (fboundp 'tibetan-analysis-generate-content))
   (let ((body (tibetan-sentence--scaffold
                1 '(1) "བཀྲ་ཤིས་བདེ་ལེགས།" nil "/tmp/f.org")))
-    (should (string-match-p "^\\* Auto-Analysis$" body))
-    ;; Segment-level section that MUST come from generate-content.
+    (should (string-match-p "^\\* Tibetan Analysis$" body))
+    ;; Segment-level renderer section MUST come through.
     (should (string-match-p "^\\*\\* Wylie Transliteration$" body))
-    ;; Segment-level Claude headings are STRIPPED — a sentence file
-    ;; uses the top-level `* Provided Translations' block instead.
-    (should-not
-     (let ((start (string-match "^\\* Auto-Analysis$" body))
-           (end   (or (string-match "^\\* Provided Translations$" body)
-                      (length body))))
-       (when start
-         (string-match-p "^\\*\\* Claude Translation$"
-                         (substring body start end)))))))
+    ;; The legacy `* Auto-Analysis' name must NOT appear (parent
+    ;; renamed for §5.18 alignment).
+    (should-not (string-match-p "^\\* Auto-Analysis$" body))))
 
 (ert-deftest tibetan-sentence-main-clause-rendered-for-transitive ()
   "An Erg-Abs transitive sentence (subject ERG + honorific verb
@@ -425,36 +459,43 @@ Tibetan sentence with a recognised verb."
     (should (string-match-p "^\\*\\* Main Clause$" content))
     (should (string-match-p "MAIN VERB" content))))
 
-(ert-deftest tibetan-sentence-scaffold-auto-analysis-strips-provided-translations ()
-  "The embedded auto-analysis must NOT contain `** Provided
-Translations' (which would duplicate the sentence-level
-`* Provided Translations' at top level)."
+(ert-deftest tibetan-sentence-scaffold-includes-provided-translations-nested ()
+  "After §5.18 sentence alignment (2026-05-18), the scaffold's
+embedded auto-analysis CONTAINS `** Provided Translations'
+\(nested under `* Tibetan Analysis').  The legacy assertion
+\(that it must NOT contain such a heading) is retired because the
+sentence file no longer carries a competing top-level
+`* Provided Translations'."
   (skip-unless (fboundp 'tibetan-analysis-generate-content))
   (let* ((body (tibetan-sentence--scaffold
-                1 '(1) "བཀྲ་ཤིས་བདེ་ལེགས།" nil "/tmp/f.org"))
-         (auto-start (string-match "^\\* Auto-Analysis$" body))
-         (auto-end (or (string-match "^\\* Provided Translations$" body)
-                       (length body))))
-    (when auto-start
-      (let ((auto-block (substring body auto-start auto-end)))
-        (should-not (string-match-p "^\\*\\* Provided Translations$"
-                                    auto-block))))))
+                1 '(1) "བཀྲ་ཤིས་བདེ་ལེགས།" nil "/tmp/f.org")))
+    (should (string-match-p "^\\*\\* Provided Translations$" body))
+    (should-not (string-match-p "^\\* Provided Translations$" body))))
 
 (ert-deftest tibetan-sentence-scaffold-wylie-fallback ()
-  "Scaffold falls back to a standalone `* Wylie' block when the
-segment renderer returns no useful output (no Tibetan content in
-the input, renderer unavailable, etc.).  The Wylie body shows the
+  "Scaffold falls back to a nested `** Wylie' block inside
+`* Tibetan Analysis' when the segment renderer returns no useful
+output (no Tibetan content in the input, renderer unavailable,
+etc.).  The Wylie body shows the
 `[Wylie transliteration not available]' placeholder when wylie is
-nil or empty."
+nil or empty.
+
+§5.18 sentence alignment (2026-05-18):  the fallback used to emit
+a top-level `* Wylie' block;  it now emits a level-2 `** Wylie'
+nested under `* Tibetan Analysis' so the outer shape stays
+identical to the renderer-active path."
   (let ((body-nil   (tibetan-sentence--scaffold 1 '(1) "x" nil "/t.org"))
         (body-empty (tibetan-sentence--scaffold 1 '(1) "x" "" "/t.org")))
     ;; No Tibetan in "x" → auto-analysis empty → fallback Wylie block.
-    (should (string-match-p "^\\* Wylie$" body-nil))
+    (should (string-match-p "^\\*\\* Wylie$" body-nil))
     (should (string-match-p "\\[Wylie transliteration not available\\]"
                             body-nil))
-    (should (string-match-p "^\\* Wylie$" body-empty))
+    (should (string-match-p "^\\*\\* Wylie$" body-empty))
     (should (string-match-p "\\[Wylie transliteration not available\\]"
-                            body-empty))))
+                            body-empty))
+    ;; The fallback uses level-2 inside `* Tibetan Analysis', not
+    ;; top-level `* Wylie' anymore.
+    (should-not (string-match-p "^\\* Wylie$" body-nil))))
 
 (ert-deftest tibetan-sentence-scaffold-empty-segments ()
   "Scaffold accepts empty seg-nums list (degenerate but valid)."
@@ -783,6 +824,230 @@ Cleans up the temp file and any analysis/ siblings on exit."
            (should (string-match-p
                     (format "^#\\+TIBETAN_HASH: %s$" expected-hash)
                     all))))))))
+
+;; ============================================================================
+;; Layout migration — old `* Auto-Analysis' shape → new `* Tibetan Analysis'
+;; (2026-05-18, segment-§5.18 alignment for sentence files)
+;; ============================================================================
+;;
+;; Existing sent-NNN.org files were generated before the alignment.
+;; They carry the legacy shape:
+;;
+;;   * Tibetan Text
+;;   * Auto-Analysis
+;;     ** … parser body …
+;;   * Provided Translations              (top-level — sentence-only design)
+;;     *** Roehrich
+;;     *** Class Translation
+;;     *** Claude Translation             (sentence-level Claude lived here)
+;;     *** Claude Grammar
+;;     *** Claude Context
+;;   * Working Translation                (at BOTTOM)
+;;   * My Notes                           (at BOTTOM)
+;;   * Footnotes                          (at BOTTOM)
+;;
+;; On first regenerate post-alignment, the file should be rewritten
+;; into the new shape:
+;;
+;;   * My Notes                           (moved to TOP)
+;;   * Working Translation                (moved to TOP)
+;;   * Tibetan Text
+;;   * Tibetan Analysis                   (parent renamed)
+;;     ** … parser body …
+;;     ** Translation                     (was *** Claude Translation)
+;;     ** Grammar
+;;       *** Claude Grammar               (preserved)
+;;     ** Provided Translations           (NESTED now, was top-level)
+;;       *** Roehrich                     (preserved body)
+;;       *** Class Translation            (preserved body)
+;;       *** Claude Context               (preserved body)
+;;   * Footnotes                          (stays at bottom)
+;;
+;; Preservation invariant:  user-written bodies (Roehrich / Class
+;; Translation / Claude Context / My Notes / Working Translation /
+;; Footnotes) survive verbatim across the migration.
+
+(ert-deftest tibetan-sentence-regenerate-migrates-auto-analysis-heading ()
+  "Legacy `* Auto-Analysis' parent → new `* Tibetan Analysis'.
+The rename is idempotent (re-running on already-migrated file is
+a no-op for this assertion)."
+  (skip-unless (fboundp 'tibetan-sentence--regenerate))
+  (let* ((dir (make-temp-file "ttest-sent-migrate-" t))
+         (path (expand-file-name "sent-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file path
+            (insert "#+TITLE: Sentence 1 Analysis\n"
+                    "#+SEGMENTS: 1\n"
+                    "#+TIBETAN_HASH: oldhash\n"
+                    "#+CREATED: 2026-01-01\n"
+                    "#+LAST_ANALYZED: 2026-01-01\n\n"
+                    "* Tibetan Text\nold text\n\n"
+                    "* Auto-Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nold wylie\n\n"
+                    "* Working Translation\nWT body\n"
+                    "* My Notes\nMN body\n"
+                    "* Footnotes\nFN body\n"))
+          (tibetan-sentence--regenerate path 1 '(1) "བདག")
+          ;; Close the buffer regenerate opened.
+          (let ((b (get-file-buffer path)))
+            (when b
+              (with-current-buffer b (set-buffer-modified-p nil))
+              (kill-buffer b)))
+          (with-temp-buffer
+            (insert-file-contents path)
+            (let ((s (buffer-string)))
+              (should (string-match-p "^\\* Tibetan Analysis$" s))
+              (should-not (string-match-p "^\\* Auto-Analysis$" s)))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-regenerate-moves-user-sections-to-top ()
+  "Legacy layout has * Working Translation / * My Notes at the
+BOTTOM (after * Provided Translations).  After regenerate they
+appear ABOVE * Tibetan Text (matching segment §5.18 ordering),
+with their bodies preserved verbatim."
+  (skip-unless (fboundp 'tibetan-sentence--regenerate))
+  (let* ((dir (make-temp-file "ttest-sent-top-" t))
+         (path (expand-file-name "sent-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file path
+            (insert "#+TITLE: Sentence 1 Analysis\n"
+                    "#+SEGMENTS: 1\n"
+                    "#+TIBETAN_HASH: oldhash\n"
+                    "#+CREATED: 2026-01-01\n"
+                    "#+LAST_ANALYZED: 2026-01-01\n\n"
+                    "* Tibetan Text\nold text\n\n"
+                    "* Auto-Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie\nold wylie\n\n"
+                    "* Provided Translations\n"
+                    "*** Roehrich\nRoehrich body\n"
+                    "*** Class Translation\nClass body\n"
+                    "*** Claude Translation\nClaude trans body\n\n"
+                    "* Working Translation\nUSER-WT keep me\n\n"
+                    "* My Notes\nUSER-MN keep me\n\n"
+                    "* Footnotes\nUSER-FN keep me\n"))
+          (tibetan-sentence--regenerate path 1 '(1) "བདག")
+          (let ((b (get-file-buffer path)))
+            (when b
+              (with-current-buffer b (set-buffer-modified-p nil))
+              (kill-buffer b)))
+          (with-temp-buffer
+            (insert-file-contents path)
+            (let* ((s (buffer-string))
+                   (mn-pos (string-match "^\\* My Notes$" s))
+                   (wt-pos (string-match "^\\* Working Translation$" s))
+                   (tt-pos (string-match "^\\* Tibetan Text$" s))
+                   (fn-pos (string-match "^\\* Footnotes$" s)))
+              ;; Both moved ABOVE Tibetan Text.
+              (should (and mn-pos wt-pos tt-pos))
+              (should (< mn-pos tt-pos))
+              (should (< wt-pos tt-pos))
+              ;; Footnotes is below everything else.
+              (should (and fn-pos (> fn-pos tt-pos)))
+              ;; User content preserved.
+              (should (string-match-p "USER-WT keep me" s))
+              (should (string-match-p "USER-MN keep me" s))
+              (should (string-match-p "USER-FN keep me" s)))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-regenerate-nests-provided-translations ()
+  "Legacy top-level `* Provided Translations' → nested
+`** Provided Translations' inside `* Tibetan Analysis'.  No more
+top-level Provided Translations block."
+  (skip-unless (fboundp 'tibetan-sentence--regenerate))
+  (let* ((dir (make-temp-file "ttest-sent-nest-" t))
+         (path (expand-file-name "sent-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file path
+            (insert "#+TITLE: Sentence 1 Analysis\n"
+                    "#+SEGMENTS: 1\n"
+                    "#+TIBETAN_HASH: oldhash\n"
+                    "#+CREATED: 2026-01-01\n"
+                    "#+LAST_ANALYZED: 2026-01-01\n\n"
+                    "* Tibetan Text\nold\n\n"
+                    "* Auto-Analysis\n** Wylie\nx\n\n"
+                    "* Provided Translations\n"
+                    "*** Roehrich\nROEHRICH-BODY\n\n"
+                    "*** Class Translation\nCLASS-BODY\n\n"
+                    "*** Claude Context\nCONTEXT-BODY\n\n"
+                    "* Working Translation\n\n* My Notes\n\n* Footnotes\n"))
+          (tibetan-sentence--regenerate path 1 '(1) "བདག")
+          (let ((b (get-file-buffer path)))
+            (when b
+              (with-current-buffer b (set-buffer-modified-p nil))
+              (kill-buffer b)))
+          (with-temp-buffer
+            (insert-file-contents path)
+            (let ((s (buffer-string)))
+              ;; No top-level Provided Translations.
+              (should-not (string-match-p "^\\* Provided Translations$" s))
+              ;; Nested Provided Translations exists (level-2).
+              (should (string-match-p "^\\*\\* Provided Translations$" s))
+              ;; Level-3 entries with their bodies preserved.
+              (should (string-match-p "ROEHRICH-BODY" s))
+              (should (string-match-p "CLASS-BODY" s))
+              (should (string-match-p "CONTEXT-BODY" s)))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-regenerate-promotes-claude-translation-to-level-2 ()
+  "Legacy `*** Claude Translation' (level-3 under top-level
+* Provided Translations) → `** Translation' (level-2 under
+* Tibetan Analysis), body preserved verbatim.
+
+This matches the segment §5.18 layout where the Claude
+translation is the primary level-2 slot directly under the
+analysis parent."
+  (skip-unless (fboundp 'tibetan-sentence--regenerate))
+  (let* ((dir (make-temp-file "ttest-sent-promote-" t))
+         (path (expand-file-name "sent-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file path
+            (insert "#+TITLE: Sentence 1 Analysis\n"
+                    "#+SEGMENTS: 1\n"
+                    "#+TIBETAN_HASH: oldhash\n"
+                    "#+CREATED: 2026-01-01\n"
+                    "#+LAST_ANALYZED: 2026-01-01\n\n"
+                    "* Tibetan Text\nold\n\n"
+                    "* Auto-Analysis\n** Wylie\nx\n\n"
+                    "* Provided Translations\n"
+                    "*** Roehrich\nR\n\n"
+                    "*** Claude Translation\n"
+                    "CLAUDE-TRANS-BODY: real sentence translation here.\n\n"
+                    "*** Claude Grammar\nGRAMMAR-BODY\n\n"
+                    "* Working Translation\n\n* My Notes\n\n* Footnotes\n"))
+          (tibetan-sentence--regenerate path 1 '(1) "བདག")
+          (let ((b (get-file-buffer path)))
+            (when b
+              (with-current-buffer b (set-buffer-modified-p nil))
+              (kill-buffer b)))
+          (with-temp-buffer
+            (insert-file-contents path)
+            (let ((s (buffer-string)))
+              ;; Body preserved (regardless of which heading carries it).
+              (should (string-match-p "CLAUDE-TRANS-BODY" s))
+              ;; Promoted to level-2 `** Translation' under
+              ;; `* Tibetan Analysis'.
+              (should (string-match-p "^\\*\\* Translation$" s))
+              ;; The body lives under `** Translation' now (not
+              ;; only as a leftover level-3 entry).
+              (with-temp-buffer
+                (insert s)
+                (goto-char (point-min))
+                (re-search-forward "^\\*\\* Translation$" nil t)
+                (let ((trans-start (point))
+                      (next-h2 (save-excursion
+                                 (or (and (re-search-forward
+                                           "^\\*\\* " nil t)
+                                          (line-beginning-position))
+                                     (point-max)))))
+                  (let ((trans-body
+                         (buffer-substring-no-properties
+                          trans-start next-h2)))
+                    (should (string-match-p "CLAUDE-TRANS-BODY" trans-body))))))))
+      (delete-directory dir t))))
 
 ;; ============================================================================
 ;; CREATE-OPEN ROUNDTRIP — open-analysis happy path (no Claude)
