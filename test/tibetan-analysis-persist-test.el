@@ -799,6 +799,217 @@ no `:PROPERTIES:' drawer.  Backwards-compatible default."
         (kill-buffer buf))
       (delete-directory dir t))))
 
+;; ============================================================================
+;; Dangling [[term-X][..]] link stripper (export safety, 2026-05-18)
+;; ============================================================================
+;;
+;; The Interlinear Gloss and Detailed Dictionary use independent MWU
+;; tokenization paths.  When they disagree on how to group syllables
+;; (e.g. Interlinear treats `zla ba' + `bzhin' as two stems while DD
+;; joins them into `zla ba bzhin'), the Interlinear emits
+;; `[[term-zla-ba][zla ba]]' and `[[term-bzhin][bzhin]]' but DD only
+;; produces `<<term-zla-ba-bzhin>>'.  The Interlinear links dangle.
+;;
+;; `org-export-dispatch' aborts with `Unable to resolve link' on the
+;; first such dangle, blocking PDF / HTML export.  Live observation:
+;; Tibetisch IV seg-049 — 4 dangling targets in one segment
+;; (term-rnams-ngo-so, term-zla-ba, term-bzhin, term-phyar-nas);
+;; export crashed on the first.
+
+(ert-deftest tibetan-analysis-strip-dangling-term-links-strips-missing-anchor ()
+  "When a `[[term-X][label]]' link has no matching `<<term-X>>'
+anchor in the buffer, the link is replaced with the plain LABEL.
+The valid sibling link (whose anchor exists) is left untouched."
+  (skip-unless (fboundp 'tibetan-analysis--strip-dangling-term-links-in-buffer))
+  (with-temp-buffer
+    (insert "** Interlinear Gloss\n"
+            "[[term-foo][foo]] [gloss-foo] "
+            "[[term-missing][label-missing]] [gloss-missing]\n\n"
+            "** Detailed Dictionary\n"
+            "<<term-foo>>\nfoo body\n")
+    (let ((stripped
+           (tibetan-analysis--strip-dangling-term-links-in-buffer)))
+      (should (= 1 stripped))
+      (let ((s (buffer-string)))
+        ;; Valid link untouched.
+        (should (string-match-p "\\[\\[term-foo\\]\\[foo\\]\\]" s))
+        ;; Dangling link replaced with plain label.
+        (should-not (string-match-p "term-missing" s))
+        (should (string-match-p "label-missing \\[gloss-missing\\]" s))
+        ;; Anchor still present.
+        (should (string-match-p "<<term-foo>>" s))))))
+
+(ert-deftest tibetan-analysis-strip-dangling-term-links-idempotent ()
+  "Running the helper twice yields the same result as running it
+once — no double-stripping, no error on a clean buffer."
+  (skip-unless (fboundp 'tibetan-analysis--strip-dangling-term-links-in-buffer))
+  (with-temp-buffer
+    (insert "** Interlinear\n[[term-x][x]] [[term-y][y label]]\n"
+            "<<term-x>>\n")
+    (tibetan-analysis--strip-dangling-term-links-in-buffer)
+    (let ((after-first (buffer-string)))
+      (tibetan-analysis--strip-dangling-term-links-in-buffer)
+      (should (string= after-first (buffer-string))))))
+
+(ert-deftest tibetan-analysis-strip-dangling-term-links-leaves-other-links-alone ()
+  "Non-`term-X' links (id, file, http, internal anchors that
+aren't `term-*') are not touched by the stripper.  Catches a
+class of would-be false positives — only the `term-*' namespace
+is the responsibility of this helper."
+  (skip-unless (fboundp 'tibetan-analysis--strip-dangling-term-links-in-buffer))
+  (with-temp-buffer
+    (insert "[[id:ABCDEF][Portfolio §1.6]]\n"
+            "[[file:foo.org][file]]\n"
+            "[[https://example.com][http]]\n"
+            "[[other-anchor][other]]\n"
+            "[[term-missing][dangling]]\n"
+            ;; No anchors at all.
+            )
+    (tibetan-analysis--strip-dangling-term-links-in-buffer)
+    (let ((s (buffer-string)))
+      (should (string-match-p "\\[\\[id:ABCDEF\\]" s))
+      (should (string-match-p "\\[\\[file:foo.org\\]" s))
+      (should (string-match-p "\\[\\[https://example.com\\]" s))
+      (should (string-match-p "\\[\\[other-anchor\\]" s))
+      ;; Only the term-* dangle was stripped.
+      (should-not (string-match-p "term-missing" s))
+      (should (string-match-p "dangling" s)))))
+
+(ert-deftest tibetan-analysis-strip-dangling-term-links-real-seg-049-shape ()
+  "Reproduces the seg-049 shape:  Interlinear emits `term-rnams-
+ngo-so' + `term-zla-ba' + `term-bzhin' + `term-phyar-nas' while
+DD anchors only have `term-rnams', `term-so', `term-zla-ba-bzhin',
+`term-phya', `term-nas'.  After strip, only the dangling 4 are
+removed;  the 5 anchored Interlinear links + the 2 anchored
+remain untouched."
+  (skip-unless (fboundp 'tibetan-analysis--strip-dangling-term-links-in-buffer))
+  (with-temp-buffer
+    (insert "** Interlinear Gloss\n"
+            "[[term-khyed-rang][khyed rang]] "
+            "[[term-rnams-ngo-so][rnams ngo so]] "
+            "[[term-zla-ba][zla ba]] "
+            "[[term-bzhin][bzhin]] "
+            "[[term-phyar-nas][phyar nas]]\n\n"
+            "** Detailed Dictionary\n"
+            "<<term-khyed-rang>>\n"
+            "<<term-rnams>>\n"
+            "<<term-so>>\n"
+            "<<term-zla-ba-bzhin>>\n"
+            "<<term-phya>>\n"
+            "<<term-nas>>\n")
+    (let ((stripped
+           (tibetan-analysis--strip-dangling-term-links-in-buffer)))
+      ;; 4 dangling: rnams-ngo-so, zla-ba, bzhin, phyar-nas.
+      (should (= 4 stripped))
+      (let ((s (buffer-string)))
+        ;; Anchored link kept as link.
+        (should (string-match-p "\\[\\[term-khyed-rang\\]" s))
+        ;; All 4 dangling labels survive as plain text.
+        (should (string-match-p "rnams ngo so" s))
+        (should (string-match-p "zla ba" s))
+        (should (string-match-p "bzhin" s))
+        (should (string-match-p "phyar nas" s))
+        ;; All 4 dangling targets are gone.
+        (should-not (string-match-p "term-rnams-ngo-so" s))
+        (should-not (string-match-p "term-zla-ba\\]" s))
+        (should-not (string-match-p "term-bzhin\\]" s))
+        (should-not (string-match-p "term-phyar-nas" s))))))
+
+(ert-deftest tibetan-analysis-strip-dangling-term-links-in-folder-walks-all-shapes ()
+  "Folder helper visits seg-*, sent-*, par-*, compound-*.org files
+in FOLDER, strips dangles in each, saves changed files, reports
+totals.  One-shot recovery path for analysis files generated
+before the dangling-link guard landed."
+  (skip-unless (fboundp 'tibetan-analysis-strip-dangling-term-links-in-folder))
+  (let* ((dir (make-temp-file "ttest-strip-folder-" t)))
+    (unwind-protect
+        (progn
+          ;; Two files with dangles, one without.
+          (with-temp-file (expand-file-name "seg-001.org" dir)
+            (insert "[[term-bad-1][label1]] [[term-good][label-g]]\n"
+                    "<<term-good>>\n"))
+          (with-temp-file (expand-file-name "sent-001.org" dir)
+            (insert "[[term-bad-2][label2]]\n"))
+          (with-temp-file (expand-file-name "seg-002.org" dir)
+            (insert "[[term-x][x]]\n<<term-x>>\n"))
+          ;; Unrelated file: ignored.
+          (with-temp-file (expand-file-name "notes.org" dir)
+            (insert "[[term-untouched][touched-not]]\n"))
+          (let ((result
+                 (tibetan-analysis-strip-dangling-term-links-in-folder dir)))
+            (should (= 3 (plist-get result :files)))
+            (should (= 2 (plist-get result :modified)))
+            (should (= 2 (plist-get result :stripped))))
+          ;; seg-001 modified.
+          (with-temp-buffer
+            (insert-file-contents (expand-file-name "seg-001.org" dir))
+            (let ((s (buffer-string)))
+              (should-not (string-match-p "term-bad-1" s))
+              (should (string-match-p "\\[\\[term-good\\]" s))
+              (should (string-match-p "label1" s))))
+          ;; sent-001 modified.
+          (with-temp-buffer
+            (insert-file-contents (expand-file-name "sent-001.org" dir))
+            (should-not
+             (string-match-p "term-bad-2" (buffer-string))))
+          ;; notes.org untouched.
+          (with-temp-buffer
+            (insert-file-contents (expand-file-name "notes.org" dir))
+            (should
+             (string-match-p "term-untouched" (buffer-string)))))
+      ;; Kill any buffers we left behind.
+      (dolist (f '("seg-001.org" "sent-001.org" "seg-002.org" "notes.org"))
+        (let ((buf (find-buffer-visiting (expand-file-name f dir))))
+          (when buf
+            (with-current-buffer buf (set-buffer-modified-p nil))
+            (kill-buffer buf))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-analysis-regenerate-auto-strips-dangling-term-links ()
+  "End-to-end:  `tibetan-analysis-regenerate-auto' invokes the
+dangling-link stripper as part of the rewrite pass.  After
+regeneration, the file is export-safe (no dangling term-*
+references)."
+  (skip-unless (fboundp 'tibetan-analysis-regenerate-auto))
+  (skip-unless (fboundp 'tibetan-analysis--strip-dangling-term-links-in-buffer))
+  (let* ((dir (make-temp-file "ttest-strip-" t))
+         (filepath (expand-file-name "seg-049.org" dir))
+         ;; Auto-content has BOTH the anchored DD and the dangling
+         ;; Interlinear link.  The stripper should remove the
+         ;; dangle on save.
+         (auto-content
+          (concat "** Interlinear Gloss\n"
+                  "[[term-foo][foo]] [gloss] "
+                  "[[term-dangling][bad label]] [other]\n\n"
+                  "** Detailed Dictionary\n"
+                  "<<term-foo>>\n"
+                  "foo body\n")))
+    (unwind-protect
+        (progn
+          (with-temp-file filepath
+            (insert "#+TITLE: seg 49\n#+TIBETAN_HASH: x\n\n"
+                    "* My Notes\n\n\n"
+                    "* Working Translation\n\n\n"
+                    "* Tibetan Text\nསྒོ\n\n"
+                    "* Tibetan Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie\nsgo\n\n"
+                    "* Footnotes\n"))
+          (tibetan-analysis-regenerate-auto filepath "སྒོ" auto-content)
+          ;; Buffer is open via find-file-noselect inside regenerate.
+          (let ((buf (find-buffer-visiting filepath)))
+            (when buf
+              (with-current-buffer buf (set-buffer-modified-p nil))
+              (kill-buffer buf)))
+          (with-temp-buffer
+            (insert-file-contents filepath)
+            (let ((s (buffer-string)))
+              ;; Anchored link preserved.
+              (should (string-match-p "\\[\\[term-foo\\]\\[foo\\]\\]" s))
+              ;; Dangling link stripped.
+              (should-not (string-match-p "term-dangling" s))
+              (should (string-match-p "bad label \\[other\\]" s)))))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-analysis-get-filepath-callable ()
   "Test that filepath function exists."
   (should (fboundp 'tibetan-analysis-get-filepath)))

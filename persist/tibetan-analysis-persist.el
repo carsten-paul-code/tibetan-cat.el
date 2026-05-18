@@ -630,7 +630,9 @@ written filepath."
               "file) rather than in the comparative source so the "
               "philological work is co-located with the translation "
               "work; the comparative source stays read-only.\n\n\n")
-      (insert "* Footnotes\n\n"))
+      (insert "* Footnotes\n\n")
+      ;; Export safety (2026-05-18) — see segment create-file.
+      (tibetan-analysis--strip-dangling-term-links-in-buffer))
     filepath))
 
 (defun tibetan-analysis-create-file
@@ -702,7 +704,12 @@ correctly stripping from the source segment body."
       (insert ":END:\n\n")
       (insert auto-content)
       (insert "\n\n")
-      (insert "* Footnotes\n\n"))
+      (insert "* Footnotes\n\n")
+      ;; Export safety (2026-05-18):  strip Interlinear→DD dangling
+      ;; term-* links from the freshly-built file so `org-export'
+      ;; doesn't abort on the first broken anchor.  See
+      ;; `tibetan-analysis--strip-dangling-term-links-in-buffer'.
+      (tibetan-analysis--strip-dangling-term-links-in-buffer))
     filepath))
 
 ;; ============================================================================
@@ -803,6 +810,105 @@ silently destroying the upstream-Claude / DM artefacts."
                      (content (buffer-substring-no-properties start end)))
                 (push (cons section-name content) sections)))))
         (nreverse sections)))))
+
+;; ============================================================================
+;; Dangling [[term-X][...]] link stripper (export safety, 2026-05-18)
+;; ============================================================================
+;;
+;; The Interlinear Gloss and Detailed Dictionary use independent MWU
+;; tokenization paths.  When they disagree on how to group syllables
+;; (e.g. Interlinear treats `zla ba' + `bzhin' as two stems while DD
+;; joins them into `zla ba bzhin'), the Interlinear emits links like
+;; `[[term-zla-ba][zla ba]]' whose `<<term-zla-ba>>' anchor DD never
+;; produces.  `org-export-dispatch' aborts on the first such broken
+;; link, blocking PDF / HTML export of analysis files for class
+;; handout.
+;;
+;; This is a defensive post-pass:  scan the buffer for term-* links,
+;; replace any whose anchor is absent with the plain label text.
+;; The root cause — divergent MWU tokenization between Interlinear
+;; and DD — is left for follow-up;  this guard makes the export
+;; class crash-safe regardless of how the divergence happens.
+
+;;;###autoload
+(defun tibetan-analysis-strip-dangling-term-links-in-folder (&optional folder)
+  "Walk FOLDER (default: analysis/ next to current source) and strip
+dangling `[[term-X][...]]' links from every `seg-*.org' /
+`sent-*.org' / `par-*.org' / `compound-*.org' analysis file.
+
+Saves files that changed; leaves files with no dangles untouched.
+Reports the total per-file dangle count + how many files were
+modified.
+
+Useful one-shot recovery for analysis files generated before
+the 2026-05-18 dangling-link guard landed — without this command
+the user would have to re-run `C-c u r' (batch reanalyse) on the
+folder, which is much slower and re-fires Claude requests."
+  (interactive)
+  (let* ((folder (or folder
+                     (when (buffer-file-name)
+                       (expand-file-name
+                        "analysis"
+                        (file-name-directory (buffer-file-name))))
+                     (read-directory-name "Analysis folder: ")))
+         (files
+          (and (file-directory-p folder)
+               (directory-files
+                folder t
+                "^\\(seg\\|sent\\|par\\|compound\\)-.*\\.org\\'")))
+         (modified 0)
+         (total-stripped 0))
+    (unless files
+      (user-error "No analysis files found in %s" folder))
+    (dolist (file files)
+      (with-current-buffer (find-file-noselect file)
+        (let ((n (tibetan-analysis--strip-dangling-term-links-in-buffer)))
+          (when (> n 0)
+            (cl-incf modified)
+            (cl-incf total-stripped n)
+            (save-buffer))
+          (set-buffer-modified-p nil))))
+    (message "Stripped %d dangling link(s) across %d file(s) (of %d)."
+             total-stripped modified (length files))
+    (list :files (length files) :modified modified :stripped total-stripped)))
+
+(defun tibetan-analysis--strip-dangling-term-links-in-buffer ()
+  "Strip dangling `[[term-X][label]]' links from the current buffer.
+
+For each `[[term-X][label]]' org link whose `<<term-X>>' anchor
+is absent from the SAME buffer, replace the link with just the
+plain LABEL text.  Anchored links — those whose target exists —
+are left untouched, as are non-`term-*' links (id:, file:, http:,
+arbitrary internal anchors).
+
+Returns the number of links stripped (for telemetry / tests).
+
+Defensive post-pass run by `tibetan-analysis-create-file' and
+`tibetan-analysis-regenerate-auto' so generated analysis files
+are export-safe.  The root cause of the divergence — Interlinear
+and Detailed Dictionary using independent MWU tokenization paths
+that can disagree — is tracked separately."
+  (save-excursion
+    (let* ((anchors
+            (let ((set (make-hash-table :test 'equal)))
+              (goto-char (point-min))
+              (while (re-search-forward
+                      "<<\\(term-[^>]+\\)>>" nil t)
+                (puthash (match-string-no-properties 1) t set))
+              set))
+           (stripped 0))
+      (goto-char (point-min))
+      (while (re-search-forward
+              "\\[\\[\\(term-[^]]+\\)\\]\\[\\([^]]*\\)\\]\\]" nil t)
+        (let ((target (match-string-no-properties 1))
+              (label (match-string-no-properties 2)))
+          (unless (gethash target anchors)
+            ;; LITERAL = t — `label' is inserted verbatim, so a `\\1'
+            ;; or similar inside the label can't be misinterpreted as
+            ;; a replacement-string backreference.
+            (replace-match label t t)
+            (cl-incf stripped))))
+      stripped)))
 
 ;; ============================================================================
 ;; REGENERATE AUTO-ANALYSIS
@@ -1013,6 +1119,12 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
         (insert sanskrit-dharmamitra)
         (unless (string-suffix-p "\n\n" sanskrit-dharmamitra)
           (insert "\n")))
+      ;; Export safety (2026-05-18):  strip Interlinear→DD dangling
+      ;; term-* links before save so `org-export' doesn't abort on
+      ;; the first broken anchor.  See
+      ;; `tibetan-analysis--strip-dangling-term-links-in-buffer'
+      ;; for the divergence root cause.
+      (tibetan-analysis--strip-dangling-term-links-in-buffer)
       (save-buffer)
       (message "Re-analyzed segment. User notes preserved and reshaped."))))
 
