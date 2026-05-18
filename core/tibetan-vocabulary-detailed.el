@@ -246,6 +246,82 @@ dynamic flag `tibetan-vocab--enriching'."
               entry))
         entry))))
 
+(declare-function tibetan-rangjung-yeshe-load "tibetan-vocabulary" ())
+(declare-function tibetan-steinert-available-p "tibetan-steinert" ())
+(declare-function tibetan-steinert-lookup "tibetan-steinert" (key &optional limit))
+(declare-function tibetan-thesaurus-lookup "tibetan-thesaurus" (key))
+(defvar tibetan-current-resources-vocab)
+(defvar tibetan-current-custom-vocab)
+(defvar tibetan-comprehensive-vocabulary)
+(defvar tibetan-rangjung-yeshe-vocabulary)
+
+;;;###autoload
+(defun tibetan-vocab--mwu-exists-p (compound)
+  "Return non-nil when COMPOUND (a tsheg-joined Tibetan string) is
+the EXACT key of an entry in any consulted dictionary.
+
+The strict MWU existence check, shared by
+`tibetan-extract-vocabulary' (Interlinear) and
+`tibetan-vocab-extract-detailed' (Detailed Dictionary) so both
+agree on which syllable groupings form MWUs.  Critical:  this
+does NOT fall back to particle-stripped substring matches —
+unlike `tibetan-lookup-word' (which strips trailing particles
+like `སོ' / `ནས' before hashing) or `tibetan-vocab-lookup-detailed'
+\(which dispatches into `tibetan-lookup-word-in-rangjung-yeshe',
+which itself calls `tibetan-strip-particles').
+
+That strip-fallback was the root cause of the Tibetisch IV
+seg-049 export crash (2026-05-18):  the greedy 3-syll MWU
+candidate `rnams ngo so' returned the `rnams' gloss after the
+strip pass, the MWU loop accepted the bogus 3-token group, and
+the Interlinear emitted a dangling `[[term-rnams-ngo-so][...]]'
+link.  `org-export-dispatch' then aborted on the unresolved
+target.
+
+Implementation:  direct `gethash' against each consulted hash
+table, plus exact-key DB probes for Steinert and Thesaurus.
+NO `tibetan-strip-particles' fallback anywhere.  Returns the
+matching entry on the first hit (any non-nil value);  nil when
+all consulted sources lack the EXACT key.
+
+Consulted sources, in priority order:
+  Resources → Custom → bundled glossary → Rangjung Yeshe
+  → Steinert → Thesaurus
+all via strict exact-key lookups."
+  (when (and compound (stringp compound)
+             (not (string-empty-p (string-trim compound))))
+    (let ((c (string-trim compound)))
+      (or
+       ;; Resources (highest curation, exact key).
+       (and (boundp 'tibetan-current-resources-vocab)
+            tibetan-current-resources-vocab
+            (gethash c tibetan-current-resources-vocab))
+       ;; Custom (user-curated, exact key).
+       (and (boundp 'tibetan-current-custom-vocab)
+            tibetan-current-custom-vocab
+            (gethash c tibetan-current-custom-vocab))
+       ;; Bundled comprehensive glossary (exact key).
+       (and (boundp 'tibetan-comprehensive-vocabulary)
+            tibetan-comprehensive-vocabulary
+            (gethash c tibetan-comprehensive-vocabulary))
+       ;; Rangjung Yeshe — STRICT exact-key probe (no particle
+       ;; stripping, no Wylie fallback).  RY is lazy-loaded;  the
+       ;; load helper is idempotent.
+       (when (fboundp 'tibetan-rangjung-yeshe-load)
+         (ignore-errors (tibetan-rangjung-yeshe-load))
+         (and (boundp 'tibetan-rangjung-yeshe-vocabulary)
+              tibetan-rangjung-yeshe-vocabulary
+              (gethash c tibetan-rangjung-yeshe-vocabulary)))
+       ;; Steinert — exact-key SQLite probe.  Skip cleanly when DB
+       ;; is unavailable (returns nil).
+       (when (and (fboundp 'tibetan-steinert-available-p)
+                  (tibetan-steinert-available-p)
+                  (fboundp 'tibetan-steinert-lookup))
+         (ignore-errors (tibetan-steinert-lookup c 1)))
+       ;; Thesaurus — exact-key file probe via the thesaurus module.
+       (and (fboundp 'tibetan-thesaurus-lookup)
+            (ignore-errors (tibetan-thesaurus-lookup c)))))))
+
 (defun tibetan-vocab-lookup-detailed (word)
   "Look up WORD and return detailed dictionary entry.
 Tries: Resources vocab, custom vocab, bundled glossaries, DharmaMitra.
@@ -444,19 +520,33 @@ analysis (C-c u A)."
                                         (tibetan-extract-vocab--tail-is-particle-p compound))
                                    (and (fboundp 'tibetan-extract-vocab--head-is-particle-p)
                                         (tibetan-extract-vocab--head-is-particle-p compound)))
-                         (let ((entry (tibetan-vocab-lookup-detailed compound)))
-                           (when entry
-                             (puthash compound t seen)
-                             (push (list :tibetan compound
-                                         :wylie (plist-get entry :wylie)
-                                         :primary (plist-get entry :primary)
-                                         :detailed (plist-get entry :detailed)
-                                         :sanskrit (plist-get entry :sanskrit)
-                                         :source (plist-get entry :source)
-                                         :compound-p t)
-                                   vocab-list)
-                             (setq found t)
-                             (setq matched-len compound-len))))))
+                         ;; MWU DETECTION:  strict exact-key check via
+                         ;; `tibetan-vocab--mwu-exists-p' (NOT
+                         ;; `tibetan-vocab-lookup-detailed', which
+                         ;; falls back through Rangjung Yeshe's
+                         ;; `tibetan-strip-particles' and produced
+                         ;; the seg-049 false-positive `rnams ngo'
+                         ;; via the `rnams' substring match).  Once
+                         ;; the strict check confirms the EXACT key
+                         ;; exists somewhere, GLOSS retrieval below
+                         ;; uses the looser `tibetan-vocab-lookup-
+                         ;; detailed' — at this point the exact-key
+                         ;; hash hit wins in the priority chain
+                         ;; before any strip-fallback can fire.
+                         (when (tibetan-vocab--mwu-exists-p compound)
+                           (let ((entry (tibetan-vocab-lookup-detailed compound)))
+                             (when entry
+                               (puthash compound t seen)
+                               (push (list :tibetan compound
+                                           :wylie (plist-get entry :wylie)
+                                           :primary (plist-get entry :primary)
+                                           :detailed (plist-get entry :detailed)
+                                           :sanskrit (plist-get entry :sanskrit)
+                                           :source (plist-get entry :source)
+                                           :compound-p t)
+                                     vocab-list)
+                               (setq found t)
+                               (setq matched-len compound-len)))))))
 
             ;; Try single syllable if no compound found
             (unless found

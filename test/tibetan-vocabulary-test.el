@@ -506,6 +506,179 @@ remain intact.  The particle-guard must not over-reject."
       (should (assoc "སངས་རྒྱས" vocab)))))
 
 ;; ============================================================================
+;; Strict MWU existence — root-cause fix for Interlinear↔DD divergence
+;; (2026-05-18, addresses Tibetisch IV seg-049 dangling-link report)
+;; ============================================================================
+;;
+;; Before this work, `tibetan-extract-vocabulary' (the Interlinear path)
+;; consulted `tibetan-lookup-word' to decide whether a 4/3/2-syllable
+;; compound was a real MWU.  `tibetan-lookup-word' internally falls
+;; back to `tibetan-strip-particles', stripping trailing particles like
+;; `སོ' (sentence-final) or `ནས' (ablative) before lookup — so
+;; `rnams ngo so' returned the `rnams' gloss ("me and those with evil
+;; karma like me,"), and the MWU loop accepted the bogus 3-syll group
+;; as a valid MWU.  Detailed Dictionary's `tibetan-vocab-lookup-detailed'
+;; is strict (`gethash' on exact keys, no particle stripping), so the
+;; two paths disagreed on MWU groupings — producing dangling
+;; `[[term-rnams-ngo-so][...]]' links that broke `org-export'.
+
+(ert-deftest tibetan-vocab-mwu-exists-p-true-for-exact-key ()
+  "Strict MWU predicate returns t when COMPOUND is the EXACT key of
+some consulted dictionary."
+  (skip-unless (fboundp 'tibetan-vocab--mwu-exists-p))
+  (let ((tibetan-current-resources-vocab (make-hash-table :test 'equal))
+        (tibetan-current-custom-vocab nil)
+        (tibetan-detailed-vocab-cache (make-hash-table :test 'equal)))
+    (puthash "སངས་རྒྱས" "Buddha" tibetan-current-resources-vocab)
+    (should (tibetan-vocab--mwu-exists-p "སངས་རྒྱས"))))
+
+(ert-deftest tibetan-vocab-mwu-exists-p-false-when-particle-stripping-would-rescue ()
+  "Strict MWU predicate returns nil when COMPOUND is NOT an exact
+key, even if particle-stripping would produce a key that IS in a
+dictionary.
+
+Concrete case:  `རྣམས་ངོ་སོ' (3-syll) has no exact entry, but
+stripping the trailing `སོ' + `ངོ' (both sentence-final particles)
+leaves `རྣམས' which IS a known entry.  The strict predicate must
+NOT be fooled by this — `tibetan-extract-vocabulary's greedy MWU
+loop must NOT accept `rnams ngo so' as a 3-syll MWU on the basis
+of the `rnams' substring match."
+  (skip-unless (fboundp 'tibetan-vocab--mwu-exists-p))
+  (let ((tibetan-current-resources-vocab (make-hash-table :test 'equal))
+        (tibetan-current-custom-vocab nil)
+        (tibetan-detailed-vocab-cache (make-hash-table :test 'equal))
+        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
+    ;; Seed `rnams' but NOT `rnams ngo so'.
+    (puthash "རྣམས" "plural marker" tibetan-comprehensive-vocabulary)
+    ;; Strict check on `rnams ngo so' → nil (no exact key).
+    (should-not (tibetan-vocab--mwu-exists-p "རྣམས་ངོ་སོ"))))
+
+(ert-deftest tibetan-vocab-mwu-exists-p-nil-on-empty-input ()
+  "Strict MWU predicate returns nil for nil / empty / whitespace input."
+  (skip-unless (fboundp 'tibetan-vocab--mwu-exists-p))
+  (should-not (tibetan-vocab--mwu-exists-p nil))
+  (should-not (tibetan-vocab--mwu-exists-p ""))
+  (should-not (tibetan-vocab--mwu-exists-p "   ")))
+
+(ert-deftest tibetan-extract-vocabulary-no-false-mwu-from-particle-strip ()
+  "Interlinear path does NOT detect `rnams ngo so' as a 3-syll MWU
+even when `tibetan-lookup-word' would happily return the `rnams'
+gloss after stripping `སོ' + `ངོ'.
+
+This is the root-cause regression for the Tibetisch IV seg-049
+export failure (2026-05-18):  Interlinear emitted `[[term-rnams-
+ngo-so][rnams ngo so]] [me and those with evil karma]', but DD's
+strict lookup only anchored `<<term-rnams>>' and `<<term-so>>'.
+Result: dangling link, `org-export-dispatch' aborted on the first
+unresolved target."
+  (let ((tibetan-current-resources-vocab nil)
+        (tibetan-current-custom-vocab nil)
+        (tibetan-detailed-vocab-cache (make-hash-table :test 'equal))
+        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
+    ;; Seed `rnams' as a single-syll entry — same as Steinert/RY in
+    ;; the live setup.  Do NOT seed `rnams ngo so'.
+    (puthash "རྣམས" "plural marker" tibetan-comprehensive-vocabulary)
+    (let* ((vocab (tibetan-extract-vocabulary "རྣམས་ངོ་སོ"))
+           (keys (mapcar #'car vocab)))
+      ;; The bogus 3-syll MWU must NOT appear in vocab.
+      (should-not (member "རྣམས་ངོ་སོ" keys))
+      ;; The legitimate single-syll `rnams' should still surface.
+      (should (member "རྣམས" keys)))))
+
+(ert-deftest tibetan-extract-vocabulary-no-verb-converb-fake-mwu ()
+  "Interlinear path does NOT produce a `verb + converb' combined
+token that has no matching dictionary entry.
+
+Concrete case:  `ཕྱར་ནས' (phyar = verb \"raise/lift\", nas =
+ablative/converb).  The legacy `verb+converb' merging path in
+`tibetan-extract-vocabulary' would combine these into a fake MWU
+`phyar nas' with the `phyar' gloss + a `[converb]' suffix
+annotation.  But DD never merges verb+converb;  the merge
+produced dangling Interlinear→DD links.
+
+The fix removes the verb+converb merging path entirely;  the
+Particle Map / Clause Structure / Grammar sections handle verb
+morphology better than a fake-MWU display in Interlinear ever
+could."
+  (let ((tibetan-current-resources-vocab nil)
+        (tibetan-current-custom-vocab nil)
+        (tibetan-detailed-vocab-cache (make-hash-table :test 'equal))
+        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
+    ;; Seed `phyar' (verb) as a single-syll entry.  Do NOT seed
+    ;; `phyar nas'.
+    (puthash "ཕྱར" "raise, lift" tibetan-comprehensive-vocabulary)
+    (let* ((vocab (tibetan-extract-vocabulary "ཕྱར་ནས"))
+           (keys (mapcar #'car vocab)))
+      ;; The fake 2-syll combined token must NOT appear.
+      (should-not (member "ཕྱར་ནས" keys))
+      ;; The verb stem alone should surface.
+      (should (member "ཕྱར" keys)))))
+
+(ert-deftest tibetan-extract-vocabulary-keeps-real-mwu-from-detailed-dict ()
+  "When an MWU IS an exact key of a consulted dictionary
+\(`tibetan-vocab-lookup-detailed' returns non-nil), the greedy MWU
+loop accepts it.  This is the positive case — we must NOT
+over-reject;  legitimate MWUs like `mkha' 'gro chos skyong' /
+`zla ba bzhin' (Steinert / Resources hits) must continue to be
+detected as units, not split into syllables.
+
+Tested by seeding the 2-syll compound into Resources (the lookup
+chain consulted by `tibetan-vocab-lookup-detailed').  The compound
+should be picked up;  the single-syll fallback should not fire."
+  (let ((tibetan-current-resources-vocab (make-hash-table :test 'equal))
+        (tibetan-current-custom-vocab nil)
+        (tibetan-detailed-vocab-cache (make-hash-table :test 'equal))
+        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
+    ;; Real exact-key entry in Resources.
+    (puthash "སངས་རྒྱས" "Buddha // awakened one"
+             tibetan-current-resources-vocab)
+    (let* ((vocab (tibetan-extract-vocabulary "སངས་རྒྱས"))
+           (keys (mapcar #'car vocab)))
+      (should (member "སངས་རྒྱས" keys))
+      ;; Should NOT have split into single syllables.
+      (should-not (member "སངས" keys))
+      (should-not (member "རྒྱས" keys)))))
+
+(ert-deftest tibetan-extract-vocabulary-and-detailed-agree-on-mwu-groupings ()
+  "Integration:  given the same input, the Interlinear path
+\(`tibetan-extract-vocabulary') and the Detailed Dictionary path
+\(`tibetan-vocab-extract-detailed') produce the SAME MWU
+groupings — measured by comparing the tibetan-text of each
+extracted unit.
+
+This is the canonical invariant the root-cause fix enforces:
+both paths must agree on which syllables form a lexical unit.
+Before the fix they disagreed because Interlinear used a loose
+particle-stripping lookup and DD used a strict gethash lookup."
+  (skip-unless (and (fboundp 'tibetan-extract-vocabulary)
+                    (fboundp 'tibetan-vocab-extract-detailed)))
+  (let ((tibetan-current-resources-vocab (make-hash-table :test 'equal))
+        (tibetan-current-custom-vocab nil)
+        (tibetan-detailed-vocab-cache (make-hash-table :test 'equal))
+        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
+    (puthash "རྣམས" "plural marker" tibetan-comprehensive-vocabulary)
+    (puthash "ཕྱར" "raise, lift" tibetan-comprehensive-vocabulary)
+    (puthash "ནས" "ablative" tibetan-comprehensive-vocabulary)
+    (puthash "ངོ" "face" tibetan-comprehensive-vocabulary)
+    (puthash "སོ" "tooth" tibetan-comprehensive-vocabulary)
+    (let* ((text "རྣམས་ངོ་སོ་ཕྱར་ནས")
+           (interlinear-keys
+            (mapcar #'car (tibetan-extract-vocabulary text)))
+           (detailed-keys
+            (mapcar (lambda (entry) (plist-get entry :tibetan))
+                    (tibetan-vocab-extract-detailed text))))
+      ;; Same set of MWU groupings (ignoring placeholder cases).
+      (let ((i-set (sort (cl-remove-if-not
+                          (lambda (k) (gethash k tibetan-comprehensive-vocabulary))
+                          interlinear-keys)
+                         #'string<))
+            (d-set (sort (cl-remove-if-not
+                          (lambda (k) (gethash k tibetan-comprehensive-vocabulary))
+                          detailed-keys)
+                         #'string<)))
+        (should (equal i-set d-set))))))
+
+;; ============================================================================
 ;; FORMATTING TESTS
 ;; ============================================================================
 

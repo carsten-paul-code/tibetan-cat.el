@@ -36,6 +36,15 @@
 ;; `tibetan-lookup-word-in-steinert' handles the disabled case gracefully.
 (require 'tibetan-steinert nil t)
 
+;; `tibetan-vocab--mwu-exists-p' lives in `core/tibetan-vocabulary-
+;; detailed.el', which itself requires this file — so we declare the
+;; symbol here (avoiding the circular `require') and let the
+;; `fboundp' guard at the actual call site short-circuit when the
+;; detailed module isn't loaded yet (in which case MWU detection
+;; falls back to single-syllable, the same result as on a fresh
+;; checkout without dictionary backing).
+(declare-function tibetan-vocab--mwu-exists-p "tibetan-vocabulary-detailed" (compound))
+
 ;; ============================================================================
 ;; DICTIONARY PRIORITY CONFIGURATION
 ;; ============================================================================
@@ -1020,12 +1029,31 @@ up `ལ་སྟོད' (\"Latö, western Tsang\") as a 2-syllable compound."
 (defun tibetan-extract-vocabulary (tibetan-text)
   "Extract vocabulary from TIBETAN-TEXT with meanings.
 Returns list of (word . meaning) pairs.
-Uses greedy matching: tries longer compounds first (4, 3, 2 syllables)
-before single.  Handles compound detection and particle stripping
-automatically.  Dictionary priority is controlled by
-`tibetan-dictionary-priority' (default: Resources > Custom >
-Rangjung Yeshe > Local glossary > DharmaMitra) and can be
-overridden per-buffer with #+TIBETAN_DICT_PRIORITY."
+
+MWU detection uses `tibetan-vocab--mwu-exists-p' (the strict,
+exact-key check shared with `tibetan-vocab-extract-detailed') so
+the Interlinear Gloss and Detailed Dictionary agree on which
+syllable groupings form MWUs.  Without this agreement, the
+Interlinear used to emit `[[term-X][label]]' links whose `<<term-X>>'
+anchors didn't exist in DD, breaking `org-export-dispatch'
+(Tibetisch IV seg-049 report, 2026-05-18).
+
+Greedy matching:  tries 4 / 3 / 2 syllable compounds before
+falling back to single.  Rejects any compound whose head OR tail
+syllable is a case / converb particle (`tibetan-extract-vocab--
+{head,tail}-is-particle-p').
+
+The legacy `verb+converb' merging path (which used to combine
+`phyar' + `nas' into a `phyar nas [converb]' display token) has
+been REMOVED — DD never produced a matching anchor for such
+combinations, so they showed up as dangling links.  Verb
+morphology is rendered separately by Particle Map, Clause
+Structure, and Grammar.
+
+Per-stem GLOSS lookup falls back through
+`tibetan-lookup-word' (particle-stripping bilingual lookup).
+Strict existence check guards MWU DETECTION;  loose gloss lookup
+populates the final `(word . meaning)' cell."
   (when tibetan-text
     ;; Load vocabularies
     (tibetan-load-resources-vocab)
@@ -1045,53 +1073,23 @@ overridden per-buffer with #+TIBETAN_DICT_PRIORITY."
           (if (or (string-empty-p word) (string-match-p "^[།༎༏]+$" word))
               (setq i (+ i 1))
 
-            ;; FIRST: Check for verb+converb or verb+nominalized patterns
-            ;; This handles ཚིག་ཅིང་ (burning), འབར་བར་ (to blaze), etc.
-            (let ((verb-pattern (tibetan-detect-verb-with-suffix words i)))
-              (when verb-pattern
-                (let* ((combined (nth 0 verb-pattern))
-                       (_base-verb (nth 1 verb-pattern))
-                       (suffix (nth 2 verb-pattern))
-                       (base-meaning (nth 3 verb-pattern))
-                       ;; Build meaning description based on suffix type
-                       (suffix-desc (cond
-                                     ((member suffix '("ཅིང" "ཞིང" "ཤིང"))
-                                      (format "%s [converb: and/while]" base-meaning))
-                                     ((member suffix '("སྟེ" "ཏེ" "དེ"))
-                                      (format "%s [converb: and then]" base-meaning))
-                                     ((member suffix '("བར" "པར"))
-                                      (format "%s [nominalized: in order to]" base-meaning))
-                                     ((member suffix '("བའི" "པའི"))
-                                      (format "%s [nominalized genitive: of -ing]" base-meaning))
-                                     ((member suffix '("བས" "པས"))
-                                      (format "%s [causal: because of -ing]" base-meaning))
-                                     ((member suffix '("བ" "པ"))
-                                      (format "%s [nominalized]" base-meaning))
-                                     (t base-meaning))))
-                  (push (cons combined suffix-desc) vocab)
-                  (setq found t)
-                  (setq matched-len 2)))) ;; close setq, let*, when, outer let
-
-            ;; SECOND: Greedy matching - try 4, 3, 2 syllable compounds.
+            ;; Greedy MWU matching — 4, 3, 2 syllable compounds.
             ;;
-            ;; Reject any compound whose TAIL syllable is a case or
-            ;; converb particle — otherwise dictionary idioms like
-            ;; `བདག་ལ' (Skt. naḥ "to me") and `སྟོད་ནས' (Skt. uparimāt
-            ;; "from above") would be picked up as single units,
-            ;; obscuring the grammatical split `bdag` + LA and
-            ;; `stod` + NAS that every downstream section (Particle
-            ;; Map, Clause Structure, Grammatical Markers) otherwise
-            ;; renders correctly.  The same gate is applied on the
-            ;; MWU side by `tibetan-enhanced-parser--case-particle-
-            ;; tail-p'; we keep the two code paths in sync so the
-            ;; Word / Particle List, Interlinear Gloss, Detailed
-            ;; Dictionary, and CAT Gloss all agree with the Particle
-            ;; Map's grammatical tokenisation.
+            ;; Reject any compound whose head OR tail syllable is a
+            ;; case / converb particle.  Then check existence via the
+            ;; STRICT `tibetan-vocab--mwu-exists-p' (exact-key
+            ;; `gethash' across all consulted dictionaries) — not via
+            ;; `tibetan-lookup-word', whose internal particle-
+            ;; stripping fallback used to produce false-positive MWUs
+            ;; like `rnams ngo so' (returned the `rnams' gloss after
+            ;; stripping `so' + `ngo' both sentence-final particles).
+            ;; See `tibetan-vocab--mwu-exists-p' for the seg-049
+            ;; root-cause context.
             ;;
             ;; User-curated compounds with particle tails (uncommon
             ;; but possible — e.g. a Resources entry for a lexicalised
             ;; idiom) should be added to the Resources vocab file,
-            ;; which takes priority earlier in the lookup chain.
+            ;; which takes priority in the strict lookup.
             (unless found
               (cl-loop for compound-len from 4 downto 2
                        until found
@@ -1104,13 +1102,15 @@ overridden per-buffer with #+TIBETAN_DICT_PRIORITY."
                                        compound-raw)
                                      (tibetan-extract-vocab--head-is-particle-p
                                       compound-raw))
-                           (let ((meaning (tibetan-lookup-word compound-raw)))
-                             (when meaning
+                           (when (and (fboundp 'tibetan-vocab--mwu-exists-p)
+                                      (tibetan-vocab--mwu-exists-p compound-raw))
+                             (let ((meaning (or (tibetan-lookup-word compound-raw)
+                                                "[look up]")))
                                (push (cons compound-raw meaning) vocab)
                                (setq found t)
                                (setq matched-len compound-len)))))))
 
-            ;; THIRD: If no compound found, lookup single word using bilingual lookup
+            ;; Single-word fallback when no compound matched.
             (unless found
               (let ((meaning (tibetan-lookup-word word)))
                 ;; Add to vocab (even if meaning is nil, to show [look up] message)
