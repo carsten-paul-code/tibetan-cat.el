@@ -327,9 +327,16 @@ something unusual)."
           (concat (tibetan-phonetics--root-thl root) subscript))))))
 
 (defconst tibetan-phonetics--umlaut-table
-  '(("a" . "e") ("o" . "ö") ("u" . "ü") ("e" . "e") ("i" . "i"))
+  '(("a" . "ä") ("o" . "ö") ("u" . "ü") ("e" . "e") ("i" . "i"))
   "Vowel + umlauting-suffix → umlauted vowel.
-Triggered by suffixes `i' / `e' / `n' / `l' / `d' / `s'.")
+Triggered by suffixes `i' / `e' / `n' / `l' / `d' / `s' AND by
+the genitive `'i' compound suffix.
+
+Uses German-orthography ä / ö / ü diacritics throughout —
+matches the strict Germano & Tournadre 2003 THL convention.
+Some casual transcriptions use `e' for the a-umlaut;  we keep
+ä for consistency with ö / ü and to align with the user's
+reading habit.")
 
 (defun tibetan-phonetics--umlaut-vowel (vowel)
   "Return the umlauted form of VOWEL."
@@ -342,13 +349,21 @@ Triggered by suffixes `i' / `e' / `n' / `l' / `d' / `s'.")
 (defun tibetan-phonetics--final-thl (vowel suffix post-suffix)
   "Compute the THL vowel + final-consonant for VOWEL + SUFFIX + POST-SUFFIX.
 
-Umlaut is triggered ONLY by the suffix, never by the post-suffix.
-This matters for forms like `tshogs' (suffix `g', post-suffix
-`s'):  the `g' blocks the `s'-driven umlaut, so the vowel `o'
-stays unchanged and the final realises as `-k'.  Compare with
-`chos' (suffix `s', no post-suffix):  here `s' umlauts `o' to
-`ö' and is silent — the classic Dharma → `chö' rendering."
-  (let* ((umlaut (member suffix tibetan-phonetics--umlauting-suffixes))
+Umlaut is normally triggered ONLY by the suffix, never by the
+post-suffix.  This matters for forms like `tshogs' (suffix `g',
+post-suffix `s'):  the `g' blocks the `s'-driven umlaut, so the
+vowel `o' stays unchanged and the final realises as `-k'.
+
+EXCEPTION:  the genitive compound suffix `'i' (a-chung + i,
+written `'i' in Wylie) DOES trigger umlaut on the stem vowel
+and both characters are silent.  `pa'i' → `pä', `po'i' →
+`pö', `bu'i' → `bü', etc.  Without this rule, every genitive-
+ending word reads as if it had no genitive marker:  `chos kyi
+rgyal po'i sa' (a high-frequency YBh construction) would
+collapse from `chö kyi gyel pö sa' to `chö kyi gyel po sa'."
+  (let* ((genitive-i (and (string= suffix "'") (string= post-suffix "i")))
+         (umlaut (or (member suffix tibetan-phonetics--umlauting-suffixes)
+                     genitive-i))
          (effective-vowel (if umlaut
                               (tibetan-phonetics--umlaut-vowel vowel)
                             vowel))

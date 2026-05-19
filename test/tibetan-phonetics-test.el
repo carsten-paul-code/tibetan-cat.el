@@ -207,9 +207,27 @@ The classic Dharma → \"chö\" rendering."
   "`lus' → `lü' (l + u + -s → ü umlaut)."
   (should (string= "lü" (tibetan-wylie-syllable-to-phonetic "lus"))))
 
-(ert-deftest tibetan-phonetics-umlaut-gnas-becomes-ne ()
-  "`gnas' → `ne' (g-prefix silent, n + a + -s → e umlaut)."
-  (should (string= "ne" (tibetan-wylie-syllable-to-phonetic "gnas"))))
+(ert-deftest tibetan-phonetics-umlaut-gnas-becomes-nä ()
+  "`gnas' → `nä' (g-prefix silent, n + a + -s → ä umlaut).
+Uses the strict THL ä diacritic for the a-umlaut, matching
+ö / ü for o / u.  Some casual transcriptions render this as
+`ne';  we keep `nä' for consistency."
+  (should (string= "nä" (tibetan-wylie-syllable-to-phonetic "gnas"))))
+
+(ert-deftest tibetan-phonetics-umlaut-pai-becomes-pä ()
+  "`pa'i' → `pä' (a + genitive 'i compound suffix → ä umlaut,
+both `' and i silent).  The 'i suffix is the Tibetan genitive
+particle written as a compound after a vowel-ending stem;  it
+umlauts the stem vowel in modern Lhasa pronunciation."
+  (should (string= "pä" (tibetan-wylie-syllable-to-phonetic "pa'i"))))
+
+(ert-deftest tibetan-phonetics-umlaut-poi-becomes-pö ()
+  "`po'i' → `pö' (o + 'i compound → ö umlaut)."
+  (should (string= "pö" (tibetan-wylie-syllable-to-phonetic "po'i"))))
+
+(ert-deftest tibetan-phonetics-umlaut-bui-becomes-bü ()
+  "`bu'i' → `bü' (u + 'i compound → ü umlaut)."
+  (should (string= "bü" (tibetan-wylie-syllable-to-phonetic "bu'i"))))
 
 (ert-deftest tibetan-phonetics-no-umlaut-on-e ()
   "`shes' → `she' (e + -s, no umlaut because e doesn't take one)."
