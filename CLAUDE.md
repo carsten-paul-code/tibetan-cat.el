@@ -1319,6 +1319,117 @@ and Josefine layout-harmonisation passes:
   `tibetan-glossaries-loaded' flag and an idempotent guard;
   `tibetan-analysis--ensure-vocabulary' short-circuits on the flag.
 
+### 5.19 Phonetics section below Wylie (THL, Lhasa, 2026-05-19)
+
+Class-reading aid.  Wylie alone is unforgiving when the
+student just needs to vocalise a line;  THL Simplified
+Phonetic Transcription (Germano & Tournadre 2003)
+approximates Lhasa pronunciation in Wylie-friendly Roman
+orthography (sh / ch / zh / ng).  Sits at level-2 directly
+under `** Wylie Transliteration' in every per-segment AND
+per-sentence analysis file (segment renderer flows through
+the shared `tibetan-analysis-generate-content' pipeline).
+
+#### Layout
+
+```
+* Tibetan Analysis
+  ** Wylie Transliteration
+  bkra shis bde legs phun sum tshogs
+
+  ** Phonetics                              ← NEW (auto-generated)
+  tra shi de lek phün sum tshok
+
+  ** Interlinear Gloss
+  …
+```
+
+#### Module
+
+`core/tibetan-phonetics.el' (~370 lines + 46 ERT specs).
+Public entry points:
+
+  - `tibetan-to-phonetics (TEXT)` — Tibetan Unicode OR Wylie
+    input;  returns space-separated THL string, shad-preserving,
+    nil-safe.
+  - `tibetan-wylie-syllable-to-phonetic (WYLIE-SYL)` — single-
+    syllable converter, exposed for thesaurus UI + tests.
+  - `tibetan-phonetics--curated-override (WYLIE)` — looks up
+    a `:phonetics:' field on a thesaurus zettel;  when present,
+    takes precedence over the rule engine.
+
+#### Algorithm
+
+Per syllable:
+1. Parse into prefix / superscript / root / subscript / vowel /
+   suffix / post-suffix using validated combo tables
+   (`--valid-prefix-combos', `--valid-super-combos') to
+   disambiguate cases like `by-' (root b + y-subscript, NOT
+   prefix b + root y).
+2. Map initial cluster (root + subscript) to THL initial via
+   `--cluster-overrides' table (palatalisations like `by → j',
+   retroflexes like `kr → tr', etc.).  Prefix + superscript
+   silently drop.
+3. Apply vowel umlaut when suffix ∈ {i, e, n, l, d, s}.
+   Post-suffix is NEVER an umlaut trigger (so `tshogs' with
+   suffix `g' + post-suffix `s' stays unumlauted → `tshok',
+   while `chos' with suffix `s' alone umlauts → `chö').
+4. Apply final consonant rules:
+   - `-ng' / `-m' kept
+   - `-g' (+ silent `-s') → `-k'
+   - `-b' → `-p' (final devoicing)
+   - `-n' / `-l' kept (visual cue post-umlaut)
+   - `-s' / `-d' / `-'` / `-r' silent
+
+#### Tone marking
+
+THL formal documents distinguish high/low tone via diacritics
+(`á' vs `à').  This implementation OMITS tone — consistent
+with simplified renderings in most published THL texts.  Tone
+can be inferred from the prefix/superscript when needed;
+omitting it keeps the phonetic line readable.
+
+#### Curated overrides
+
+When the rule engine produces wrong output for a specific
+word (Madhyamaka terms, Sanskrit loanwords, monastic-tradition
+readings), the fix is to populate the per-word thesaurus
+zettel's `:phonetics:' field — not to complicate the rules
+table.  The override path checks for this field and uses it
+verbatim when present.
+
+#### Wiring
+
+- `tibetan-analysis--priority-section-order' (in
+  `persist/tibetan-analysis-persist.el', line 2948+) extended
+  with `"** Phonetics"' at position 2 (right after Wylie).
+- `tibetan-analysis-generate-content' (~line 3308) inserts
+  the heading + body inline with the Wylie pass.  Soft-required
+  — emits `[Phonetics not available]' when the converter
+  module isn't loaded.
+- Sentence files inherit automatically via
+  `tibetan-sentence--render-auto-analysis' (sentence renderer
+  re-uses the segment generator).
+- Top-level `(require 'tibetan-phonetics)' in `tibetan-cat.el'.
+
+#### Suite trajectory
+
+1882 → 1929 / 1928 expected / 0 unexpected / 1 skipped.  46
+phonetics specs + 1 integration spec.  BDD 244 / 244.  Lint
+clean.
+
+#### Live spot-check (seg-049, Tibetisch IV)
+
+Wylie:  `khyed rang sgor shog dang  mdang mkha' 'gro chos
+skyong rnams ngo so zla ba bzhin phyar nas/'
+
+Phonetics:  `khye rang go shok dang dang kha dro chö kyong
+nam ngo so da ba zhin cha ne/'
+
+Readable, faithful to Lhasa pronunciation;  `'gro' →  `dro'
+(retroflex r-subscript), `chos' → `chö' (umlaut), `mdang' →
+`dang' (m-prefix silent, homophone with `dang').
+
 ## 6. Open work (prioritised)
 
 ### P0 — Verify Detailed Dictionary on a real segment ✓ DONE 2026-04-15

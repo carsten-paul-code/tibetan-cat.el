@@ -51,6 +51,7 @@
 (condition-case nil (require 'tibetan-analysis-persist-test) (error nil))
 
 ;; New tests added for open source release
+(condition-case nil (require 'tibetan-phonetics-test) (error nil))
 (condition-case nil (require 'tibetan-wylie-test) (error nil))
 (condition-case nil (require 'tibetan-text-classifier-test) (error nil))
 (condition-case nil (require 'tibetan-sentence-workspace-test) (error nil))

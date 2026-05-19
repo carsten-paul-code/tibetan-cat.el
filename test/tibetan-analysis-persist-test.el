@@ -537,6 +537,38 @@ body bytes verbatim (CLAUDE.md §6 user-content invariant)."
   "Test that content generation function exists."
   (should (fboundp 'tibetan-analysis-generate-content)))
 
+(ert-deftest tibetan-analysis-generate-content-emits-phonetics-after-wylie ()
+  "Class-reading aid (2026-05-19):  the analysis content emits a
+`** Phonetics' section directly after `** Wylie Transliteration'.
+
+Asserts the priority-order invariant and the body is non-empty
+for Tibetan input (phonetics converter actually fires)."
+  (skip-unless (and (fboundp 'tibetan-analysis-generate-content)
+                    (fboundp 'tibetan-to-phonetics)))
+  (let ((content (tibetan-analysis-generate-content "བདག")))
+    (should content)
+    (should (stringp content))
+    ;; Both headings present.
+    (should (string-match-p "^\\*\\* Wylie Transliteration$" content))
+    (should (string-match-p "^\\*\\* Phonetics$" content))
+    ;; Phonetics appears AFTER Wylie.
+    (let ((wylie-pos (string-match "^\\*\\* Wylie Transliteration$" content))
+          (phon-pos  (string-match "^\\*\\* Phonetics$" content)))
+      (should (and wylie-pos phon-pos))
+      (should (< wylie-pos phon-pos)))
+    ;; Phonetics body is non-empty (and not the fallback placeholder).
+    (let* ((phon-pos (string-match "^\\*\\* Phonetics$" content))
+           (after (substring content phon-pos))
+           ;; Body lives between the heading and the next ^** heading.
+           (body-start (and (string-match "\n" after) (match-end 0)))
+           (next-heading (and body-start
+                              (string-match "^\\*\\* " after body-start)))
+           (body (string-trim
+                  (substring after body-start
+                             (or next-heading (length after))))))
+      (should (not (string-empty-p body)))
+      (should-not (string-match-p "\\[Phonetics not available\\]" body)))))
+
 (ert-deftest tibetan-analysis-generate-content-empty ()
   "Test content generation with empty input."
   ;; Should not error on empty input

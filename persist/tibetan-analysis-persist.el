@@ -2947,6 +2947,7 @@ nil, the subsection is omitted."
 
 (defconst tibetan-analysis--priority-section-order
   '("** Wylie Transliteration"
+    "** Phonetics"
     "** Interlinear Gloss"
     "** Claude Translation"
     "** Grammar"
@@ -3303,6 +3304,25 @@ it with `let' around the call when Claude data is available."
             ;; ============================================================
             (insert "** Wylie Transliteration\n")
             (insert (or wylie-full "[Not available]"))
+            (insert "\n\n")
+
+            ;; ============================================================
+            ;; SECTION 1.5: Phonetics (THL Simplified, Lhasa-based)
+            ;; Class-reading aid (2026-05-19):  Wylie alone is unforgiving
+            ;; when the student is vocalising a line.  THL approximates
+            ;; modern Lhasa pronunciation in Wylie-friendly Roman
+            ;; orthography (sh / ch / zh / ng).  Soft-required so
+            ;; segments still generate when the converter is absent.
+            ;; ============================================================
+            (insert "** Phonetics\n")
+            (let ((phon (and (fboundp 'tibetan-to-phonetics)
+                             (ignore-errors
+                               (tibetan-to-phonetics tibetan-text)))))
+              (insert (or (and phon
+                               (stringp phon)
+                               (not (string-empty-p (string-trim phon)))
+                               phon)
+                          "[Phonetics not available]")))
             (insert "\n\n")
 
             ;; ============================================================
