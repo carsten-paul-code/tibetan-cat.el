@@ -358,10 +358,13 @@ and `* Footnotes'."
             (should (< combined foot))))
       (delete-directory dir t))))
 
-(ert-deftest tibetan-analysis-regenerate-auto-emits-dm-sanskrit-before-dm-tibetan ()
-  "Phase 2.1: Sanskrit-first applies to the DharmaMitra siblings
-too — `* DharmaMitra Translation (Sanskrit)' sits ABOVE
-`* DharmaMitra Translation (Tibetan)' (was below)."
+(ert-deftest tibetan-analysis-regenerate-auto-migrates-legacy-dm-tibetan-toplevel ()
+  "DharmaMitra Tibetan layout revision (2026-05-19):  the legacy
+top-level `* DharmaMitra Translation (Tibetan)' is RETIRED.  On
+regenerate, the legacy section is removed and its body migrated
+to the nested `** DharmaMitra Translation' inside `* Tibetan
+Analysis' (peer of `** Translation').  Sanskrit DM stays at
+top-level (parallel-mode workflow symmetry)."
   (let* ((dir (make-temp-file "ttest-reorder-2.1d-" t))
          (file (expand-file-name "seg-001.org" dir)))
     (unwind-protect
@@ -371,18 +374,23 @@ too — `* DharmaMitra Translation (Sanskrit)' sits ABOVE
                     "* Tibetan Text\nbdag\n\n"
                     "* Tibetan Analysis\n** Wylie\nbdag\n\n"
                     "* Footnotes\n\n"
-                    "* DharmaMitra Translation (Tibetan)\nDM-T\n\n"
+                    "* DharmaMitra Translation (Tibetan)\nDM-T-LEGACY-BODY\n\n"
                     "* DharmaMitra Translation (Sanskrit)\nDM-S\n\n"))
           (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
                      (lambda (&rest _) "** Wylie\nbdag\n\n")))
             (tibetan-analysis-regenerate-auto file "བདག" "** Wylie\nbdag\n\n"))
-          (let* ((s (with-temp-buffer
-                      (insert-file-contents file)
-                      (buffer-string)))
-                 (dm-skt (tibetan-analysis-test--section-pos s "DharmaMitra Translation (Sanskrit)"))
-                 (dm-tib (tibetan-analysis-test--section-pos s "DharmaMitra Translation (Tibetan)")))
-            (should (and dm-skt dm-tib))
-            (should (< dm-skt dm-tib))))
+          (let ((s (with-temp-buffer
+                     (insert-file-contents file)
+                     (buffer-string))))
+            ;; Top-level DM Tibetan section retired.
+            (should-not (string-match-p
+                         "^\\* DharmaMitra Translation (Tibetan)$" s))
+            ;; Body migrated to nested level-2 location.
+            (should (string-match-p "^\\*\\* DharmaMitra Translation$" s))
+            (should (string-match-p "DM-T-LEGACY-BODY" s))
+            ;; Sanskrit DM stays at top-level.
+            (should (string-match-p
+                     "^\\* DharmaMitra Translation (Sanskrit)$" s))))
       (delete-directory dir t))))
 
 (ert-deftest tibetan-analysis-regenerate-auto-old-file-with-old-order-rewrites-into-new-order ()
@@ -417,6 +425,9 @@ preserved-content bodies intact."
                       (insert-file-contents file)
                       (buffer-string)))
                  (positions
+                  ;; DharmaMitra Tibetan no longer at top-level (2026-05-19) —
+                  ;; migrated to nested `** DharmaMitra Translation' inside
+                  ;; `* Tibetan Analysis'.
                   (mapcar (lambda (n)
                             (cons n (tibetan-analysis-test--section-pos s n)))
                           '("My Notes"
@@ -427,9 +438,8 @@ preserved-content bodies intact."
                             "Tibetan Analysis"
                             "Combined Analysis"
                             "Footnotes"
-                            "DharmaMitra Translation (Sanskrit)"
-                            "DharmaMitra Translation (Tibetan)"))))
-            ;; All sections present.
+                            "DharmaMitra Translation (Sanskrit)"))))
+            ;; All top-level sections present.
             (dolist (p positions)
               (should (cdr p)))
             ;; Strictly ascending positions in the new order.
@@ -441,7 +451,11 @@ preserved-content bodies intact."
             (should (string-match-p "MUST-SURVIVE-NOTE" s))
             (should (string-match-p "MUST-SURVIVE-WT" s))
             (should (string-match-p "MUST-SURVIVE-FN" s))
+            ;; DM Tibetan body migrated to nested level-2 location.
             (should (string-match-p "DM-T-BODY" s))
+            (should-not (string-match-p
+                         "^\\* DharmaMitra Translation (Tibetan)$" s))
+            ;; DM Sanskrit stays at top-level.
             (should (string-match-p "DM-S-BODY" s))
             (should (string-match-p "IAST: ahaṃ" s))))
       (delete-directory dir t))))

@@ -459,9 +459,14 @@ that Phase 5 must preserve across reanalyse-without-refire."
     "REALIGN-BODY\n")))
 
 (ert-deftest tibetan-reanalyze-preserves-top-level-sections-without-refire ()
-  "Phase 5 of two-language-parallel-analysis (2026-04-30):
+  "Phase 5 of two-language-parallel-analysis (2026-04-30) +
+DharmaMitra Tibetan layout revision (2026-05-19):
 reanalyse-without-refire (`:re-request-claude nil', the
-default) preserves ALL six new top-level sections verbatim."
+default) preserves the five remaining top-level analysis
+sections verbatim.  DharmaMitra Tibetan (formerly the sixth
+top-level section) is now nested inside `* Tibetan Analysis'
+as `** DharmaMitra Translation' — its body is preserved by the
+migration helper."
   (let* ((tmp (make-temp-file "tibetan-toplevel-" t))
          (file (expand-file-name "seg-009.org" tmp)))
     (unwind-protect
@@ -474,15 +479,16 @@ default) preserves ALL six new top-level sections verbatim."
           (let ((s (with-temp-buffer
                      (insert-file-contents file)
                      (buffer-string))))
-            ;; All six top-level sections still present.
+            ;; Remaining top-level sections still present.
             (should (string-match-p "^\\* Sanskrit Text$" s))
             (should (string-match-p "^\\* Sanskrit Analysis$" s))
             (should (string-match-p "^\\* Combined Analysis$" s))
             (should (string-match-p
-                     "^\\* DharmaMitra Translation (Tibetan)$" s))
-            (should (string-match-p
                      "^\\* DharmaMitra Translation (Sanskrit)$" s))
             (should (string-match-p "^\\* Sanskrit (DharmaMitra)$" s))
+            ;; DharmaMitra Tibetan retired from top-level (2026-05-19).
+            (should-not (string-match-p
+                         "^\\* DharmaMitra Translation (Tibetan)$" s))
             ;; Bodies preserved verbatim.
             (should (string-match-p "IAST: ahaṃ" s))
             (should (string-match-p "Devanagari: अहम्" s))
@@ -490,6 +496,7 @@ default) preserves ALL six new top-level sections verbatim."
             (should (string-match-p "SANDHI-BODY" s))
             (should (string-match-p "COMBINED-BODY" s))
             (should (string-match-p "DIVERGENCE-BODY" s))
+            ;; DM Tibetan body migrated to nested location.
             (should (string-match-p "DM-TIB-BODY" s))
             (should (string-match-p "DM-SKT-BODY" s))
             (should (string-match-p "REALIGN-BODY" s))
@@ -498,16 +505,23 @@ default) preserves ALL six new top-level sections verbatim."
       (when (file-exists-p tmp) (delete-directory tmp t)))))
 
 (ert-deftest tibetan-reanalyze-canonical-section-order ()
-  "Reanalyse rebuild emits sections in canonical order:
-  Tibetan Text → My Notes → Working Translation → Sanskrit Text →
-  Tibetan Analysis → Sanskrit Analysis → Combined Analysis →
-  Footnotes → DharmaMitra Translation (Tibetan) →
-  DharmaMitra Translation (Sanskrit) → Sanskrit (DharmaMitra).
+  "Reanalyse rebuild emits TOP-LEVEL sections in canonical order:
+  My Notes → Working Translation → Sanskrit Text → Sanskrit
+  Analysis → Tibetan Text → Tibetan Analysis → Combined Analysis
+  → Footnotes → DharmaMitra Translation (Sanskrit) →
+  Sanskrit (DharmaMitra).
 
 Phase 1.2 of layout-revision §5.18 (2026-05-04): `Auto-Analysis'
-parent heading renamed to `Tibetan Analysis'.  Phase 2.1 will
-reorder this list (Sanskrit-first); for now only the rename is
-asserted."
+parent heading renamed to `Tibetan Analysis'.  Phase 2.1
+reordered to Sanskrit-first.
+
+DharmaMitra Tibetan layout revision (2026-05-19):  the legacy
+top-level `* DharmaMitra Translation (Tibetan)' section is
+RETIRED.  The body now lives at level-2 `** DharmaMitra
+Translation' inside `* Tibetan Analysis' (peer of `**
+Translation'), so the AI translations sit side by side for
+class comparison.  This test no longer asserts the top-level
+heading exists."
   (let* ((tmp (make-temp-file "tibetan-toplevel-order-" t))
          (file (expand-file-name "seg-009.org" tmp)))
     (unwind-protect
@@ -520,10 +534,6 @@ asserted."
                       (insert-file-contents file)
                       (buffer-string)))
                  (positions
-                  ;; Phase 2.1 of layout-revision §5.18 (2026-05-04):
-                  ;; Sanskrit-first canonical order, user-content
-                  ;; sections at top, Sanskrit pair before Tibetan
-                  ;; pair, DM Sanskrit before DM Tibetan.
                   (mapcar (lambda (n)
                             (cons n (tibetan-batch-test--section-position s n)))
                           '("My Notes"
@@ -535,7 +545,6 @@ asserted."
                             "Combined Analysis"
                             "Footnotes"
                             "DharmaMitra Translation (Sanskrit)"
-                            "DharmaMitra Translation (Tibetan)"
                             "Sanskrit (DharmaMitra)"))))
             ;; Each section is present.
             (dolist (p positions)
@@ -544,7 +553,11 @@ asserted."
             (let ((prev -1))
               (dolist (p positions)
                 (should (> (cdr p) prev))
-                (setq prev (cdr p))))))
+                (setq prev (cdr p))))
+            ;; The retired top-level DM Tibetan section must NOT be
+            ;; re-emitted by regenerate.
+            (should-not (string-match-p
+                         "^\\* DharmaMitra Translation (Tibetan)$" s))))
       (when (file-exists-p tmp) (delete-directory tmp t)))))
 
 ;; ============================================================================

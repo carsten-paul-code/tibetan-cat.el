@@ -43,23 +43,34 @@
        (delete-directory dir t))))
 
 (defun tibetan-dm-trans-test--baseline-analysis ()
-  "Return baseline analysis-file content for tests."
+  "Return baseline analysis-file content for tests.
+
+Uses the post-§5.18 layout:  `* Tibetan Analysis' parent + level-2
+`** Translation' (Claude) + level-2 `** DharmaMitra Translation'
+placeholder.  Tibetan-side DM writer (since 2026-05-19) targets
+the placeholder under `* Tibetan Analysis', not the legacy
+top-level `* DharmaMitra Translation (Tibetan)' section."
   (concat "#+TITLE: Segment 5 Analysis\n\n"
+          "* My Notes\n\n* Working Translation\n\n"
           "* Tibetan Text\n"
           "བདག་གིས་ལས་བྱས།\n\n"
-          "* Auto-Analysis\n"
+          "* Tibetan Analysis\n"
           ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
           "** Wylie Transliteration\nbdag gis las byas /\n\n"
-          "** Claude Translation (Tibetan)\n[Requesting...]\n\n"
-          "* My Notes\n\n* Working Translation\n\n* Footnotes\n"))
+          "** Translation\n[Requesting translation...]\n\n"
+          "** DharmaMitra Translation\n[Awaiting DharmaMitra…]\n\n"
+          "* Footnotes\n"))
 
 ;; ============================================================================
 ;; Writer — `--write-section'
 ;; ============================================================================
 
 (ert-deftest tibetan-dm-trans-write-section-creates-tibetan-section ()
-  "Writer adds `** DharmaMitra Translation (Tibetan)' to the
-analysis file when none exists yet."
+  "Writer places the Tibetan DharmaMitra translation under the
+level-2 `** DharmaMitra Translation' heading inside `* Tibetan
+Analysis' — peer of `** Translation' (Claude).  Layout revision
+2026-05-19:  the legacy top-level `* DharmaMitra Translation
+\(Tibetan)' is retired."
   (skip-unless (fboundp 'tibetan-dharmamitra-translation--write-section))
   (tibetan-dm-trans-test--with-analysis-file
       (tibetan-dm-trans-test--baseline-analysis)
@@ -70,8 +81,38 @@ analysis file when none exists yet."
         (insert-file-contents analysis-file)
         (let ((s (buffer-string)))
           (should (string-match-p
-                   "^\\* DharmaMitra Translation (Tibetan)$" s))
-          (should (string-match-p "By me, the work was done\\." s)))))))
+                   "^\\*\\* DharmaMitra Translation$" s))
+          (should (string-match-p "By me, the work was done\\." s))
+          ;; The legacy top-level heading must NOT appear.
+          (should-not (string-match-p
+                       "^\\* DharmaMitra Translation (Tibetan)$" s))
+          ;; The placeholder body is gone.
+          (should-not (string-match-p "\\[Awaiting DharmaMitra" s)))))))
+
+(ert-deftest tibetan-dm-trans-write-section-tibetan-deletes-legacy-toplevel ()
+  "Migration:  when the analysis file has a LEGACY top-level
+`* DharmaMitra Translation (Tibetan)' section (from before the
+layout revision), the Tibetan writer deletes it and places the
+new body under the nested `** DharmaMitra Translation' inside
+`* Tibetan Analysis'."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation--write-section))
+  (tibetan-dm-trans-test--with-analysis-file
+      (concat (tibetan-dm-trans-test--baseline-analysis)
+              "\n* DharmaMitra Translation (Tibetan)\n"
+              ":PROPERTIES:\n:LAST_TRANSLATED: 2026-04-30\n:END:\n\n"
+              "LEGACY DM body (should be migrated away)\n")
+    (tibetan-dharmamitra-translation--write-section
+     analysis-file "MIGRATED FRESH BODY" "Tibetan")
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (let ((s (buffer-string)))
+        ;; Legacy top-level section gone.
+        (should-not (string-match-p
+                     "^\\* DharmaMitra Translation (Tibetan)$" s))
+        (should-not (string-match-p "LEGACY DM body" s))
+        ;; Fresh body present under nested heading.
+        (should (string-match-p "MIGRATED FRESH BODY" s))
+        (should (string-match-p "^\\*\\* DharmaMitra Translation$" s))))))
 
 (ert-deftest tibetan-dm-trans-write-section-creates-sanskrit-section ()
   "Writer parameterises the heading on SOURCE-LANG: `Sanskrit'
@@ -172,7 +213,9 @@ Tibetan text."
 
 (ert-deftest tibetan-dm-trans-fire-tibetan-writes-result-to-section ()
   "After firing, the analysis file contains the translation under
-`** DharmaMitra Translation (Tibetan)'."
+the new nested `** DharmaMitra Translation' heading inside
+`* Tibetan Analysis' (peer of `** Translation').  Layout
+revision 2026-05-19."
   (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-tibetan))
   (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
              (lambda (&rest _) "By me, the work was done.")))
@@ -184,8 +227,10 @@ Tibetan text."
         (insert-file-contents analysis-file)
         (let ((s (buffer-string)))
           (should (string-match-p
-                   "^\\* DharmaMitra Translation (Tibetan)$" s))
-          (should (string-match-p "By me, the work was done\\." s)))))))
+                   "^\\*\\* DharmaMitra Translation$" s))
+          (should (string-match-p "By me, the work was done\\." s))
+          (should-not (string-match-p
+                       "^\\* DharmaMitra Translation (Tibetan)$" s)))))))
 
 (ert-deftest tibetan-dm-trans-fire-tibetan-skips-empty-text ()
   "Empty / nil Tibetan text → no API call, no write.  REGRESSION

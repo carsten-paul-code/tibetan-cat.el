@@ -973,6 +973,14 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
           (cdr (assoc "Combined Analysis" user-sections)))
          (dm-tibetan
           (cdr (assoc "DharmaMitra Translation (Tibetan)" user-sections)))
+         ;; Read the NESTED `** DharmaMitra Translation' body from
+         ;; the CURRENT file state BEFORE the buffer is erased.  See
+         ;; the post-save migration block for how this is restored
+         ;; into the regenerated file's new nested location.
+         (dm-tibetan-nested-body
+          (and (file-exists-p filepath)
+               (tibetan-analysis--read-dharmamitra-tibetan-nested-body
+                filepath)))
          (dm-sanskrit
           (cdr (assoc "DharmaMitra Translation (Sanskrit)" user-sections)))
          (sanskrit-dharmamitra
@@ -1111,10 +1119,11 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
         (insert dm-sanskrit)
         (unless (string-suffix-p "\n\n" dm-sanskrit)
           (insert "\n")))
-      (when dm-tibetan
-        (insert dm-tibetan)
-        (unless (string-suffix-p "\n\n" dm-tibetan)
-          (insert "\n")))
+      ;; Tibetan-side DharmaMitra is NO LONGER emitted at top-level
+      ;; (2026-05-19 layout revision).  The captured `dm-tibetan'
+      ;; body is migrated into `** DharmaMitra Translation' (level-2
+      ;; inside `* Tibetan Analysis') via the post-save migration
+      ;; helper below — see comment after `save-buffer'.
       (when sanskrit-dharmamitra
         (insert sanskrit-dharmamitra)
         (unless (string-suffix-p "\n\n" sanskrit-dharmamitra)
@@ -1126,7 +1135,99 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
       ;; for the divergence root cause.
       (tibetan-analysis--strip-dangling-term-links-in-buffer)
       (save-buffer)
+      ;; Tibetan DharmaMitra preservation + migration (2026-05-19):
+      ;; the legacy top-level `* DharmaMitra Translation (Tibetan)'
+      ;; section has been retired in favour of `** DharmaMitra
+      ;; Translation' nested under `* Tibetan Analysis' (peer of
+      ;; `** Translation').  Body is preserved across regenerate
+      ;; by reading from EITHER location and restoring at the new
+      ;; nested location:
+      ;;   - First regenerate of a legacy file:  `dm-tibetan' has
+      ;;     the top-level body;  read + extract + restore.
+      ;;   - Subsequent regenerates:  `dm-tibetan' is nil (top-level
+      ;;     section already gone);  read body from the new nested
+      ;;     location (saved by prior regenerate or by the async DM
+      ;;     writer) and restore it again after auto-content rewrite.
+      ;; Placeholder / awaiting stubs are skipped — they're already
+      ;; emitted by the auto-content renderer.
+      (when (fboundp 'tibetan-dharmamitra-translation--write-nested-tibetan-section)
+        (let ((body (or dm-tibetan-nested-body
+                        (and dm-tibetan
+                             (tibetan-analysis--extract-section-body
+                              dm-tibetan)))))
+          (when (and body
+                     (not (string-empty-p body))
+                     (not (string-match-p "\\`\\[Awaiting" body))
+                     (not (string-match-p "\\`\\[Requesting" body))
+                     (not (string-match-p "\\`\\[Translation not available" body)))
+            (tibetan-dharmamitra-translation--write-nested-tibetan-section
+             filepath body))))
       (message "Re-analyzed segment. User notes preserved and reshaped."))))
+
+(defun tibetan-analysis--read-dharmamitra-tibetan-nested-body (filepath)
+  "Return the trimmed body of `** DharmaMitra Translation' inside
+`* Tibetan Analysis' in FILEPATH, or nil when absent / empty /
+a placeholder.
+
+Used by `tibetan-analysis-regenerate-auto' to preserve the
+DharmaMitra Tibetan body across regenerates (the body sits
+inside the auto-content region and would otherwise be erased
+by the rewrite pass)."
+  (when (and filepath (file-exists-p filepath))
+    (with-temp-buffer
+      (insert-file-contents filepath)
+      (goto-char (point-min))
+      (when (re-search-forward "^\\* Tibetan Analysis$" nil t)
+        (let ((parent-end (save-excursion
+                            (if (re-search-forward "^\\* " nil t)
+                                (line-beginning-position)
+                              (point-max)))))
+          (when (re-search-forward
+                 "^\\*\\* DharmaMitra Translation[ \t]*$" parent-end t)
+            (forward-line 1)
+            ;; Skip property drawer if present.
+            (when (looking-at-p "[ \t]*:PROPERTIES:[ \t]*$")
+              (when (re-search-forward "^[ \t]*:END:[ \t]*$" parent-end t)
+                (forward-line 1)))
+            (let* ((body-start (point))
+                   (body-end (save-excursion
+                               (if (re-search-forward
+                                    "^\\*\\{1,2\\}[^*\n]\\|^\\* " parent-end t)
+                                   (line-beginning-position)
+                                 parent-end)))
+                   (body (string-trim
+                          (buffer-substring-no-properties
+                           body-start body-end))))
+              (and (not (string-empty-p body)) body))))))))
+
+(defun tibetan-analysis--extract-section-body (section-text)
+  "Extract just the body of a captured org section.
+
+SECTION-TEXT is the full section text including heading line +
+optional property drawer + body, as captured by
+`tibetan-analysis-get-user-sections'.  Returns the trimmed body
+\(everything after the heading line and an optional `:PROPERTIES:
+… :END:' drawer);  nil when SECTION-TEXT is nil / empty.
+
+Used by the regenerate-auto migration path to extract just the
+body of a captured top-level section so it can be re-inserted
+at a different location (e.g. legacy `* DharmaMitra Translation
+\(Tibetan)' body → nested `** DharmaMitra Translation' under
+`* Tibetan Analysis')."
+  (when (and section-text (stringp section-text)
+             (not (string-empty-p section-text)))
+    (with-temp-buffer
+      (insert section-text)
+      (goto-char (point-min))
+      ;; Skip the heading line.
+      (forward-line 1)
+      ;; Skip an optional property drawer.
+      (when (looking-at-p "[ \t]*:PROPERTIES:[ \t]*$")
+        (when (re-search-forward "^[ \t]*:END:[ \t]*$" nil t)
+          (forward-line 1)))
+      (let ((body (string-trim
+                   (buffer-substring-no-properties (point) (point-max)))))
+        (and (not (string-empty-p body)) body)))))
 
 ;; ============================================================================
 ;; GENERATE AUTO-CONTENT - Improved format with inline annotations
@@ -2950,6 +3051,8 @@ nil, the subsection is omitted."
     "** Phonetics"
     "** Interlinear Gloss"
     "** Claude Translation"
+    "** Translation"
+    "** DharmaMitra Translation"
     "** Grammar"
     "** Sentence Structure"
     "** Verb Classification (Hill 2010)")
@@ -3250,10 +3353,18 @@ it with `let' around the call when Claude data is available."
                                    (when (and verbs multiword-units (fboundp 'tibetan-analyze-zero-markers))
                                      (tibetan-analyze-zero-markers verbs multiword-units words))
                                  (error nil)))
-               (translation (condition-case nil
-                                (when (fboundp 'tibetan-get-dharmamitra-translation)
-                                  (tibetan-get-dharmamitra-translation tibetan-text))
-                              (error nil)))
+               ;; Inline DharmaMitra lookup retired 2026-05-19 with the
+               ;; removal of the level-3 `*** DharmaMitra' placeholder.
+               ;; The real Tibetan DM translation is fetched async by
+               ;; `tibetan-dharmamitra-translation-fire-tibetan' and
+               ;; written to `** DharmaMitra Translation' under
+               ;; `* Tibetan Analysis'.  This binding is retained as
+               ;; a no-op probe so the let* shape stays stable for
+               ;; downstream destructuring callers.
+               (_translation (condition-case nil
+                                 (when (fboundp 'tibetan-get-dharmamitra-translation)
+                                   (tibetan-get-dharmamitra-translation tibetan-text))
+                               (error nil)))
                (_claimed-indices (condition-case nil
                                      (when (fboundp 'tibetan-get-claimed-indices)
                                        (tibetan-get-claimed-indices multiword-units))
@@ -3340,6 +3451,16 @@ it with `let' around the call when Claude data is available."
             ;; ============================================================
             (insert "** Claude Translation\n")
             (insert "[Requesting translation...]\n\n")
+
+            ;; ============================================================
+            ;; SECTION 1c: DharmaMitra Translation (level-2, sibling of
+            ;; Claude Translation).  Populated asynchronously by
+            ;; `tibetan-dharmamitra-translation-fire-tibetan'.  Placed
+            ;; immediately after Claude so the two AI translations
+            ;; sit side by side for class comparison (2026-05-19).
+            ;; ============================================================
+            (insert "** DharmaMitra Translation\n")
+            (insert "[Awaiting DharmaMitra…]\n\n")
 
             ;; ============================================================
             ;; SECTION 2: Word / Particle List
@@ -3790,14 +3911,16 @@ it with `let' around the call when Claude data is available."
             ;; rendering against external translations as a final check.
             ;; ============================================================
             (insert "** Provided Translations\n")
-            ;; 8a: DharmaMitra AI translation
-            (insert "*** DharmaMitra\n")
-            (if (and translation
-                     (not (string= translation "[Translation not available]"))
-                     (not (string= translation "[DharmaMitra not loaded]")))
-                (insert (format "%s\n" translation))
-              (insert "[Not available — enable DharmaMitra access to generate]\n"))
-            (insert "\n")
+            ;; 8a (retired 2026-05-19):  the inline `*** DharmaMitra'
+            ;; placeholder used to live here, populated by an inline
+            ;; DharmaMitra API call (or a `[Not available — enable
+            ;; DharmaMitra access to generate]' stub).  The block is
+            ;; redundant — the real DharmaMitra Tibetan translation
+            ;; lives at level-2 `** DharmaMitra Translation' directly
+            ;; under `** Translation' (a peer of Claude's translation),
+            ;; populated asynchronously by
+            ;; `tibetan-dharmamitra-translation-fire-tibetan'.  See
+            ;; CLAUDE.md §5.20 for the layout rationale.
             ;; 8b: CAT rule-based gloss.  Prefer the enriched-vocab-pairs
             ;; built during the Word/Particle List pass — those meanings
             ;; already incorporate the Hill-morphology and Resources

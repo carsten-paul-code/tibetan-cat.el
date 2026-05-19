@@ -30,16 +30,190 @@
 ;; Writer
 ;; ----------------------------------------------------------------------------
 
+(defun tibetan-dharmamitra-translation--write-nested-tibetan-section
+    (analysis-file translation)
+  "Write the DharmaMitra Tibetan TRANSLATION into the level-2
+`** DharmaMitra Translation' section inside `* Tibetan Analysis'.
+
+The renderer emits a `** DharmaMitra Translation\\n[Awaiting…]'
+placeholder during analysis generation;  this writer locates the
+placeholder and replaces its body with the real translation, plus
+a `:PROPERTIES:' drawer carrying `:LAST_TRANSLATED:'.
+
+When the placeholder is absent (legacy files generated before
+the 2026-05-19 layout revision), creates the heading immediately
+after `** Translation' / `** Claude Translation' inside
+`* Tibetan Analysis'.  When the parent is also absent, falls
+back to top-level `* DharmaMitra Translation (Tibetan)' (the
+pre-layout-revision behaviour) for safety.
+
+Returns t on success, nil otherwise."
+  (when (and analysis-file
+             (stringp analysis-file)
+             (file-exists-p analysis-file)
+             (file-writable-p analysis-file)
+             (stringp translation)
+             (not (string-empty-p translation)))
+    (let ((buf (find-file-noselect analysis-file)))
+      (with-current-buffer buf
+        (org-mode)
+        (save-excursion
+          (goto-char (point-min))
+          ;; Migrate legacy top-level section if present:  read its
+          ;; body, delete the section, and we'll re-insert at the
+          ;; new location below.  Idempotent — no-op when absent.
+          (tibetan-dharmamitra-translation--delete-legacy-toplevel-section
+           buf "Tibetan")
+          (goto-char (point-min))
+          (cond
+           ;; New layout:  level-2 placeholder under * Tibetan Analysis.
+           ((re-search-forward
+             "^\\*\\* DharmaMitra Translation[ \t]*$" nil t)
+            ;; Replace from heading line through next ^** / ^* heading.
+            (beginning-of-line)
+            (let* ((start (point))
+                   (end (save-excursion
+                          (forward-line 1)
+                          (if (re-search-forward
+                               "^\\*\\{1,2\\}[^*\n]\\|^\\* " nil t)
+                              (line-beginning-position)
+                            (point-max)))))
+              (delete-region start end)
+              (goto-char start))
+            (insert "** DharmaMitra Translation\n")
+            (insert ":PROPERTIES:\n")
+            (insert (format ":LAST_TRANSLATED: %s\n"
+                            (format-time-string "%Y-%m-%d")))
+            (insert ":END:\n\n")
+            (insert translation)
+            (unless (string-suffix-p "\n" translation) (insert "\n"))
+            (insert "\n"))
+           ;; New layout with no placeholder yet:  insert after
+           ;; `** Translation' / `** Claude Translation' inside
+           ;; `* Tibetan Analysis'.
+           ((tibetan-dharmamitra-translation--insert-after-translation
+             buf translation))
+           ;; Fallback:  top-level (legacy / no Tibetan Analysis parent).
+           (t
+            (tibetan-dharmamitra-translation--write-toplevel-section
+             buf translation "Tibetan")))))
+      (with-current-buffer buf (save-buffer))
+      t)))
+
+(defun tibetan-dharmamitra-translation--delete-legacy-toplevel-section
+    (buffer source-lang)
+  "Delete any legacy top-level `* DharmaMitra Translation (SOURCE-LANG)'
+section in BUFFER.  Idempotent — no-op when absent.  Used by the
+Tibetan-side migration to clear the top-level section before
+reinserting the body at the new nested location."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (let ((heading-re (format "^\\* DharmaMitra Translation (%s)[ \t]*$"
+                                (regexp-quote source-lang))))
+        (when (re-search-forward heading-re nil t)
+          (beginning-of-line)
+          (let ((start (point))
+                (end (save-excursion (org-end-of-subtree t t) (point))))
+            (delete-region start end)
+            t))))))
+
+(defun tibetan-dharmamitra-translation--insert-after-translation
+    (buffer translation)
+  "Insert a fresh `** DharmaMitra Translation' block inside
+`* Tibetan Analysis'.
+
+Placement:
+  (a) immediately after `** Translation' or `** Claude
+      Translation' (whichever appears first) — the canonical
+      side-by-side layout;
+  (b) when no Translation sibling exists, at the end of the
+      `* Tibetan Analysis' subtree — better than dropping the
+      body or punting to top-level.
+
+Returns t when `* Tibetan Analysis' is present, nil otherwise.
+The caller falls back to top-level placement when this returns
+nil."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward "^\\* Tibetan Analysis$" nil t)
+        (let* ((parent-end (save-excursion
+                             (if (re-search-forward "^\\* " nil t)
+                                 (line-beginning-position)
+                               (point-max))))
+               (after-trans-pos
+                (save-excursion
+                  (when (re-search-forward
+                         "^\\*\\* \\(Translation\\|Claude Translation\\)[ \t]*$"
+                         parent-end t)
+                    (forward-line 1)
+                    (if (re-search-forward "^\\*\\* " parent-end t)
+                        (line-beginning-position)
+                      parent-end))))
+               (insert-pos (or after-trans-pos parent-end)))
+          (goto-char insert-pos)
+          (insert "** DharmaMitra Translation\n")
+          (insert ":PROPERTIES:\n")
+          (insert (format ":LAST_TRANSLATED: %s\n"
+                          (format-time-string "%Y-%m-%d")))
+          (insert ":END:\n\n")
+          (insert translation)
+          (unless (string-suffix-p "\n" translation) (insert "\n"))
+          (insert "\n")
+          t)))))
+
+(defun tibetan-dharmamitra-translation--write-toplevel-section
+    (buffer-or-file translation source-lang)
+  "Write `* DharmaMitra Translation (SOURCE-LANG)' at top-level.
+
+BUFFER-OR-FILE is either a buffer or a file path.  Used for
+Sanskrit (which stays at top-level in parallel-Sanskrit mode)
+and as a fallback for Tibetan in legacy files without a
+`* Tibetan Analysis' parent.
+
+Creates or replaces the section.  Body is TRANSLATION;  property
+drawer carries `:LAST_TRANSLATED:' for freshness tracking."
+  (let ((buf (if (bufferp buffer-or-file) buffer-or-file
+               (find-file-noselect buffer-or-file)))
+        (heading (format "* DharmaMitra Translation (%s)" source-lang))
+        (heading-re (format "^\\* DharmaMitra Translation (%s)[ \t]*$"
+                            (regexp-quote source-lang))))
+    (with-current-buffer buf
+      (org-mode)
+      (save-excursion
+        (goto-char (point-min))
+        (cond
+         ((re-search-forward heading-re nil t)
+          (beginning-of-line)
+          (let ((start (point))
+                (end (save-excursion (org-end-of-subtree t t) (point))))
+            (delete-region start end)))
+         (t
+          (goto-char (point-max))
+          (unless (bolp) (insert "\n"))
+          (unless (looking-back "\n\n" 2) (insert "\n"))))
+        (insert heading "\n")
+        (insert ":PROPERTIES:\n")
+        (insert (format ":LAST_TRANSLATED: %s\n"
+                        (format-time-string "%Y-%m-%d")))
+        (insert ":END:\n\n")
+        (insert translation)
+        (unless (string-suffix-p "\n" translation) (insert "\n"))))
+    t))
+
 (defun tibetan-dharmamitra-translation--write-section
     (analysis-file translation source-lang)
-  "Write `* DharmaMitra Translation (SOURCE-LANG)' to ANALYSIS-FILE.
+  "Dispatch the DharmaMitra writer based on SOURCE-LANG.
 
-Creates or replaces the section.  Body is TRANSLATION; property
-drawer carries `:LAST_TRANSLATED:' (today's date) for freshness
-tracking.
+Tibetan side (`source-lang' = \"Tibetan\") writes into the
+level-2 `** DharmaMitra Translation' inside `* Tibetan Analysis',
+sitting as a peer of `** Translation' (the Claude rendering).
+Sanskrit side stays at top-level `* DharmaMitra Translation
+\(Sanskrit)' for parallel-mode workflow symmetry with the legacy
+Sanskrit pipeline.
 
-Returns t on success, nil when ANALYSIS-FILE is missing or any
-input is invalid."
+Returns t on success, nil otherwise."
   (when (and analysis-file
              (stringp analysis-file)
              (file-exists-p analysis-file)
@@ -48,38 +222,16 @@ input is invalid."
              (not (string-empty-p translation))
              (stringp source-lang)
              (not (string-empty-p source-lang)))
-    (let ((buf (find-file-noselect analysis-file))
-          (heading (format "* DharmaMitra Translation (%s)" source-lang))
-          (heading-re (format "^\\* DharmaMitra Translation (%s)[ \t]*$"
-                              (regexp-quote source-lang))))
-      (with-current-buffer buf
-        (org-mode)
-        (save-excursion
-          (goto-char (point-min))
-          ;; Locate or create the section.
-          (cond
-           ((re-search-forward heading-re nil t)
-            ;; Replace existing — delete from heading through end of subtree.
-            (beginning-of-line)
-            (let ((start (point))
-                  (end (save-excursion (org-end-of-subtree t t) (point))))
-              (delete-region start end)))
-           (t
-            ;; Append at end of buffer with separating blank line.
-            (goto-char (point-max))
-            (unless (bolp) (insert "\n"))
-            (unless (looking-back "\n\n" 2) (insert "\n"))))
-          ;; Insert the new section.
-          (insert heading "\n")
-          (insert ":PROPERTIES:\n")
-          (insert (format ":LAST_TRANSLATED: %s\n"
-                          (format-time-string "%Y-%m-%d")))
-          (insert ":END:\n\n")
-          (insert translation)
-          (unless (string-suffix-p "\n" translation)
-            (insert "\n"))))
-      (with-current-buffer buf (save-buffer))
-      t)))
+    (cond
+     ((string= source-lang "Tibetan")
+      (tibetan-dharmamitra-translation--write-nested-tibetan-section
+       analysis-file translation))
+     (t
+      (tibetan-dharmamitra-translation--write-toplevel-section
+       analysis-file translation source-lang)
+      (with-current-buffer (find-file-noselect analysis-file)
+        (save-buffer))
+      t))))
 
 ;; ----------------------------------------------------------------------------
 ;; Fire function (orchestrates API call + writer)
