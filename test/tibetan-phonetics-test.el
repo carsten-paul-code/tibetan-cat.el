@@ -144,6 +144,36 @@
   "`mya' → `nya' (m + -y subscript → palatalised `ny')."
   (should (string= "nya" (tibetan-wylie-syllable-to-phonetic "mya"))))
 
+(ert-deftest tibetan-phonetics-subscript-gyi-stays-gyi ()
+  "`gyi' → `gyi' (g + -y subscript = palatalised g, kept).
+This is the Tibetan genitive particle.  Regression for the
+ambiguity:  `(g . y)' must NOT be in the valid-prefix table,
+or the parser mis-identifies `g' as a prefix + `y' as the
+root and drops the `g'."
+  (should (string= "gyi" (tibetan-wylie-syllable-to-phonetic "gyi"))))
+
+(ert-deftest tibetan-phonetics-subscript-gyung-stays-gyung ()
+  "`gyung' → `gyung' (g + -y subscript = palatalised g)."
+  (should (string= "gyung" (tibetan-wylie-syllable-to-phonetic "gyung"))))
+
+(ert-deftest tibetan-phonetics-prefix-rgyud-becomes-gyü ()
+  "`rgyud' → `gyü' (r-superscript + g+y subscript = `gy', + u +
+-d suffix → ü umlaut, d silent).  The classic `kagyü' element
+from `bka' brgyud'."
+  (should (string= "gyü" (tibetan-wylie-syllable-to-phonetic "rgyud"))))
+
+(ert-deftest tibetan-phonetics-prefix-brgyud-becomes-gyü ()
+  "`brgyud' → `gyü' (b-prefix + r-super + g-root + y-sub + u + d).
+Regression for the parser's prefix detection:  Case A (prefix +
+super + root pattern) must fire when the b-prefix sits over a
+superscript-root combo.  Without this, the cluster passes
+through with `b' and `r' still visible (`brgyü')."
+  (should (string= "gyü" (tibetan-wylie-syllable-to-phonetic "brgyud"))))
+
+(ert-deftest tibetan-phonetics-phrase-bka-brgyud-becomes-kagyü ()
+  "`bka' brgyud' → `ka gyü' (the canonical `Kagyü' lineage name)."
+  (should (string= "ka gyü" (tibetan-to-phonetics "bka' brgyud"))))
+
 ;; ============================================================================
 ;; Vowel umlauts — final i / e / n / l / d / s suffixes
 ;; ============================================================================

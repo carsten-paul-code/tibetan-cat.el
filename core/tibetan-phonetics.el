@@ -111,7 +111,11 @@ short-circuits.")
     ("d" . "k") ("d" . "g") ("d" . "ng") ("d" . "p") ("d" . "b") ("d" . "m")
     ;; g-
     ("g" . "c") ("g" . "ny") ("g" . "t") ("g" . "d") ("g" . "n")
-    ("g" . "ts") ("g" . "zh") ("g" . "z") ("g" . "sh") ("g" . "s") ("g" . "y")
+    ("g" . "ts") ("g" . "zh") ("g" . "z") ("g" . "sh") ("g" . "s")
+    ;; NOT ("g" . "y") — `gy-' is the palatalised cluster g + y-
+    ;; subscript (genitive particle `gyi', words like `gyung',
+    ;; `gyal'), NOT prefix g + root y.  Removing this combo lets the
+    ;; parser correctly identify `gy-' as a root+subscript cluster.
     ;; m-
     ("m" . "kh") ("m" . "g") ("m" . "ng")
     ("m" . "ch") ("m" . "j") ("m" . "ny")
@@ -194,14 +198,42 @@ subscript hierarchy."
          (super "")
          (root "")
          (subscript ""))
-    ;; Try prefix.
-    (when (> (length s) 1)
+    ;; Try prefix.  Two patterns:
+    ;;
+    ;;   (A) prefix + super + root   — e.g. `brgy' = b + r + g + (y).
+    ;;       Detected by checking whether the REST starts with a
+    ;;       valid (super . root) combo;  the prefix gets stripped
+    ;;       and the super check below catches the r.
+    ;;
+    ;;   (B) prefix + root            — the simple case, e.g. `bk' = b + k.
+    ;;       Detected by looking up (first . next-root) in
+    ;;       `--valid-prefix-combos'.
+    ;;
+    ;; Without (A), syllables like `brgyud' (which want to parse as
+    ;; b-prefix + r-super + g-root + y-sub + u + d) get stuck:  the
+    ;; greedy root finder grabs `r' first;  `b' isn't a valid prefix
+    ;; before r in the simple table;  the cluster passes through with
+    ;; `b' and `r' intact (output `brgyü' instead of `gyü').
+    (when (and (> (length s) 1)
+               (member (substring s 0 1)
+                       '("b" "d" "g" "m" "'")))
       (let* ((first (substring s 0 1))
              (rest  (substring s 1))
-             (rest-root (tibetan-phonetics--starts-with-root rest)))
-        (when (and rest-root
+             (rest-root (tibetan-phonetics--starts-with-root rest))
+             (case-a-fires
+              (and rest-root
+                   (member rest-root '("r" "l" "s"))
+                   (> (length rest) (length rest-root))
+                   (let ((deeper (tibetan-phonetics--starts-with-root
+                                  (substring rest (length rest-root)))))
+                     (and deeper
+                          (member (cons rest-root deeper)
+                                  tibetan-phonetics--valid-super-combos)))))
+             (case-b-fires
+              (and rest-root
                    (member (cons first rest-root)
-                           tibetan-phonetics--valid-prefix-combos))
+                           tibetan-phonetics--valid-prefix-combos))))
+        (when (or case-a-fires case-b-fires)
           (setq prefix first)
           (setq s rest))))
     ;; Try superscript.
