@@ -2843,7 +2843,17 @@ For each Bialek-detected particle in BIALEK-ANALYSIS:
     "** DharmaMitra Translation"
     "** Grammar"
     "** Sentence Structure"
-    "** Verb Classification (Hill 2010)")
+    "** Verb Classification (Hill 2010)"
+    ;; §5.21 Commit 5/7 (2026-05-20):  Provided Translations +
+    ;; Detailed Dictionary added with Detailed Dictionary as the
+    ;; LAST entry.  Class-use feedback:  the dictionary is reference
+    ;; material consulted on confusion, not flow reading;  moving
+    ;; it to the bottom turns the analysis file into a top-to-
+    ;; bottom reading flow (Wylie → Phonetics → Interlinear →
+    ;; Translations → Grammar → Sentence/Verb structure → Provided
+    ;; Translations → Detailed Dictionary, reference).
+    "** Provided Translations"
+    "** Detailed Dictionary")
   "Section headings (at org level-2) that should appear first in the
 `* Auto-Analysis' output, in this exact order.  Any level-2 section
 NOT listed here is kept and emitted afterwards in the order it was
@@ -3694,28 +3704,19 @@ it with `let' around the call when Claude data is available."
             ;; NOTE: Zero-Marked NPs section removed - was producing confusing output
 
             ;; ============================================================
-            ;; SECTION 7: Detailed Dictionary (rich entries with Sanskrit)
-            ;; Rendered by the dedicated helper; kept as its own
-            ;; function so the output stays testable in isolation and
-            ;; the orchestrator can narrate sections one-per-call.
-            ;; The bialek analysis is threaded through so the
-            ;; renderer can split word+particle compounds the same
-            ;; way the Interlinear does — anchoring `mthu'i' under
-            ;; `<<term-mthu>>' so the Interlinear's jump link
-            ;; resolves to the real stem entry.
-            ;; ============================================================
-            (let ((bialek-for-dd
-                   (condition-case nil
-                       (when (fboundp 'tibetan-analyze-grammar-bialek)
-                         (tibetan-analyze-grammar-bialek tibetan-text))
-                     (error nil))))
-              (tibetan-analysis--render-detailed-dictionary
-               tibetan-text vocab-pairs bialek-for-dd))
-
-            ;; ============================================================
-            ;; SECTION 8: Provided Translations (at end — combine step)
-            ;; Shown last so students can compare their own word-by-word
-            ;; rendering against external translations as a final check.
+            ;; SECTION 7: Provided Translations (combine step)
+            ;;
+            ;; §5.21 Commit 5/7 (2026-05-20):  SWAPPED with the
+            ;; Detailed Dictionary emission below.  Provided
+            ;; Translations now renders BEFORE the Detailed
+            ;; Dictionary so the dictionary moves to the very bottom
+            ;; of `* Tibetan Analysis' — class-use feedback:  DD is
+            ;; reference material consulted on confusion, not flow
+            ;; reading;  it shouldn't sit between Verb Classification
+            ;; and Provided Translations.  Reader-flow goal:  Wylie
+            ;; → Phonetics → Interlinear → Translations → Grammar →
+            ;; Sentence/Verb structure → Provided Translations →
+            ;; Detailed Dictionary (reference, not flow).
             ;; ============================================================
             (insert "** Provided Translations\n")
             ;; 8a (retired 2026-05-19):  the inline `*** DharmaMitra'
@@ -3783,6 +3784,30 @@ it with `let' around the call when Claude data is available."
                         (insert (format "**** %s\n%s\n\n" source text))))
                   (insert "[Add reference translations here, e.g. from Blue Annals (Roerich), or other published translations]\n")))
               (insert "\n"))
+
+            ;; ============================================================
+            ;; SECTION 8 (§5.21 Commit 5/7, 2026-05-20):  Detailed
+            ;; Dictionary (rich entries with Sanskrit).  Now emitted
+            ;; AFTER Provided Translations so it sits at the BOTTOM
+            ;; of `* Tibetan Analysis' as reference material — was
+            ;; SECTION 7 (between Verb Classification and Provided
+            ;; Translations) pre-§5.21.  Body unchanged;  the
+            ;; per-entry rendering improvement was deferred per
+            ;; AskUserQuestion.
+            ;;
+            ;; The bialek analysis is threaded through so the
+            ;; renderer can split word+particle compounds the same
+            ;; way the Interlinear does — anchoring `mthu'i' under
+            ;; `<<term-mthu>>' so the Interlinear's jump link
+            ;; resolves to the real stem entry.
+            ;; ============================================================
+            (let ((bialek-for-dd
+                   (condition-case nil
+                       (when (fboundp 'tibetan-analyze-grammar-bialek)
+                         (tibetan-analyze-grammar-bialek tibetan-text))
+                     (error nil))))
+              (tibetan-analysis--render-detailed-dictionary
+               tibetan-text vocab-pairs bialek-for-dd))
 
             ;; Reorder level-2 sections into the workshop-agreed
             ;; priority: Wylie → Particle Map → Interlinear Gloss →

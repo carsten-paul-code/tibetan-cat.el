@@ -2587,6 +2587,63 @@ breakdown."
                  "\\[Bialek 2022 §[0-9]+\\.[0-9]+[^]]*; Portfolio §[0-9.]+[^]]*\\]"
                  out))))))
 
+;; ----------------------------------------------------------------------------
+;; §5.21 Commit 5/7 (2026-05-20):  `** Detailed Dictionary' moves to
+;; the bottom of `* Tibetan Analysis'.  Class-use feedback:  the
+;; dictionary is reference material consulted on confusion, not flow
+;; reading;  it shouldn't sit in the middle of the analysis between
+;; Verb Classification and Provided Translations.  Reader-flow goal:
+;;
+;;   Wylie → Phonetics → Interlinear → Translations → Grammar →
+;;   Sentence/Verb structure → Provided Translations → Detailed
+;;   Dictionary (reference, not flow)
+;;
+;; No body changes — improvement deferred per AskUserQuestion.
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-analysis-detailed-dictionary-is-last-section ()
+  "`** Detailed Dictionary' is the LAST level-2 heading emitted
+inside the `* Tibetan Analysis' subtree.  Renders AFTER
+`** Provided Translations' so the reader reaches the dictionary
+only on confusion — flow sections (Wylie → Phonetics →
+Interlinear → Translations → Grammar → Sentence Structure →
+Verb Classification → Provided Translations) appear first."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_word) nil)))
+    (let ((out (condition-case nil
+                   (tibetan-analysis-generate-content
+                    "བདག་གིས་ལས་བྱས།")
+                 (error nil))))
+      (when out
+        (should (string-match-p "^\\*\\* Detailed Dictionary$" out))
+        (should (string-match-p "^\\*\\* Provided Translations$" out))
+        ;; Provided Translations comes BEFORE Detailed Dictionary.
+        (let ((dd-pos (string-match
+                       "^\\*\\* Detailed Dictionary$" out))
+              (pt-pos (string-match
+                       "^\\*\\* Provided Translations$" out)))
+          (should (and dd-pos pt-pos))
+          (should (< pt-pos dd-pos)))
+        ;; Detailed Dictionary is the LAST level-2 heading — no
+        ;; other `** ' heading appears after it.
+        (let ((dd-end (and (string-match
+                            "^\\*\\* Detailed Dictionary$" out)
+                           (match-end 0))))
+          (when dd-end
+            (should-not (string-match-p "^\\*\\* [A-Z]"
+                                        (substring out dd-end)))))))))
+
+(ert-deftest tibetan-analysis-priority-order-puts-detailed-dictionary-last ()
+  "`tibetan-analysis--priority-section-order' lists `** Detailed
+Dictionary' as the LAST entry.  Sections not in the priority
+list fall to the end in generation order — so making Detailed
+Dictionary the explicit last entry locks the position even if
+emission order changes."
+  (let ((order tibetan-analysis--priority-section-order))
+    (should (member "** Detailed Dictionary" order))
+    (should (string= "** Detailed Dictionary"
+                     (car (last order))))))
+
 (ert-deftest tibetan-analysis-particle-bullet-bialek-ref-falls-back ()
   "When the bialek-tuple's portfolio field is nil, the bracket
 shows only the Bialek 2022 ref (no trailing `; ').  When the
