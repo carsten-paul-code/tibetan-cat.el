@@ -256,18 +256,30 @@
     :example "auto-content for `§42' has no inner Reference Translations slot"
     :tags (:paragraph :dedup :auto-content :critical))
 
-  (spec "Segment auto-content STILL emits the inner Reference Translations placeholder"
+  (spec "Segment auto-content no longer emits the inner Reference Translations placeholder"
     :given (when (fboundp 'tibetan-analysis-generate-content)
              (setq result (tibetan-analysis-generate-content
                            "བདུད།" "Segment 7" "")))
     :when result
     :then ((should result)
-           ;; Backwards-compat: segment files still get the slot, since they
-           ;; populate it from inline 〔trans:N〕 / Resources files.
-           (should (string-match-p "\\*\\*\\* Reference Translations"
+           ;; §5.21 Commit 6/7 (2026-05-20):  `** Provided Translations'
+           ;; became a USER-CONTENT slot (preserved across reanalyze
+           ;; like `* My Notes' / `* Working Translation').  The nested
+           ;; `*** Reference Translations' auto-fill that used to live
+           ;; inside PT was retired in the same commit — Carsten now
+           ;; pastes reference translations manually, and the new
+           ;; nested-body preservation machinery keeps them verbatim
+           ;; across regenerate.  Paragraph-mode files still get
+           ;; top-level `* Reference Translations' from
+           ;; `tibetan-analysis-create-paragraph-file' (unchanged).
+           (should-not (string-match-p "\\*\\*\\* Reference Translations"
+                                       result))
+           ;; PT itself IS present — as an empty user-content
+           ;; placeholder.
+           (should (string-match-p "^\\*\\* Provided Translations$"
                                    result)))
-    :example "auto-content for `Segment 7' keeps the slot"
-    :tags (:segment :auto-content :backwards-compat))
+    :example "auto-content for `Segment 7' has no inner RT slot post-§5.21"
+    :tags (:segment :auto-content :layout-revision))
 
   (spec "Scaffold creates an Apparatus section between Auto-Analysis and Footnotes"
     :given (let* ((tmpdir (make-temp-file "tibetan-par-app" t))

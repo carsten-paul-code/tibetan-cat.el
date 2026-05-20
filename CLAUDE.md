@@ -3,15 +3,20 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-05-04 (§5.18 added: per-segment layout
-revision for Sanskrit-first reading workflow — Sanskrit grouped above
-Tibetan, parent rename `* Auto-Analysis' → `* Tibetan Analysis', level-2
-`** Claude Translation' → `** Translation' on both sides, `** Divergence'
-→ `** Sanskrit-Tibetan Comparison' always-emitted with `[Faithful — …]'
-marker.  Architecture unchanged from §5.17.  Previous: §5.17 two-
-language-parallel architecture; §5.10–§5.13 dictionary polish, grammar
-unification, thesaurus + target-language pipeline, three-level
-dispatch).
+editing. Last updated 2026-05-20 (§5.21 added: Mid-class Cleanup —
+five layout frictions resolved across 7 commits for the Tibetisch
+IV Milarepa class reading.  `*** CAT Gloss' retired (+248 lines
+deleted), `** Claude Vocabulary' promoted to level-2 under
+Interlinear, `*** Particle Map' + `*** Particles in This Segment'
+merged into one `*** Particles' section with new Bialek 2022
+published-textbook refs in the bullet bracket, `** Detailed
+Dictionary' moved to the bottom of `* Tibetan Analysis', `**
+Provided Translations' becomes user-content preserved across
+reanalyze.  Previous: §5.20 DM-Tibetan nested next to Claude
+Translation; §5.19 Phonetics; §5.18 Sanskrit-first layout
+revision; §5.17 two-language-parallel architecture;
+§5.10–§5.13 dictionary polish, grammar unification, thesaurus +
+target-language pipeline, three-level dispatch).
 
 Companion files worth reading alongside this one:
 - `~/.claude/projects/-Users-cp/memory/working_discipline.md` — the
@@ -224,9 +229,10 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-05-04): **1839 tests, 1838 expected, 0 unexpected
-failures, 1 intentional skip (compound-analysis-callable).**  Carsten
-runs this after every change and expects it to stay green.
+Current state (2026-05-20, post-§5.21):  **1947 tests, 1946
+expected, 0 unexpected failures, 1 intentional skip (compound-
+analysis-callable).**  Carsten runs this after every change and
+expects it to stay green.
 
 When adding a test, always wire it into `test/run-all-tests.el` via
 `condition-case`. Otherwise the suite silently doesn't pick it up and
@@ -1429,6 +1435,208 @@ nam ngo so da ba zhin cha ne/'
 Readable, faithful to Lhasa pronunciation;  `'gro' →  `dro'
 (retroflex r-subscript), `chos' → `chö' (umlaut), `mdang' →
 `dang' (m-prefix silent, homophone with `dang').
+
+### 5.20 DharmaMitra Tibetan next to Claude Translation (done, 2026-05-19)
+
+Layout-only revision:  the top-level `* DharmaMitra
+Translation (Tibetan)' section moved INSIDE `* Tibetan
+Analysis' as a level-2 sibling of `** Translation' (Claude).
+Reader gets both AI translations side-by-side under one parent
+heading instead of one at the top and one at the bottom of the
+file.  Sanskrit-side DM stays at top-level (parallel-mode
+only).
+
+Mechanics:  new `tibetan-dharmamitra-translation--write-
+nested-tibetan-section' writer locates the nested slot and
+overwrites the body atomically;  `--read-dharmamitra-tibetan-
+nested-body' reader pulls the body from the new location;
+`regenerate-auto' reads BEFORE buffer erase, writes BACK after
+save.  Same dual-name preserve pattern as §5.18:  legacy
+top-level body still preserved on first regenerate, then
+migrated to the new nested location.
+
+### 5.21 Per-segment layout revision — Mid-class Cleanup (done, 2026-05-20)
+
+Class-use feedback after §5.18 / §5.19 / §5.20 layout-revisions:
+the per-segment file flows better than before but five concrete
+frictions remained.  Each was small in isolation;  together
+they pushed the file into the shape Carsten wants for the
+Tibetisch IV Milarepa class reading.
+
+#### Target on-disk layout (post-§5.21)
+
+```
+* My Notes                            user-edited (preserved)
+* Working Translation                 user-edited (preserved)
+* Tibetan Text                        raw Tibetan
+* Tibetan Analysis
+  ** Wylie Transliteration
+  ** Phonetics
+  ** Interlinear Gloss
+  ** Claude Vocabulary                ← MOVED from Provided Translations
+  ** Translation                      Claude
+  ** DharmaMitra Translation          peer of Translation
+  ** Grammar
+    *** Particles                     ← MERGED (Particle Map + Particles
+                                        in This Segment) with Bialek 2022
+                                        textbook refs in the bullet bracket
+    *** Claude Grammar                Claude prose, kept
+  ** Sentence Structure
+  ** Verb Classification (Hill 2010)
+  ** Provided Translations            ← USER-CONTENT; preserved across
+                                        regenerate (Carsten pastes
+                                        Roehrich / Lopez here)
+  ** Detailed Dictionary              ← MOVED to bottom (reference, not
+                                        flow)
+* Footnotes                           user-edited (preserved)
+* DharmaMitra Translation (Sanskrit)  parallel-mode only
+* Sanskrit (DharmaMitra)              parallel-mode only
+```
+
+#### Commits (7 commits)
+
+| Commit | Subject                                                | Tests |
+|--------|--------------------------------------------------------|-------|
+| 1/7    | `*** CAT Gloss' + 248-line composer retired            | +2    |
+| 2/7    | `** Claude Vocabulary' promoted to level 2 below Interlinear | +3 |
+| 3/7    | `*** Particle Map' + `*** Particles in This Segment' merged into `*** Particles' | +2 (updated) |
+| 4/7    | Bialek 2022 published-textbook refs added to particle bullets | +4 |
+| 5/7    | `** Detailed Dictionary' moved to bottom of `* Tibetan Analysis' | +2 |
+| 6/7    | `** Provided Translations' becomes user-content (preserved across reanalyze) | +3 |
+| 7/7    | CLAUDE.md §5.21 + final verification                   | docs  |
+
+Each commit is a single logical change per CLAUDE.md §2.4 and
+follows the §5.18 / §5.19 / §5.20 layout-revision mechanics
+(dual-name parsers + new-name writers + migration helpers,
+signed off three times before this batch).
+
+#### Particle bullet shape (Commits 3+4)
+
+```
+*** Particles
+=CASE= (magenta) · ~CONVERB~ (orange) · Ø zero-marked
+
+khyed rang sgor shog =dang=  mdang mkha' 'gro ... =gyi= ... ~nas~
+
+- དང [dang] · COMITATIVE (COM)
+    [Bialek 2022 §1.7 (Comitative); Portfolio §1.9]
+    §1.7.1 Accompaniment — the comitative links two nouns that
+    co-participate in an event or state.
+
+    - byams pa dang snying rjer ldan te
+      "endowed with kindness and compassion"  (LBRG)
+
+- ནས [nas] · CONVERBIAL: ABLATIVE CONVERB
+    [Bialek 2022 §2.11 (V+nas); Portfolio §2.11]
+    §2.4 approx-sequential
+```
+
+Visual skeleton at the top of the merged section, per-particle
+bullets below.  Each bullet's bracket carries BOTH `Bialek 2022
+§X.Y (Title)' (published textbook, canonical numbering, via the
+new `philology/tibetan-bialek-textbook-refs.el' alist) AND
+`Portfolio §X.Y' (Carsten's hand-written zettel, may differ
+from the textbook numbering).  Either side may be absent →
+bracket falls back to whichever is available.  Portfolio sub-
+function snippet inlined below the bullet (existing Pass 6c
+behaviour preserved).
+
+#### Provided Translations preservation (Commit 6)
+
+Renderer emits `** Provided Translations\n\n\n' as a pristine
+empty placeholder.  `tibetan-analysis--read-provided-
+translations-nested-body' reads the existing body BEFORE the
+buffer is erased;  `tibetan-analysis--write-nested-provided-
+translations-body' restores it AFTER save.  Same pattern as
+the §5.20 DharmaMitra Tibetan nested body.
+
+`*** Reference Translations' auto-fill (which used to pull
+external PDF text from Resources) retired — Carsten now pastes
+reference translations manually, and the new preservation
+machinery keeps them verbatim across regenerate.  Paragraph-
+mode files (`par-NNN.org') still get top-level `* Reference
+Translations' from
+`tibetan-analysis-create-paragraph-file' (unchanged).
+
+#### Deferred (per AskUserQuestion during plan mode)
+
+Two specific improvements were explicitly deferred to keep the
+batch layout-only:
+
+- **Zero-marker (Ø) function improvements in the particle
+  skeleton.**  The current `Ø zero-marked' rendering correctly
+  marks unmarked clausal positions but the heuristic for which
+  positions to mark is hand-tuned and occasionally surfaces a
+  spurious `Ø' on transitive subjects.  Layout is correct;
+  body needs work in a follow-up.
+- **Detailed Dictionary per-entry rendering polish.**  The
+  multi-source block from §5.3 is correct but visually dense.
+  Improvement deferred — moving the section to the bottom
+  (Commit 5) is the layout-level win;  per-entry tuning is a
+  separate polish pass.
+
+#### Suite trajectory
+
+1929 (post-§5.20) → 1938 (Commit 1, +2 -1 retire) → 1938
+(Commit 2, +3 -3 retire) → 1938 (Commit 3, +2 updated) →
+1942 (Commit 4, +4) → 1944 (Commit 5, +2) → **1947** (Commit 6,
++3) / 1946 expected / 0 unexpected / 1 skipped.  Plus BDD
+specs 244 / 244 unchanged.
+
+#### Verification recipe
+
+After Commit 7 lands:
+
+1. `cd /Users/cp/tibetan-cat.el && make test` (or the batch
+   command from §4) → 1947 / 1946 expected / 0 unexpected /
+   1 skipped.  `make compile` clean (no new warnings).
+
+2. **Live regenerate.**  On the Tibetisch IV / Milarepa
+   analysis folder:
+   - `M-x tibetan-analysis-batch-reanalyze` with
+     `:re-request-claude nil` (preserve Claude content;  the
+     new layout takes effect, Claude content lands in the new
+     slots).
+   - Spot-check seg-049:
+     - `*** CAT Gloss' heading absent.
+     - `** Claude Vocabulary' heading present, level 2, AFTER
+       `** Interlinear Gloss', BEFORE `** Translation'.
+     - `*** Particles' heading present;  `*** Particle Map'
+       and `*** Particles in This Segment' absent.
+     - Particle bullet for `nas' shows `[Bialek 2022 §2.11
+       (V+nas); Portfolio §2.11]'.
+     - `** Provided Translations' heading present but EMPTY
+       body (or carrying just Carsten's hand-paste, no auto-
+       children).
+     - `** Detailed Dictionary' is the LAST `** ' heading
+       inside `* Tibetan Analysis'.
+
+3. **User-content preservation test.**  Paste a reference
+   translation into `** Provided Translations' on a seg file,
+   re-run `C-c u R' on that segment, confirm paste survives.
+
+4. **Export safety.**  `M-x org-html-export-to-html' on a
+   regen'd seg file succeeds (the §5.18 dangling-term-link
+   strip + the §5.21 layout integration both fire).
+
+5. **Idempotency.**  Re-run `batch-reanalyze' a second time;
+   diff should be empty modulo `:LAST_ANALYZED:' timestamps.
+
+Yogācārabhūmi explicitly deferred per Carsten's "for the
+moment only Milarepa is urgent" comment.
+
+#### Files changed (across all 7 commits)
+
+| Path | Role |
+|------|------|
+| `persist/tibetan-analysis-persist.el` | Renderer, regenerate-auto, scaffold, priority section order, particle skeleton + bullets + grammar section, detailed dictionary placement, provided translations nested read/write |
+| `persist/tibetan-analysis-claude.el` | Claude section-order (Vocabulary → level 2), `--migrate-legacy-claude-headings' Step 4, `--insert-claude-vocabulary-heading' helper, `--merge-claude-vocabulary' retired, `--place-claude-grammar-heading' updated for merged `*** Particles' |
+| `philology/tibetan-bialek-textbook-refs.el` (NEW) | Defconst alist + `tibetan-bialek-textbook-ref' lookup helper |
+| `test/tibetan-analysis-persist-test.el` | +14 ERT specs across the batch |
+| `test/tibetan-analysis-claude-sections-test.el` | Claude tests updated for level-2 Vocabulary + retired merge |
+| `test/tibetan-analysis-claude-prompt-test.el` | CAT-Gloss prompt test retired |
+| `tibetan-cat.el` | `(require 'tibetan-bialek-textbook-refs nil t)' |
+| `CLAUDE.md` | §5.21 added |
 
 ## 6. Open work (prioritised)
 

@@ -195,14 +195,18 @@
     "Particle Map renders Ø inline, not as trailing notes"
 
   (spec "Ø appears inline before transitive verb"
-    :given (when (fboundp 'tibetan-analysis--generate-particle-map)
+    ;; §5.21 Commit 3/7 (2026-05-20):  `--generate-particle-map'
+    ;; was renamed to `--render-particle-skeleton' when the visual
+    ;; map became the top half of the merged `*** Particles'
+    ;; section.  Logic + behaviour unchanged.
+    :given (when (fboundp 'tibetan-analysis--render-particle-skeleton)
              (cl-letf (((symbol-function 'tibetan-to-wylie-fixed)
                         (lambda (s)
                           (cond ((equal s "FOO") "alpha smra beta")
                                 ((equal s "smra") "smra")
                                 (t s)))))
                (setq result
-                     (tibetan-analysis--generate-particle-map
+                     (tibetan-analysis--render-particle-skeleton
                       "FOO"
                       nil
                       '(((lemma . "smra")
@@ -212,18 +216,18 @@
     :then ((should result)
            (should (string-match-p "Ø smra" result))
            (should-not (string-match-p "\\[Ø AGENT expected" result)))
-    :example "Particle Map embeds Ø inline before `smra'"
+    :example "Particle skeleton embeds Ø inline before `smra'"
     :tags (:zero-marker :rendering :critical))
 
   (spec "Ø NOT inserted before intransitive verbs"
-    :given (when (fboundp 'tibetan-analysis--generate-particle-map)
+    :given (when (fboundp 'tibetan-analysis--render-particle-skeleton)
              (cl-letf (((symbol-function 'tibetan-to-wylie-fixed)
                         (lambda (s)
                           (cond ((equal s "BAR") "phyin pa")
                                 ((equal s "phyin") "phyin")
                                 (t s)))))
                (setq result
-                     (tibetan-analysis--generate-particle-map
+                     (tibetan-analysis--render-particle-skeleton
                       "BAR"
                       nil
                       '(((lemma . "phyin")

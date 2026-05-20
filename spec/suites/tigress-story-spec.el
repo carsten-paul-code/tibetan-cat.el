@@ -308,8 +308,12 @@
             (tibetan-analysis-generate-content test-text))
     :then ((tibetan-bdd-assert-contains result "** Grammar"
             "Should have merged ** Grammar section (Pass 6b rename)")
-           (tibetan-bdd-assert-contains result "*** Particles in This Segment"
-            "Should have particles sub-section (was ** Grammatical Markers pre-6b)")
+           ;; §5.21 Commit 3/7 (2026-05-20):  `*** Particle Map' +
+           ;; `*** Particles in This Segment' merged into a single
+           ;; `*** Particles' section with the visual skeleton at
+           ;; the top and per-particle bullets below.
+           (tibetan-bdd-assert-contains result "*** Particles"
+            "Should have merged Particles sub-section (§5.21:  was two siblings pre-merge)")
            (tibetan-bdd-assert-matches "→\\|ERG\\|case" result
             "Should show particle annotations with types and functions"))
     :example "Tigress: analysis output format"
