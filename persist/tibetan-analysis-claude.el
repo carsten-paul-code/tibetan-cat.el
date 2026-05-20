@@ -1968,7 +1968,20 @@ before invoking."
                (line-beginning-position)
              (point-max)))))
     (cond
-     ;; Preferred: just before `*** Particles in This Segment'.
+     ;; Preferred (§5.21 Commit 3/7):  just AFTER `*** Particles'
+     ;; (the merged Particle Map + Particles in This Segment).
+     ;; Reader flow:  particle markup + bullets → prose reading.
+     ((save-excursion
+        (re-search-forward "^\\*\\*\\* Particles$" grammar-end t))
+      (re-search-forward "^\\*\\*\\* Particles$" grammar-end t)
+      (forward-line 1)
+      (if (re-search-forward
+           (tibetan-analysis--claude-stop-re 3) grammar-end t)
+          (beginning-of-line)
+        (goto-char grammar-end))
+      (insert "*** Claude Grammar\n\n\n"))
+     ;; Legacy fallback A:  just before `*** Particles in This
+     ;; Segment' (pre-§5.21 layout).
      ((save-excursion
         (re-search-forward "^\\*\\*\\* Particles in This Segment$"
                            grammar-end t))
@@ -1976,7 +1989,7 @@ before invoking."
                          grammar-end t)
       (beginning-of-line)
       (insert "*** Claude Grammar\n\n\n"))
-     ;; Fallback: after Particle Map body.
+     ;; Legacy fallback B:  after Particle Map body (oldest layout).
      ((save-excursion
         (re-search-forward "^\\*\\*\\* Particle Map$" grammar-end t))
       (re-search-forward "^\\*\\*\\* Particle Map$" grammar-end t)

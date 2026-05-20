@@ -1933,7 +1933,7 @@ only if at least one plain content token remains."
         gloss))))
 
 
-(defun tibetan-analysis--generate-particle-map (tibetan-text _particles verbs)
+(defun tibetan-analysis--render-particle-skeleton (tibetan-text _particles verbs)
   "Generate a visual particle map for TIBETAN-TEXT.
 PARTICLES is the parsed particles list, VERBS is the verb list.
 Returns an org-formatted string with particles highlighted:
@@ -2606,24 +2606,30 @@ vocab-pairs loop — threaded in so the `*** Buddhist Terms'
 subsection can look up per-token 84000Definitions bodies.  When
 nil, the subsection is omitted."
   (insert "** Grammar\n")
-  (insert "Visual particle map, Claude's prose reading of the grammar,\n")
-  (insert "then per-particle Portfolio references.\n\n")
+  (insert "Visual particle map + per-particle reference (Bialek 2022\n")
+  (insert "+ Portfolio).  Claude's prose reading follows.\n\n")
   ;; ------------------------------------------------------------------
-  ;; Sub-section 1: Particle Map (annotated Wylie).
-  ;; Visual summary — =CASE= (magenta) / ~CONVERB~ (orange) overlays.
+  ;; Sub-section 1 (§5.21 Commit 3/7, 2026-05-20):  merged `***
+  ;; Particles' section.  Was previously two siblings — `***
+  ;; Particle Map' (visual `=CASE=' / `~CONVERB~' / `Ø' skeleton)
+  ;; + `*** Particles in This Segment' (per-particle bullets with
+  ;; Portfolio refs).  Merged so the reader gets both views in one
+  ;; place:  one-line scan at the top, detailed bullets below.
   ;; ------------------------------------------------------------------
-  (insert "*** Particle Map\n")
+  (insert "*** Particles\n")
   (insert "=CASE= (magenta) · ~CONVERB~ (orange) · Ø zero-marked\n\n")
-  (let ((annotated-wylie (tibetan-analysis--generate-particle-map
+  (let ((annotated-wylie (tibetan-analysis--render-particle-skeleton
                           tibetan-text particles verbs)))
     (insert annotated-wylie)
     (insert "\n\n"))
+  (tibetan-analysis--render-particle-bullets bialek-analysis claude-particles)
+  (insert "\n")
   ;; ------------------------------------------------------------------
   ;; Sub-section 2: Claude Grammar — prose reading (U4, 2026-04-24).
   ;; Placeholder heading at org level 3 so the Claude write-path can
-  ;; target it.  Sits BETWEEN Particle Map (visual) and Particles in
-  ;; This Segment (detailed) so the reader flow is
-  ;;   map → prose interpretation → per-particle Portfolio refs.
+  ;; target it.  Sits AFTER the merged Particles section (visual +
+  ;; bullets), giving the reader flow:
+  ;;   particle markup → per-particle refs → prose interpretation.
   ;; The body is filled by `tibetan-analysis--ensure-claude-headings'
   ;; + `tibetan-analysis--restore-claude-sections' after the Claude
   ;; response arrives.  When no Claude data yet, the heading sits
@@ -2639,32 +2645,32 @@ nil, the subsection is omitted."
   ;; Sub-section 3 (optional): Buddhist Terms (U3, 2026-04-24;
   ;; Phase 5 of zettel-in-translation-workflow on 2026-04-26 adds
   ;; the zettel-cache read path).
-  ;; One entry per token with an 84000 `<term>'-tagged Steinert hit.
-  ;; Surfaces the 84000Definitions paragraph so students meeting
-  ;; `ཚད་མེད་བཞི་པོ' (Four Immeasurables), `བྱང་ཆུབ་ཀྱི་སེམས'
-  ;; (Bodhicitta), etc. for the first time have the encyclopedia-
-  ;; style explanation inline, not buried in the Detailed Dictionary.
-  ;; Section omitted entirely when no such terms are in the passage.
   ;; ------------------------------------------------------------------
   (let ((terms (and enriched-vocab-pairs
                     (fboundp 'tibetan-analysis--collect-buddhist-terms)
                     (tibetan-analysis--collect-buddhist-terms
                      enriched-vocab-pairs))))
     (when terms
-      (tibetan-analysis--render-buddhist-terms-section terms)))
-  ;; ------------------------------------------------------------------
-  ;; Sub-section 4: Particles in This Segment.
-  ;;
-  ;; Flow per bialek detection:
-  ;;   1. Compute compact header line (particle type + Portfolio ref).
-  ;;   2. Try to match against CLAUDE-PARTICLES on (word wylie, particle
-  ;;      wylie) for a per-occurrence sub-ID + short label.
-  ;;   3. On hit: look up the Portfolio snippet via
-  ;;      `tibetan-interlinear-portfolio-function-snippet', emit the
-  ;;      sub-section title + description inline.
-  ;;   4. On miss: fall back to the translation-hint line.
-  ;; ------------------------------------------------------------------
-  (insert "*** Particles in This Segment\n")
+      (tibetan-analysis--render-buddhist-terms-section terms))))
+
+(defun tibetan-analysis--render-particle-bullets (bialek-analysis claude-particles)
+  "Render per-particle bullets for `*** Particles' (§5.21 Commit 3/7).
+Was the body of the standalone `*** Particles in This Segment'
+section pre-§5.21.  Now part of the merged `*** Particles' that
+also carries the visual skeleton at the top.
+
+For each Bialek-detected particle in BIALEK-ANALYSIS:
+  1. Header line:  particle (with context word when clitic) ·
+     type · `[Bialek 2022 §X.Y; Portfolio §A.B]' reference
+     bracket.  Bialek 2022 ref added Commit 4/7;  this commit
+     emits only the Portfolio ref via the existing `portfolio'
+     field on the bialek tuple.
+  2. Try to match against CLAUDE-PARTICLES on particle wylie for
+     a per-occurrence sub-ID + short label.  On hit, look up the
+     Portfolio snippet via
+     `tibetan-interlinear-portfolio-function-snippet'.
+  3. On miss, fall back to the parser's generic translation
+     hint."
   (if bialek-analysis
       (dolist (a bialek-analysis)
         (let* ((particle (nth 0 a))

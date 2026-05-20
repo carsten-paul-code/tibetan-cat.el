@@ -1350,10 +1350,10 @@ above, which carries the same information more compactly."
 ;; ----------------------------------------------------------------------------
 
 (ert-deftest tibetan-analysis-grammar-section-renders-merged ()
-  "Pass 6b (2026-04-22) merges Particle Map + Particle Overview +
-Grammatical Markers into a single `** Grammar' section with two
-sub-headings: `*** Particle Map' and `*** Particles in This Segment'.
-The old standalone sections must NOT appear."
+  "§5.21 Commit 3/7 (2026-05-20):  Pass 6b's two siblings `***
+Particle Map' + `*** Particles in This Segment' are MERGED into
+a single `*** Particles' section with the visual skeleton at the
+top and per-particle bullets below."
   (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
              (lambda (_word) nil)))
     (let ((out (condition-case nil
@@ -1362,10 +1362,12 @@ The old standalone sections must NOT appear."
       (when out
         ;; Merged section exists at level 2
         (should (string-match-p "^\\*\\* Grammar$" out))
-        ;; With expected sub-headings
-        (should (string-match-p "^\\*\\*\\* Particle Map$" out))
-        (should (string-match-p "^\\*\\*\\* Particles in This Segment$" out))
-        ;; Old standalone sections are retired
+        ;; §5.21:  one merged `*** Particles' section.
+        (should (string-match-p "^\\*\\*\\* Particles$" out))
+        ;; Old siblings retired.
+        (should-not (string-match-p "^\\*\\*\\* Particle Map$" out))
+        (should-not (string-match-p "^\\*\\*\\* Particles in This Segment$" out))
+        ;; Old standalone level-2 sections are retired (Pass 6b).
         (should-not (string-match-p "^\\*\\* Particle Map$" out))
         (should-not (string-match-p "^\\*\\* Particle Overview$" out))
         (should-not (string-match-p "^\\*\\* Grammatical Markers$" out))))))
@@ -1514,9 +1516,12 @@ Bialek-reported word matches Claude's `:word' field cleanly."
                  out))))))
 
 (ert-deftest tibetan-analysis-grammar-falls-back-without-claude-particles ()
-  "Without Claude tuples, the Grammar section renders the compact
-parser-only list — no § sub-IDs, no snippet block.  Regression guard
-that Pass 6c is additive, not destructive of the Pass 6b baseline."
+  "Without Claude tuples, the merged `*** Particles' section
+renders the compact parser-only bullet list — no § sub-IDs, no
+snippet block.  Regression guard that Pass 6c is additive, not
+destructive of the Pass 6b baseline.  §5.21 Commit 3/7:  the
+merged section is `*** Particles' (was `*** Particles in This
+Segment'  sibling of `*** Particle Map')."
   (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
              (lambda (_word) nil)))
     (let* ((tibetan-analysis--claude-particles-for-render nil)
@@ -1526,7 +1531,7 @@ that Pass 6c is additive, not destructive of the Pass 6b baseline."
                   (error nil))))
       (when out
         (should (string-match-p "^\\*\\* Grammar$" out))
-        (should (string-match-p "^\\*\\*\\* Particles in This Segment$" out))
+        (should (string-match-p "^\\*\\*\\* Particles$" out))
         ;; No Claude-driven sub-ID headers.
         (should-not (string-match-p "^  § [0-9]" out))))))
 
@@ -1587,7 +1592,7 @@ sensitive matching (explicit `case-fold-search nil') keep the
 passes from stepping on each other's output.  Particle tokens
 keep their natural lowercase Wylie now that the face remap
 handles visual emphasis."
-  (let ((map (tibetan-analysis--generate-particle-map
+  (let ((map (tibetan-analysis--render-particle-skeleton
               "བསླབས་ནས་སོང་" nil nil)))
     ;; Converb wrapping present (lowercase `nas' inside `~...~').
     (should (string-match-p "~nas~" map))
@@ -1602,7 +1607,7 @@ Uses `མཐུའི' (mthu + genitive 'i in one word) where the `\\b'i\\b'
 regex can match — testing that GEN marks `=gis=' and doesn't leak
 into a converb `~gis~' wrap."
   (let* ((case-fold-search t)    ;; hostile default
-         (map (tibetan-analysis--generate-particle-map
+         (map (tibetan-analysis--render-particle-skeleton
                "མཐུའི་གིས་" nil nil)))
     ;; ERG particle `gis' renders as `=gis=' (lowercase, magenta
     ;; via face remap) and never as `~gis~' (converb orange).
@@ -1710,7 +1715,7 @@ keep their natural lowercase Wylie spelling (Pass 6d, 2026-04-22).
 Reads cleaner than upcased `='I='; magenta/orange face remap in
 `tibetan-analysis-setup-faces' carries the visual emphasis."
   (let ((case-fold-search nil)   ;; be strict about case in this test
-        (map (tibetan-analysis--generate-particle-map
+        (map (tibetan-analysis--render-particle-skeleton
               "མཐུའི་བསླབས་ནས་སོང་" nil nil)))
     ;; Genitive `'i' stays lowercase (apostrophe + i), not upcased.
     (should (string-match-p "='i=" map))
