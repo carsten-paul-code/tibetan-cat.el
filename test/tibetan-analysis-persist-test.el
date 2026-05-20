@@ -2437,5 +2437,34 @@ mis-promoted it)."
         (setq start (match-end 0)))
       (should (= count 1)))))
 
+;; ============================================================================
+;; §5.21 — `*** CAT Gloss' removal (2026-05-20)
+;; ============================================================================
+;;
+;; The rule-based CAT Gloss inside `** Provided Translations' was retired:
+;; Carsten reads Claude / DharmaMitra translations in class, CAT Gloss was
+;; a hand-rolled phrase composer that added 248 lines for no class value.
+
+(ert-deftest tibetan-analysis-generate-content-no-cat-gloss ()
+  "§5.21:  the segment renderer no longer emits `*** CAT Gloss'.
+The rule-based CAT Gloss is retired in favour of the two AI
+translations (`** Translation' / `** DharmaMitra Translation')
+that already render the working surface for class reading."
+  (let ((out (tibetan-analysis-generate-content "བདག་གིས།" 1 nil nil)))
+    (should out)
+    (should-not (string-match-p "^\\*\\*\\* CAT Gloss$" out))))
+
+(ert-deftest tibetan-analysis-cat-translation-builder-retired ()
+  "§5.21:  `tibetan-analysis--build-cat-translation' and its three
+helper functions (`--cat-english-gloss', `--ing-form',
+`--past-form') are retired along with the CAT Gloss section.
+The fboundp probe guards against accidental re-introduction."
+  (should-not (fboundp 'tibetan-analysis--build-cat-translation))
+  (should-not (fboundp 'tibetan-analysis--ing-form))
+  (should-not (fboundp 'tibetan-analysis--past-form))
+  ;; `--cat-english-gloss' was a helper used ONLY by the CAT
+  ;; pipeline.  Retired with the rest.
+  (should-not (fboundp 'tibetan-analysis--cat-english-gloss)))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

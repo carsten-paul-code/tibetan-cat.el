@@ -95,22 +95,12 @@ English-preferred)."
              "བདག་" nil nil source-file))
           (should (equal captured-lang "de")))))))
 
-(ert-deftest tibetan-analysis-cat-english-gloss-respects-target-lang ()
-  "`--cat-english-gloss' (the CAT Gloss helper that extracts a
-short gloss from a bilingual entry) must pick the GERMAN half
-when `tibetan-analysis--target-lang' is `\"de\"', so the CAT
-line reads in German for a document whose header selects German.
-Default (nil / `en') keeps the English-preferred legacy behavior."
-  (let ((gloss "Heimat // homeland"))
-    (let ((tibetan-analysis--target-lang nil))
-      (should (equal "homeland"
-                     (tibetan-analysis--cat-english-gloss gloss))))
-    (let ((tibetan-analysis--target-lang "en"))
-      (should (equal "homeland"
-                     (tibetan-analysis--cat-english-gloss gloss))))
-    (let ((tibetan-analysis--target-lang "de"))
-      (should (equal "Heimat"
-                     (tibetan-analysis--cat-english-gloss gloss))))))
+;; tibetan-analysis-cat-english-gloss-respects-target-lang retired
+;; 2026-05-20 along with the `*** CAT Gloss' section it tested.
+;; The target-lang dispatch is still exercised by neighbouring tests
+;; on `tibetan-analysis-generate-content' (which respects
+;; `tibetan-analysis--target-lang' via the Interlinear / Word List
+;; paths).  See §5.21 retirement notes.
 
 (ert-deftest tibetan-analysis-target-lang-no-header-leaves-nil ()
   "When the source file has no `#+TIBETAN_TARGET_LANG:' header, the

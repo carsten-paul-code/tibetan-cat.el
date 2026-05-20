@@ -1932,254 +1932,6 @@ only if at least one plain content token remains."
           (string-join (cl-subseq tokens 0 (- n tail-count)) " ")
         gloss))))
 
-(defun tibetan-analysis--cat-english-gloss (meaning)
-  "Extract a short gloss from MEANING for the CAT Gloss line.
-
-Name is historical — the helper originally ONLY produced English,
-but Pass 5c (2026-04-22) made it target-language-aware via the
-`tibetan-analysis--target-lang' dynamic variable.  When the
-document's `#+TIBETAN_TARGET_LANG: de' header is active, the
-German side of a bilingual `DE // EN' gloss wins; with `en' (or
-nil — backward-compat default), English wins.
-
-MEANING is the enriched short-meaning produced by the Word/Particle
-List renderer.  Handled shapes:
-
-  1. Hill-morphology two-line form:  stem-ref + newline + gloss.
-     Returns just the gloss.
-  2. Curated bilingual entry with a DE // EN split on `//\\='.
-     Returns the target-language side.
-  3. Stem-reference only (German abbreviation, no English).
-     Returns the stripped stem-ref phrase.
-  4. Plain English gloss with sense separators.  Returns the first
-     sense (up to `;\\=').
-  5. RY-style `verb: do\\=' / `noun: X\\=' — strips the POS prefix.
-
-Returns nil if MEANING is nil, empty, or a placeholder."
-  (when (and meaning
-             (stringp meaning)
-             (not (string-empty-p meaning))
-             (not (string= meaning "[look up]"))
-             (not (string= meaning "[not found]")))
-    (let ((m (string-trim meaning)))
-      ;; Bilingual `DE // EN' split: pick the target-language side.
-      (when (string-match-p "//" m)
-        (let ((parts (split-string m "//" t)))
-          (setq m (string-trim
-                   (cond
-                    ((and (boundp 'tibetan-analysis--target-lang)
-                          (equal tibetan-analysis--target-lang "de"))
-                     (car parts))               ;; German = first half
-                    (t (car (last parts))))))))  ;; English = last half
-      ;; If the result begins with a stem reference followed by ";\n..."
-      ;; (Hill morphology two-line form), drop the stem ref and keep
-      ;; just the lemma meaning.
-      (let ((case-fold-search t))
-        (when (string-match
-               "^\\(?:[Pp]f\\|[Pp]res\\|[Ff]t\\|[Ff]ut\\|[Ii]mp\\)\\.[ \t]+\\(?:of\\|von\\|zu\\)[ \t]+[^;]+;[ \t\n]*\\(.+\\)\\'"
-               m)
-          (setq m (string-trim (match-string 1 m)))))
-      ;; Drop leading "1) "/"1. "/"1: " numbering.
-      (setq m (replace-regexp-in-string "^[0-9]+[.):]\\s-*" "" m))
-      ;; Drop RY-style POS prefixes ("verb: do", "noun: ...", "adj: ...").
-      (setq m (replace-regexp-in-string
-               "^\\(?:verb\\|noun\\|adj\\|adv\\|pron\\|part\\|particle\\):[ \t]*"
-               "" m))
-      ;; Keep only the first sense (before ';').
-      (setq m (string-trim (car (split-string m ";" t))))
-      ;; Squash internal whitespace/newlines.
-      (setq m (replace-regexp-in-string "[ \t\n]+" " " m))
-      ;; Strip any stray Wylie cross-reference tail that leaked in from
-      ;; user wordlists (e.g. "dice kha phung la thong" → "dice").
-      (setq m (tibetan-analysis--strip-wylie-tail m))
-      (if (string-empty-p m) nil m))))
-
-(defun tibetan-analysis--ing-form (verb)
-  "Return a rough English -ing form of VERB.
-Expects a bare infinitive stem like \"do\", \"make\", \"arrive\", \"lose\".
-Handles the most common spelling adjustments (silent -e drop, doubled
-final consonants, -ie → -y).  Intentionally simple — this is only ever
-used for the best-effort CAT Gloss preview, not user-facing translation."
-  (cond
-   ((or (null verb) (string-empty-p verb)) verb)
-   ;; Multi-word verb: "-ing" the first word.
-   ((string-match-p " " verb)
-    (let* ((words (split-string verb " " t))
-           (head (car words))
-           (tail (cdr words)))
-      (string-join (cons (tibetan-analysis--ing-form head) tail) " ")))
-   ;; tie → tying, lie → lying, die → dying
-   ((string-match-p "ie\\'" verb)
-    (concat (substring verb 0 -2) "ying"))
-   ;; silent -e: make → making, give → giving
-   ;; (but keep -ee, -ye, -oe like "see/dye/hoe")
-   ((and (string-match-p "e\\'" verb)
-         (not (string-match-p "[eyo]e\\'" verb)))
-    (concat (substring verb 0 -1) "ing"))
-   (t (concat verb "ing"))))
-
-(defun tibetan-analysis--past-form (verb)
-  "Return a best-effort English past participle of VERB.
-Handles a small set of irregular classical Tibetan-relevant verbs
-(\"do\" → \"done\", \"make\" → \"made\", \"go\" → \"gone\", \"come\" → \"come\",
-\"lose\" → \"lost\", \"see\" → \"seen\", \"say\" → \"said\", \"be\" → \"been\",
-\"arise\" → \"arisen\", \"fall\" → \"fallen\"); otherwise appends -ed with
-the usual spelling adjustments.  Like `tibetan-analysis--ing-form', this
-is only used for the CAT Gloss preview."
-  (let* ((m '(("do" . "done") ("make" . "made") ("go" . "gone")
-              ("come" . "come") ("lose" . "lost") ("see" . "seen")
-              ("say" . "said") ("be" . "been") ("arise" . "arisen")
-              ("fall" . "fallen") ("rise" . "risen") ("give" . "given")
-              ("take" . "taken") ("stake" . "staked") ("wager" . "wagered")
-              ("set" . "set") ("put" . "put") ("become" . "become")
-              ("know" . "known") ("grow" . "grown") ("speak" . "spoken")
-              ("write" . "written") ("hear" . "heard") ("tell" . "told")))
-         (lower (and verb (downcase (string-trim verb))))
-         (hit (and lower (assoc lower m))))
-    (cond
-     ((or (null verb) (string-empty-p verb)) verb)
-     ;; Multi-word verb: past-form the head.
-     ((string-match-p " " verb)
-      (let* ((words (split-string verb " " t))
-             (head (car words))
-             (tail (cdr words)))
-        (string-join (cons (tibetan-analysis--past-form head) tail) " ")))
-     (hit (cdr hit))
-     ;; -e already present: love → loved
-     ((string-match-p "e\\'" verb) (concat verb "d"))
-     ;; -y after consonant: try → tried
-     ((string-match-p "[^aeiou]y\\'" verb)
-      (concat (substring verb 0 -1) "ied"))
-     (t (concat verb "ed")))))
-
-(defun tibetan-analysis--build-cat-translation (vocab-pairs)
-  "Build a CAT-suggested translation from VOCAB-PAIRS.
-VOCAB-PAIRS is a list of (word . meaning) pairs.  MEANING is expected
-to already be a short CAT-ready English gloss (see
-`tibetan-analysis--cat-english-gloss').
-Returns a rough English gloss with particle-aware phrasing.
-Understands genitive (→ \\='of\\='), dative (→ \\='to/for\\='), topic
-(→ \\='as for...\\='), causal converb -pas/-bas (→ \\='because ... /
-by ...-ing\\='), sequential converb -te/-ste/-nas (→ \\='... and
-then\\='), and other common Tibetan grammatical constructions."
-  (let ((parts '())
-        (prev-was-genitive nil))
-    (dolist (pair vocab-pairs)
-      (let* ((word (car pair))
-             (meaning (cdr pair))
-             ;; Strip punctuation for comparison
-             (word-clean (replace-regexp-in-string "[།༎༏༐༑༔/]" "" word)))
-        (cond
-         ;; Skip entries with no useful meaning
-         ((or (null meaning)
-              (string= meaning "[look up]")
-              (string= meaning "[not found]")))
-
-         ;; Genitive particle (bare particle only — standalone ‘gi’,
-         ;; ‘kyi’, ‘gyi’, ‘yi’, or ‘’i’).  Compound words with a
-         ;; genitive suffix baked in (e.g. sleb pa'i, rnam pa'i) are
-         ;; handled further down in the content-word branch so their
-         ;; verb meaning is preserved.
-         ((member word-clean '("གི" "ཀྱི" "གྱི" "ཡི" "འི"))
-          (unless prev-was-genitive
-            (push "of" parts))
-          (setq prev-was-genitive t))
-
-         ;; Topic marker: wrap as "As for X, ..."
-         ((string= word-clean "ནི")
-          (let ((so-far (string-join (nreverse parts) " ")))
-            (setq parts (list (format "As for %s:" so-far)))))
-
-         ;; Dative: "to/for"
-         ((member word-clean '("ལ" "ར" "དུ" "ཏུ" "སུ" "རུ"))
-          (push "to" parts)
-          (setq prev-was-genitive nil))
-
-         ;; Ablative: "from"
-         ((member word-clean '("ནས" "ལས"))
-          (push "from" parts)
-          (setq prev-was-genitive nil))
-
-         ;; Comitative: "and/with"
-         ((string= word-clean "དང")
-          (push "and" parts)
-          (setq prev-was-genitive nil))
-
-         ;; Ergative: "by"
-         ((member word-clean '("གིས" "ཀྱིས" "གྱིས" "ཡིས" "ས"))
-          (push "by" parts)
-          (setq prev-was-genitive nil))
-
-         ;; Regular content word: extract first short meaning.  Uses
-         ;; the CAT English-gloss helper so Hill morphology glosses
-         ;; ("pf. of X;\nmeaning") and German//English entries collapse
-         ;; to a single short English sense.  Then apply converb-suffix
-         ;; tweaks so forms like `byas pas`, `pham nas`, `'thon te`,
-         ;; `sleb pa'i' read naturally in the CAT line.
-         (t
-          (let* ((cleaned
-                  (or (tibetan-analysis--cat-english-gloss meaning)
-                      (when (stringp meaning) (string-trim meaning))))
-                 (trimmed (when cleaned
-                            (string-trim
-                             (car (split-string cleaned "," t))))))
-            ;; If meaning already includes genitive phrasing, drop
-            ;; the redundant "of" we pushed for the preceding particle.
-            (when (and trimmed prev-was-genitive
-                       (string-match-p "^\\(Of\\|of\\)" trimmed))
-              (when (string= (car parts) "of")
-                (pop parts)))
-            (when trimmed
-              ;; Converb / nominalizer+case suffixes embedded in the
-              ;; content word.  Small set, conservative — we only
-              ;; wrap the gloss if it looks like a verb ("to X").
-              (let* ((verb-like
-                      (string-match-p "\\`to[ \t]" trimmed))
-                     (bare (if verb-like
-                               (replace-regexp-in-string "\\`to[ \t]+" ""
-                                                          trimmed)
-                             trimmed))
-                     (formatted
-                      (cond
-                       ((not verb-like) trimmed)
-                       ;; Nominalized genitive (pa'i/ba'i):  "of X-ing".
-                       ;; `ing-form' already appends "ing", so we use
-                       ;; "%s" rather than "%sing" (otherwise we'd get
-                       ;; "of doinging").
-                       ((or (string-suffix-p "པའི" word-clean)
-                            (string-suffix-p "བའི" word-clean))
-                        (format "of %s" (tibetan-analysis--ing-form bare)))
-                       ;; Nominalized terminative (par/bar):  "to X".
-                       ((or (string-suffix-p "པར" word-clean)
-                            (string-suffix-p "བར" word-clean))
-                        (format "to %s" bare))
-                       ;; Causal converb (pas/bas):  "by X-ing".
-                       ((or (string-suffix-p "པས" word-clean)
-                            (string-suffix-p "བས" word-clean))
-                        (format "by %s" (tibetan-analysis--ing-form bare)))
-                       ;; Sequential converbs (te/ste/nas/las):
-                       ;; "having X'd, ..."
-                       ((or (string-suffix-p "སྟེ" word-clean)
-                            (string-suffix-p "ཏེ"  word-clean)
-                            (string-suffix-p "ནས" word-clean)
-                            (string-suffix-p "ལས" word-clean))
-                        (format "having %s, " (tibetan-analysis--past-form bare)))
-                       ;; Simultaneous converbs (cing/zhing/shing):
-                       ;; "while X-ing".
-                       ((or (string-suffix-p "ཅིང" word-clean)
-                            (string-suffix-p "ཞིང" word-clean)
-                            (string-suffix-p "ཤིང" word-clean))
-                        (format "while %s" (tibetan-analysis--ing-form bare)))
-                       ;; Bare nominalizer (pa/ba):  "(the) X-ing".
-                       ((or (string-suffix-p "པ" word-clean)
-                            (string-suffix-p "བ" word-clean))
-                        (tibetan-analysis--ing-form bare))
-                       (t trimmed))))
-                (push formatted parts))))
-          (setq prev-was-genitive nil)))))
-    (if parts
-        (string-join (nreverse parts) " ")
-      "[Generate with C-c t g]")))
 
 (defun tibetan-analysis--generate-particle-map (tibetan-text _particles verbs)
   "Generate a visual particle map for TIBETAN-TEXT.
@@ -3380,9 +3132,12 @@ it with `let' around the call when Claude data is available."
                ;; Populated by the Word/Particle List loop below with
                ;; (word . short-English-gloss) pairs reflecting the same
                ;; Hill-morphology / Resources enrichment that shows up
-               ;; in the Word/Particle List.  Reused by the CAT Gloss
-               ;; section so the CAT line benefits from the enrichment
-               ;; instead of pulling raw RY glosses.
+               ;; in the Word/Particle List.  Also consumed by the
+               ;; Buddhist-terms collector (`--collect-buddhist-terms')
+               ;; that feeds the Detailed Dictionary head's gloss
+               ;; line.  Used to feed the retired `*** CAT Gloss'
+               ;; section too (§5.21 retired CAT Gloss; the
+               ;; enrichment chain stays for the DD path).
                (enriched-vocab-pairs nil)
                ;; `word-clean' → t for every token whose primary
                ;; dictionary hit was Resources or Custom (the hand-
@@ -3921,18 +3676,13 @@ it with `let' around the call when Claude data is available."
             ;; populated asynchronously by
             ;; `tibetan-dharmamitra-translation-fire-tibetan'.  See
             ;; CLAUDE.md §5.20 for the layout rationale.
-            ;; 8b: CAT rule-based gloss.  Prefer the enriched-vocab-pairs
-            ;; built during the Word/Particle List pass — those meanings
-            ;; already incorporate the Hill-morphology and Resources
-            ;; enrichment, so the CAT line stops showing "defeat" for the
-            ;; inflected past stem ཕམ and "to extend to" for སླེབ.  Falls
-            ;; back to the raw vocab-pairs on legacy paths.
-            (insert "*** CAT Gloss\n")
-            (let* ((cat-input (or enriched-vocab-pairs vocab-pairs))
-                   (cat-trans (when cat-input
-                                (tibetan-analysis--build-cat-translation cat-input))))
-              (insert (format "%s\n" (or cat-trans "[Generate with vocabulary analysis]"))))
-            (insert "\n")
+            ;; 8b (retired 2026-05-20, layout-revision §5.21):  the
+            ;; rule-based `*** CAT Gloss' block lived here, populated by
+            ;; `tibetan-analysis--build-cat-translation' (+ 3 helpers,
+            ;; ~248 lines total).  Retired because Carsten reads the AI
+            ;; translations (`** Translation' / `** DharmaMitra
+            ;; Translation') in class;  the rule-based composer never
+            ;; reached the working surface.  See CLAUDE.md §5.21.
             ;; 8c: Claude Vocabulary section.  DharmaMitra-style word-by-word
             ;; analysis from Claude — the second tier in the three-tier
             ;; vocabulary ranking:
