@@ -2644,6 +2644,140 @@ emission order changes."
     (should (string= "** Detailed Dictionary"
                      (car (last order))))))
 
+;; ----------------------------------------------------------------------------
+;; §5.21 Commit 6/7 (2026-05-20):  `** Provided Translations' becomes
+;; a USER-CONTENT section preserved across reanalyze — behaves like
+;; `* My Notes' / `* Working Translation', not like an auto-generated
+;; analysis section.  Carsten pastes published / hand-curated reference
+;; translations (Roehrich, Lopez, etc.) into this slot during class
+;; prep;  the regenerate path must keep his pastes verbatim.
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-analysis-provided-translations-emitted-as-empty-placeholder ()
+  "Renderer emits `** Provided Translations' as a bare empty
+placeholder — no `*** Reference Translations' child, no `*** CAT
+Gloss', no `*** Claude Vocabulary'.  All auto-children are
+retired in §5.21:  CAT Gloss in Commit 1, Claude Vocabulary
+promoted to level 2 in Commit 2, Reference Translations was
+the only remaining auto-child and is removed here so the slot
+becomes pristine for user paste."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_word) nil)))
+    (let ((out (condition-case nil
+                   (tibetan-analysis-generate-content
+                    "བདག་གིས་ལས་བྱས།")
+                 (error nil))))
+      (when out
+        (should (string-match-p "^\\*\\* Provided Translations$" out))
+        ;; No auto-children inside PT.
+        (let* ((pt-start (string-match
+                          "^\\*\\* Provided Translations$" out))
+               (next-l2 (and pt-start
+                             (string-match
+                              "^\\*\\* [A-Z]"
+                              (substring out (1+ pt-start)))))
+               (pt-body (and pt-start
+                             (substring out
+                                        pt-start
+                                        (if next-l2
+                                            (+ 1 pt-start next-l2)
+                                          (length out))))))
+          (when pt-body
+            (should-not (string-match-p
+                         "^\\*\\*\\* Reference Translations$" pt-body))
+            (should-not (string-match-p
+                         "^\\*\\*\\* CAT Gloss$" pt-body))
+            (should-not (string-match-p
+                         "^\\*\\*\\* Claude Vocabulary$" pt-body))))))))
+
+(ert-deftest tibetan-analysis-read-provided-translations-nested-body-helper ()
+  "`tibetan-analysis--read-provided-translations-nested-body'
+exists and returns the trimmed body of `** Provided Translations'
+inside `* Tibetan Analysis' from FILEPATH.  Returns nil on
+absent / empty / placeholder body."
+  (should (fboundp 'tibetan-analysis--read-provided-translations-nested-body))
+  (let ((tmp (make-temp-file "ta-pt-" nil ".org")))
+    (unwind-protect
+        (progn
+          ;; Case 1:  body present — returned trimmed.
+          (with-temp-file tmp
+            (insert "#+TITLE: t\n\n")
+            (insert "* Tibetan Analysis\n")
+            (insert "** Wylie Transliteration\nfoo\n\n")
+            (insert "** Provided Translations\n")
+            (insert "Roehrich 1976: foo bar.\n")
+            (insert "Lopez 2019: alt rendering.\n\n")
+            (insert "** Detailed Dictionary\n[deep ref]\n"))
+          (let ((body (tibetan-analysis--read-provided-translations-nested-body
+                       tmp)))
+            (should (stringp body))
+            (should (string-match-p "Roehrich 1976" body))
+            (should (string-match-p "Lopez 2019" body))
+            ;; Body must NOT contain the next heading.
+            (should-not (string-match-p "Detailed Dictionary" body)))
+          ;; Case 2:  empty body → nil.
+          (with-temp-file tmp
+            (insert "* Tibetan Analysis\n** Provided Translations\n\n"))
+          (should-not
+           (tibetan-analysis--read-provided-translations-nested-body tmp))
+          ;; Case 3:  no `* Tibetan Analysis' → nil (legacy
+          ;; `* Auto-Analysis' fallback handled separately).
+          (with-temp-file tmp
+            (insert "* Tibetan Text\nfoo\n"))
+          (should-not
+           (tibetan-analysis--read-provided-translations-nested-body tmp)))
+      (delete-file tmp))))
+
+(ert-deftest tibetan-analysis-provided-translations-preserved-across-regenerate ()
+  "Hand-pasted content under `** Provided Translations' (inside
+`* Tibetan Analysis') survives `tibetan-analysis-regenerate-auto'
+verbatim.  Same pattern as the §5.20 DharmaMitra-Tibetan-nested-
+body preservation."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_word) nil)))
+    (let* ((tmp (make-temp-file "ta-pt-preserve-" nil ".org"))
+           (paste "Roehrich 1976 (Blue Annals):\nMilarepa replied …\n\nLopez 2019:\nMila answered …\n"))
+      (unwind-protect
+          (progn
+            ;; Build a file in the §5.21 layout with hand-pasted PT body.
+            (with-temp-file tmp
+              (insert "#+TITLE: Segment 1 Analysis\n")
+              (insert "#+TIBETAN_HASH: 0\n")
+              (insert "#+LAST_ANALYZED: 1970-01-01\n\n")
+              (insert "* My Notes\n\n\n")
+              (insert "* Working Translation\n\n\n")
+              (insert "* Tibetan Text\nབདག་གིས་ལས་བྱས།\n\n")
+              (insert "* Tibetan Analysis\n")
+              (insert ":PROPERTIES:\n:GENERATED: t\n:END:\n\n")
+              (insert "** Wylie Transliteration\nbdag gis las byas\n\n")
+              (insert "** Provided Translations\n")
+              (insert paste)
+              (insert "\n")
+              (insert "** Detailed Dictionary\n[ref]\n\n")
+              (insert "* Footnotes\n\n"))
+            ;; Regenerate with new auto-content — the existing PT body
+            ;; must survive verbatim.
+            (let ((auto (tibetan-analysis-generate-content
+                         "བདག་གིས་ལས་བྱས།")))
+              (tibetan-analysis-regenerate-auto
+               tmp "བདག་གིས་ལས་བྱས།" auto))
+            ;; Read the post-regenerate file and assert paste survived.
+            (let ((post (with-temp-buffer
+                          (insert-file-contents tmp)
+                          (buffer-string))))
+              (should (string-match-p "Roehrich 1976" post))
+              (should (string-match-p "Lopez 2019" post))
+              (should (string-match-p "Milarepa replied" post))
+              (should (string-match-p "Mila answered" post))
+              ;; Layout still correct:  PT before DD.
+              (let ((pt-pos (string-match
+                             "^\\*\\* Provided Translations$" post))
+                    (dd-pos (string-match
+                             "^\\*\\* Detailed Dictionary$" post)))
+                (should (and pt-pos dd-pos))
+                (should (< pt-pos dd-pos)))))
+        (delete-file tmp)))))
+
 (ert-deftest tibetan-analysis-particle-bullet-bialek-ref-falls-back ()
   "When the bialek-tuple's portfolio field is nil, the bracket
 shows only the Bialek 2022 ref (no trailing `; ').  When the

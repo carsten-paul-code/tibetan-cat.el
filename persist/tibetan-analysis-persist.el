@@ -986,6 +986,16 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
           (and (file-exists-p filepath)
                (tibetan-analysis--read-dharmamitra-tibetan-nested-body
                 filepath)))
+         ;; §5.21 Commit 6/7 (2026-05-20):  read the NESTED `**
+         ;; Provided Translations' body BEFORE buffer erase so the
+         ;; user's hand-pasted reference translations survive
+         ;; regenerate verbatim.  Renderer emits an empty PT
+         ;; placeholder;  the post-save block below re-injects this
+         ;; body into the freshly-regenerated location.
+         (pt-nested-body
+          (and (file-exists-p filepath)
+               (tibetan-analysis--read-provided-translations-nested-body
+                filepath)))
          (dm-sanskrit
           (cdr (assoc "DharmaMitra Translation (Sanskrit)" user-sections)))
          (sanskrit-dharmamitra
@@ -1167,6 +1177,15 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
                      (not (string-match-p "\\`\\[Translation not available" body)))
             (tibetan-dharmamitra-translation--write-nested-tibetan-section
              filepath body))))
+      ;; §5.21 Commit 6/7 (2026-05-20):  re-inject the preserved
+      ;; `** Provided Translations' body into the freshly-regenerated
+      ;; file.  The renderer emitted an empty placeholder above; if
+      ;; the user had any hand-pasted reference translations in the
+      ;; previous file state, write them back now.
+      (when (and pt-nested-body
+                 (not (string-empty-p pt-nested-body)))
+        (tibetan-analysis--write-nested-provided-translations-body
+         filepath pt-nested-body))
       (message "Re-analyzed segment. User notes preserved and reshaped."))))
 
 (defun tibetan-analysis--read-dharmamitra-tibetan-nested-body (filepath)
@@ -1204,6 +1223,100 @@ by the rewrite pass)."
                           (buffer-substring-no-properties
                            body-start body-end))))
               (and (not (string-empty-p body)) body))))))))
+
+(defun tibetan-analysis--read-provided-translations-nested-body (filepath)
+  "Return the trimmed body of `** Provided Translations' inside
+`* Tibetan Analysis' in FILEPATH, or nil when absent / empty.
+
+§5.21 Commit 6/7 (2026-05-20):  used by
+`tibetan-analysis-regenerate-auto' to preserve the user's hand-
+pasted reference translations (Roehrich, Lopez, published English
+versions, …) across regenerates.  Pattern modelled on the §5.20
+`--read-dharmamitra-tibetan-nested-body' helper.
+
+On legacy files (where the body still carries the now-retired
+auto-children `*** CAT Gloss' / `*** Claude Vocabulary' / `***
+Reference Translations'), this returns the body verbatim
+including those subtrees;  the renderer no longer emits them,
+so on subsequent regenerates they sit harmlessly in the user-
+content slot.  Carsten can manually delete them on first inspect
+if desired (one-shot manual sweep)."
+  (when (and filepath (file-exists-p filepath))
+    (with-temp-buffer
+      (insert-file-contents filepath)
+      (goto-char (point-min))
+      (when (re-search-forward "^\\* Tibetan Analysis$" nil t)
+        (let ((parent-end (save-excursion
+                            (if (re-search-forward "^\\* " nil t)
+                                (line-beginning-position)
+                              (point-max)))))
+          (when (re-search-forward
+                 "^\\*\\* Provided Translations[ \t]*$" parent-end t)
+            (forward-line 1)
+            ;; Skip property drawer if present.
+            (when (looking-at-p "[ \t]*:PROPERTIES:[ \t]*$")
+              (when (re-search-forward "^[ \t]*:END:[ \t]*$" parent-end t)
+                (forward-line 1)))
+            (let* ((body-start (point))
+                   (body-end (save-excursion
+                               (if (re-search-forward
+                                    "^\\*\\{1,2\\}[^*\n]\\|^\\* " parent-end t)
+                                   (line-beginning-position)
+                                 parent-end)))
+                   (body (string-trim
+                          (buffer-substring-no-properties
+                           body-start body-end))))
+              (and (not (string-empty-p body)) body))))))))
+
+(defun tibetan-analysis--write-nested-provided-translations-body
+    (filepath body)
+  "Write BODY into the nested `** Provided Translations' section of
+FILEPATH (inside `* Tibetan Analysis'), replacing whatever empty
+placeholder the renderer emitted.
+
+§5.21 Commit 6/7 (2026-05-20):  called by
+`tibetan-analysis-regenerate-auto' AFTER `save-buffer' to re-
+inject the user's preserved Provided Translations body into the
+freshly-regenerated file at the new nested location.  Mirror of
+the §5.20 DM-Tibetan nested writer in
+`tibetan-dharmamitra-translation.el'.
+
+Pre-conditions:
+  · FILEPATH exists and is in the §5.21 on-disk layout (carries
+    `* Tibetan Analysis' parent + nested `** Provided
+    Translations' placeholder).  No-op when the section is absent.
+  · BODY is a non-empty string (caller skips the call when no
+    preserved body exists)."
+  (when (and filepath (file-exists-p filepath)
+             body (stringp body) (not (string-empty-p body)))
+    (with-current-buffer (find-file-noselect filepath)
+      (save-excursion
+        (goto-char (point-min))
+        (when (re-search-forward "^\\* Tibetan Analysis$" nil t)
+          (let ((parent-end (save-excursion
+                              (if (re-search-forward "^\\* " nil t)
+                                  (line-beginning-position)
+                                (point-max)))))
+            (when (re-search-forward
+                   "^\\*\\* Provided Translations[ \t]*$"
+                   parent-end t)
+              (forward-line 1)
+              ;; Skip a property drawer if present.
+              (when (looking-at-p "[ \t]*:PROPERTIES:[ \t]*$")
+                (when (re-search-forward "^[ \t]*:END:[ \t]*$"
+                                         parent-end t)
+                  (forward-line 1)))
+              (let ((body-start (point))
+                    (body-end (save-excursion
+                                (if (re-search-forward
+                                     "^\\*\\{1,2\\}[^*\n]\\|^\\* "
+                                     parent-end t)
+                                    (line-beginning-position)
+                                  parent-end))))
+                (delete-region body-start body-end)
+                (goto-char body-start)
+                (insert (string-trim-right body) "\n\n"))
+              (save-buffer))))))))
 
 (defun tibetan-analysis--extract-section-body (section-text)
   "Extract just the body of a captured org section.
@@ -3089,7 +3202,17 @@ doesn't apply and the default ranking is used.
 
 Claude-tagged per-particle functions (Pass 6c) are threaded in via
 the dynamic `tibetan-analysis--claude-particles-for-render' — set
-it with `let' around the call when Claude data is available."
+it with `let' around the call when Claude data is available.
+
+§5.21 Commit 6/7 (2026-05-20):  SEG-ID and SOURCE-TEXT are kept
+in the signature for caller compatibility but are no longer
+consumed inside this function.  Their sole previous use was the
+`*** Reference Translations' auto-fill nested under `**
+Provided Translations';  that auto-fill was retired in the
+same commit so PT could become a pristine user-content slot.
+The `(ignore …)' form below silences the byte-compiler's
+unused-arg warning without breaking the public API."
+  (ignore seg-id source-text)
   (let* ((resolved-src (or source-file
                            (and (boundp 'tibetan-current-source-file)
                                 tibetan-current-source-file)
@@ -3718,72 +3841,36 @@ it with `let' around the call when Claude data is available."
             ;; Sentence/Verb structure → Provided Translations →
             ;; Detailed Dictionary (reference, not flow).
             ;; ============================================================
-            (insert "** Provided Translations\n")
-            ;; 8a (retired 2026-05-19):  the inline `*** DharmaMitra'
-            ;; placeholder used to live here, populated by an inline
-            ;; DharmaMitra API call (or a `[Not available — enable
-            ;; DharmaMitra access to generate]' stub).  The block is
-            ;; redundant — the real DharmaMitra Tibetan translation
-            ;; lives at level-2 `** DharmaMitra Translation' directly
-            ;; under `** Translation' (a peer of Claude's translation),
-            ;; populated asynchronously by
-            ;; `tibetan-dharmamitra-translation-fire-tibetan'.  See
-            ;; CLAUDE.md §5.20 for the layout rationale.
-            ;; 8b (retired 2026-05-20, layout-revision §5.21):  the
-            ;; rule-based `*** CAT Gloss' block lived here, populated by
-            ;; `tibetan-analysis--build-cat-translation' (+ 3 helpers,
-            ;; ~248 lines total).  Retired because Carsten reads the AI
-            ;; translations (`** Translation' / `** DharmaMitra
-            ;; Translation') in class;  the rule-based composer never
-            ;; reached the working surface.  See CLAUDE.md §5.21.
-            ;; 8c (relocated 2026-05-20, layout-revision §5.21):
-            ;; `*** Claude Vocabulary' moved OUT of Provided
-            ;; Translations and PROMOTED to level-2 `** Claude
-            ;; Vocabulary' nested directly under `* Tibetan
-            ;; Analysis' (immediately after `** Interlinear Gloss').
-            ;; The emission lives in SECTION 1b above, near
-            ;; Interlinear.  See CLAUDE.md §5.21.
-            ;; U4 (2026-04-24): removed the legacy `*** Claude Grammar'
-            ;; emission that used to live here inside Provided
-            ;; Translations.  The reorder step's `--extract-claude-
-            ;; grammar' helper would then promote it to a level-2
-            ;; `** Claude Grammar' sibling section (Pass 6b layout).
-            ;; Post-U4 Claude Grammar lives at level 3 nested under
-            ;; `** Grammar' between Particle Map and Particles in This
-            ;; Segment; the scaffold is emitted by
-            ;; `--render-grammar-section'.  Keeping this emission here
-            ;; AND the render-grammar-section one produced a duplicate
-            ;; — orphan `** Claude Grammar' at level 2 stuck at end
-            ;; of Auto-Analysis (bug surfaced 2026-04-24 seg-16 regen).
+            ;; §5.21 Commit 6/7 (2026-05-20):  Provided Translations
+            ;; becomes a PURELY USER-CONTENT slot — pristine empty
+            ;; placeholder at the renderer level;  the regenerate-auto
+            ;; path preserves any hand-pasted body across regenerates
+            ;; (same pattern as `* My Notes' / `* Working Translation'
+            ;; / the §5.20 nested DharmaMitra body).  Carsten pastes
+            ;; published / hand-curated reference translations
+            ;; (Roehrich, Lopez, Bialek-style published English
+            ;; renderings) into this slot during class prep;  prior
+            ;; behaviour clobbered them on every reanalyze.
             ;;
-            ;; 8d: Reference translations from external sources.
-            ;; Skipped when SEG-ID is a paragraph identifier (`§N'):
-            ;; paragraph analysis files (par-NNN.org) carry their
-            ;; reference translations in a TOP-LEVEL `* Reference
-            ;; Translations' section populated by
-            ;; `tibetan-analysis-create-paragraph-file' from sibling
-            ;; subsections of the source `** §N' heading.  Emitting
-            ;; the segment-pipeline `*** Reference Translations'
-            ;; placeholder here as well would just clutter the file
-            ;; with a redundant "[Add reference translations here…]"
-            ;; line beneath the already-populated top-level block.
-            (unless (and (stringp seg-id)
-                         (string-prefix-p "§" seg-id))
-              (insert "*** Reference Translations\n")
-              (let* ((seg-num (and seg-id
-                                   (condition-case nil
-                                       (tibetan-analysis--extract-segment-number seg-id)
-                                     (error nil))))
-                     (ref-translations
-                      (tibetan-analysis--find-reference-translations
-                       tibetan-text seg-num source-text)))
-                (if ref-translations
-                    (dolist (ref ref-translations)
-                      (let ((source (car ref))
-                            (text (cdr ref)))
-                        (insert (format "**** %s\n%s\n\n" source text))))
-                  (insert "[Add reference translations here, e.g. from Blue Annals (Roerich), or other published translations]\n")))
-              (insert "\n"))
+            ;; Retired auto-children:
+            ;;  · `*** CAT Gloss'           — Commit 1 of this batch.
+            ;;  · `*** Claude Vocabulary'   — Commit 2 (promoted to
+            ;;                                  level-2 under
+            ;;                                  Interlinear).
+            ;;  · `*** Reference Translations' (auto-populated from
+            ;;     external PDF/text in Resources) — retired here.
+            ;;     For paragraph-mode files (`par-NNN.org') the
+            ;;     reference translations still live at the TOP-LEVEL
+            ;;     `* Reference Translations' section emitted by
+            ;;     `tibetan-analysis-create-paragraph-file' from sibling
+            ;;     subsections of the source `** §N' heading.  For
+            ;;     segment files, Carsten now pastes reference
+            ;;     translations into PT directly — auto-population
+            ;;     was a useful pre-fill but tripped the preserve
+            ;;     story (the user-edited version got overwritten
+            ;;     on every regenerate).  Manual paste survives
+            ;;     verbatim.
+            (insert "** Provided Translations\n\n\n")
 
             ;; ============================================================
             ;; SECTION 8 (§5.21 Commit 5/7, 2026-05-20):  Detailed
