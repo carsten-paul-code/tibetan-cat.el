@@ -1455,7 +1455,7 @@ five-key shape."
 
 (defconst tibetan-analysis--claude-section-order
   '((:translation "Translation"        2)
-    (:vocabulary  "Claude Vocabulary"  3)
+    (:vocabulary  "Claude Vocabulary"  2)
     (:grammar     "Claude Grammar"     3)
     (:particles   "Claude Particles"   3)
     (:context     "Claude Context"     3))
@@ -1672,13 +1672,96 @@ Both branches are no-ops when nothing to migrate."
         ;; file already in the new shape is a no-op.
         (goto-char (point-min))
         (while (re-search-forward "^\\*\\* Claude Translation$" nil t)
-          (replace-match "** Translation" t t))))
-      ;; Step 4 (sentence only): reparent any level-3 Claude subsection
+          (replace-match "** Translation" t t))
+        ;; Step 4 (segment only, §5.21 Commit 2/7, 2026-05-20):
+        ;; promote level-3 `*** Claude Vocabulary' → level-2 `**
+        ;; Claude Vocabulary' (immediately after `** Interlinear
+        ;; Gloss'), preserving body.  Idempotent — skipped when
+        ;; level-2 already exists.
+        (unless (save-excursion
+                  (goto-char (point-min))
+                  (re-search-forward "^\\*\\* Claude Vocabulary$" nil t))
+          (goto-char (point-min))
+          (when (re-search-forward "^\\*\\*\\* Claude Vocabulary$" nil t)
+            (let* ((heading-start (line-beginning-position))
+                   (body-start (progn (forward-line 1) (point)))
+                   (body-end
+                    (save-excursion
+                      (if (re-search-forward
+                           (tibetan-analysis--claude-stop-re 3) nil t)
+                          (line-beginning-position)
+                        (point-max))))
+                   (body (string-trim
+                          (buffer-substring-no-properties
+                           body-start body-end))))
+              (delete-region heading-start body-end)
+              (tibetan-analysis--insert-claude-vocabulary-heading
+               (current-buffer) body))))))
+      ;; Step 5 (sentence only): reparent any level-3 Claude subsection
       ;; that previously landed outside `* Provided Translations' back
       ;; into it.  Repairs files written by the pre-fix regenerate run
       ;; that appended orphaned Claude headings at end-of-buffer.
       (unless (tibetan-analysis--claude-segment-layout-p buffer)
         (tibetan-analysis--reparent-orphaned-claude-subsections buffer))))
+
+(defun tibetan-analysis--insert-claude-vocabulary-heading (buffer body)
+  "Insert `** Claude Vocabulary' with BODY into BUFFER.
+
+Placement rule (§5.21 Commit 2/7, 2026-05-20):  prefer the slot
+right after `** Interlinear Gloss' (the canonical scaffold
+position — word-for-word trot → per-word annotations → fluent
+translations).  Fallbacks in decreasing preference:  after
+`** Wylie Transliteration', after `** Translation' / `** Claude
+Translation', after the first `* ' top-level heading, end of
+buffer.  BODY may be empty — the heading is still created with
+two trailing newlines."
+  (with-current-buffer buffer
+    (save-excursion
+      (let ((insert-pos
+             (cond
+              ;; Preferred:  after `** Interlinear Gloss' (and its
+              ;; body) — matches the scaffold's renderer order.
+              ((save-excursion
+                 (goto-char (point-min))
+                 (when (re-search-forward "^\\*\\* Interlinear Gloss$" nil t)
+                   (forward-line 1)
+                   (if (re-search-forward "^\\*\\* " nil t)
+                       (line-beginning-position)
+                     (point-max)))))
+              ;; Fallback A:  after `** Wylie Transliteration' (and
+              ;; body) — segment-layout always has Wylie even when
+              ;; the Interlinear marker hasn't fired yet.
+              ((save-excursion
+                 (goto-char (point-min))
+                 (when (re-search-forward "^\\*\\* Wylie Transliteration$" nil t)
+                   (forward-line 1)
+                   (if (re-search-forward "^\\*\\* " nil t)
+                       (line-beginning-position)
+                     (point-max)))))
+              ;; Fallback B:  after `** Translation' / `** Claude
+              ;; Translation' (legacy buffers without Wylie).
+              ((save-excursion
+                 (goto-char (point-min))
+                 (when (re-search-forward
+                        "^\\*\\* \\(?:Translation\\|Claude Translation\\)$"
+                        nil t)
+                   (forward-line 1)
+                   (if (re-search-forward "^\\*\\* " nil t)
+                       (line-beginning-position)
+                     (point-max)))))
+              ;; Last resort:  after first `* ' heading or end of buffer.
+              ((save-excursion
+                 (goto-char (point-min))
+                 (when (re-search-forward "^\\* " nil t)
+                   (forward-line 1)
+                   (point))))
+              (t (point-max)))))
+        (goto-char insert-pos)
+        (insert "** Claude Vocabulary\n")
+        (when (and body (not (string-empty-p body)))
+          (insert body)
+          (unless (string-suffix-p "\n" body) (insert "\n")))
+        (insert "\n")))))
 
 
 (defun tibetan-analysis--insert-claude-translation-heading (buffer body)
@@ -1954,61 +2037,15 @@ whichever target heading is still missing.  Idempotent."
                    nil t))
           (tibetan-analysis--insert-claude-translation-heading
            buffer nil))
-        ;; Ensure `*** Claude Vocabulary' exists (before Grammar).
+        ;; Ensure `** Claude Vocabulary' exists at LEVEL 2 (§5.21
+        ;; Commit 2/7, 2026-05-20).  Placement:  after `**
+        ;; Interlinear Gloss' if present;  else after `** Translation'
+        ;; / `** Claude Translation';  else after first `* ' heading.
+        ;; Idempotent — skipped when level-2 heading already exists.
         (unless (save-excursion
                   (goto-char (point-min))
-                  (re-search-forward "^\\*\\*\\* Claude Vocabulary$" nil t))
-          (goto-char (point-min))
-          (cond
-           ;; Prefer: inside `** Provided Translations', after
-           ;; `*** DharmaMitra' if present, else before Grammar.
-           ((re-search-forward "^\\*\\* Provided Translations$" nil t)
-            (let* ((section-end
-                    (save-excursion
-                      (if (re-search-forward
-                           (tibetan-analysis--claude-stop-re 2) nil t)
-                          (line-beginning-position)
-                        (point-max))))
-                   (mitra-end
-                    (save-excursion
-                      (when (re-search-forward
-                             "^\\*\\*\\* DharmaMitra$" section-end t)
-                        (forward-line 1)
-                        (if (re-search-forward
-                             (tibetan-analysis--claude-stop-re 3)
-                             section-end t)
-                            (line-beginning-position)
-                          section-end))))
-                   (grammar-pos
-                    (save-excursion
-                      (when (re-search-forward
-                             "^\\*\\*\\* Claude Grammar$" section-end t)
-                        (line-beginning-position))))
-                   (ref-pos
-                    (save-excursion
-                      (when (re-search-forward
-                             "^\\*\\*\\* Reference Translations$"
-                             section-end t)
-                        (line-beginning-position)))))
-              (goto-char (or mitra-end grammar-pos ref-pos section-end))
-              (insert "*** Claude Vocabulary\n\n\n")))
-           ;; Fallback: after the Translation heading.  Phase 1.3 of
-           ;; layout-revision §5.18 (2026-05-04): the level-2 heading
-           ;; is now `** Translation' (was `** Claude Translation');
-           ;; accept both during the soft-migration window.
-           (t
-            (goto-char (point-min))
-            (if (re-search-forward
-                 "^\\*\\* \\(?:Translation\\|Claude Translation\\)$" nil t)
-                (progn
-                  (forward-line 1)
-                  (if (re-search-forward
-                       (tibetan-analysis--claude-stop-re 2) nil t)
-                      (beginning-of-line)
-                    (goto-char (point-max)))
-                  (insert "*** Claude Vocabulary\n\n\n"))
-              (goto-char (point-max))
-              (insert "\n*** Claude Vocabulary\n\n")))))
+                  (re-search-forward "^\\*\\* Claude Vocabulary$" nil t))
+          (tibetan-analysis--insert-claude-vocabulary-heading buffer nil))
         ;; U4 (2026-04-24): ensure `*** Claude Grammar' exists at level
         ;; 3 under `** Grammar', between Particle Map (visual) and
         ;; Particles in This Segment (detailed), following the reader
@@ -2244,11 +2281,11 @@ reanalyse."
             (when (plist-get sections key)
               (tibetan-analysis--replace-claude-section-body
                buf heading (plist-get sections key) level))))
-        ;; Merge Claude Vocabulary into the Word / Particle List as
-        ;; ◇ tier-2 lines beneath each matching entry.
-        (when (plist-get sections :vocabulary)
-          (tibetan-analysis--merge-claude-vocabulary
-           buf (plist-get sections :vocabulary)))
+        ;; `--merge-claude-vocabulary' call retired 2026-05-20
+        ;; (§5.21 Commit 2/7).  The merge targeted `** Word /
+        ;; Particle List' which §5.10 retired — net no-op since
+        ;; April.  Claude Vocabulary now lives at its own level-2
+        ;; `** Claude Vocabulary' slot right after Interlinear.
         ;; Phase 4 of zettel-in-translation-workflow (2026-04-24):
         ;; cache each Claude Vocabulary line into the matching zettel's
         ;; `* Claude Explanation' section.  Only fills empty sections;
@@ -2310,88 +2347,13 @@ with `---' are skipped."
                 (push (cons key trimmed) result)))))))
     (nreverse result)))
 
-(defun tibetan-analysis--merge-claude-vocabulary (buffer vocab-text)
-  "Merge parsed Claude vocabulary lines into `** Word / Particle List' in BUFFER.
-For each entry in the word list, looks up a matching Claude vocabulary
-line (by Wylie key) and inserts it as a `    ◇ ...' tier-2 line
-right after the existing gloss.  Existing ◇ lines are removed first
-for idempotency.
-
-VOCAB-TEXT is the raw body of the `## Vocabulary' / `*** Claude Vocabulary'
-section.  When nil or empty, this function is a no-op."
-  (when (and vocab-text (stringp vocab-text)
-             (not (string-empty-p (string-trim vocab-text))))
-    (let ((entries (tibetan-analysis--parse-claude-vocabulary vocab-text)))
-      (when entries
-        (with-current-buffer buffer
-          (save-excursion
-            (goto-char (point-min))
-            (when (re-search-forward "^\\*\\* Word / Particle List$" nil t)
-              (forward-line 1)
-              (let ((section-end
-                     (save-excursion
-                       (if (re-search-forward
-                            (tibetan-analysis--claude-stop-re 2) nil t)
-                           (line-beginning-position)
-                         (point-max)))))
-                ;; Pass 1: strip existing ◇ lines (idempotent re-merge).
-                (save-excursion
-                  (while (re-search-forward "^    ◇ .*\n?" section-end t)
-                    (replace-match "")
-                    ;; Recalculate end after deletion.
-                    (setq section-end
-                          (save-excursion
-                            (goto-char (point-min))
-                            (if (and (re-search-forward
-                                      "^\\*\\* Word / Particle List$" nil t)
-                                     (forward-line 1)
-                                     (re-search-forward
-                                      (tibetan-analysis--claude-stop-re 2)
-                                      nil t))
-                                (line-beginning-position)
-                              (point-max))))))
-                ;; Pass 2: insert ◇ lines after matching entries.
-                ;; Each word-list entry starts with " N." and has
-                ;; a Wylie key in [brackets].  We use a marker for
-                ;; section-end so insertions don't invalidate it.
-                (goto-char (point-min))
-                (re-search-forward "^\\*\\* Word / Particle List$" nil t)
-                (forward-line 1)
-                (let ((end-marker
-                       (let ((pos (save-excursion
-                                    (if (re-search-forward
-                                         (tibetan-analysis--claude-stop-re 2)
-                                         nil t)
-                                        (line-beginning-position)
-                                      (point-max)))))
-                         (copy-marker pos))))
-                  (while (re-search-forward
-                          "^[ \t]*[0-9]+\\..*\\[\\([^]]+\\)\\]"
-                          end-marker t)
-                    (let* ((wylie-key (downcase
-                                       (string-trim (match-string 1))))
-                           (match (assoc wylie-key entries)))
-                      (when match
-                        ;; Find the end of this entry (next numbered
-                        ;; line or section boundary).
-                        (let ((entry-end
-                               (save-excursion
-                                 (forward-line 1)
-                                 ;; Skip continuation lines (indented,
-                                 ;; starting with spaces + text).
-                                 (while (and (< (point) end-marker)
-                                             (looking-at "^    "))
-                                   (forward-line 1))
-                                 (point))))
-                          (goto-char entry-end)
-                          (insert (format "    ◇ %s\n" (cdr match)))))))
-                  (set-marker end-marker nil))))))))))
-
-;; Backwards-compatible alias — callers outside this module may still
-;; refer to the old one-section name.  New code should use
-;; `tibetan-analysis--insert-claude-sections'.
+;; Backwards-compatible alias — older callers still refer to the
+;; one-section name `--insert-claude-translation'.  Restored here
+;; (was previously near `--merge-claude-vocabulary' which was
+;; retired in §5.21 Commit 2/7, 2026-05-20).
 (defalias 'tibetan-analysis--insert-claude-translation
   'tibetan-analysis--insert-claude-sections)
+
 (defun tibetan-analysis--read-claude-section-body (filepath heading &optional level)
   "Return the non-placeholder body under `HEADING' in FILEPATH, or nil.
 LEVEL is the org heading level to look for (defaults to 3 for
@@ -2472,8 +2434,17 @@ read / restore helpers in
           ;; Pre-three-section legacy heading.
           (tibetan-analysis--read-claude-section-body
            filepath "Claude" 3)))
-        (vocabulary (tibetan-analysis--read-claude-section-body
-                     filepath "Claude Vocabulary" 3))
+        (vocabulary
+         (or
+          ;; Current layout (§5.21 Commit 2/7, 2026-05-20): level 2,
+          ;; sitting between `** Interlinear Gloss' and `**
+          ;; Translation'.
+          (tibetan-analysis--read-claude-section-body
+           filepath "Claude Vocabulary" 2)
+          ;; Legacy level-3 placement inside Provided Translations
+          ;; (sentence files + pre-§5.21 segment files).
+          (tibetan-analysis--read-claude-section-body
+           filepath "Claude Vocabulary" 3)))
         (grammar
          (or
           ;; Current layout: level 2 (promoted out of Provided
@@ -2556,11 +2527,8 @@ restore path will not create a new Context heading."
             (when (re-search-forward "^\\*\\*\\* Claude Context$" nil t)
               (tibetan-analysis--replace-claude-section-body
                buf "Claude Context" (plist-get sections :context) 3))))
-        ;; Merge Claude Vocabulary into the Word / Particle List as
-        ;; ◇ tier-2 lines (same as the insert path).
-        (when (plist-get sections :vocabulary)
-          (tibetan-analysis--merge-claude-vocabulary
-           buf (plist-get sections :vocabulary)))
+        ;; `--merge-claude-vocabulary' call retired 2026-05-20
+        ;; (§5.21 Commit 2/7) — see insert path for rationale.
         (save-buffer)))))
 
 ;; Backwards-compatible single-section restore — wraps the translation

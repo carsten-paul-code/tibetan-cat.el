@@ -2802,6 +2802,7 @@ nil, the subsection is omitted."
   '("** Wylie Transliteration"
     "** Phonetics"
     "** Interlinear Gloss"
+    "** Claude Vocabulary"
     "** Claude Translation"
     "** Translation"
     "** DharmaMitra Translation"
@@ -3195,8 +3196,24 @@ it with `let' around the call when Claude data is available."
             ;; SECTION 1a: Interlinear Gloss + Particle Overview
             ;; Mark position — content inserted after the Word/Particle List
             ;; loop has built enriched-vocab-pairs and bialek-analysis.
+            ;; Marker has default insertion-type nil → text inserted AT the
+            ;; marker position stays AFTER the marker (Interlinear lands at
+            ;; the saved point, sections below it come AFTER Interlinear).
             ;; ============================================================
             (setq interlinear-marker (copy-marker (point)))
+
+            ;; ============================================================
+            ;; SECTION 1a': Claude Vocabulary (promoted to level 2 in §5.21,
+            ;; 2026-05-20).  Was buried at level 3 inside `** Provided
+            ;; Translations'.  Now sits immediately AFTER Interlinear and
+            ;; BEFORE the AI translations — natural reading order for
+            ;; class:  word-for-word trot → per-word annotations → fluent
+            ;; AI translations → grammar.  Populated asynchronously by
+            ;; `tibetan-analysis--insert-claude-sections' (Claude section-
+            ;; order has the `:vocabulary' entry at level 2 now).
+            ;; ============================================================
+            (insert "** Claude Vocabulary\n")
+            (insert "[Awaiting Claude…]\n\n")
 
             ;; ============================================================
             ;; SECTION 1b: Claude Translation (promoted to level 2)
@@ -3683,15 +3700,13 @@ it with `let' around the call when Claude data is available."
             ;; translations (`** Translation' / `** DharmaMitra
             ;; Translation') in class;  the rule-based composer never
             ;; reached the working surface.  See CLAUDE.md §5.21.
-            ;; 8c: Claude Vocabulary section.  DharmaMitra-style word-by-word
-            ;; analysis from Claude — the second tier in the three-tier
-            ;; vocabulary ranking:
-            ;;   1. Provided vocabulary (★ in the Word / Particle List)
-            ;;   2. Claude (this section — contextual glosses with grammar)
-            ;;   3. Steinert & Co. (URLs in the Word / Particle List)
-            ;; Populated asynchronously by `tibetan-analysis--insert-claude-sections'.
-            (insert "*** Claude Vocabulary\n")
-            (insert "\n")
+            ;; 8c (relocated 2026-05-20, layout-revision §5.21):
+            ;; `*** Claude Vocabulary' moved OUT of Provided
+            ;; Translations and PROMOTED to level-2 `** Claude
+            ;; Vocabulary' nested directly under `* Tibetan
+            ;; Analysis' (immediately after `** Interlinear Gloss').
+            ;; The emission lives in SECTION 1b above, near
+            ;; Interlinear.  See CLAUDE.md §5.21.
             ;; U4 (2026-04-24): removed the legacy `*** Claude Grammar'
             ;; emission that used to live here inside Provided
             ;; Translations.  The reorder step's `--extract-claude-

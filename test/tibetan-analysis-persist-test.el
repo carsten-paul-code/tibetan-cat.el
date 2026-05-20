@@ -2454,6 +2454,44 @@ that already render the working surface for class reading."
     (should out)
     (should-not (string-match-p "^\\*\\*\\* CAT Gloss$" out))))
 
+(ert-deftest tibetan-analysis-claude-vocabulary-at-level-2 ()
+  "§5.21 Commit 2/7:  `** Claude Vocabulary' lives at LEVEL 2,
+sitting between `** Interlinear Gloss' and `** Translation' /
+`** Claude Translation'.  No more level-3 `*** Claude
+Vocabulary' inside `** Provided Translations'."
+  (let ((out (tibetan-analysis-generate-content "བདག་གིས།" 1 nil nil)))
+    (should out)
+    ;; Level-2 heading present.
+    (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
+    ;; Level-3 heading absent.
+    (should-not (string-match-p "^\\*\\*\\* Claude Vocabulary$" out))
+    ;; Position:  AFTER Interlinear, BEFORE Claude Translation.
+    (let ((interlinear-pos (string-match "^\\*\\* Interlinear Gloss$" out))
+          (vocab-pos       (string-match "^\\*\\* Claude Vocabulary$" out))
+          (trans-pos       (string-match
+                            "^\\*\\* \\(?:Claude Translation\\|Translation\\)$"
+                            out)))
+      (should (and interlinear-pos vocab-pos trans-pos))
+      (should (< interlinear-pos vocab-pos))
+      (should (< vocab-pos trans-pos))))) ; §5.21 canonical order
+
+(ert-deftest tibetan-analysis-claude-section-order-vocabulary-at-level-2 ()
+  "§5.21:  `tibetan-analysis--claude-section-order' has
+`(:vocabulary \"Claude Vocabulary\" 2)' — level 2, not the
+legacy level 3.  Locks the section-order entry the Claude
+writer dispatches on."
+  (let ((entry (assq :vocabulary tibetan-analysis--claude-section-order)))
+    (should entry)
+    (should (string= "Claude Vocabulary" (nth 1 entry)))
+    (should (= 2 (nth 2 entry)))))
+
+(ert-deftest tibetan-analysis-merge-claude-vocabulary-retired ()
+  "§5.21:  `tibetan-analysis--merge-claude-vocabulary' is retired.
+The merge targeted `** Word / Particle List' which §5.10 retired
+months ago — net no-op since April.  Regression guard against
+re-introduction."
+  (should-not (fboundp 'tibetan-analysis--merge-claude-vocabulary)))
+
 (ert-deftest tibetan-analysis-cat-translation-builder-retired ()
   "§5.21:  `tibetan-analysis--build-cat-translation' and its three
 helper functions (`--cat-english-gloss', `--ing-form',

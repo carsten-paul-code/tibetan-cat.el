@@ -239,16 +239,10 @@ the gptel pipeline."
 
 (ert-deftest tibetan-claude-sections-ensure-from-legacy ()
   "Legacy `*** Claude' under Provided Translations is migrated to
-`** Claude Translation' at level 2 (after Wylie); `*** Claude
-Vocabulary' lands at level 3 inside Provided Translations.
-
-U4 (2026-04-24): `*** Claude Grammar' now lands at level 3 nested
-under `** Grammar' (between Particle Map and Particles list when
-present, or at end of Grammar when the scaffold is absent).  When
-no `** Grammar' pre-exists, `--ensure-claude-headings' creates a
-minimal one so Claude Grammar is always nested.
-
-No Context in segment layout."
+`** Translation' at level 2 (§5.18 rename) and §5.21 promotes
+Claude Vocabulary to LEVEL 2 too (between Interlinear and
+Translation).  Grammar stays at level 3 nested under `**
+Grammar' (U4).  No Context in segment layout."
   (tibetan-sections-test--with-analysis
       (concat "* Tibetan Text\n"
               "བདག\n\n"
@@ -263,21 +257,16 @@ No Context in segment layout."
       (insert-file-contents analysis-file)
       (tibetan-analysis--ensure-claude-headings (current-buffer))
       (let ((content (buffer-string)))
-        ;; Segment-layout target: Translation at level 2, Vocabulary
-        ;; at level 3 inside Provided Translations, Grammar at level 3
-        ;; inside Grammar (U4).
         (should (string-match-p "^\\*\\* Translation$"    content))
-        (should (string-match-p "^\\*\\*\\* Claude Vocabulary$"  content))
+        ;; §5.21:  Claude Vocabulary lives at LEVEL 2 now.
+        (should (string-match-p "^\\*\\* Claude Vocabulary$"     content))
+        (should-not (string-match-p "^\\*\\*\\* Claude Vocabulary$" content))
         (should (string-match-p "^\\*\\* Grammar$"               content))
         (should (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
-        ;; No stray level-2 Claude Grammar post-U4.
         (should-not (string-match-p "^\\*\\* Claude Grammar$"    content))
-        ;; Legacy bare heading GONE, no level-3 Translation left over.
         (should-not (string-match-p "^\\*\\*\\* Claude$"             content))
         (should-not (string-match-p "^\\*\\*\\* Claude Translation$" content))
-        ;; Context heading is not auto-created in segment layout.
         (should-not (string-match-p "^\\*\\*\\* Claude Context$" content))
-        ;; Original body survives under the promoted Translation.
         (should (string-match-p "Old translation body" content))))))
 
 (ert-deftest tibetan-claude-sections-ensure-idempotent ()
@@ -297,7 +286,9 @@ U4 (2026-04-24): Claude Grammar is now at level 3 nested under
                              while pos
                              count pos)))
           (should (= 1 (count-of "^\\*\\* Translation$")))
-          (should (= 1 (count-of "^\\*\\*\\* Claude Vocabulary$")))
+          ;; §5.21:  Claude Vocabulary at level 2, idempotent.
+          (should (= 1 (count-of "^\\*\\* Claude Vocabulary$")))
+          (should (= 0 (count-of "^\\*\\*\\* Claude Vocabulary$")))
           (should (= 1 (count-of "^\\*\\*\\* Claude Grammar$")))
           ;; No level-2 Grammar duplicates (U4 layout).
           (should (= 0 (count-of "^\\*\\* Claude Grammar$")))
@@ -307,13 +298,12 @@ U4 (2026-04-24): Claude Grammar is now at level 3 nested under
 (ert-deftest tibetan-claude-sections-ensure-grammar-placement ()
   "After migration/insertion the headings sit where the priority
 order requires:
-  - `** Claude Translation' at level 2, after `** Wylie Transliteration'.
-  - `** Grammar' at level 2, after Claude Translation (U4 2026-04-24:
+  - `** Translation' at level 2, after `** Wylie Transliteration'.
+  - `** Claude Vocabulary' at level 2 (§5.21), after Wylie.
+  - `** Grammar' at level 2, after Translation (U4 2026-04-24:
     `--ensure-claude-headings' synthesises this if missing so Claude
     Grammar always has a nested home).
-  - `*** Claude Grammar' at level 3 inside `** Grammar'.
-  - `*** Claude Vocabulary' at level 3 inside `** Provided Translations',
-    before `*** Reference Translations'."
+  - `*** Claude Grammar' at level 3 inside `** Grammar'."
   (tibetan-sections-test--with-analysis
       (concat "* Tibetan Text\n"
               "བདག\n\n"
@@ -330,26 +320,27 @@ order requires:
       (let* ((content (buffer-string))
              (wylie-pos    (string-match "^\\*\\* Wylie Transliteration$" content))
              (trans-pos    (string-match "^\\*\\* Translation$"    content))
+             (vocab-pos    (string-match "^\\*\\* Claude Vocabulary$"  content))
              (gram-pos     (string-match "^\\*\\* Grammar$"               content))
              (cl-gram-pos  (string-match "^\\*\\*\\* Claude Grammar$"     content))
              (provided-pos (string-match "^\\*\\* Provided Translations$" content))
-             (vocab-pos    (string-match "^\\*\\*\\* Claude Vocabulary$"  content))
              (ref-pos      (string-match "^\\*\\*\\* Reference Translations$"
                                          content)))
-        (should (and wylie-pos trans-pos gram-pos cl-gram-pos
-                     provided-pos vocab-pos ref-pos))
-        ;; Translation, Grammar, Provided Translations all at level 2
-        ;; in that order.
-        (should (< wylie-pos trans-pos))
+        (should (and wylie-pos trans-pos vocab-pos gram-pos cl-gram-pos
+                     provided-pos ref-pos))
+        ;; §5.21 canonical order:
+        ;;   Wylie → Claude Vocabulary → Translation → Grammar → Provided.
+        ;; Claude Vocabulary lands right after Wylie (matches the
+        ;; scaffold's render-order — annotations follow word-for-word
+        ;; before the fluent translations).
+        (should (< wylie-pos vocab-pos))
+        (should (< vocab-pos trans-pos))
         (should (< trans-pos gram-pos))
         (should (< gram-pos provided-pos))
         ;; Claude Grammar (level 3) sits inside Grammar (between
         ;; Grammar heading and the next level-2 heading).
         (should (< gram-pos cl-gram-pos))
-        (should (< cl-gram-pos provided-pos))
-        ;; Vocabulary sits inside Provided, before Reference.
-        (should (< provided-pos vocab-pos))
-        (should (< vocab-pos ref-pos))))))
+        (should (< cl-gram-pos provided-pos))))))
 
 (ert-deftest tibetan-claude-sections-ensure-sentence-layout-keeps-level-3 ()
   "Sentence-layout buffers (no `** Wylie Transliteration') keep the
@@ -497,10 +488,10 @@ body is left untouched."
 
 (ert-deftest tibetan-claude-sections-insert-migrates-legacy-heading ()
   "Inserting into a segment file that still has `*** Claude' migrates
-the heading to `** Claude Translation' (level 2), creates
-`*** Claude Grammar' at level 3 under `** Grammar' (U4 2026-04-24 —
-`** Grammar' is synthesised if not already present), and inserts
-`*** Claude Vocabulary' at level 3 inside Provided Translations."
+the heading to `** Translation' (level 2, §5.18 rename), promotes
+`*** Claude Vocabulary' to LEVEL 2 (§5.21 Commit 2/7, 2026-05-20),
+creates `*** Claude Grammar' at level 3 under `** Grammar' (U4
+2026-04-24)."
   (tibetan-sections-test--with-analysis
       (concat "* Tibetan Text\n"
               "བདག\n\n"
@@ -520,7 +511,9 @@ the heading to `** Claude Translation' (level 2), creates
       (insert-file-contents analysis-file)
       (let ((content (buffer-string)))
         (should     (string-match-p "^\\*\\* Translation$"    content))
-        (should     (string-match-p "^\\*\\*\\* Claude Vocabulary$"  content))
+        ;; §5.21:  Claude Vocabulary lives at LEVEL 2, not 3.
+        (should     (string-match-p "^\\*\\* Claude Vocabulary$"     content))
+        (should-not (string-match-p "^\\*\\*\\* Claude Vocabulary$"  content))
         (should     (string-match-p "^\\*\\* Grammar$"               content))
         (should     (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
         ;; Post-U4: Claude Grammar is NOT at level 2 any more.
@@ -755,7 +748,9 @@ level 3 inside Provided Translations — on the analysis file."
       (insert-file-contents analysis-file)
       (let ((content (buffer-string)))
         (should     (string-match-p "^\\*\\* Translation$"    content))
-        (should     (string-match-p "^\\*\\*\\* Claude Vocabulary$"  content))
+        ;; §5.21:  Claude Vocabulary at LEVEL 2.
+        (should     (string-match-p "^\\*\\* Claude Vocabulary$"     content))
+        (should-not (string-match-p "^\\*\\*\\* Claude Vocabulary$"  content))
         (should     (string-match-p "^\\*\\* Grammar$"               content))
         (should     (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
         ;; Post-U4: Claude Grammar is NOT at level 2 any more.
@@ -857,61 +852,17 @@ level 3 inside Provided Translations — on the analysis file."
    "* My Notes\n\n\n"
    "* Footnotes\n\n"))
 
-(ert-deftest tibetan-claude-vocabulary-merge-basic ()
-  "Matching Claude vocabulary lines are inserted as ◇ tier-2 entries."
-  (let* ((scaffold (tibetan-merge-test--word-list-scaffold))
-         (vocab-text (concat "bdag, noun, \"I/self\", first-person pronoun\n"
-                             "byas, verb-past, \"did/made\", main verb\n")))
-    (with-temp-buffer
-      (insert scaffold)
-      (tibetan-analysis--merge-claude-vocabulary (current-buffer) vocab-text)
-      (let ((content (buffer-string)))
-        ;; ◇ lines present after matching entries
-        (should (string-match-p
-                 " 1\\. བདག \\[bdag\\].*\n    ★.*\n    ◇ bdag, noun"
-                 content))
-        (should (string-match-p
-                 " 4\\. བྱས \\[byas\\].*\n    ★.*\n    ◇ byas, verb-past"
-                 content))
-        ;; Non-matching entries have no ◇ line
-        (should-not (string-match-p "gis.*\n.*◇" content))
-        (should-not (string-match-p "las.*\n.*◇ las," content))))))
-
-(ert-deftest tibetan-claude-vocabulary-merge-idempotent ()
-  "Running merge twice produces the same result (no duplicate ◇ lines)."
-  (let* ((scaffold (tibetan-merge-test--word-list-scaffold))
-         (vocab-text "bdag, noun, \"I/self\", first-person pronoun\n"))
-    (with-temp-buffer
-      (insert scaffold)
-      (tibetan-analysis--merge-claude-vocabulary (current-buffer) vocab-text)
-      (let ((after-first (buffer-string)))
-        (tibetan-analysis--merge-claude-vocabulary (current-buffer) vocab-text)
-        (should (equal (buffer-string) after-first))))))
-
-(ert-deftest tibetan-claude-vocabulary-merge-nil-noop ()
-  "Nil or empty vocab-text is a no-op."
-  (let ((scaffold (tibetan-merge-test--word-list-scaffold)))
-    (with-temp-buffer
-      (insert scaffold)
-      (let ((before (buffer-string)))
-        (tibetan-analysis--merge-claude-vocabulary (current-buffer) nil)
-        (should (equal (buffer-string) before))
-        (tibetan-analysis--merge-claude-vocabulary (current-buffer) "")
-        (should (equal (buffer-string) before))))))
-
-(ert-deftest tibetan-claude-vocabulary-merge-replaces-stale ()
-  "Re-merging with different vocab replaces old ◇ lines."
-  (let* ((scaffold (tibetan-merge-test--word-list-scaffold))
-         (vocab-v1 "bdag, noun, \"I/self\", first-person pronoun\n")
-         (vocab-v2 "bdag, pronoun, \"self/I\", updated gloss\n"))
-    (with-temp-buffer
-      (insert scaffold)
-      (tibetan-analysis--merge-claude-vocabulary (current-buffer) vocab-v1)
-      (should (string-match-p "◇ bdag, noun" (buffer-string)))
-      (tibetan-analysis--merge-claude-vocabulary (current-buffer) vocab-v2)
-      (let ((content (buffer-string)))
-        (should (string-match-p "◇ bdag, pronoun" content))
-        (should-not (string-match-p "◇ bdag, noun" content))))))
+;; Retired 2026-05-20 (§5.21 Commit 2/7):  the 4 tibetan-claude-
+;; vocabulary-merge-* tests exercised
+;; `tibetan-analysis--merge-claude-vocabulary' which merged Claude
+;; Vocabulary entries as ◇ tier-2 lines into `** Word / Particle
+;; List'.  §5.10 retired the Word/Particle List section in April —
+;; the merge was a silent no-op for 7 months.  §5.21 promotes
+;; Claude Vocabulary to its own level-2 section between Interlinear
+;; and Translation;  the merge is finally deleted along with the
+;; helper.  Coverage replaced by
+;; `tibetan-analysis-claude-vocabulary-at-level-2' (in
+;; `tibetan-analysis-persist-test.el').
 
 (ert-deftest tibetan-claude-sections-auto-regen-on-particles-arrival ()
   "Pass 6c: when Claude's response includes a `## Particles' block,
