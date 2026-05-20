@@ -27,6 +27,11 @@
 (require 'tibetan-verb-classifier nil t)
 (require 'tibetan-enhanced-display nil t)
 (require 'tibetan-particles-bialek nil t)
+;; §5.21 Commit 4/7 (2026-05-20):  Bialek 2022 published-textbook
+;; section references on the merged `*** Particles' bullets.
+;; Soft-required so a missing table degrades gracefully — bracket
+;; falls back to Portfolio-only when the lookup returns nil.
+(require 'tibetan-bialek-textbook-refs nil t)
 (require 'tibetan-interlinear nil t)
 ;; Round-2 (clauses + NPs + argument structure) — used by the
 ;; `** Clause Structure' section.  Soft-required so a missing module
@@ -2725,12 +2730,31 @@ For each Bialek-detected particle in BIALEK-ANALYSIS:
                              (push p out))))
                        (nreverse out)))))
           ;; Header line.  Two shapes:
-          ;;   · standalone (word == particle):   PARTICLE · TYPE [§X.Y]
-          ;;   · clitic (word contains particle): WORD · PARTICLE · TYPE [§X.Y]
+          ;;   · standalone (word == particle):
+          ;;       PARTICLE · TYPE [Bialek 2022 §X.Y (Title); Portfolio §A.B]
+          ;;   · clitic (word contains particle):
+          ;;       WORD · PARTICLE · TYPE [Bialek 2022 §X.Y; Portfolio §A.B]
           ;; The « » wrapping and the double word-in-word pattern of
           ;; Pass 6b read as noise when the word IS just the particle
           ;; (`ནས [nas] in «ནས [nas]»').  Compact format drops that.
-          (let ((standalone-p (equal word particle)))
+          ;;
+          ;; §5.21 Commit 4/7 (2026-05-20):  bullet bracket now carries
+          ;; BOTH the Bialek 2022 published-textbook reference
+          ;; (canonical numbering, looked up via
+          ;; `tibetan-bialek-textbook-ref' against the particle-type
+          ;; string) AND the existing Portfolio §A.B field from the
+          ;; bialek tuple.  Either side may be absent:
+          ;;   · Both present  → `[Bialek 2022 §X.Y …; Portfolio §A.B]'
+          ;;   · Bialek-only   → `[Bialek 2022 §X.Y …]'
+          ;;   · Portfolio-only→ `[Portfolio §A.B]'
+          ;;   · Both nil      → bracket omitted entirely
+          ;; The Portfolio side is RETAINED because it can carry an
+          ;; in-house function breakdown that Bialek's published
+          ;; chapter numbering doesn't expose.
+          (let ((standalone-p (equal word particle))
+                (bialek-ref
+                 (and (fboundp 'tibetan-bialek-textbook-ref)
+                      (tibetan-bialek-textbook-ref type))))
             (insert (format "- %s"
                             (tibetan-analysis--format-word-with-wylie
                              (if standalone-p particle word))))
@@ -2739,8 +2763,13 @@ For each Bialek-detected particle in BIALEK-ANALYSIS:
                               (tibetan-analysis--format-word-with-wylie
                                particle))))
             (insert (format " · %s" type))
-            (when portfolio
-              (insert (format "  [%s]" portfolio)))
+            (cond
+             ((and bialek-ref portfolio)
+              (insert (format "  [%s; %s]" bialek-ref portfolio)))
+             (bialek-ref
+              (insert (format "  [%s]" bialek-ref)))
+             (portfolio
+              (insert (format "  [%s]" portfolio))))
             (insert "\n"))
           ;; Claude-assigned sub-functions + Portfolio snippets.  A
           ;; single bialek entry may match several Claude tuples when

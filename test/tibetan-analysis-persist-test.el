@@ -2509,5 +2509,119 @@ The fboundp probe guards against accidental re-introduction."
   ;; pipeline.  Retired with the rest.
   (should-not (fboundp 'tibetan-analysis--cat-english-gloss)))
 
+;; ----------------------------------------------------------------------------
+;; §5.21 Commit 4/7 (2026-05-20):  Bialek 2022 published-textbook
+;; references on per-particle bullets.  Bullet bracket now carries
+;; BOTH `Bialek 2022 §X.Y (Title)' (canonical published reference)
+;; AND the existing `Portfolio §A.B' field (Carsten's hand-written
+;; zettel — may differ from textbook numbering).  Either side may
+;; be absent → bracket falls back gracefully to whichever is
+;; available.
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-analysis-bialek-textbook-ref-lookup-exists ()
+  "`tibetan-bialek-textbook-ref' maps a particle-type string (the
+ALL-CAPS `nth 2' of a `tibetan-analyze-grammar-bialek' tuple) to
+the canonical `Bialek 2022 §X.Y (Title)' string.  Helper must
+exist and return a string for at least the core cases."
+  (require 'tibetan-bialek-textbook-refs nil t)
+  (should (fboundp 'tibetan-bialek-textbook-ref))
+  ;; Core case particles — must resolve.
+  (should (stringp (tibetan-bialek-textbook-ref "GENITIVE (GEN)")))
+  (should (stringp (tibetan-bialek-textbook-ref
+                    "ERGATIVE/INSTRUMENTAL (ERG/INST)")))
+  (should (stringp (tibetan-bialek-textbook-ref "DATIVE (DAT)")))
+  (should (stringp (tibetan-bialek-textbook-ref "TERMINATIVE (ALL)")))
+  (should (stringp (tibetan-bialek-textbook-ref "COMITATIVE (COM)")))
+  (should (stringp (tibetan-bialek-textbook-ref "ELATIVE/ABLATIVE (ABL)")))
+  (should (stringp (tibetan-bialek-textbook-ref "TOPIC (TOP)")))
+  ;; Core converbs.
+  (should (stringp (tibetan-bialek-textbook-ref
+                    "CONVERBIAL: ABLATIVE CONVERB")))
+  (should (stringp (tibetan-bialek-textbook-ref
+                    "CONVERBIAL: COORDINATIVE CONVERB")))
+  (should (stringp (tibetan-bialek-textbook-ref
+                    "CONVERBIAL: SIMULTANEOUS CONVERB")))
+  (should (stringp (tibetan-bialek-textbook-ref
+                    "CONVERBIAL: CAUSAL CONVERB")))
+  (should (stringp (tibetan-bialek-textbook-ref
+                    "CONVERBIAL: CONDITIONAL CONVERB")))
+  ;; Unknown type → nil (NOT an error).
+  (should-not (tibetan-bialek-textbook-ref "MADE-UP NONSENSE")))
+
+(ert-deftest tibetan-analysis-bialek-textbook-ref-shape ()
+  "Returned references follow the canonical `Bialek 2022 §X.Y
+(Title)' shape so the renderer can drop them verbatim into the
+bullet bracket.  Section number + parenthetical title both
+present."
+  (require 'tibetan-bialek-textbook-refs nil t)
+  (let ((ref (tibetan-bialek-textbook-ref "GENITIVE (GEN)")))
+    (should (string-match-p "Bialek 2022" ref))
+    (should (string-match-p "§" ref))
+    (should (string-match-p "(Genitive)" ref)))
+  (let ((ref (tibetan-bialek-textbook-ref "COMITATIVE (COM)")))
+    (should (string-match-p "Bialek 2022 §1\\.7" ref))
+    (should (string-match-p "(Comitative)" ref)))
+  (let ((ref (tibetan-bialek-textbook-ref
+              "CONVERBIAL: ABLATIVE CONVERB")))
+    ;; Bialek's gerundial-converb chapter; §2.11 covers V+nas.
+    (should (string-match-p "Bialek 2022 §2\\.11" ref))))
+
+(ert-deftest tibetan-analysis-particle-bullet-carries-bialek-ref ()
+  "The merged `*** Particles' bullet bracket carries BOTH the
+Bialek 2022 published-textbook reference AND the Portfolio
+reference, separated by `; '.  Reader gets both:  canonical
+textbook numbering for cross-referencing the Bialek book, plus
+Carsten's hand-written zettel for the in-house function
+breakdown."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (_word) nil)))
+    (let ((out (condition-case nil
+                   (tibetan-analysis-generate-content
+                    "བདག་གིས་ལས་བྱས།")
+                 (error nil))))
+      (when out
+        ;; The Ergative bullet for `gis' carries both refs in one
+        ;; bracket.
+        (should (string-match-p
+                 "\\[Bialek 2022 §[0-9]+\\.[0-9]+[^]]*; Portfolio §[0-9.]+[^]]*\\]"
+                 out))))))
+
+(ert-deftest tibetan-analysis-particle-bullet-bialek-ref-falls-back ()
+  "When the bialek-tuple's portfolio field is nil, the bracket
+shows only the Bialek 2022 ref (no trailing `; ').  When the
+Bialek 2022 lookup misses (unknown type), the bracket shows
+only the Portfolio ref (no leading `; ').  Either way, the
+bracket itself is well-formed (single matched pair of square
+brackets)."
+  (require 'tibetan-bialek-textbook-refs nil t)
+  ;; Bialek-only side: simulate a tuple with no Portfolio field.
+  (let* ((bialek-analysis
+          (list (list "གིས" "བདག་གིས"
+                      "ERGATIVE/INSTRUMENTAL (ERG/INST)"
+                      "Marks agent" "Translation: by X"
+                      "Bialek: Ergative"
+                      nil)))  ;; portfolio absent
+         (out (with-temp-buffer
+                (tibetan-analysis--render-particle-bullets
+                 bialek-analysis nil)
+                (buffer-string))))
+    (should (string-match-p "\\[Bialek 2022 §[^]]*\\]" out))
+    ;; No trailing semicolon because Portfolio missing.
+    (should-not (string-match-p "Bialek 2022 §[^]]*;[^]]*\\]" out)))
+  ;; Portfolio-only side: simulate an unknown type with a Portfolio
+  ;; field intact.
+  (let* ((bialek-analysis
+          (list (list "??" "??"
+                      "UNKNOWN-TYPE-NOT-IN-BIALEK-2022"
+                      "x" "y" "z"
+                      "Portfolio §9.9 (Made up)")))
+         (out (with-temp-buffer
+                (tibetan-analysis--render-particle-bullets
+                 bialek-analysis nil)
+                (buffer-string))))
+    (should (string-match-p "\\[Portfolio §9\\.9[^]]*\\]" out))
+    (should-not (string-match-p "Bialek 2022" out))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

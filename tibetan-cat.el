@@ -128,6 +128,11 @@
 
 ;; Bialek grammar system (for classical prose)
 (require 'tibetan-particles-bialek)    ; Bialek-based grammar analysis
+;; §5.21 Commit 4/7 (2026-05-20):  Bialek 2022 published-textbook
+;; section refs on per-particle bullets in the merged `***
+;; Particles' section.  Soft-required so the analysis file degrades
+;; to Portfolio-only refs if the table is missing.
+(require 'tibetan-bialek-textbook-refs nil t)
 (require 'tibetan-translation-suggest)  ; Translation suggestion engine
 (require 'tibetan-classroom)            ; Segment analysis (main classroom tool)
 
