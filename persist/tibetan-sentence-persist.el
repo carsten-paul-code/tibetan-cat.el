@@ -738,6 +738,12 @@ are unaffected — only the sent-NNN.org embedded body changes."
     (with-temp-buffer
       (insert (format "#+TITLE: Sentence %d Analysis\n" sent-num))
       (insert "#+STARTUP: showall\n")
+      ;; §5.22 follow-up (2026-05-21):  HTML / PDF / LaTeX export of
+      ;; the sentence file does NOT carry an auto-generated table of
+      ;; contents AND does NOT prefix headings with section numbers.
+      ;; The on-disk org headings already structure the document —
+      ;; class-presentation cleaner without the numbered TOC overlay.
+      (insert "#+OPTIONS: toc:nil num:nil\n")
       (when source-name
         (insert (format "#+SOURCE: [[file:../%s::*Sentence %d][%s / Sentence %d]]\n"
                         source-name sent-num source-name sent-num)))

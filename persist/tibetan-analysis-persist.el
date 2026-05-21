@@ -600,6 +600,9 @@ written filepath."
     (with-temp-file filepath
       (insert (format "#+TITLE: Paragraph %d Analysis\n" num))
       (insert "#+STARTUP: showall\n")
+      ;; §5.22 follow-up (2026-05-21):  no TOC / no section numbering
+      ;; on export — see segment scaffold comment.
+      (insert "#+OPTIONS: toc:nil num:nil\n")
       (when source-file
         (insert (format "#+SOURCE: [[file:../%s::*§%d][%s / §%d]]\n"
                         source-name num source-name num)))
@@ -664,6 +667,13 @@ correctly stripping from the source segment body."
     (with-temp-file filepath
       (insert (format "#+TITLE: Segment %d Analysis\n" seg-num))
       (insert "#+STARTUP: showall\n")
+      ;; §5.22 follow-up (2026-05-21):  HTML / PDF / LaTeX export of
+      ;; the analysis file does NOT carry an auto-generated table of
+      ;; contents AND does NOT prefix headings with section numbers
+      ;; (`1. My Notes' / `1.1. …').  The on-disk org headings already
+      ;; structure the document — class-presentation is cleaner without
+      ;; the numbered TOC overlay.
+      (insert "#+OPTIONS: toc:nil num:nil\n")
       (insert (format "#+SOURCE: [[file:../%s::*Segment %d][%s / Segment %d]]\n"
                       source-name seg-num source-name seg-num))
       (insert (format "#+TIBETAN_HASH: %s\n" hash))

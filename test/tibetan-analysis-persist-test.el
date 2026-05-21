@@ -775,6 +775,34 @@ file only]' fallback template."
   "Test that file creation function exists."
   (should (fboundp 'tibetan-analysis-create-file)))
 
+(ert-deftest tibetan-analysis-create-file-disables-toc-and-section-numbering ()
+  "§5.22 follow-up (2026-05-21):  segment scaffold emits
+`#+OPTIONS: toc:nil num:nil' so HTML / PDF / LaTeX export of
+seg-NNN.org does NOT include an auto-generated table of contents
+AND does NOT prefix headings with section numbers.  Class-
+presentation clean."
+  (skip-unless (fboundp 'tibetan-analysis-create-file))
+  (let* ((dir (make-temp-file "ttest-options-" t))
+         (source-file (expand-file-name "src.org" dir))
+         (buf nil))
+    (unwind-protect
+        (progn
+          (with-temp-file source-file (insert "#+TITLE: Source\n"))
+          (setq buf (find-file-noselect source-file))
+          (with-current-buffer buf
+            (let ((path (tibetan-analysis-create-file
+                         7 "བདུད།" source-file
+                         "** Wylie\nbdud\n" nil)))
+              (with-temp-buffer
+                (insert-file-contents path)
+                (let ((s (buffer-string)))
+                  (should (string-match-p "^#\\+OPTIONS:.*toc:nil" s))
+                  (should (string-match-p "^#\\+OPTIONS:.*num:nil" s)))))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-analysis-create-file-writes-folio-drawer-when-passed ()
   "P6 — when the optional FOLIO argument is passed, the analysis
 file's `* Tibetan Text' heading carries a `:PROPERTIES:' drawer

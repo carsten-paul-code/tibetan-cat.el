@@ -329,6 +329,19 @@ Just some prose, no sentence headings here.
     (should (string-match-p "^#\\+CREATED: " body))
     (should (string-match-p "^#\\+LAST_ANALYZED: " body))))
 
+(ert-deftest tibetan-sentence-scaffold-disables-toc-and-section-numbering ()
+  "§5.22 follow-up (2026-05-21):  sentence scaffold emits
+`#+OPTIONS: toc:nil num:nil' so HTML / PDF / LaTeX export of the
+file does NOT include an auto-generated table of contents AND
+does NOT prefix headings with section numbers (`1. My Notes' /
+`1.1. …').  Class-presentation clean — the on-disk org-mode
+headings already structure the document, and a numbered TOC on
+top of that is visual noise when the file is projected in class."
+  (let ((body (tibetan-sentence--scaffold
+               1 '(1) "བདུད།" "bdud" "/tmp/foo.org")))
+    (should (string-match-p "^#\\+OPTIONS:.*toc:nil" body))
+    (should (string-match-p "^#\\+OPTIONS:.*num:nil" body))))
+
 (ert-deftest tibetan-sentence-scaffold-source-link ()
   "Scaffold encodes the source-file link with sentence anchor."
   (let ((body (tibetan-sentence--scaffold
