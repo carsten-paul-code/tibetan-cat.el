@@ -369,41 +369,90 @@ the corresponding heading has real content, not placeholder text)."
 ;; FILE CREATION (scaffold)
 ;; ============================================================================
 
-(defconst tibetan-sentence--segment-claude-sections
-  '()
-  "Level-2 headings stripped from segment-level auto-analysis output
-before it is embedded in a sentence file's `* Tibetan Analysis'
-block.
+(defvar tibetan-sentence--compressed-for-render nil
+  "Dynamic var:  when non-nil, the sentence renderer compresses the
+embedded segment output to the in-class layout (Vocabulary +
+Translation + Grammar + Provided Translations only;  drops Wylie,
+Phonetics, Interlinear, DharmaMitra Translation, Sentence Structure,
+Verb Classification, Detailed Dictionary).
 
-POST-ALIGNMENT (2026-05-18): this list is EMPTY.  After the
-sentence-file layout was aligned with segment §5.18 layout, the
-segment renderer's `** Translation' and `** Provided Translations'
-subtrees ARE used by the sentence file:  the sentence-level Claude
-translation lands in `** Translation' (level-2 primary slot,
-matching segment), and the sentence-specific Roehrich / Class
-Translation / Claude Context level-3 entries live inside the
-nested `** Provided Translations'.  Stripping them would orphan
-the slots the sentence layer needs to fill.
+§5.22 (2026-05-21):  let-bound by `tibetan-sentence--create-file'
+and `tibetan-sentence--regenerate' based on the source-document
+header `#+TIBETAN_SENTENCE_COMPRESSED: t' (read via
+`tibetan-analysis--read-source-metadata's `:sentence-compressed'
+plist key).  Consumed by
+`tibetan-sentence--segment-claude-sections' below to switch
+between the empty full-pass list and the compressed strip list.
 
-Kept as an explicit empty defconst so the strip path stays clean
-\(rather than being deleted from `--strip-segment-claude-sections',
-which still uses it as the filter input).  If a future divergence
-requires stripping a particular level-2 heading from the embedded
-segment output, list it here.")
+Nil → existing full-layout behaviour (the default;  backwards-
+compatible).  Per-segment seg-NNN.org files are unaffected;  this
+flag only changes the embedded shape inside sent-NNN.org.")
+
+(defconst tibetan-sentence--compressed-strip-list
+  '("** Wylie Transliteration"
+    "** Phonetics"
+    "** Interlinear Gloss"
+    "** DharmaMitra Translation"
+    "** Sentence Structure"
+    "** Verb Classification (Hill 2010)"
+    "** Detailed Dictionary")
+  "Level-2 headings dropped from the segment-renderer output when
+compressed-sentence mode is active (§5.22, 2026-05-21).
+
+What stays (implicitly, by NOT being in this list):
+  · `** Claude Vocabulary' — Claude's per-word annotations.
+  · `** Translation' — Claude's primary translation.
+  · `** Grammar' — Claude's prose + merged `*** Particles'.
+  · `** Provided Translations' — user-content slot with sentence-
+    only L3 extras (Roehrich / Class Translation / Claude Context)
+    injected by `--inject-sentence-l3-entries' after stripping.
+
+Used by `tibetan-sentence--segment-claude-sections' when
+`tibetan-sentence--compressed-for-render' is non-nil.  When the
+flag is nil the accessor returns `'()' instead (full pass-through,
+matching the pre-§5.22 empty-list defconst behaviour).")
+
+(defun tibetan-sentence--segment-claude-sections ()
+  "Return the list of level-2 headings to strip from segment-renderer
+output before embedding it in a sentence file.
+
+§5.22 (2026-05-21):  was a `defconst' (always `'()' post-§5.18
+alignment);  promoted to a defun so the list can vary per-call
+based on `tibetan-sentence--compressed-for-render':
+
+  · Flag nil (default):  return `'()' — full pass-through;
+    the embedded segment output retains all 11 level-2 sections.
+    Identical to the pre-§5.22 no-op behaviour.
+
+  · Flag non-nil:  return
+    `tibetan-sentence--compressed-strip-list' — 7 heavy /
+    reference sections (Wylie / Phonetics / Interlinear /
+    DharmaMitra Translation / Sentence Structure / Verb
+    Classification / Detailed Dictionary) get filtered out.
+
+Consumed by `--strip-segment-claude-sections' below."
+  (if tibetan-sentence--compressed-for-render
+      tibetan-sentence--compressed-strip-list
+    '()))
 
 (defun tibetan-sentence--strip-segment-claude-sections (content)
   "Return CONTENT with segment-level Claude sections removed.
 Uses the segment-module splitter so heading boundaries are
-consistent with the rest of the tool."
+consistent with the rest of the tool.
+
+§5.22 (2026-05-21):  the strip list is now sourced from the defun
+`tibetan-sentence--segment-claude-sections', which consults the
+dynamic var `tibetan-sentence--compressed-for-render'.  See that
+accessor's docstring for the two-mode behaviour."
   (if (not (and content (stringp content) (not (string-empty-p content))))
       ""
     (let* ((split (tibetan-analysis--split-level2-sections content))
            (preamble (car split))
+           (strip (tibetan-sentence--segment-claude-sections))
            (sections
             (cl-remove-if
              (lambda (pair)
-               (member (car pair)
-                       tibetan-sentence--segment-claude-sections))
+               (member (car pair) strip))
              (cdr split))))
       (concat (or preamble "")
               (mapconcat (lambda (p) (concat (car p) "\n" (cdr p)))

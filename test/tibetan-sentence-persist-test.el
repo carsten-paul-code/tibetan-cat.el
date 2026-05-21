@@ -1497,6 +1497,107 @@ heading (`^\\*+ ')."
     (insert "no file here\n")
     (should-error (tibetan-sentence-resegment) :type 'user-error)))
 
+;; ----------------------------------------------------------------------------
+;; §5.22 Commit 2/5 (2026-05-21):  dynamic strip-list extension.
+;; `tibetan-sentence--segment-claude-sections' converts from defconst
+;; to a defun accessor that consults the dynamic var
+;; `tibetan-sentence--compressed-for-render'.  When the var is non-nil
+;; the accessor returns the compressed strip-list (7 heavy/reference
+;; sections to drop);  when nil it returns the empty list (existing
+;; backwards-compatible behaviour).
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-sentence-segment-claude-sections-defaults-to-empty ()
+  "With `tibetan-sentence--compressed-for-render' unset (the default),
+the accessor returns the empty list — identical to the pre-§5.22
+no-op behaviour.  Backwards-compat regression guard."
+  (should (fboundp 'tibetan-sentence--segment-claude-sections))
+  (let ((tibetan-sentence--compressed-for-render nil))
+    (should (equal (tibetan-sentence--segment-claude-sections) '()))))
+
+(ert-deftest tibetan-sentence-segment-claude-sections-compressed-list ()
+  "With `tibetan-sentence--compressed-for-render' bound to a truthy
+value, the accessor returns the compressed strip-list:  7 heavy /
+reference level-2 sections that get dropped from the embedded
+segment output before the sentence file is written.
+
+Sections that STAY in compressed mode (kept implicitly by NOT being
+in the strip list):
+  · ** Claude Vocabulary
+  · ** Translation
+  · ** Grammar
+  · ** Provided Translations
+  · (any other future section a renderer might emit)"
+  (let ((tibetan-sentence--compressed-for-render t))
+    (let ((strip (tibetan-sentence--segment-claude-sections)))
+      (should (listp strip))
+      (should (= 7 (length strip)))
+      (should (member "** Wylie Transliteration" strip))
+      (should (member "** Phonetics" strip))
+      (should (member "** Interlinear Gloss" strip))
+      (should (member "** DharmaMitra Translation" strip))
+      (should (member "** Sentence Structure" strip))
+      (should (member "** Verb Classification (Hill 2010)" strip))
+      (should (member "** Detailed Dictionary" strip))
+      ;; Kept sections must NOT be in the strip list.
+      (should-not (member "** Claude Vocabulary" strip))
+      (should-not (member "** Translation" strip))
+      (should-not (member "** Grammar" strip))
+      (should-not (member "** Provided Translations" strip)))))
+
+(ert-deftest tibetan-sentence-strip-compresses-when-flag-set ()
+  "`tibetan-sentence--strip-segment-claude-sections' filters the heavy
+sections out of segment-renderer content when the compressed flag is
+set, and is a no-op when it's not.
+
+Compressed-mode test:  build a content blob with all 11 level-2
+sections, assert post-filter only 4 remain (Vocab + Translation +
+Grammar + Provided Translations).  Full-mode test:  same input,
+assert all 11 sections still present."
+  (let ((content
+         (concat
+          "** Wylie Transliteration\nfoo\n\n"
+          "** Phonetics\nfu\n\n"
+          "** Interlinear Gloss\nfoo bar\n\n"
+          "** Claude Vocabulary\nfoo = thing\n\n"
+          "** Translation\nThe thing.\n\n"
+          "** DharmaMitra Translation\nThe thing (DM).\n\n"
+          "** Grammar\n*** Particles\n=ERG=\n\n"
+          "** Sentence Structure\n[clauses]\n\n"
+          "** Verb Classification (Hill 2010)\n[verbs]\n\n"
+          "** Provided Translations\n\n\n"
+          "** Detailed Dictionary\n[deep]\n")))
+    ;; Compressed mode — only the 4 kept sections survive.
+    (let* ((tibetan-sentence--compressed-for-render t)
+           (out (tibetan-sentence--strip-segment-claude-sections content)))
+      (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
+      (should (string-match-p "^\\*\\* Translation$" out))
+      (should (string-match-p "^\\*\\* Grammar$" out))
+      (should (string-match-p "^\\*\\* Provided Translations$" out))
+      (should-not (string-match-p "^\\*\\* Wylie Transliteration$" out))
+      (should-not (string-match-p "^\\*\\* Phonetics$" out))
+      (should-not (string-match-p "^\\*\\* Interlinear Gloss$" out))
+      (should-not (string-match-p "^\\*\\* DharmaMitra Translation$" out))
+      (should-not (string-match-p "^\\*\\* Sentence Structure$" out))
+      (should-not (string-match-p
+                   "^\\*\\* Verb Classification (Hill 2010)$" out))
+      (should-not (string-match-p "^\\*\\* Detailed Dictionary$" out)))
+    ;; Full mode (default) — all 11 sections pass through unchanged.
+    (let* ((tibetan-sentence--compressed-for-render nil)
+           (out (tibetan-sentence--strip-segment-claude-sections content)))
+      (should (string-match-p "^\\*\\* Wylie Transliteration$" out))
+      (should (string-match-p "^\\*\\* Phonetics$" out))
+      (should (string-match-p "^\\*\\* Interlinear Gloss$" out))
+      (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
+      (should (string-match-p "^\\*\\* Translation$" out))
+      (should (string-match-p "^\\*\\* DharmaMitra Translation$" out))
+      (should (string-match-p "^\\*\\* Grammar$" out))
+      (should (string-match-p "^\\*\\* Sentence Structure$" out))
+      (should (string-match-p
+               "^\\*\\* Verb Classification (Hill 2010)$" out))
+      (should (string-match-p "^\\*\\* Provided Translations$" out))
+      (should (string-match-p "^\\*\\* Detailed Dictionary$" out)))))
+
 ;; ============================================================================
 ;; HELPER FUNCTION
 ;; ============================================================================
