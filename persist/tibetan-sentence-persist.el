@@ -705,12 +705,36 @@ Fallback:  when the segment renderer is unavailable
 content), the analysis parent gets a minimal `* Wylie' block
 under `* Tibetan Analysis' instead of the rich segment-renderer
 body.  The outer shape (My Notes / Working Translation top,
-Footnotes bottom) is preserved either way."
+Footnotes bottom) is preserved either way.
+
+§5.22 (2026-05-21):  reads SOURCE-FILE's
+`#+TIBETAN_SENTENCE_COMPRESSED:' header via
+`tibetan-analysis--read-source-metadata' and let-binds
+`tibetan-sentence--compressed-for-render' for the body of the
+call.  When the header is truthy, the embedded segment-renderer
+output is stripped to the in-class layout (Vocabulary +
+Translation + Grammar + Provided Translations only).  When the
+header is absent or nil, the full layout is preserved
+\(backwards-compatible default).  Per-segment seg-NNN.org files
+are unaffected — only the sent-NNN.org embedded body changes."
   (let* ((source-name (and source-file
                            (file-name-nondirectory source-file)))
          (date (format-time-string "%Y-%m-%d"))
          (hash (tibetan-sentence--compute-hash tibetan-text))
-         (segs-csv (mapconcat #'number-to-string seg-nums ", ")))
+         (segs-csv (mapconcat #'number-to-string seg-nums ", "))
+         ;; §5.22:  per-source compressed-sentence flag.  Read once
+         ;; here and bind dynamically so the downstream call chain
+         ;; (`--render-auto-analysis' → `--strip-segment-claude-
+         ;; sections' → `--segment-claude-sections') consults the
+         ;; right strip list.
+         (meta (and source-file
+                    (fboundp 'tibetan-analysis--read-source-metadata)
+                    (condition-case nil
+                        (tibetan-analysis--read-source-metadata source-file)
+                      (error nil))))
+         (tibetan-sentence--compressed-for-render
+          (or (plist-get meta :sentence-compressed)
+              tibetan-sentence--compressed-for-render)))
     (with-temp-buffer
       (insert (format "#+TITLE: Sentence %d Analysis\n" sent-num))
       (insert "#+STARTUP: showall\n")

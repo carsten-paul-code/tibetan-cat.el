@@ -1545,6 +1545,133 @@ in the strip list):
       (should-not (member "** Grammar" strip))
       (should-not (member "** Provided Translations" strip)))))
 
+(ert-deftest tibetan-sentence-create-file-honours-compressed-header ()
+  "End-to-end:  source file carries `#+TIBETAN_SENTENCE_COMPRESSED: t';
+`tibetan-sentence--create-file' writes a sent-NNN.org whose
+`* Tibetan Analysis' body has ONLY the 4 kept level-2 sections
+plus the 3 sentence-only L3 extras under `** Provided
+Translations'.
+
+Stubs `tibetan-analysis-generate-content' to return a fixed
+11-section blob so the test doesn't depend on the renderer's
+real output (which varies with vocab DB state)."
+  (let* ((dir (make-temp-file "sent-compressed-" t))
+         (source-file (expand-file-name "source.org" dir))
+         (analysis-folder (expand-file-name "analysis" dir)))
+    (unwind-protect
+        (progn
+          (make-directory analysis-folder)
+          (with-temp-file source-file
+            (insert "#+TITLE: T\n#+TIBETAN_SENTENCE_COMPRESSED: t\n"))
+          (cl-letf
+              (((symbol-function 'tibetan-analysis-generate-content)
+                (lambda (&rest _args)
+                  (concat
+                   "** Wylie Transliteration\nfoo\n\n"
+                   "** Phonetics\nfu\n\n"
+                   "** Interlinear Gloss\nfoo bar\n\n"
+                   "** Claude Vocabulary\nfoo = thing\n\n"
+                   "** Translation\nThe thing.\n\n"
+                   "** DharmaMitra Translation\nThe thing (DM).\n\n"
+                   "** Grammar\n*** Particles\n=ERG=\n\n"
+                   "** Sentence Structure\n[clauses]\n\n"
+                   "** Verb Classification (Hill 2010)\n[verbs]\n\n"
+                   "** Provided Translations\n\n\n"
+                   "** Detailed Dictionary\n[deep]\n")))
+               ((symbol-function 'tibetan-analysis--filter-to-tibetan-lines)
+                (lambda (text) text))
+               ((symbol-function 'tibetan-sentence--filepath)
+                (lambda (n)
+                  (expand-file-name
+                   (format "sent-%03d.org" n) analysis-folder))))
+            (tibetan-sentence--create-file 1 '(1) "བདུད།" source-file))
+          (let ((out (with-temp-buffer
+                       (insert-file-contents
+                        (expand-file-name "sent-001.org" analysis-folder))
+                       (buffer-string))))
+            ;; Kept sections present.
+            (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
+            (should (string-match-p "^\\*\\* Translation$" out))
+            (should (string-match-p "^\\*\\* Grammar$" out))
+            (should (string-match-p "^\\*\\* Provided Translations$" out))
+            ;; Dropped sections absent.
+            (should-not (string-match-p "^\\*\\* Wylie Transliteration$" out))
+            (should-not (string-match-p "^\\*\\* Phonetics$" out))
+            (should-not (string-match-p "^\\*\\* Interlinear Gloss$" out))
+            (should-not (string-match-p "^\\*\\* DharmaMitra Translation$"
+                                        out))
+            (should-not (string-match-p "^\\*\\* Sentence Structure$" out))
+            (should-not (string-match-p
+                         "^\\*\\* Verb Classification (Hill 2010)$" out))
+            (should-not (string-match-p "^\\*\\* Detailed Dictionary$" out))
+            ;; Sentence-only L3 extras still injected under PT.
+            (should (string-match-p "^\\*\\*\\* Roehrich$" out))
+            (should (string-match-p "^\\*\\*\\* Class Translation$" out))
+            (should (string-match-p "^\\*\\*\\* Claude Context$" out))
+            ;; Top-level user + footer sections survive.
+            (should (string-match-p "^\\* My Notes$" out))
+            (should (string-match-p "^\\* Working Translation$" out))
+            (should (string-match-p "^\\* Tibetan Text$" out))
+            (should (string-match-p "^\\* Tibetan Analysis$" out))
+            (should (string-match-p "^\\* Footnotes$" out))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-create-file-leaves-full-layout-without-header ()
+  "Backwards-compat:  source file WITHOUT the
+`#+TIBETAN_SENTENCE_COMPRESSED:' header produces the full
+sent-NNN.org layout — all 11 level-2 sections survive in
+`* Tibetan Analysis'.  Regression guard against accidental
+flag drift."
+  (let* ((dir (make-temp-file "sent-full-" t))
+         (source-file (expand-file-name "source.org" dir))
+         (analysis-folder (expand-file-name "analysis" dir)))
+    (unwind-protect
+        (progn
+          (make-directory analysis-folder)
+          ;; No `#+TIBETAN_SENTENCE_COMPRESSED:' header at all.
+          (with-temp-file source-file
+            (insert "#+TITLE: T\n"))
+          (cl-letf
+              (((symbol-function 'tibetan-analysis-generate-content)
+                (lambda (&rest _args)
+                  (concat
+                   "** Wylie Transliteration\nfoo\n\n"
+                   "** Phonetics\nfu\n\n"
+                   "** Interlinear Gloss\nfoo bar\n\n"
+                   "** Claude Vocabulary\nfoo = thing\n\n"
+                   "** Translation\nThe thing.\n\n"
+                   "** DharmaMitra Translation\nThe thing (DM).\n\n"
+                   "** Grammar\n*** Particles\n=ERG=\n\n"
+                   "** Sentence Structure\n[clauses]\n\n"
+                   "** Verb Classification (Hill 2010)\n[verbs]\n\n"
+                   "** Provided Translations\n\n\n"
+                   "** Detailed Dictionary\n[deep]\n")))
+               ((symbol-function 'tibetan-analysis--filter-to-tibetan-lines)
+                (lambda (text) text))
+               ((symbol-function 'tibetan-sentence--filepath)
+                (lambda (n)
+                  (expand-file-name
+                   (format "sent-%03d.org" n) analysis-folder))))
+            (tibetan-sentence--create-file 2 '(2) "བདུད།" source-file))
+          (let ((out (with-temp-buffer
+                       (insert-file-contents
+                        (expand-file-name "sent-002.org" analysis-folder))
+                       (buffer-string))))
+            ;; All 11 segment-renderer level-2 sections survive.
+            (should (string-match-p "^\\*\\* Wylie Transliteration$" out))
+            (should (string-match-p "^\\*\\* Phonetics$" out))
+            (should (string-match-p "^\\*\\* Interlinear Gloss$" out))
+            (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
+            (should (string-match-p "^\\*\\* Translation$" out))
+            (should (string-match-p "^\\*\\* DharmaMitra Translation$" out))
+            (should (string-match-p "^\\*\\* Grammar$" out))
+            (should (string-match-p "^\\*\\* Sentence Structure$" out))
+            (should (string-match-p
+                     "^\\*\\* Verb Classification (Hill 2010)$" out))
+            (should (string-match-p "^\\*\\* Provided Translations$" out))
+            (should (string-match-p "^\\*\\* Detailed Dictionary$" out))))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-sentence-strip-compresses-when-flag-set ()
   "`tibetan-sentence--strip-segment-claude-sections' filters the heavy
 sections out of segment-renderer content when the compressed flag is
