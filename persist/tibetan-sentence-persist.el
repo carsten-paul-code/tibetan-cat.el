@@ -1822,5 +1822,110 @@ Proceed? "
       (tibetan-sentence-create-all)
       (message "Resegment complete.  Review the source file and the new sent-*.org files; old work is in analysis/archive/.")))))
 
+;; ============================================================================
+;; §5.22 (2026-05-21):  Per-source compressed-sentence toggle.
+;;
+;; `tibetan-sentence-toggle-source-compressed' flips the
+;; `#+TIBETAN_SENTENCE_COMPRESSED:' header on the current source
+;; document.  When set to `t', subsequent sent-NNN.org files for
+;; that source render in the in-class compressed layout (Vocabulary
+;; + Translation + Grammar + Provided Translations only;  drops
+;; Wylie / Phonetics / Interlinear / DharmaMitra / Sentence
+;; Structure / Verb Classification / Detailed Dictionary).
+;;
+;; Mirrors the §5.14 `tibetan-cat-toggle-source-mode-parallel'
+;; pattern (header-toggle + source-file resolution from analysis
+;; buffer).
+;; ============================================================================
+
+(defun tibetan-sentence--source-file-for-toggle (filepath)
+  "Resolve the source-document path from FILEPATH.
+
+When FILEPATH is an analysis file (carries `#+SOURCE:' linking
+back to the source), follow that link;  otherwise treat FILEPATH
+as the source directly.  Used by
+`tibetan-sentence-toggle-source-compressed' so the user can run
+the toggle from EITHER the source buffer OR an open analysis
+buffer."
+  (or (and filepath
+           (fboundp 'tibetan-analysis--source-file-from-analysis)
+           (tibetan-analysis--source-file-from-analysis filepath))
+      filepath))
+
+;;;###autoload
+(defun tibetan-sentence-toggle-source-compressed (&optional source-file)
+  "Toggle `#+TIBETAN_SENTENCE_COMPRESSED: t' on SOURCE-FILE.
+
+When the header is absent OR present with a falsy value
+\(`nil' / `no' / `false' / empty), add `#+TIBETAN_SENTENCE_
+COMPRESSED: t'.  When the header is present with a truthy value,
+remove it.  Idempotent — running the toggle twice returns the
+file to its original state.
+
+Source-file resolution:
+  1. Argument SOURCE-FILE if given.
+  2. If the current buffer is an analysis file, follow its
+     `#+SOURCE:' link to the source document.
+  3. Otherwise, treat the current buffer's file as the source.
+  4. If neither resolves, prompt for a path.
+
+Subsequent `sent-NNN.org' files created for or regenerated from
+this source will pick up the new value automatically via
+`tibetan-analysis--read-source-metadata'.  Per-segment seg-NNN.org
+files are unaffected.
+
+Bound to `C-c u z C' (Compressed) under the existing
+`C-c u z' source-document prefix.  Sibling of `C-c u z L'
+\(target language) and `C-c u z P' (parallel-Sanskrit)."
+  (interactive)
+  (let* ((source-file
+          (or source-file
+              (tibetan-sentence--source-file-for-toggle
+               (buffer-file-name))
+              (read-file-name "Source file: " nil nil t))))
+    (unless (and source-file (stringp source-file)
+                 (not (string-empty-p source-file))
+                 (file-exists-p source-file)
+                 (file-writable-p source-file))
+      (user-error
+       "Cannot toggle compressed-sentence header — source file missing / not writable: %s"
+       source-file))
+    (let* ((meta (tibetan-analysis--read-source-metadata source-file))
+           (currently-on (plist-get meta :sentence-compressed)))
+      (with-temp-buffer
+        (insert-file-contents source-file)
+        (goto-char (point-min))
+        (cond
+         (currently-on
+          ;; Header is truthy — remove the entire line.
+          (when (re-search-forward
+                 "^#\\+TIBETAN_SENTENCE_COMPRESSED:.*\n?" nil t)
+            (replace-match "" t t)))
+         (t
+          ;; Header absent or falsy — set / add `t'.
+          (cond
+           ;; Existing falsy line → replace value in place.
+           ((re-search-forward
+             "^#\\+TIBETAN_SENTENCE_COMPRESSED:.*$" nil t)
+            (replace-match "#+TIBETAN_SENTENCE_COMPRESSED: t" t t))
+           ;; Insert after the first `#+TITLE:' line.
+           ((progn (goto-char (point-min))
+                   (re-search-forward "^#\\+TITLE:.*$" nil t))
+            (end-of-line)
+            (insert "\n#+TIBETAN_SENTENCE_COMPRESSED: t"))
+           ;; No `#+TITLE:' either — prepend.
+           (t
+            (goto-char (point-min))
+            (insert "#+TIBETAN_SENTENCE_COMPRESSED: t\n")))))
+        (write-region (point-min) (point-max) source-file))
+      (when (called-interactively-p 'any)
+        (message
+         "Compressed-sentence mode %s on %s — next sent-NNN.org regenerate %s"
+         (if currently-on "DISABLED" "ENABLED")
+         (file-name-nondirectory source-file)
+         (if currently-on
+             "will restore the full layout"
+           "will render only Vocabulary + Translation + Grammar + Provided Translations"))))))
+
 (provide 'tibetan-sentence-persist)
 ;;; tibetan-sentence-persist.el ends here

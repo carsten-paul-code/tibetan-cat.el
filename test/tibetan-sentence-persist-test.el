@@ -1545,6 +1545,56 @@ in the strip list):
       (should-not (member "** Grammar" strip))
       (should-not (member "** Provided Translations" strip)))))
 
+(ert-deftest tibetan-sentence-toggle-source-compressed-adds-and-removes ()
+  "`tibetan-sentence-toggle-source-compressed' adds the header on a
+file that doesn't have it (or has a falsy value) and removes it
+on a file that has a truthy value.  Idempotent — running the
+toggle twice returns the file to its original state."
+  (should (fboundp 'tibetan-sentence-toggle-source-compressed))
+  (let* ((dir (make-temp-file "sent-toggle-" t))
+         (source-file (expand-file-name "source.org" dir)))
+    (unwind-protect
+        (progn
+          ;; Initial state:  no header.
+          (with-temp-file source-file
+            (insert "#+TITLE: T\n#+ANALYSIS_VERSION: 1.0\n\n* Tibetan Text\n"))
+          ;; First toggle:  header added with value `t'.
+          (tibetan-sentence-toggle-source-compressed source-file)
+          (let ((post (with-temp-buffer
+                        (insert-file-contents source-file)
+                        (buffer-string))))
+            (should (string-match-p
+                     "^#\\+TIBETAN_SENTENCE_COMPRESSED: t$" post))
+            ;; Metadata reader sees it as truthy.
+            (should (plist-get
+                     (tibetan-analysis--read-source-metadata source-file)
+                     :sentence-compressed)))
+          ;; Second toggle:  header removed.
+          (tibetan-sentence-toggle-source-compressed source-file)
+          (let ((post (with-temp-buffer
+                        (insert-file-contents source-file)
+                        (buffer-string))))
+            (should-not (string-match-p
+                         "^#\\+TIBETAN_SENTENCE_COMPRESSED:" post))
+            (should-not (plist-get
+                         (tibetan-analysis--read-source-metadata source-file)
+                         :sentence-compressed))
+            ;; Other headers unaffected — `#+TITLE:' and
+            ;; `#+ANALYSIS_VERSION:' survive the toggle.
+            (should (string-match-p "^#\\+TITLE: T$" post))
+            (should (string-match-p "^#\\+ANALYSIS_VERSION: 1\\.0$"
+                                    post)))
+          ;; Third toggle:  header added again.  Confirms idempotent
+          ;; round-trip.
+          (tibetan-sentence-toggle-source-compressed source-file)
+          (let ((post (with-temp-buffer
+                        (insert-file-contents source-file)
+                        (buffer-string))))
+            (should (plist-get
+                     (tibetan-analysis--read-source-metadata source-file)
+                     :sentence-compressed))))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-sentence-create-file-honours-compressed-header ()
   "End-to-end:  source file carries `#+TIBETAN_SENTENCE_COMPRESSED: t';
 `tibetan-sentence--create-file' writes a sent-NNN.org whose
