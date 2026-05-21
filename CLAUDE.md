@@ -3,23 +3,26 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-05-21 (§5.22 added: Compressed
-sentence-analysis file for class reading.  Per-source
-`#+TIBETAN_SENTENCE_COMPRESSED: t' header drops 7 reference
-sections (Wylie / Phonetics / Interlinear / DharmaMitra /
-Sentence Structure / Verb Classification / Detailed Dictionary)
-from sent-NNN.org leaving only Vocabulary + Translation +
-Grammar + Provided Translations.  Sentence-only L3 extras
-(Roehrich / Class Translation / Claude Context) preserved.
-Per-segment seg-NNN.org unaffected.  Toggle command `C-c u z
-C'.  Previous: §5.21 Mid-class Cleanup (CAT Gloss retired,
-Claude Vocabulary promoted to level-2, Particle Map + Particles
-merged with Bialek 2022 refs, Detailed Dictionary moved to
-bottom, Provided Translations user-content); §5.20 DM-Tibetan
-nested; §5.19 Phonetics; §5.18 Sanskrit-first layout revision;
-§5.17 two-language-parallel architecture; §5.10–§5.13 dictionary
-polish, grammar unification, thesaurus + target-language
-pipeline, three-level dispatch).
+editing. Last updated 2026-05-21 (§5.22 final: sentence-analysis
+files unconditionally render the in-class compressed layout —
+Vocabulary + Translation + Grammar (with the converb-rich
+`*** Particles' section) + Provided Translations only;  7
+reference sections stripped (Wylie / Phonetics / Interlinear /
+DharmaMitra / Sentence Structure / Verb Classification /
+Detailed Dictionary).  The opt-in machinery from §5.22 initial
+(`#+TIBETAN_SENTENCE_COMPRESSED:' header + `C-c u z C' toggle +
+dynamic var + metadata-reader key) is RETIRED.  Per-segment
+seg-NNN.org keeps the full §5.21 layout — clean split of class-
+reading vs deep-analysis surfaces.  Also: `#+OPTIONS: toc:nil
+num:nil' on all analysis-file scaffolds.  Previous: §5.21 Mid-
+class Cleanup (CAT Gloss retired, Claude Vocabulary promoted
+to level-2, Particle Map + Particles merged with Bialek 2022
+refs, Detailed Dictionary moved to bottom, Provided
+Translations user-content); §5.20 DM-Tibetan nested; §5.19
+Phonetics; §5.18 Sanskrit-first layout revision; §5.17 two-
+language-parallel architecture; §5.10–§5.13 dictionary polish,
+grammar unification, thesaurus + target-language pipeline,
+three-level dispatch).
 
 Companion files worth reading alongside this one:
 - `~/.claude/projects/-Users-cp/memory/working_discipline.md` — the
@@ -232,10 +235,10 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-05-21, post-§5.22):  **1954 tests, 1953
-expected, 0 unexpected failures, 1 intentional skip (compound-
-analysis-callable).**  Carsten runs this after every change and
-expects it to stay green.
+Current state (2026-05-21, post-§5.22 final):  **1955 tests,
+1954 expected, 0 unexpected failures, 1 intentional skip
+(compound-analysis-callable).**  Carsten runs this after every
+change and expects it to stay green.
 
 When adding a test, always wire it into `test/run-all-tests.el` via
 `condition-case`. Otherwise the suite silently doesn't pick it up and
@@ -1641,20 +1644,39 @@ moment only Milarepa is urgent" comment.
 | `tibetan-cat.el` | `(require 'tibetan-bialek-textbook-refs nil t)' |
 | `CLAUDE.md` | §5.21 added |
 
-### 5.22 Compressed sentence-analysis file for class reading (done, 2026-05-21)
+### 5.22 Compressed sentence-analysis layout for class reading (done, 2026-05-21)
 
 Class-use feedback the day after §5.21 shipped:  the per-sentence
 analysis files (`sent-NNN.org') inherit the full per-segment
 renderer output (~11 level-2 sections inside `* Tibetan
-Analysis').  In class, students don't need most of that — they
-need to know what each word means and how the sentence is built.
-The reference sections (Detailed Dictionary, Verb Classification,
-Sentence Structure) are prep-time tools, not in-class tools.
+Analysis').  In class, the reference sections (Detailed
+Dictionary, Verb Classification, Sentence Structure) are prep-
+time tools, not in-class tools.
 
-Solution:  per-source-document opt-in for a compressed sentence-
-file layout.
+Carsten:  *"the full layout isn't necessary for the sentence,
+only for the segments… max 2 pages A4 per sentence with the
+really important information for the sentence esp. the
+structure (with converbs)."*
 
-#### Target on-disk layout (compressed sent-NNN.org)
+Solution evolved over the day:
+
+1. **Initial (Commits 1-5):**  opt-in compressed layout via per-
+   source `#+TIBETAN_SENTENCE_COMPRESSED: t' header + `C-c u z C'
+   toggle command + dynamic var + metadata-reader key.  Matched
+   the §5.12 / §5.14 per-source-header pattern.
+2. **Drop DD always (Commit 6):**  even without the header, sentence
+   files balloon when DD lists 20+ entries for a multi-segment
+   sentence.  DD became always-stripped from sentence files.
+3. **Final (Commit 7):**  retire the opt-in entirely — sentence
+   files are unconditionally compressed.  The toggle + header +
+   dynamic var + metadata key are removed.  Per-segment seg-NNN.org
+   files keep the full §5.21 layout.
+
+Net result:  sentence files render the in-class compressed shape
+by default;  segment files keep the full prep-time shape.  Clean
+split of class-reading vs deep-analysis surfaces.
+
+#### Target on-disk layout (sent-NNN.org)
 
 ```
 * My Notes                            user-edited (preserved)
@@ -1667,6 +1689,8 @@ file layout.
     *** Particles                     legend + skeleton + bullets
                                         with [Bialek 2022 §X.Y;
                                         Portfolio §A.B] refs
+                                        (the converb-rich
+                                        structure section)
     *** Claude Grammar                Claude's prose reading
   ** Provided Translations            ← KEPT (user-content slot)
     *** Roehrich                      hand-paste of published English
@@ -1675,93 +1699,72 @@ file layout.
 * Footnotes                           user-edited (preserved)
 ```
 
-Compare to FULL `sent-NNN.org' (post-§5.21):  11 level-2 sections
-inside `* Tibetan Analysis' → 4 in compressed mode.
+Compare to FULL §5.21 sent-NNN.org:  11 level-2 sections inside
+`* Tibetan Analysis' → 4 always.
 
-DROPPED in compressed mode:  `** Wylie Transliteration', `**
-Phonetics', `** Interlinear Gloss', `** DharmaMitra Translation',
-`** Sentence Structure', `** Verb Classification (Hill 2010)',
-`** Detailed Dictionary'.
+DROPPED in sentence files (unconditional):  `** Wylie
+Transliteration', `** Phonetics', `** Interlinear Gloss', `**
+DharmaMitra Translation', `** Sentence Structure', `** Verb
+Classification (Hill 2010)', `** Detailed Dictionary'.
 
-Per-segment `seg-NNN.org' files are UNAFFECTED — only the
-embedded sentence-file shape changes.  The full segment file is
-still the prep-time canonical reference;  the compressed sentence
-file is the in-class reading view.
+Per-segment `seg-NNN.org' files are UNAFFECTED — segment scaffold
+keeps the full §5.21 layout.
 
-#### Activation:  per-source header
+#### Activation
 
-```
-#+TITLE: …
-#+TIBETAN_SENTENCE_COMPRESSED: t
-…
-```
+None needed.  Sentence files are unconditionally compressed.
+The `C-c u z' prefix loses one command (`C-c u z C' freed up
+for future use);  per-source `#+TIBETAN_SENTENCE_COMPRESSED:'
+header is ignored if present (backwards-tolerant).
 
-Matches the §5.12 `#+TIBETAN_TARGET_LANG:' and §5.14 `#+SOURCE_
-MODE: parallel-sanskrit' patterns:  one switch per reading,
-preserved across reanalyse, picked up automatically by the next
-`tibetan-sentence--create-file' / `--regenerate'.
-
-Falsy values (`nil', `no', `false', empty) or absence → existing
-§5.21 full layout (backwards-compatible default).
-
-#### Toggle command
-
-  · `C-c u z C' → `tibetan-sentence-toggle-source-compressed'
-    flips the header in the current source file (or follows
-    `#+SOURCE:' from an open analysis buffer).  Idempotent.
-    Menu entry under `Tibetan → Persistent Analysis →'.
-
-  · Sibling of `C-c u z L' (target language) and `C-c u z P'
-    (parallel-Sanskrit) — three per-source toggles under the
-    same `C-c u z' prefix.
-
-#### Commits (5)
+#### Commits (7)
 
 | Commit | Subject                                                                  | Tests |
 |--------|--------------------------------------------------------------------------|-------|
-| 1/5    | `--read-source-metadata' extension:  `:sentence-compressed' plist key    | +1    |
-| 2/5    | Dynamic strip-list:  defconst → defun accessor + new compressed-strip-list| +3   |
-| 3/5    | Wire flag through `--scaffold' (used by both `--create-file' + `--regenerate')| +2 |
-| 4/5    | `tibetan-sentence-toggle-source-compressed' + `C-c u z C' + menu         | +1    |
-| 5/5    | CLAUDE.md §5.22 + final verification                                     | docs  |
+| 1      | `--read-source-metadata' extension:  `:sentence-compressed' plist key    | +1    |
+| 2      | Dynamic strip-list:  defconst → defun accessor + new compressed-strip-list| +3   |
+| 3      | Wire flag through `--scaffold' (used by both `--create-file' + `--regenerate')| +2 |
+| 4      | `tibetan-sentence-toggle-source-compressed' + `C-c u z C' + menu         | +1    |
+| 5      | CLAUDE.md §5.22 initial + verification                                   | docs  |
+| 6      | Always-strip Detailed Dictionary from sentence files (full + compressed) | +1, ±3 |
+| 7      | Retire opt-in machinery;  compressed becomes unconditional default       | −3, ±4|
 
-#### Mechanism
+Commits 1-5 set up the opt-in;  Commit 6 broadened the strip;
+Commit 7 retired the opt-in and made the strip unconditional.
+A pragmatic but slightly long path — kept here in the §5.22
+entry rather than fragmented across §5.22 + §5.23 because the
+whole arc is one logical batch (one day's iteration on class-
+reading sentence files).
+
+#### Mechanism (post-Commit 7)
 
 The §5.18 sentence alignment already had a stripper hook
 (`tibetan-sentence--strip-segment-claude-sections') reading from
 a `defconst' filter list (empty since §5.18 alignment landed).
-§5.22 converts that defconst to a `defun' accessor that consults
-a new dynamic var `tibetan-sentence--compressed-for-render':
+§5.22 final keeps that mechanism, simplified:
 
-  · Flag nil (default):  accessor returns `'()' — full pass-
-    through, identical to pre-§5.22 behaviour.
-  · Flag non-nil:  accessor returns the 7-entry compressed strip
-    list (`** Wylie Transliteration' / `** Phonetics' / `**
-    Interlinear Gloss' / `** DharmaMitra Translation' / `**
-    Sentence Structure' / `** Verb Classification (Hill 2010)' /
-    `** Detailed Dictionary').
+  · `tibetan-sentence--strip-list' (defconst, 7 entries):
+    Wylie / Phonetics / Interlinear / DharmaMitra Translation /
+    Sentence Structure / Verb Classification (Hill 2010) /
+    Detailed Dictionary.
+  · `--segment-claude-sections' accessor returns the list
+    unconditionally.
 
-The flag is let-bound inside `tibetan-sentence--scaffold' from
-the `:sentence-compressed' plist key of
-`tibetan-analysis--read-source-metadata' — both `--create-file'
-and `--regenerate' route through scaffold, so a single bind
-covers all entry points.
+No dynamic var, no metadata-reader key, no header, no toggle.
 
 Sentence-only L3 extras (Roehrich / Class Translation / Claude
-Context) survive untouched:  the strip operates on level-2
+Context) survive the strip:  the filter operates on level-2
 headings, and `** Provided Translations' is NOT in the strip
-list, so the existing `--inject-sentence-l3-entries' continues
-to attach them under that parent.
+list, so `--inject-sentence-l3-entries' continues to attach
+them under that parent.
 
 #### Verification recipe
 
-1. **ERT**:  `make test-quick' → 1947 (§5.21 baseline) + 7 new
-   = 1954 / 1953 expected / 0 unexpected / 1 skipped.
-   `make test' (BDD) stays 244 / 244.  `make compile' clean.
+1. **ERT**:  `make test-quick' → 1955 / 1954 expected / 0
+   unexpected / 1 skipped.  `make test' (BDD) stays 244 / 244.
+   `make compile' clean.
 
 2. **Live spot-check** on Milarepa source:
-   - `C-c u z C' (from `Milarepa-prepared.org' or any open
-     `sent-*.org' buffer) → header added.
    - `M-x tibetan-sentence-batch-reanalyze' with
      `:re-request-claude nil' on the Tibetisch IV analysis
      folder.
@@ -1771,27 +1774,38 @@ to attach them under that parent.
      Roehrich / Class Translation / Claude Context still under
      Provided Translations.
 
-3. **Backwards-compat**:  on a source WITHOUT the header, the
-   next regenerate produces the full §5.21 layout (regression
-   test covers this).
+3. **Segment-file regression** (no behavioural change expected):
+   pick a seg-NNN.org file, confirm the full §5.21 layout
+   (Wylie / Phonetics / Interlinear / Vocabulary / Translation /
+   DM Translation / Grammar / Sentence Structure / Verb
+   Classification / Provided Translations / Detailed
+   Dictionary) is intact.
 
 4. **Idempotency**:  re-run batch-reanalyse a second time;  diff
    should be empty modulo `:LAST_ANALYZED:' timestamps.
 
-5. **Roundtrip toggle**:  `C-c u z C' twice in a row → header
-   added then removed;  metadata reader confirms `t' → nil.
-
-#### Files changed
+#### Files changed (across the 7 commits)
 
 | Path | Role |
 |------|------|
-| `persist/tibetan-analysis-claude.el` | `--read-source-metadata' +1 plist key `:sentence-compressed' |
-| `persist/tibetan-sentence-persist.el` | Dynamic var + accessor + compressed-strip-list defconst, `--scaffold' wiring, `tibetan-sentence-toggle-source-compressed' command |
-| `config/tibetan-keybindings.el` | `C-c u z C' binding |
-| `config/tibetan-menu.el` | "Toggle Compressed Sentence Layout" entry under Persistent Analysis |
-| `test/tibetan-analysis-claude-prompt-test.el` | +1 metadata-reader spec |
-| `test/tibetan-sentence-persist-test.el` | +6 ERT specs (accessor x2, strip x1, end-to-end x1, backwards-compat x1, toggle x1) |
-| `CLAUDE.md` | §5.22 added, §4 totals refreshed |
+| `persist/tibetan-analysis-claude.el` | `:sentence-compressed' plist key (added Commit 1, retired Commit 7) |
+| `persist/tibetan-sentence-persist.el` | `tibetan-sentence--strip-list' defconst (Commit 7 consolidation of the intermediate accessor + strip-list pair from Commits 2+6);  `--scaffold' uses the unconditional strip |
+| `config/tibetan-keybindings.el` | `C-c u z C' binding (added Commit 4, retired Commit 7) |
+| `config/tibetan-menu.el` | "Toggle Compressed Sentence Layout" entry (added Commit 4, retired Commit 7) |
+| `test/tibetan-analysis-claude-prompt-test.el` | Metadata-reader spec (added Commit 1, flipped to absence guard in Commit 7) |
+| `test/tibetan-sentence-persist-test.el` | ERT specs across the arc:  +6 in Commits 2-4, ±4 / -3 in Commit 7 |
+| `CLAUDE.md` | §5.22 added Commit 5, reframed Commit 7 |
+
+#### TOC + section-numbering disabled on export (follow-up, 2026-05-21)
+
+Independent of the sentence-layout work:  all three analysis-
+file scaffolds (`tibetan-analysis-create-file' for segment files,
+`tibetan-analysis-create-paragraph-file' for paragraph files,
+`tibetan-sentence--scaffold' for sentence files) now emit
+`#+OPTIONS: toc:nil num:nil' right after `#+STARTUP: showall'.
+HTML / PDF / LaTeX export of any analysis file no longer
+includes an auto-generated table of contents or numbered
+section prefixes (`1. My Notes' / `1.1. …').
 
 ## 6. Open work (prioritised)
 
