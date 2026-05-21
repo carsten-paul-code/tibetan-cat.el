@@ -1593,7 +1593,20 @@ Returns list of (source-name . translation-text) pairs."
 Short-circuits on the canonical `tibetan-glossaries-loaded' flag so a
 batch reanalysis never re-emits the `Loading glossaries...' message
 or replays the underlying I/O.  The hash-table-count fallback is
-kept for sessions where the flag is not bound (older loaders)."
+kept for sessions where the flag is not bound (older loaders).
+
+§5.22 follow-up (2026-05-21):  also primes the per-document
+Resources vocabulary (auto-detected from `Resources/' next to
+the source buffer) and Custom vocabulary (pointed to by
+`#+TIBETAN_VOCAB_FILE:').  Without these explicit loads, the
+Interlinear Gloss's multisource ranker found
+`tibetan-current-resources-vocab' / `tibetan-current-custom-vocab'
+nil and silently fell through to rank 3 (Steinert) — surfacing
+generic dictionary glosses where the user expected their curated
+Resources entries.  Both loaders cache per-file, so repeated
+calls are cheap.  Wrapped in `ignore-errors' because the loaders
+read `(buffer-file-name)' and may signal in edge cases (e.g.
+indirect or temp buffers)."
   (cond
    ;; Fast path: the loader already ran and recorded its success.
    ((and (boundp 'tibetan-glossaries-loaded) tibetan-glossaries-loaded)
@@ -1611,7 +1624,14 @@ kept for sessions where the flag is not bound (older loaders)."
       ;; Try loading from file
       (let ((glossary-file "~/buddhist-studies/translation-tools/load-comprehensive-glossaries.el"))
         (when (file-exists-p (expand-file-name glossary-file))
-          (load-file (expand-file-name glossary-file))))))))
+          (load-file (expand-file-name glossary-file)))))))
+  ;; Always (after the general-glossary short-circuit) prime the
+  ;; per-document Resources + Custom vocab so the Interlinear ranker
+  ;; sees them at rank 1/2.  Idempotent and cached internally.
+  (when (fboundp 'tibetan-load-resources-vocab)
+    (ignore-errors (tibetan-load-resources-vocab)))
+  (when (fboundp 'tibetan-load-custom-vocab)
+    (ignore-errors (tibetan-load-custom-vocab))))
 
 (defun tibetan-analysis--get-particle-annotation (word)
   "Get compact particle annotation for WORD.
