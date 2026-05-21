@@ -1411,36 +1411,43 @@ Returns plist:
           (let ((seg-nums (plist-get data :seg-nums))
                 (tib-text (plist-get data :tibetan-text)))
             (tibetan-sentence--regenerate filepath sent-id seg-nums tib-text)
-            (when re-request-claude
-              (condition-case e2
-                  (tibetan-sentence--request-claude
-                   tib-text seg-nums filepath src)
-                (error (message "Sentence Claude re-request failed for %s: %s"
-                                (file-name-nondirectory filepath)
-                                (error-message-string e2)))))
-            ;; Sentence-level wiring of two-language-parallel-
-            ;; analysis (2026-04-30):  in parallel mode, also fire
-            ;; the sentence-level Sanskrit + (chained) Combined
-            ;; Claude calls.  Aggregates child-segment Sanskrit via
-            ;; `tibetan-sanskrit-parallel-text-for-sentence' (skips
-            ;; placeholders); no-op when no child has real Sanskrit
-            ;; or the source isn't parallel-mode.
-            (when (and re-request-claude
-                       (fboundp 'tibetan-sanskrit-parallel-text-for-sentence)
-                       (fboundp 'tibetan-analysis--fire-parallel-claude-with-plist))
-              (let ((skt-plist
-                     (condition-case nil
-                         (tibetan-sanskrit-parallel-text-for-sentence
-                          src seg-nums)
-                       (error nil))))
-                (when skt-plist
-                  (condition-case e3
-                      (tibetan-analysis--fire-parallel-claude-with-plist
-                       tib-text skt-plist src filepath)
-                    (error (message
-                            "Sentence Sanskrit/Combined fire failed for %s: %s"
-                            (file-name-nondirectory filepath)
-                            (error-message-string e3)))))))
+            ;; §5.22 follow-up (2026-05-21):  honour RE-REQUEST-CLAUDE
+            ;; `:missing-only' here too — skip the Claude/parallel-mode
+            ;; fire when the sentence file already has populated
+            ;; Translation/Vocabulary slots.  See
+            ;; `tibetan-analysis--should-fire-claude-p'.
+            (let ((fire-p (tibetan-analysis--should-fire-claude-p
+                           re-request-claude filepath)))
+              (when fire-p
+                (condition-case e2
+                    (tibetan-sentence--request-claude
+                     tib-text seg-nums filepath src)
+                  (error (message "Sentence Claude re-request failed for %s: %s"
+                                  (file-name-nondirectory filepath)
+                                  (error-message-string e2)))))
+              ;; Sentence-level wiring of two-language-parallel-
+              ;; analysis (2026-04-30):  in parallel mode, also fire
+              ;; the sentence-level Sanskrit + (chained) Combined
+              ;; Claude calls.  Aggregates child-segment Sanskrit via
+              ;; `tibetan-sanskrit-parallel-text-for-sentence' (skips
+              ;; placeholders); no-op when no child has real Sanskrit
+              ;; or the source isn't parallel-mode.
+              (when (and fire-p
+                         (fboundp 'tibetan-sanskrit-parallel-text-for-sentence)
+                         (fboundp 'tibetan-analysis--fire-parallel-claude-with-plist))
+                (let ((skt-plist
+                       (condition-case nil
+                           (tibetan-sanskrit-parallel-text-for-sentence
+                            src seg-nums)
+                         (error nil))))
+                  (when skt-plist
+                    (condition-case e3
+                        (tibetan-analysis--fire-parallel-claude-with-plist
+                         tib-text skt-plist src filepath)
+                      (error (message
+                              "Sentence Sanskrit/Combined fire failed for %s: %s"
+                              (file-name-nondirectory filepath)
+                              (error-message-string e3))))))))
             `(:file ,filepath :sent-id ,sent-id :ok t
                     :seg-nums ,seg-nums))
         (error
@@ -1477,7 +1484,16 @@ Returns plist:
                    (read-directory-name "Analysis folder: " d d t))
          :source-file (buffer-file-name)
          :re-request-claude
-         (y-or-n-p "Also request a fresh Claude analysis per sentence? ")
+         ;; §5.22 follow-up (2026-05-21):  three-way prompt mirroring
+         ;; the segment batch.  Default `:missing-only' skips files
+         ;; already carrying populated Translation/Vocabulary;  no
+         ;; wasted Claude calls on bulk layout-only reanalyses.
+         (let ((c (read-char-choice
+                   "Claude:  [m] missing-only (skip populated)  [a] always re-fire  [n] never  ? "
+                   '(?m ?a ?n))))
+           (cond ((eq c ?a) t)
+                 ((eq c ?n) nil)
+                 (t         :missing-only)))
          :dry-run nil))
   (let* ((folder (or folder
                      (and (buffer-file-name)

@@ -4487,9 +4487,18 @@ segment id is parsed from the filename (`seg-NNN[-short].org').
 SOURCE-FILE, when supplied, is the path of the original class file —
 its buffer contents are scanned for inline 〔trans:N〕 blocks.
 
-When RE-REQUEST-CLAUDE is non-nil, a fresh Claude request is dispatched
-(asynchronously) after regeneration.  Otherwise the pre-existing
-`*** Claude' translation is preserved.
+RE-REQUEST-CLAUDE controls Claude / DM request dispatch:
+  · nil             — never re-fire;  preserve existing content.
+  · t               — always re-fire (legacy behaviour).
+  · `:missing-only' — fire only when the file's Claude
+                       Translation / Vocabulary slots are missing
+                       or placeholders (§5.22 follow-up, 2026-05-21
+                       — `tibetan-analysis--should-fire-claude-p').
+                       DharmaMitra is fired in parallel under the
+                       same gate.  Files already populated are
+                       skipped, saving API spend and class-prep
+                       time when batch-reanalysing for layout
+                       updates.
 
 With DRY-RUN non-nil, return a plist describing what would happen
 without touching the file.  Otherwise return a plist:
@@ -4589,32 +4598,42 @@ without touching the file.  Otherwise return a plist:
             (when has-any-section
               (tibetan-analysis--restore-claude-sections
                filepath existing-sections))
-            (when re-request-claude
-              (condition-case e2
-                  (tibetan-analysis--request-claude-translation
-                   tibetan-text filepath)
-                (error (message "Claude re-request failed for %s: %s"
-                                (file-name-nondirectory filepath)
-                                (error-message-string e2)))))
-            ;; Phase A.3 of multi-translator-parallel-reading (2026-04-30):
-            ;; when the caller explicitly asks for re-request (`C-u C-c u r'),
-            ;; also refresh DharmaMitra translations.  Same gate as Claude.
-            (when (and re-request-claude
-                       (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
-              (condition-case e3
-                  (tibetan-dharmamitra-translation-fire-for-segment
-                   tibetan-text filepath source-file seg-id)
-                (error (message "DharmaMitra re-request failed for %s: %s"
-                                (file-name-nondirectory filepath)
-                                (error-message-string e3)))))
-            ;; Phase 5 of two-language-parallel-analysis (2026-04-30):
-            ;; when re-firing in parallel-mode, also fire Sanskrit +
-            ;; (chained) Combined Claude calls via the dispatcher.
-            ;; No-op when source isn't parallel-mode or the segment's
-            ;; Sanskrit sibling is a placeholder.
-            (when re-request-claude
-              (tibetan-analysis--fire-parallel-mode-claude-calls
-               tibetan-text source-file filepath))
+            ;; §5.22 follow-up (2026-05-21):  Claude / DM / parallel-mode
+            ;; gates consult `tibetan-analysis--should-fire-claude-p',
+            ;; which honours the `:missing-only' value of RE-REQUEST-
+            ;; CLAUDE.  When set, files already carrying populated
+            ;; Claude content are skipped — saving API spend on bulk
+            ;; layout-update reanalyses.
+            (let ((fire-p (tibetan-analysis--should-fire-claude-p
+                           re-request-claude filepath)))
+              (when fire-p
+                (condition-case e2
+                    (tibetan-analysis--request-claude-translation
+                     tibetan-text filepath)
+                  (error (message "Claude re-request failed for %s: %s"
+                                  (file-name-nondirectory filepath)
+                                  (error-message-string e2)))))
+              ;; Phase A.3 of multi-translator-parallel-reading (2026-04-30):
+              ;; when the caller explicitly asks for re-request (`C-u C-c u r'),
+              ;; also refresh DharmaMitra translations.  Same gate as Claude
+              ;; — `:missing-only' skips DM when Claude is being skipped too,
+              ;; matching the user's "skip if exists" intent for batch ops.
+              (when (and fire-p
+                         (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
+                (condition-case e3
+                    (tibetan-dharmamitra-translation-fire-for-segment
+                     tibetan-text filepath source-file seg-id)
+                  (error (message "DharmaMitra re-request failed for %s: %s"
+                                  (file-name-nondirectory filepath)
+                                  (error-message-string e3)))))
+              ;; Phase 5 of two-language-parallel-analysis (2026-04-30):
+              ;; when re-firing in parallel-mode, also fire Sanskrit +
+              ;; (chained) Combined Claude calls via the dispatcher.
+              ;; No-op when source isn't parallel-mode or the segment's
+              ;; Sanskrit sibling is a placeholder.
+              (when fire-p
+                (tibetan-analysis--fire-parallel-mode-claude-calls
+                 tibetan-text source-file filepath)))
             `(:file ,filepath :seg-id ,seg-id :ok t
                     :claude-preserved ,(and has-any-section t)))
         (error
@@ -4655,7 +4674,19 @@ Returns a plist summary:
                    (read-directory-name "Analysis folder: " d d t))
          :source-file (buffer-file-name)
          :re-request-claude
-         (y-or-n-p "Also request a fresh Claude translation for each file? ")
+         ;; §5.22 follow-up (2026-05-21):  three-way prompt.  Default
+         ;; is `:missing-only' — fire Claude/DM only for files that
+         ;; currently carry empty / placeholder Translation slots,
+         ;; skip files already populated.  Matches Carsten's stated
+         ;; expectation that batch reanalyse shouldn't re-fire when
+         ;; translations exist;  explicit force is still available
+         ;; via the second prompt branch.
+         (let* ((c (read-char-choice
+                    "Claude/DM:  [m] missing-only (skip populated)  [a] always re-fire  [n] never  ? "
+                    '(?m ?a ?n))))
+           (cond ((eq c ?a) t)
+                 ((eq c ?n) nil)
+                 (t         :missing-only)))
          :dry-run nil))
   (let* ((folder (or folder
                      (and (buffer-file-name)

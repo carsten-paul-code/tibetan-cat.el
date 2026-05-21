@@ -237,6 +237,48 @@ the gptel pipeline."
 ;; --ensure-claude-headings (segment layout)
 ;; ============================================================================
 
+(ert-deftest tibetan-claude-sections-should-fire-policy ()
+  "§5.22 follow-up (2026-05-21):  `tibetan-analysis--should-fire-claude-p'
+implements the three-way `re-request-claude' policy:
+
+  · `nil'             → never fire (returns nil).
+  · `t'               → always fire (returns t).
+  · `:missing-only'   → fire only when `--claude-needs-request-p'
+                         reports the file's Translation/Vocabulary
+                         slots are missing or placeholders.
+
+User feedback (2026-05-21):  \"if (Claude and DharmaMitra)
+translation already exists it should only be renewed on
+explicit request.\"  Default for batch reanalyze interactive
+prompt is `:missing-only';  explicit `[a]lways' still available."
+  (tibetan-sections-test--with-analysis
+      (concat "* Tibetan Text\nbdag\n\n"
+              "* Tibetan Analysis\n"
+              "** Wylie Transliteration\nbdag /\n\n"
+              "** Claude Vocabulary\nbdag, pronoun, \"I\"\n\n"
+              "** Translation\nI did the work.\n\n")
+    ;; File HAS populated Claude content.
+    (should-not (tibetan-analysis--claude-needs-request-p analysis-file))
+    ;; Policy: nil → nil, t → t, :missing-only → nil (populated).
+    (should-not (tibetan-analysis--should-fire-claude-p nil analysis-file))
+    (should (tibetan-analysis--should-fire-claude-p t analysis-file))
+    (should-not (tibetan-analysis--should-fire-claude-p
+                 :missing-only analysis-file)))
+  (tibetan-sections-test--with-analysis
+      (concat "* Tibetan Text\nbdag\n\n"
+              "* Tibetan Analysis\n"
+              "** Wylie Transliteration\nbdag /\n\n"
+              "** Claude Vocabulary\n[Awaiting Claude…]\n\n"
+              "** Translation\n[Requesting translation...]\n\n")
+    ;; File has PLACEHOLDER content only.
+    (should (tibetan-analysis--claude-needs-request-p analysis-file))
+    ;; Policy: :missing-only → t (needs request).
+    (should (tibetan-analysis--should-fire-claude-p
+             :missing-only analysis-file))
+    ;; nil still nil; t still t.
+    (should-not (tibetan-analysis--should-fire-claude-p nil analysis-file))
+    (should (tibetan-analysis--should-fire-claude-p t analysis-file))))
+
 (ert-deftest tibetan-claude-sections-migrate-past-vocab-placeholder ()
   "BUG-FIX (2026-05-21):  when the file has BOTH:
   · `** Claude Vocabulary' at level 2 with the empty `[Awaiting

@@ -2499,6 +2499,7 @@ and known error markers so we don't re-persist dead content."
                                           start end))))
                                 (unless
                                     (or (string-empty-p b)
+                                        (string-match-p "\\`\\[Awaiting" b)
                                         (string-match-p "\\`\\[Requesting" b)
                                         (string-match-p "\\`\\[Claude unavailable" b)
                                         (string-match-p "\\`\\[Claude request failed" b)
@@ -2604,6 +2605,43 @@ Legacy wrapper around `tibetan-analysis--read-claude-sections' that
 returns only the `:translation' slot for callers that have not been
 migrated yet."
   (plist-get (tibetan-analysis--read-claude-sections filepath) :translation))
+
+(defun tibetan-analysis--claude-needs-request-p (filepath)
+  "Return non-nil when FILEPATH lacks populated Claude content.
+
+\"Populated\" = at least Translation OR Vocabulary slot has a
+non-placeholder body (the slots `tibetan-analysis--read-claude-
+sections' reads and filters for placeholders).  When BOTH are nil
+\(missing or `[Awaiting…]' / `[Requesting…]' placeholders), the
+file needs a Claude request.
+
+§5.22 follow-up (2026-05-21):  used by the `:missing-only'
+semantic of `re-request-claude' in `tibetan-analysis-reanalyze-
+file' / `tibetan-sentence-reanalyze-file' to skip the API call
+on files already populated."
+  (when (and filepath (file-exists-p filepath))
+    (let ((sections (tibetan-analysis--read-claude-sections filepath)))
+      (and (null (plist-get sections :translation))
+           (null (plist-get sections :vocabulary))))))
+
+(defun tibetan-analysis--should-fire-claude-p (re-request-claude filepath)
+  "Decide whether to fire a Claude request for FILEPATH.
+
+RE-REQUEST-CLAUDE controls the policy:
+  · nil             — never fire (preserve existing content).
+  · t               — always fire (legacy behaviour;  forces
+                       a fresh Claude call regardless of
+                       existing content).
+  · `:missing-only' — fire only when the file's Claude
+                       Translation/Vocabulary slots are missing
+                       or placeholders.
+
+Returns non-nil when a request SHOULD be dispatched."
+  (cond
+   ((null re-request-claude) nil)
+   ((eq re-request-claude :missing-only)
+    (tibetan-analysis--claude-needs-request-p filepath))
+   (t t)))
 
 (defun tibetan-analysis--restore-claude-sections (filepath sections)
   "Write SECTIONS (a plist) back into FILEPATH's Claude headings.
