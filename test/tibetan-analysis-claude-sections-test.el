@@ -237,6 +237,110 @@ the gptel pipeline."
 ;; --ensure-claude-headings (segment layout)
 ;; ============================================================================
 
+(ert-deftest tibetan-claude-sections-migrate-past-vocab-placeholder ()
+  "BUG-FIX (2026-05-21):  when the file has BOTH:
+  · `** Claude Vocabulary' at level 2 with the empty `[Awaiting
+    Claude…]' placeholder (emitted by the new §5.21 scaffold), AND
+  · `*** Claude Vocabulary' at level 3 under `** Provided
+    Translations' with REAL content (from a pre-§5.21 Claude
+    response stored at the legacy slot)
+the migrator must MOVE the legacy content up to the level-2 slot.
+
+Pre-fix behaviour:  the migrator's guard checked only whether
+`** Claude Vocabulary' EXISTS at level 2, and skipped migration
+because the placeholder body satisfied that check — stranding
+the legacy content under Provided Translations forever.
+
+Post-fix behaviour:  guard now treats placeholder body as
+\"slot effectively empty, do migrate\".  Real-content body
+still suppresses migration (idempotency)."
+  (tibetan-sections-test--with-analysis
+      (concat "* Tibetan Text\n"
+              "བདག\n\n"
+              "* Tibetan Analysis\n"
+              "** Wylie Transliteration\n"
+              "bdag /\n\n"
+              "** Claude Vocabulary\n"
+              "[Awaiting Claude…]\n\n"
+              "** Translation\n"
+              "[Requesting translation...]\n\n"
+              "** Grammar\n"
+              "*** Claude Grammar\n\n\n"
+              "** Provided Translations\n"
+              "*** Claude Vocabulary\n"
+              "bdag, pronoun, \"I/self\", first-person honorific\n"
+              "gis, ergative, \"by\", marks the agent\n\n"
+              "*** Claude Translation\n"
+              "I did the work.\n\n"
+              "*** Reference Translations\n[none]\n")
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (tibetan-analysis--migrate-legacy-claude-headings (current-buffer))
+      (let ((content (buffer-string)))
+        ;; Level-2 Claude Vocabulary now has the real content.
+        (should (string-match-p "bdag, pronoun" content))
+        (should (string-match-p "gis, ergative" content))
+        ;; Legacy level-3 Claude Vocabulary heading is gone.
+        (should-not (string-match-p "^\\*\\*\\* Claude Vocabulary$"
+                                    content))
+        ;; Level-2 Vocabulary placeholder is gone — body has been replaced.
+        (let* ((vocab-pos (string-match
+                           "^\\*\\* Claude Vocabulary$" content))
+               (after (and vocab-pos (substring content vocab-pos))))
+          (should after)
+          ;; Body following the level-2 heading is the real content,
+          ;; not the [Awaiting…] placeholder.
+          (should-not (string-match-p
+                       "\\`\\*\\* Claude Vocabulary\n\\[Awaiting"
+                       after)))
+        ;; Translation:  same migration story.
+        (should (string-match-p "I did the work" content))
+        (should-not (string-match-p "^\\*\\*\\* Claude Translation$"
+                                    content))))))
+
+(ert-deftest tibetan-claude-sections-migrate-idempotent-on-real-content ()
+  "Migration must NOT clobber a level-2 slot that already has REAL
+content.  When the level-2 `** Claude Vocabulary' body is genuine
+\(not a placeholder), the migrator leaves it alone — even if a
+legacy level-3 slot also exists (precedence to the new slot).
+
+Regression guard for the bug fix:  the placeholder-detection
+must distinguish `[Awaiting Claude…]' (= empty) from real
+content (= non-empty / authoritative)."
+  (tibetan-sections-test--with-analysis
+      (concat "* Tibetan Text\n"
+              "བདག\n\n"
+              "* Tibetan Analysis\n"
+              "** Wylie Transliteration\n"
+              "bdag /\n\n"
+              "** Claude Vocabulary\n"
+              "REAL-LEVEL-2-CONTENT: bdag = self\n\n"
+              "** Grammar\n"
+              "*** Claude Grammar\n\n\n"
+              "** Provided Translations\n"
+              "*** Claude Vocabulary\n"
+              "STALE-LEGACY-CONTENT: bdag = ego\n\n"
+              "*** Reference Translations\n[none]\n")
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (tibetan-analysis--migrate-legacy-claude-headings (current-buffer))
+      (let ((content (buffer-string)))
+        ;; Level-2 body preserved (NOT clobbered by stale legacy).
+        (should (string-match-p "REAL-LEVEL-2-CONTENT" content))
+        ;; Legacy level-3 heading either gone (cleaned up) OR present
+        ;; with its content;  either way, level-2 was not touched.
+        ;; Stale content does not bleed into level-2.
+        (let* ((vocab-pos (string-match
+                           "^\\*\\* Claude Vocabulary$" content))
+               (next-l2 (string-match
+                         "^\\*\\* [A-Z]"
+                         (substring content (1+ vocab-pos))))
+               (vocab-body (substring content
+                                      vocab-pos
+                                      (+ 1 vocab-pos next-l2))))
+          (should-not (string-match-p "STALE-LEGACY-CONTENT"
+                                      vocab-body)))))))
+
 (ert-deftest tibetan-claude-sections-ensure-from-legacy ()
   "Legacy `*** Claude' under Provided Translations is migrated to
 `** Translation' at level 2 (§5.18 rename) and §5.21 promotes

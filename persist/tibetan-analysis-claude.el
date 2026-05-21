@@ -1623,6 +1623,66 @@ Translations section exists or when no orphans are found."
                                     (if (string-empty-p body) ""
                                       (concat body "\n"))))))))))))))
 
+(defun tibetan-analysis--claude-l2-has-real-content-p (heading-re buffer)
+  "Return non-nil when a level-2 heading matching HEADING-RE in BUFFER
+carries non-placeholder body content.
+
+\"Real content\" = body is non-empty AND does not match a known
+Claude placeholder marker (`[Awaiting`, `[Requesting`, `[Claude
+unavailable`, `[Claude request failed`, `[Translation not
+available`).  Used by `--migrate-legacy-claude-headings' to
+decide whether a level-2 slot is effectively empty (placeholder
+only) and therefore eligible to receive migrated legacy
+level-3 content.
+
+§5.21 Commit 7 / §5.22 follow-up (2026-05-21):  added because
+the prior guard checked only heading EXISTENCE, which made the
+migration skip when the new §5.21 scaffold had emitted a fresh
+`[Awaiting Claude…]' placeholder at level 2 — stranding legacy
+level-3 content under `** Provided Translations'."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward
+             (format "^\\*\\* \\(?:%s\\)$" heading-re) nil t)
+        (forward-line 1)
+        (let* ((start (point))
+               (end (save-excursion
+                      (if (re-search-forward
+                           "^\\*\\* [^*\n]\\|^\\* " nil t)
+                          (line-beginning-position)
+                        (point-max))))
+               (body (string-trim
+                      (buffer-substring-no-properties start end))))
+          (and (not (string-empty-p body))
+               (not (string-match-p "\\`\\[Awaiting" body))
+               (not (string-match-p "\\`\\[Requesting" body))
+               (not (string-match-p "\\`\\[Claude unavailable" body))
+               (not (string-match-p "\\`\\[Claude request failed" body))
+               (not (string-match-p "\\`\\[Translation not available"
+                                    body))))))))
+
+(defun tibetan-analysis--delete-claude-l2-section (heading-re buffer)
+  "Delete the level-2 heading matching HEADING-RE and its body from BUFFER.
+No-op when no matching heading is present.
+
+§5.22 follow-up (2026-05-21):  used by the migration helper to
+clear a placeholder-only level-2 slot before re-inserting it
+with migrated content from a legacy level-3 location."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward
+             (format "^\\*\\* \\(?:%s\\)$" heading-re) nil t)
+        (let* ((start (line-beginning-position))
+               (end (save-excursion
+                      (forward-line 1)
+                      (if (re-search-forward
+                           "^\\*\\* [^*\n]\\|^\\* " nil t)
+                          (line-beginning-position)
+                        (point-max)))))
+          (delete-region start end))))))
+
 (defun tibetan-analysis--migrate-legacy-claude-headings (buffer)
   "Migrate legacy `*** Claude' / `*** Claude Translation' / `** Claude
 Translation' headings in BUFFER.
@@ -1650,13 +1710,17 @@ Both branches are no-ops when nothing to migrate."
       (goto-char (point-min))
       (when (re-search-forward "^\\*\\*\\* Claude$" nil t)
         (replace-match "*** Claude Translation" t t))
-      ;; Step 2 (segment only): promote level-3 Translation → level-2
+      ;; Step 2 (segment only): promote level-3 Translation → level-2.
+      ;;
+      ;; §5.22 follow-up (2026-05-21):  guard relaxed — migrate when the
+      ;; level-2 slot is ABSENT *or* exists with only a placeholder
+      ;; body (`[Awaiting…]' / `[Requesting…]' / etc.).  Prior guard
+      ;; checked only heading existence, which made migration skip
+      ;; when the new §5.21 scaffold had emitted a fresh placeholder
+      ;; — stranding legacy L3 content under Provided Translations.
       (when (tibetan-analysis--claude-segment-layout-p buffer)
-        (unless (save-excursion
-                  (goto-char (point-min))
-                  (re-search-forward
-                   "^\\*\\* \\(?:Claude Translation\\|Translation\\)$"
-                   nil t))
+        (unless (tibetan-analysis--claude-l2-has-real-content-p
+                 "Claude Translation\\|Translation" buffer)
           (goto-char (point-min))
           (when (re-search-forward "^\\*\\*\\* Claude Translation$" nil t)
             (let* ((heading-start (line-beginning-position))
@@ -1670,6 +1734,10 @@ Both branches are no-ops when nothing to migrate."
                    (body (string-trim
                           (buffer-substring-no-properties body-start body-end))))
               (delete-region heading-start body-end)
+              ;; Clear any existing L2 placeholder before re-inserting
+              ;; so we don't end up with two `** Translation' headings.
+              (tibetan-analysis--delete-claude-l2-section
+               "Claude Translation\\|Translation" buffer)
               (tibetan-analysis--insert-claude-translation-heading
                (current-buffer) body))))
         ;; Step 3 (segment only, Phase 1.3 of layout-revision §5.18):
@@ -1682,11 +1750,19 @@ Both branches are no-ops when nothing to migrate."
         ;; Step 4 (segment only, §5.21 Commit 2/7, 2026-05-20):
         ;; promote level-3 `*** Claude Vocabulary' → level-2 `**
         ;; Claude Vocabulary' (immediately after `** Interlinear
-        ;; Gloss'), preserving body.  Idempotent — skipped when
-        ;; level-2 already exists.
-        (unless (save-excursion
-                  (goto-char (point-min))
-                  (re-search-forward "^\\*\\* Claude Vocabulary$" nil t))
+        ;; Gloss'), preserving body.
+        ;;
+        ;; §5.22 follow-up (2026-05-21):  guard relaxed — migrate when
+        ;; the level-2 slot is ABSENT *or* exists with only a
+        ;; placeholder body (`[Awaiting Claude…]').  Original guard
+        ;; checked only heading existence;  the new §5.21 scaffold
+        ;; emits a fresh placeholder at level 2, so on already-
+        ;; analysed files the legacy L3 content got stranded under
+        ;; Provided Translations.  Discovered on Milarepa seg-061
+        ;; / seg-062 — segs had real legacy vocab under PT but
+        ;; the L2 slot stayed `[Awaiting…]'.
+        (unless (tibetan-analysis--claude-l2-has-real-content-p
+                 "Claude Vocabulary" buffer)
           (goto-char (point-min))
           (when (re-search-forward "^\\*\\*\\* Claude Vocabulary$" nil t)
             (let* ((heading-start (line-beginning-position))
@@ -1701,6 +1777,11 @@ Both branches are no-ops when nothing to migrate."
                           (buffer-substring-no-properties
                            body-start body-end))))
               (delete-region heading-start body-end)
+              ;; Clear any existing L2 placeholder before re-inserting
+              ;; so we don't end up with two `** Claude Vocabulary'
+              ;; headings (one placeholder, one with the migrated body).
+              (tibetan-analysis--delete-claude-l2-section
+               "Claude Vocabulary" buffer)
               (tibetan-analysis--insert-claude-vocabulary-heading
                (current-buffer) body))))))
       ;; Step 5 (sentence only): reparent any level-3 Claude subsection
