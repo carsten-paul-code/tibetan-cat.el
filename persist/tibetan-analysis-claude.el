@@ -2373,14 +2373,24 @@ reanalyse."
            (buf (or (find-buffer-visiting analysis-file)
                     (find-file-noselect analysis-file))))
       (with-current-buffer buf
-        (tibetan-analysis--ensure-claude-headings buf)
-        (dolist (entry (tibetan-analysis--claude-effective-section-order buf))
-          (let ((key (nth 0 entry))
-                (heading (nth 1 entry))
-                (level (nth 2 entry)))
-            (when (plist-get sections key)
-              (tibetan-analysis--replace-claude-section-body
-               buf heading (plist-get sections key) level))))
+        ;; 2026-05-21:  suppress before/after-change-functions during
+        ;; the regex-driven write loop.  Org-mode's incremental
+        ;; fontification (and other after-change hooks) can clobber
+        ;; match data set by `re-search-forward' before `replace-match'
+        ;; runs — signalling `Match data clobbered by buffer
+        ;; modification hooks' and dropping the Claude response on the
+        ;; floor.  Discovered when a batch run on Milarepa segs 62-72
+        ;; logged `Claude insert failed: Match data clobbered' on every
+        ;; segment despite the API returning content cleanly.
+        (let ((inhibit-modification-hooks t))
+          (tibetan-analysis--ensure-claude-headings buf)
+          (dolist (entry (tibetan-analysis--claude-effective-section-order buf))
+            (let ((key (nth 0 entry))
+                  (heading (nth 1 entry))
+                  (level (nth 2 entry)))
+              (when (plist-get sections key)
+                (tibetan-analysis--replace-claude-section-body
+                 buf heading (plist-get sections key) level)))))
         ;; `--merge-claude-vocabulary' call retired 2026-05-20
         ;; (§5.21 Commit 2/7).  The merge targeted `** Word /
         ;; Particle List' which §5.10 retired — net no-op since
