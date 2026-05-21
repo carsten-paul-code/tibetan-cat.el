@@ -308,10 +308,24 @@ Keys:
                    identifier for the Tibetan-side parallel
                    (e.g. `BO_T06_D4037' for the Derge
                    Bodhisattvabhūmi).  nil when unset.
+  :sentence-compressed  truthy when `#+TIBETAN_SENTENCE_COMPRESSED:'
+                   carries a non-empty value other than `nil' /
+                   `no' / `false' (case-insensitive).  §5.22
+                   (2026-05-21) flag:  per-source switch that
+                   makes the per-sentence renderer emit a
+                   compressed in-class layout (Vocabulary +
+                   Translation + Grammar + Provided Translations
+                   only, drops Wylie / Phonetics / Interlinear /
+                   DharmaMitra / Sentence Structure / Verb
+                   Classification / Detailed Dictionary).  Per-
+                   segment seg-NNN.org files are unaffected;
+                   only sent-NNN.org gets the compressed shape.
+                   nil → existing full-layout behaviour (the
+                   default;  backwards-compatible).
 
 Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
   (let (title work author sources ctx vocab corpus target-lang source-mode
-              dm-sanskrit-source dm-tibetan-source)
+              dm-sanskrit-source dm-tibetan-source sentence-compressed)
     (when (and source-file (file-exists-p source-file))
       (condition-case nil
           (with-temp-buffer
@@ -349,6 +363,20 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
               (let ((val (string-trim (match-string 1))))
                 (unless (string-empty-p val)
                   (setq dm-tibetan-source val))))
+            ;; §5.22 (2026-05-21):  per-source compressed-sentence
+            ;; flag.  Truthy when the trimmed value is non-empty AND
+            ;; not one of the standard falsey words (`nil', `no',
+            ;; `false') case-insensitively.  The stored plist value
+            ;; is itself `t' rather than the raw string — consumers
+            ;; can use `(plist-get … :sentence-compressed)' as a
+            ;; boolean check directly.
+            (goto-char (point-min))
+            (when (re-search-forward
+                   "^#\\+TIBETAN_SENTENCE_COMPRESSED:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (downcase (string-trim (match-string 1)))))
+                (when (and (not (string-empty-p val))
+                           (not (member val '("nil" "no" "false"))))
+                  (setq sentence-compressed t))))
             (goto-char (point-min))
             (while (re-search-forward
                     "^#\\+TIBETAN_CLAUDE_CONTEXT:[ \t]*\\(.*\\)$" nil t)
@@ -387,7 +415,8 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
           :target-lang target-lang
           :source-mode source-mode
           :dm-sanskrit-source dm-sanskrit-source
-          :dm-tibetan-source dm-tibetan-source)))
+          :dm-tibetan-source dm-tibetan-source
+          :sentence-compressed sentence-compressed)))
 
 
 ;;;###autoload
