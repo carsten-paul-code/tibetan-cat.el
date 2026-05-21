@@ -136,10 +136,9 @@
       tibetan-cat-toggle-source-mode-parallel
       :help "Toggle `#+SOURCE_MODE: parallel-sanskrit' on the current source file.  When ON: next reanalyse emits ** Sanskrit Source above Wylie AND the Claude prompt becomes Sanskrit-primary with optional ### Tibetan Divergence notes.  When OFF: today's Tibetan-only behaviour."
       :active (fboundp 'tibetan-cat-toggle-source-mode-parallel)]
-     ["Toggle Compressed Sentence Layout (C-c u z C)"
-      tibetan-sentence-toggle-source-compressed
-      :help "Toggle `#+TIBETAN_SENTENCE_COMPRESSED: t' on the current source file.  When ON: subsequent sent-NNN.org files render in the in-class compressed layout (Vocabulary + Translation + Grammar + Provided Translations only;  drops Wylie / Phonetics / Interlinear / DharmaMitra / Sentence Structure / Verb Classification / Detailed Dictionary).  Per-segment seg-NNN.org files unaffected.  Toggle OFF: full §5.21 sentence-file layout restored on next regenerate."
-      :active (fboundp 'tibetan-sentence-toggle-source-compressed)]
+     ;; §5.22 final (2026-05-21):  "Toggle Compressed Sentence Layout"
+     ;; menu entry retired — sentence files are now unconditionally
+     ;; in compressed layout (segment files keep the full layout).
      ["DharmaMitra Realign Segment (C-c u z d)"
       tibetan-sanskrit-parallel-dm-realign-segment
       :help "DM-search + Claude-pick the matching Sanskrit for the segment under cursor.  Without prefix: preview.  C-u: write a `* Sanskrit (DharmaMitra)' section to the analysis file (source file untouched).  Requires #+DM_SANSKRIT_SOURCE: header on the source."

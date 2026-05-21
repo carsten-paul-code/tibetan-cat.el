@@ -422,18 +422,28 @@ Translations'.  My Notes / Working Translation are AT THE TOP
 
 (ert-deftest tibetan-sentence-scaffold-tibetan-analysis-on-tibetan-input ()
   "A Tibetan-containing sentence gets a `* Tibetan Analysis' block
-with the segment-level renderer output embedded.  The sentence
-scaffold no longer STRIPS the renderer's `** Translation' or
-`** Provided Translations' subtrees — those slots now hold the
-sentence-level Claude content (matching segment §5.18 layout).
-What used to be the top-level `* Provided Translations' block is
-nested inside `* Tibetan Analysis' as `** Provided Translations'."
+with the segment-level renderer output embedded — but only the
+compressed class-reading subset survives.
+
+§5.22 final (2026-05-21):  sentence files unconditionally render
+the in-class compressed layout — `** Translation' and `**
+Provided Translations' come through (matching segment §5.18
+layout for those two slots), but the 7 reference sections (Wylie
+/ Phonetics / Interlinear / DharmaMitra Translation / Sentence
+Structure / Verb Classification (Hill 2010) / Detailed
+Dictionary) are stripped.
+
+Pre-§5.22-final:  asserted `** Wylie Transliteration' was
+present.  Now asserted ABSENT (compressed default)."
   (skip-unless (fboundp 'tibetan-analysis-generate-content))
   (let ((body (tibetan-sentence--scaffold
                1 '(1) "བཀྲ་ཤིས་བདེ་ལེགས།" nil "/tmp/f.org")))
     (should (string-match-p "^\\* Tibetan Analysis$" body))
-    ;; Segment-level renderer section MUST come through.
-    (should (string-match-p "^\\*\\* Wylie Transliteration$" body))
+    ;; Kept sections (sentence-renderer compressed default).
+    (should (string-match-p "^\\*\\* Grammar$" body))
+    ;; Stripped sections (compressed default).
+    (should-not (string-match-p "^\\*\\* Wylie Transliteration$" body))
+    (should-not (string-match-p "^\\*\\* Detailed Dictionary$" body))
     ;; The legacy `* Auto-Analysis' name must NOT appear (parent
     ;; renamed for §5.18 alignment).
     (should-not (string-match-p "^\\* Auto-Analysis$" body))))
@@ -1520,118 +1530,64 @@ heading (`^\\*+ ')."
 ;; backwards-compatible behaviour).
 ;; ----------------------------------------------------------------------------
 
-(ert-deftest tibetan-sentence-segment-claude-sections-full-mode-list ()
-  "§5.22 follow-up (2026-05-21):  with `--compressed-for-render'
-unset (full-layout default), the accessor returns the always-
-strip list — `(\"** Detailed Dictionary\")'.  DD is dropped
-from sentence files regardless of compressed flag (DD bloats
-multi-segment sentence files;  per-segment seg-NNN.org files
-keep it as the dictionary reference).
+(ert-deftest tibetan-sentence-segment-claude-sections-strip-list ()
+  "§5.22 final (2026-05-21):  sentence files are ALWAYS rendered in
+the compressed in-class layout.  The accessor returns a fixed
+7-entry strip list — no longer flag-conditional.
 
-Pre-§5.22-follow-up:  accessor returned `'()' in full mode."
-  (should (fboundp 'tibetan-sentence--segment-claude-sections))
-  (let ((tibetan-sentence--compressed-for-render nil))
-    (should (equal (tibetan-sentence--segment-claude-sections)
-                   '("** Detailed Dictionary")))))
+Drops:  Wylie, Phonetics, Interlinear, DharmaMitra Translation,
+Sentence Structure, Verb Classification (Hill 2010), Detailed
+Dictionary.
 
-(ert-deftest tibetan-sentence-segment-claude-sections-compressed-list ()
-  "With `tibetan-sentence--compressed-for-render' bound to a truthy
-value, the accessor returns the compressed strip-list:  7 heavy /
-reference level-2 sections that get dropped from the embedded
-segment output before the sentence file is written.
-
-Sections that STAY in compressed mode (kept implicitly by NOT being
-in the strip list):
+Keeps (implicitly, by NOT being in the strip list):
   · ** Claude Vocabulary
   · ** Translation
   · ** Grammar
   · ** Provided Translations
-  · (any other future section a renderer might emit)"
-  (let ((tibetan-sentence--compressed-for-render t))
-    (let ((strip (tibetan-sentence--segment-claude-sections)))
-      (should (listp strip))
-      (should (= 7 (length strip)))
-      (should (member "** Wylie Transliteration" strip))
-      (should (member "** Phonetics" strip))
-      (should (member "** Interlinear Gloss" strip))
-      (should (member "** DharmaMitra Translation" strip))
-      (should (member "** Sentence Structure" strip))
-      (should (member "** Verb Classification (Hill 2010)" strip))
-      (should (member "** Detailed Dictionary" strip))
-      ;; Kept sections must NOT be in the strip list.
-      (should-not (member "** Claude Vocabulary" strip))
-      (should-not (member "** Translation" strip))
-      (should-not (member "** Grammar" strip))
-      (should-not (member "** Provided Translations" strip)))))
 
-(ert-deftest tibetan-sentence-toggle-source-compressed-adds-and-removes ()
-  "`tibetan-sentence-toggle-source-compressed' adds the header on a
-file that doesn't have it (or has a falsy value) and removes it
-on a file that has a truthy value.  Idempotent — running the
-toggle twice returns the file to its original state."
-  (should (fboundp 'tibetan-sentence-toggle-source-compressed))
-  (let* ((dir (make-temp-file "sent-toggle-" t))
-         (source-file (expand-file-name "source.org" dir)))
-    (unwind-protect
-        (progn
-          ;; Initial state:  no header.
-          (with-temp-file source-file
-            (insert "#+TITLE: T\n#+ANALYSIS_VERSION: 1.0\n\n* Tibetan Text\n"))
-          ;; First toggle:  header added with value `t'.
-          (tibetan-sentence-toggle-source-compressed source-file)
-          (let ((post (with-temp-buffer
-                        (insert-file-contents source-file)
-                        (buffer-string))))
-            (should (string-match-p
-                     "^#\\+TIBETAN_SENTENCE_COMPRESSED: t$" post))
-            ;; Metadata reader sees it as truthy.
-            (should (plist-get
-                     (tibetan-analysis--read-source-metadata source-file)
-                     :sentence-compressed)))
-          ;; Second toggle:  header removed.
-          (tibetan-sentence-toggle-source-compressed source-file)
-          (let ((post (with-temp-buffer
-                        (insert-file-contents source-file)
-                        (buffer-string))))
-            (should-not (string-match-p
-                         "^#\\+TIBETAN_SENTENCE_COMPRESSED:" post))
-            (should-not (plist-get
-                         (tibetan-analysis--read-source-metadata source-file)
-                         :sentence-compressed))
-            ;; Other headers unaffected — `#+TITLE:' and
-            ;; `#+ANALYSIS_VERSION:' survive the toggle.
-            (should (string-match-p "^#\\+TITLE: T$" post))
-            (should (string-match-p "^#\\+ANALYSIS_VERSION: 1\\.0$"
-                                    post)))
-          ;; Third toggle:  header added again.  Confirms idempotent
-          ;; round-trip.
-          (tibetan-sentence-toggle-source-compressed source-file)
-          (let ((post (with-temp-buffer
-                        (insert-file-contents source-file)
-                        (buffer-string))))
-            (should (plist-get
-                     (tibetan-analysis--read-source-metadata source-file)
-                     :sentence-compressed))))
-      (delete-directory dir t))))
+User feedback (2026-05-21):  \"the full layout isn't necessary
+for the sentence, only for the segments… max 2 pages A4 per
+sentence with the really important information, esp. the
+structure (with converbs).\"  The compressed shape is the class-
+reading default;  per-segment seg-NNN.org files keep the full
+§5.21 layout for prep-time deep analysis."
+  (should (fboundp 'tibetan-sentence--segment-claude-sections))
+  (let ((strip (tibetan-sentence--segment-claude-sections)))
+    (should (listp strip))
+    (should (= 7 (length strip)))
+    (should (member "** Wylie Transliteration" strip))
+    (should (member "** Phonetics" strip))
+    (should (member "** Interlinear Gloss" strip))
+    (should (member "** DharmaMitra Translation" strip))
+    (should (member "** Sentence Structure" strip))
+    (should (member "** Verb Classification (Hill 2010)" strip))
+    (should (member "** Detailed Dictionary" strip))
+    ;; Kept sections must NOT be in the strip list.
+    (should-not (member "** Claude Vocabulary" strip))
+    (should-not (member "** Translation" strip))
+    (should-not (member "** Grammar" strip))
+    (should-not (member "** Provided Translations" strip))))
 
-(ert-deftest tibetan-sentence-create-file-honours-compressed-header ()
-  "End-to-end:  source file carries `#+TIBETAN_SENTENCE_COMPRESSED: t';
-`tibetan-sentence--create-file' writes a sent-NNN.org whose
-`* Tibetan Analysis' body has ONLY the 4 kept level-2 sections
-plus the 3 sentence-only L3 extras under `** Provided
-Translations'.
+(ert-deftest tibetan-sentence-create-file-emits-compressed-layout ()
+  "§5.22 final (2026-05-21):  end-to-end — `tibetan-sentence--create-
+file' always writes a sent-NNN.org in the class-reading compressed
+layout, regardless of any source-document headers.
+
+`* Tibetan Analysis' carries only the 4 kept level-2 sections
+(Vocabulary + Translation + Grammar + Provided Translations);
+the 3 sentence-only L3 extras (Roehrich + Class Translation +
+Claude Context) sit under Provided Translations.
 
 Stubs `tibetan-analysis-generate-content' to return a fixed
 11-section blob so the test doesn't depend on the renderer's
 real output (which varies with vocab DB state)."
-  (let* ((dir (make-temp-file "sent-compressed-" t))
+  (let* ((dir (make-temp-file "sent-class-" t))
          (source-file (expand-file-name "source.org" dir))
          (analysis-folder (expand-file-name "analysis" dir)))
     (unwind-protect
         (progn
           (make-directory analysis-folder)
-          (with-temp-file source-file
-            (insert "#+TITLE: T\n#+TIBETAN_SENTENCE_COMPRESSED: t\n"))
+          (with-temp-file source-file (insert "#+TITLE: T\n"))
           (cl-letf
               (((symbol-function 'tibetan-analysis-generate-content)
                 (lambda (&rest _args)
@@ -1685,99 +1641,28 @@ real output (which varies with vocab DB state)."
             (should (string-match-p "^\\* Footnotes$" out))))
       (delete-directory dir t))))
 
-(ert-deftest tibetan-sentence-create-file-leaves-full-layout-without-header ()
-  "Source file WITHOUT the `#+TIBETAN_SENTENCE_COMPRESSED:' header
-produces the FULL sent-NNN.org layout — all the segment-renderer
-level-2 sections survive EXCEPT `** Detailed Dictionary'.
-
-§5.22 follow-up (2026-05-21):  DD is now always-stripped from
-sentence files regardless of the compressed flag.  Rationale:
-sentence files aggregate multiple segments → DD bloats to 20+
-entries on a typical multi-segment sentence;  the per-segment
-seg-NNN.org files already carry those entries for prep-time
-lookup, and the sentence file is for flow reading not deep
-dictionary work.
-
-Per-segment seg-NNN.org files are UNAFFECTED — they still carry
-the full DD as the bottom section of `* Tibetan Analysis'."
-  (let* ((dir (make-temp-file "sent-full-" t))
-         (source-file (expand-file-name "source.org" dir))
-         (analysis-folder (expand-file-name "analysis" dir)))
-    (unwind-protect
-        (progn
-          (make-directory analysis-folder)
-          ;; No `#+TIBETAN_SENTENCE_COMPRESSED:' header at all.
-          (with-temp-file source-file
-            (insert "#+TITLE: T\n"))
-          (cl-letf
-              (((symbol-function 'tibetan-analysis-generate-content)
-                (lambda (&rest _args)
-                  (concat
-                   "** Wylie Transliteration\nfoo\n\n"
-                   "** Phonetics\nfu\n\n"
-                   "** Interlinear Gloss\nfoo bar\n\n"
-                   "** Claude Vocabulary\nfoo = thing\n\n"
-                   "** Translation\nThe thing.\n\n"
-                   "** DharmaMitra Translation\nThe thing (DM).\n\n"
-                   "** Grammar\n*** Particles\n=ERG=\n\n"
-                   "** Sentence Structure\n[clauses]\n\n"
-                   "** Verb Classification (Hill 2010)\n[verbs]\n\n"
-                   "** Provided Translations\n\n\n"
-                   "** Detailed Dictionary\n[deep]\n")))
-               ((symbol-function 'tibetan-analysis--filter-to-tibetan-lines)
-                (lambda (text) text))
-               ((symbol-function 'tibetan-sentence--filepath)
-                (lambda (n)
-                  (expand-file-name
-                   (format "sent-%03d.org" n) analysis-folder))))
-            (tibetan-sentence--create-file 2 '(2) "བདུད།" source-file))
-          (let ((out (with-temp-buffer
-                       (insert-file-contents
-                        (expand-file-name "sent-002.org" analysis-folder))
-                       (buffer-string))))
-            ;; All segment-renderer level-2 sections survive EXCEPT
-            ;; `** Detailed Dictionary' — always-stripped from
-            ;; sentence files per §5.22 follow-up (2026-05-21).
-            (should (string-match-p "^\\*\\* Wylie Transliteration$" out))
-            (should (string-match-p "^\\*\\* Phonetics$" out))
-            (should (string-match-p "^\\*\\* Interlinear Gloss$" out))
-            (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
-            (should (string-match-p "^\\*\\* Translation$" out))
-            (should (string-match-p "^\\*\\* DharmaMitra Translation$" out))
-            (should (string-match-p "^\\*\\* Grammar$" out))
-            (should (string-match-p "^\\*\\* Sentence Structure$" out))
-            (should (string-match-p
-                     "^\\*\\* Verb Classification (Hill 2010)$" out))
-            (should (string-match-p "^\\*\\* Provided Translations$" out))
-            ;; Detailed Dictionary is ALWAYS dropped from sentence
-            ;; files — even in non-compressed (full) mode.
-            (should-not (string-match-p "^\\*\\* Detailed Dictionary$" out))))
-      (delete-directory dir t))))
+(ert-deftest tibetan-sentence-toggle-source-compressed-retired ()
+  "§5.22 final (2026-05-21):  the opt-in
+`tibetan-sentence-toggle-source-compressed' command is retired —
+the compressed layout is now the default for ALL sentence files,
+no per-source header switch needed.  Per fboundp check guards
+against accidental re-introduction."
+  (should-not (fboundp 'tibetan-sentence-toggle-source-compressed)))
 
 (ert-deftest tibetan-sentence-strip-always-drops-detailed-dictionary ()
-  "§5.22 follow-up (2026-05-21):  `** Detailed Dictionary' is in the
-sentence-stripper's filter list regardless of the compressed
-flag — sentence files never carry DD.  Per-segment seg-NNN.org
-files keep DD;  this is a sentence-renderer behaviour only.
+  "§5.22 final (2026-05-21):  `** Detailed Dictionary' is in the
+sentence-stripper's filter list unconditionally — sentence files
+never carry DD.  Per-segment seg-NNN.org files keep DD as their
+prep-time dictionary reference;  this is a sentence-renderer
+behaviour only."
+  (should (member "** Detailed Dictionary"
+                  (tibetan-sentence--segment-claude-sections))))
 
-Asserts the accessor returns DD on the list in BOTH modes."
-  (let ((tibetan-sentence--compressed-for-render nil))
-    (should (member "** Detailed Dictionary"
-                    (tibetan-sentence--segment-claude-sections))))
-  (let ((tibetan-sentence--compressed-for-render t))
-    (should (member "** Detailed Dictionary"
-                    (tibetan-sentence--segment-claude-sections)))))
-
-(ert-deftest tibetan-sentence-strip-compresses-when-flag-set ()
-  "`tibetan-sentence--strip-segment-claude-sections' filters the heavy
-sections out of segment-renderer content when the compressed flag is
-set, and drops only `** Detailed Dictionary' in full mode (§5.22
-follow-up, 2026-05-21:  DD is always-stripped from sentence files).
-
-Compressed-mode test:  build a content blob with all 11 level-2
-sections, assert post-filter only 4 remain (Vocab + Translation +
-Grammar + Provided Translations).  Full-mode test:  same input,
-assert all 11 EXCEPT `** Detailed Dictionary' still present."
+(ert-deftest tibetan-sentence-strip-compresses-segment-output ()
+  "§5.22 final (2026-05-21):  `tibetan-sentence--strip-segment-
+claude-sections' unconditionally drops the 7 reference sections
+from segment-renderer output before embedding in a sentence file.
+No mode flag — sentence files are always class-format."
   (let ((content
          (concat
           "** Wylie Transliteration\nfoo\n\n"
@@ -1791,13 +1676,13 @@ assert all 11 EXCEPT `** Detailed Dictionary' still present."
           "** Verb Classification (Hill 2010)\n[verbs]\n\n"
           "** Provided Translations\n\n\n"
           "** Detailed Dictionary\n[deep]\n")))
-    ;; Compressed mode — only the 4 kept sections survive.
-    (let* ((tibetan-sentence--compressed-for-render t)
-           (out (tibetan-sentence--strip-segment-claude-sections content)))
+    (let ((out (tibetan-sentence--strip-segment-claude-sections content)))
+      ;; Kept: 4 sections.
       (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
       (should (string-match-p "^\\*\\* Translation$" out))
       (should (string-match-p "^\\*\\* Grammar$" out))
       (should (string-match-p "^\\*\\* Provided Translations$" out))
+      ;; Dropped: 7 sections.
       (should-not (string-match-p "^\\*\\* Wylie Transliteration$" out))
       (should-not (string-match-p "^\\*\\* Phonetics$" out))
       (should-not (string-match-p "^\\*\\* Interlinear Gloss$" out))
@@ -1805,22 +1690,6 @@ assert all 11 EXCEPT `** Detailed Dictionary' still present."
       (should-not (string-match-p "^\\*\\* Sentence Structure$" out))
       (should-not (string-match-p
                    "^\\*\\* Verb Classification (Hill 2010)$" out))
-      (should-not (string-match-p "^\\*\\* Detailed Dictionary$" out)))
-    ;; Full mode (default) — all 11 sections pass through EXCEPT
-    ;; `** Detailed Dictionary' (always-stripped per §5.22 follow-up).
-    (let* ((tibetan-sentence--compressed-for-render nil)
-           (out (tibetan-sentence--strip-segment-claude-sections content)))
-      (should (string-match-p "^\\*\\* Wylie Transliteration$" out))
-      (should (string-match-p "^\\*\\* Phonetics$" out))
-      (should (string-match-p "^\\*\\* Interlinear Gloss$" out))
-      (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
-      (should (string-match-p "^\\*\\* Translation$" out))
-      (should (string-match-p "^\\*\\* DharmaMitra Translation$" out))
-      (should (string-match-p "^\\*\\* Grammar$" out))
-      (should (string-match-p "^\\*\\* Sentence Structure$" out))
-      (should (string-match-p
-               "^\\*\\* Verb Classification (Hill 2010)$" out))
-      (should (string-match-p "^\\*\\* Provided Translations$" out))
       (should-not (string-match-p "^\\*\\* Detailed Dictionary$" out)))))
 
 ;; ============================================================================

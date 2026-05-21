@@ -302,20 +302,13 @@
   ;; `### Tibetan Divergence' notes.  Toggling OFF returns the
   ;; document to today's Tibetan-only behaviour.
 
-(define-key tibetan-thesaurus-prefix-map (kbd "C")
-  'tibetan-sentence-toggle-source-compressed)
-  ;; §5.22 (2026-05-21):  toggle `#+TIBETAN_SENTENCE_COMPRESSED: t'
-  ;; on the current source file.  Sibling of `C-c u z L' (target
-  ;; language) and `C-c u z P' (parallel-Sanskrit) — same per-source
-  ;; opt-in header pattern.  When ON:  subsequent sent-NNN.org files
-  ;; render in the in-class compressed layout — only `** Claude
-  ;; Vocabulary' / `** Translation' / `** Grammar' / `** Provided
-  ;; Translations' survive inside `* Tibetan Analysis'; Wylie /
-  ;; Phonetics / Interlinear / DharmaMitra / Sentence Structure /
-  ;; Verb Classification / Detailed Dictionary are dropped.
-  ;; Per-segment seg-NNN.org files are unaffected.  Toggling OFF
-  ;; returns sentence files to the full §5.21 layout on next
-  ;; regenerate.
+;; §5.22 final (2026-05-21):  the `C-c u z C' toggle for the
+;; compressed sentence layout is RETIRED.  Sentence files are now
+;; unconditionally rendered in the class-reading compressed shape
+;; (Vocabulary + Translation + Grammar + Provided Translations
+;; only).  Per-segment seg-NNN.org files keep the full §5.21
+;; layout.  No per-source header switch needed.  The keybinding
+;; is freed up for future use under the `C-c u z' prefix.
 
 (define-key tibetan-thesaurus-prefix-map (kbd "d")
   'tibetan-sanskrit-parallel-dm-realign-segment)

@@ -369,92 +369,52 @@ the corresponding heading has real content, not placeholder text)."
 ;; FILE CREATION (scaffold)
 ;; ============================================================================
 
-(defvar tibetan-sentence--compressed-for-render nil
-  "Dynamic var:  when non-nil, the sentence renderer compresses the
-embedded segment output to the in-class layout (Vocabulary +
-Translation + Grammar + Provided Translations only;  drops Wylie,
-Phonetics, Interlinear, DharmaMitra Translation, Sentence Structure,
-Verb Classification, Detailed Dictionary).
-
-§5.22 (2026-05-21):  let-bound by `tibetan-sentence--create-file'
-and `tibetan-sentence--regenerate' based on the source-document
-header `#+TIBETAN_SENTENCE_COMPRESSED: t' (read via
-`tibetan-analysis--read-source-metadata's `:sentence-compressed'
-plist key).  Consumed by
-`tibetan-sentence--segment-claude-sections' below to switch
-between the empty full-pass list and the compressed strip list.
-
-Nil → existing full-layout behaviour (the default;  backwards-
-compatible).  Per-segment seg-NNN.org files are unaffected;  this
-flag only changes the embedded shape inside sent-NNN.org.")
-
-(defconst tibetan-sentence--always-strip-list
-  '("** Detailed Dictionary")
-  "Level-2 headings stripped from the segment-renderer output for
-EVERY sentence file, regardless of the compressed flag.
-
-§5.22 follow-up (2026-05-21):  `** Detailed Dictionary' is
-always-stripped from sentence files because:
-
-  · A typical multi-segment sentence file aggregates 4-6
-    segments → DD balloons to 20+ entries, dominating the file
-    visually even though the entries duplicate what already
-    sits in each per-segment `seg-NNN.org' file.
-  · The per-segment file is the prep-time dictionary reference;
-    the sentence file is for flow reading.
-
-Per-segment `seg-NNN.org' files are UNAFFECTED — they keep DD
-as the bottom section of `* Tibetan Analysis' (§5.21 layout).
-This stripping applies only to the sentence renderer.")
-
-(defconst tibetan-sentence--compressed-strip-list
+(defconst tibetan-sentence--strip-list
   '("** Wylie Transliteration"
     "** Phonetics"
     "** Interlinear Gloss"
     "** DharmaMitra Translation"
     "** Sentence Structure"
-    "** Verb Classification (Hill 2010)")
-  "Additional level-2 headings dropped from the segment-renderer
-output when compressed-sentence mode is active (§5.22, 2026-05-21).
+    "** Verb Classification (Hill 2010)"
+    "** Detailed Dictionary")
+  "Level-2 headings dropped from the segment-renderer output before
+it is embedded in a sentence file's `* Tibetan Analysis' block.
 
-Combined with `tibetan-sentence--always-strip-list' by
-`--segment-claude-sections' below — compressed mode drops the
-union of both lists (6 sections here + `** Detailed Dictionary'
-from always-strip = 7 total).
+§5.22 final (2026-05-21):  sentence files are ALWAYS rendered in
+the class-reading compressed layout.  Per-segment seg-NNN.org
+files keep the full §5.21 layout (these sections only get
+stripped from the sentence renderer's path;  the segment scaffold
+is unaffected).
 
-What stays in compressed mode (implicitly, by being on neither
-strip list):
+What stays (implicitly, by NOT being in this list):
   · `** Claude Vocabulary' — Claude's per-word annotations.
   · `** Translation' — Claude's primary translation.
-  · `** Grammar' — Claude's prose + merged `*** Particles'.
+  · `** Grammar' — Claude's prose + merged `*** Particles' with
+    Bialek 2022 / Portfolio refs (the converb-rich structure
+    section the in-class reading turns on).
   · `** Provided Translations' — user-content slot with sentence-
     only L3 extras (Roehrich / Class Translation / Claude Context)
     injected by `--inject-sentence-l3-entries' after stripping.
 
-§5.22 (2026-05-21) initial:  DD was in this list.
-§5.22 follow-up (2026-05-21):  DD moved to the always-strip
-list because full-mode sentence files also benefit from
-dropping it (multi-segment aggregation makes DD a wall of text).")
+User feedback (2026-05-21):  \"the full layout isn't necessary
+for the sentence, only for the segments… max 2 pages A4 per
+sentence with the really important information, esp. the
+structure (with converbs).\"  The opt-in machinery from §5.22
+initial (`#+TIBETAN_SENTENCE_COMPRESSED:' header, toggle command,
+keybinding) is retired in favour of unconditional compression.")
 
 (defun tibetan-sentence--segment-claude-sections ()
   "Return the list of level-2 headings to strip from segment-renderer
 output before embedding it in a sentence file.
 
-  · Flag nil (default, full-layout):  return
-    `tibetan-sentence--always-strip-list' — drops only the
-    always-stripped sections (currently `** Detailed Dictionary'
-    per §5.22 follow-up, 2026-05-21).
-  · Flag non-nil (compressed-layout):  return the union of
-    `--always-strip-list' + `--compressed-strip-list' — drops
-    7 heavy / reference sections total (Wylie / Phonetics /
-    Interlinear / DharmaMitra Translation / Sentence Structure /
-    Verb Classification / Detailed Dictionary).
+§5.22 final (2026-05-21):  unconditional — sentence files are
+always class-format.  Returns `tibetan-sentence--strip-list'
+verbatim.  Kept as a defun (rather than the user calling the
+defconst directly) so internal mocking + future strip-list
+variants stay easy to wire.
 
 Consumed by `--strip-segment-claude-sections' below."
-  (if tibetan-sentence--compressed-for-render
-      (append tibetan-sentence--always-strip-list
-              tibetan-sentence--compressed-strip-list)
-    tibetan-sentence--always-strip-list))
+  tibetan-sentence--strip-list)
 
 (defun tibetan-sentence--strip-segment-claude-sections (content)
   "Return CONTENT with segment-level Claude sections removed.
@@ -728,34 +688,18 @@ under `* Tibetan Analysis' instead of the rich segment-renderer
 body.  The outer shape (My Notes / Working Translation top,
 Footnotes bottom) is preserved either way.
 
-§5.22 (2026-05-21):  reads SOURCE-FILE's
-`#+TIBETAN_SENTENCE_COMPRESSED:' header via
-`tibetan-analysis--read-source-metadata' and let-binds
-`tibetan-sentence--compressed-for-render' for the body of the
-call.  When the header is truthy, the embedded segment-renderer
-output is stripped to the in-class layout (Vocabulary +
-Translation + Grammar + Provided Translations only).  When the
-header is absent or nil, the full layout is preserved
-\(backwards-compatible default).  Per-segment seg-NNN.org files
-are unaffected — only the sent-NNN.org embedded body changes."
+§5.22 final (2026-05-21):  the embedded segment-renderer output
+is unconditionally stripped to the in-class compressed layout
+(Vocabulary + Translation + Grammar + Provided Translations
+only).  Per-segment seg-NNN.org files are unaffected;  only the
+sent-NNN.org embedded body is compressed.  See
+`tibetan-sentence--strip-list' for the dropped sections and
+their rationale."
   (let* ((source-name (and source-file
                            (file-name-nondirectory source-file)))
          (date (format-time-string "%Y-%m-%d"))
          (hash (tibetan-sentence--compute-hash tibetan-text))
-         (segs-csv (mapconcat #'number-to-string seg-nums ", "))
-         ;; §5.22:  per-source compressed-sentence flag.  Read once
-         ;; here and bind dynamically so the downstream call chain
-         ;; (`--render-auto-analysis' → `--strip-segment-claude-
-         ;; sections' → `--segment-claude-sections') consults the
-         ;; right strip list.
-         (meta (and source-file
-                    (fboundp 'tibetan-analysis--read-source-metadata)
-                    (condition-case nil
-                        (tibetan-analysis--read-source-metadata source-file)
-                      (error nil))))
-         (tibetan-sentence--compressed-for-render
-          (or (plist-get meta :sentence-compressed)
-              tibetan-sentence--compressed-for-render)))
+         (segs-csv (mapconcat #'number-to-string seg-nums ", ")))
     (with-temp-buffer
       (insert (format "#+TITLE: Sentence %d Analysis\n" sent-num))
       (insert "#+STARTUP: showall\n")
@@ -1850,109 +1794,13 @@ Proceed? "
       (message "Resegment complete.  Review the source file and the new sent-*.org files; old work is in analysis/archive/.")))))
 
 ;; ============================================================================
-;; §5.22 (2026-05-21):  Per-source compressed-sentence toggle.
-;;
-;; `tibetan-sentence-toggle-source-compressed' flips the
-;; `#+TIBETAN_SENTENCE_COMPRESSED:' header on the current source
-;; document.  When set to `t', subsequent sent-NNN.org files for
-;; that source render in the in-class compressed layout (Vocabulary
-;; + Translation + Grammar + Provided Translations only;  drops
-;; Wylie / Phonetics / Interlinear / DharmaMitra / Sentence
-;; Structure / Verb Classification / Detailed Dictionary).
-;;
-;; Mirrors the §5.14 `tibetan-cat-toggle-source-mode-parallel'
-;; pattern (header-toggle + source-file resolution from analysis
-;; buffer).
+;; §5.22 final (2026-05-21):  the opt-in toggle command
+;; `tibetan-sentence-toggle-source-compressed' and its helper
+;; `tibetan-sentence--source-file-for-toggle' are RETIRED.
+;; Compressed sentence layout is now the unconditional default;
+;; no per-source header switch needed (see
+;; `tibetan-sentence--strip-list' for the dropped sections).
 ;; ============================================================================
-
-(defun tibetan-sentence--source-file-for-toggle (filepath)
-  "Resolve the source-document path from FILEPATH.
-
-When FILEPATH is an analysis file (carries `#+SOURCE:' linking
-back to the source), follow that link;  otherwise treat FILEPATH
-as the source directly.  Used by
-`tibetan-sentence-toggle-source-compressed' so the user can run
-the toggle from EITHER the source buffer OR an open analysis
-buffer."
-  (or (and filepath
-           (fboundp 'tibetan-analysis--source-file-from-analysis)
-           (tibetan-analysis--source-file-from-analysis filepath))
-      filepath))
-
-;;;###autoload
-(defun tibetan-sentence-toggle-source-compressed (&optional source-file)
-  "Toggle `#+TIBETAN_SENTENCE_COMPRESSED: t' on SOURCE-FILE.
-
-When the header is absent OR present with a falsy value
-\(`nil' / `no' / `false' / empty), add `#+TIBETAN_SENTENCE_
-COMPRESSED: t'.  When the header is present with a truthy value,
-remove it.  Idempotent — running the toggle twice returns the
-file to its original state.
-
-Source-file resolution:
-  1. Argument SOURCE-FILE if given.
-  2. If the current buffer is an analysis file, follow its
-     `#+SOURCE:' link to the source document.
-  3. Otherwise, treat the current buffer's file as the source.
-  4. If neither resolves, prompt for a path.
-
-Subsequent `sent-NNN.org' files created for or regenerated from
-this source will pick up the new value automatically via
-`tibetan-analysis--read-source-metadata'.  Per-segment seg-NNN.org
-files are unaffected.
-
-Bound to `C-c u z C' (Compressed) under the existing
-`C-c u z' source-document prefix.  Sibling of `C-c u z L'
-\(target language) and `C-c u z P' (parallel-Sanskrit)."
-  (interactive)
-  (let* ((source-file
-          (or source-file
-              (tibetan-sentence--source-file-for-toggle
-               (buffer-file-name))
-              (read-file-name "Source file: " nil nil t))))
-    (unless (and source-file (stringp source-file)
-                 (not (string-empty-p source-file))
-                 (file-exists-p source-file)
-                 (file-writable-p source-file))
-      (user-error
-       "Cannot toggle compressed-sentence header — source file missing / not writable: %s"
-       source-file))
-    (let* ((meta (tibetan-analysis--read-source-metadata source-file))
-           (currently-on (plist-get meta :sentence-compressed)))
-      (with-temp-buffer
-        (insert-file-contents source-file)
-        (goto-char (point-min))
-        (cond
-         (currently-on
-          ;; Header is truthy — remove the entire line.
-          (when (re-search-forward
-                 "^#\\+TIBETAN_SENTENCE_COMPRESSED:.*\n?" nil t)
-            (replace-match "" t t)))
-         (t
-          ;; Header absent or falsy — set / add `t'.
-          (cond
-           ;; Existing falsy line → replace value in place.
-           ((re-search-forward
-             "^#\\+TIBETAN_SENTENCE_COMPRESSED:.*$" nil t)
-            (replace-match "#+TIBETAN_SENTENCE_COMPRESSED: t" t t))
-           ;; Insert after the first `#+TITLE:' line.
-           ((progn (goto-char (point-min))
-                   (re-search-forward "^#\\+TITLE:.*$" nil t))
-            (end-of-line)
-            (insert "\n#+TIBETAN_SENTENCE_COMPRESSED: t"))
-           ;; No `#+TITLE:' either — prepend.
-           (t
-            (goto-char (point-min))
-            (insert "#+TIBETAN_SENTENCE_COMPRESSED: t\n")))))
-        (write-region (point-min) (point-max) source-file))
-      (when (called-interactively-p 'any)
-        (message
-         "Compressed-sentence mode %s on %s — next sent-NNN.org regenerate %s"
-         (if currently-on "DISABLED" "ENABLED")
-         (file-name-nondirectory source-file)
-         (if currently-on
-             "will restore the full layout"
-           "will render only Vocabulary + Translation + Grammar + Provided Translations"))))))
 
 (provide 'tibetan-sentence-persist)
 ;;; tibetan-sentence-persist.el ends here

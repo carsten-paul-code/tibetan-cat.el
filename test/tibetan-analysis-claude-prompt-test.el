@@ -63,39 +63,16 @@
       (should (equal (plist-get meta :author) "gTsang smyon He ru ka"))
       (should (equal (plist-get meta :sources) "fol. 1a1")))))
 
-(ert-deftest tibetan-analysis-metadata-reads-sentence-compressed-header ()
-  "§5.22 Commit 1/5 (2026-05-21):  `#+TIBETAN_SENTENCE_COMPRESSED: t'
-in the source-file header is captured by
-`tibetan-analysis--read-source-metadata' under the
-`:sentence-compressed' plist key.  Truthy when the trimmed value
-is `t' / `T' / `yes' / non-empty;  absent or `nil' / empty → nil
-on the plist (so consumers can use `(plist-get … :sentence-
-compressed)' as a boolean check)."
-  ;; Truthy: t
+(ert-deftest tibetan-analysis-metadata-sentence-compressed-key-retired ()
+  "§5.22 final (2026-05-21):  the `:sentence-compressed' plist key
+on `tibetan-analysis--read-source-metadata' is retired.
+Sentence files are ALWAYS compressed now;  the per-source
+`#+TIBETAN_SENTENCE_COMPRESSED:' header has no consumer.  Asserts
+absent from the returned plist regardless of header presence."
   (tibetan-test--with-source
       "#+TITLE: T\n#+TIBETAN_SENTENCE_COMPRESSED: t\n"
     (let ((meta (tibetan-analysis--read-source-metadata source-file)))
-      (should (plist-get meta :sentence-compressed))))
-  ;; Truthy: yes
-  (tibetan-test--with-source
-      "#+TITLE: T\n#+TIBETAN_SENTENCE_COMPRESSED: yes\n"
-    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
-      (should (plist-get meta :sentence-compressed))))
-  ;; Falsy: nil
-  (tibetan-test--with-source
-      "#+TITLE: T\n#+TIBETAN_SENTENCE_COMPRESSED: nil\n"
-    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
-      (should-not (plist-get meta :sentence-compressed))))
-  ;; Falsy: empty value
-  (tibetan-test--with-source
-      "#+TITLE: T\n#+TIBETAN_SENTENCE_COMPRESSED:\n"
-    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
-      (should-not (plist-get meta :sentence-compressed))))
-  ;; Absent — no header at all.
-  (tibetan-test--with-source
-      "#+TITLE: T\n"
-    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
-      (should-not (plist-get meta :sentence-compressed)))))
+      (should-not (plist-member meta :sentence-compressed)))))
 
 (ert-deftest tibetan-claude-prompt-collects-multiple-context-headers ()
   "Every `#+TIBETAN_CLAUDE_CONTEXT:' line is collected in source order."
