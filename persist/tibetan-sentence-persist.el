@@ -388,18 +388,42 @@ Nil → existing full-layout behaviour (the default;  backwards-
 compatible).  Per-segment seg-NNN.org files are unaffected;  this
 flag only changes the embedded shape inside sent-NNN.org.")
 
+(defconst tibetan-sentence--always-strip-list
+  '("** Detailed Dictionary")
+  "Level-2 headings stripped from the segment-renderer output for
+EVERY sentence file, regardless of the compressed flag.
+
+§5.22 follow-up (2026-05-21):  `** Detailed Dictionary' is
+always-stripped from sentence files because:
+
+  · A typical multi-segment sentence file aggregates 4-6
+    segments → DD balloons to 20+ entries, dominating the file
+    visually even though the entries duplicate what already
+    sits in each per-segment `seg-NNN.org' file.
+  · The per-segment file is the prep-time dictionary reference;
+    the sentence file is for flow reading.
+
+Per-segment `seg-NNN.org' files are UNAFFECTED — they keep DD
+as the bottom section of `* Tibetan Analysis' (§5.21 layout).
+This stripping applies only to the sentence renderer.")
+
 (defconst tibetan-sentence--compressed-strip-list
   '("** Wylie Transliteration"
     "** Phonetics"
     "** Interlinear Gloss"
     "** DharmaMitra Translation"
     "** Sentence Structure"
-    "** Verb Classification (Hill 2010)"
-    "** Detailed Dictionary")
-  "Level-2 headings dropped from the segment-renderer output when
-compressed-sentence mode is active (§5.22, 2026-05-21).
+    "** Verb Classification (Hill 2010)")
+  "Additional level-2 headings dropped from the segment-renderer
+output when compressed-sentence mode is active (§5.22, 2026-05-21).
 
-What stays (implicitly, by NOT being in this list):
+Combined with `tibetan-sentence--always-strip-list' by
+`--segment-claude-sections' below — compressed mode drops the
+union of both lists (6 sections here + `** Detailed Dictionary'
+from always-strip = 7 total).
+
+What stays in compressed mode (implicitly, by being on neither
+strip list):
   · `** Claude Vocabulary' — Claude's per-word annotations.
   · `** Translation' — Claude's primary translation.
   · `** Grammar' — Claude's prose + merged `*** Particles'.
@@ -407,33 +431,30 @@ What stays (implicitly, by NOT being in this list):
     only L3 extras (Roehrich / Class Translation / Claude Context)
     injected by `--inject-sentence-l3-entries' after stripping.
 
-Used by `tibetan-sentence--segment-claude-sections' when
-`tibetan-sentence--compressed-for-render' is non-nil.  When the
-flag is nil the accessor returns `'()' instead (full pass-through,
-matching the pre-§5.22 empty-list defconst behaviour).")
+§5.22 (2026-05-21) initial:  DD was in this list.
+§5.22 follow-up (2026-05-21):  DD moved to the always-strip
+list because full-mode sentence files also benefit from
+dropping it (multi-segment aggregation makes DD a wall of text).")
 
 (defun tibetan-sentence--segment-claude-sections ()
   "Return the list of level-2 headings to strip from segment-renderer
 output before embedding it in a sentence file.
 
-§5.22 (2026-05-21):  was a `defconst' (always `'()' post-§5.18
-alignment);  promoted to a defun so the list can vary per-call
-based on `tibetan-sentence--compressed-for-render':
-
-  · Flag nil (default):  return `'()' — full pass-through;
-    the embedded segment output retains all 11 level-2 sections.
-    Identical to the pre-§5.22 no-op behaviour.
-
-  · Flag non-nil:  return
-    `tibetan-sentence--compressed-strip-list' — 7 heavy /
-    reference sections (Wylie / Phonetics / Interlinear /
-    DharmaMitra Translation / Sentence Structure / Verb
-    Classification / Detailed Dictionary) get filtered out.
+  · Flag nil (default, full-layout):  return
+    `tibetan-sentence--always-strip-list' — drops only the
+    always-stripped sections (currently `** Detailed Dictionary'
+    per §5.22 follow-up, 2026-05-21).
+  · Flag non-nil (compressed-layout):  return the union of
+    `--always-strip-list' + `--compressed-strip-list' — drops
+    7 heavy / reference sections total (Wylie / Phonetics /
+    Interlinear / DharmaMitra Translation / Sentence Structure /
+    Verb Classification / Detailed Dictionary).
 
 Consumed by `--strip-segment-claude-sections' below."
   (if tibetan-sentence--compressed-for-render
-      tibetan-sentence--compressed-strip-list
-    '()))
+      (append tibetan-sentence--always-strip-list
+              tibetan-sentence--compressed-strip-list)
+    tibetan-sentence--always-strip-list))
 
 (defun tibetan-sentence--strip-segment-claude-sections (content)
   "Return CONTENT with segment-level Claude sections removed.

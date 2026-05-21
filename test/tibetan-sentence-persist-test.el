@@ -1520,13 +1520,19 @@ heading (`^\\*+ ')."
 ;; backwards-compatible behaviour).
 ;; ----------------------------------------------------------------------------
 
-(ert-deftest tibetan-sentence-segment-claude-sections-defaults-to-empty ()
-  "With `tibetan-sentence--compressed-for-render' unset (the default),
-the accessor returns the empty list — identical to the pre-§5.22
-no-op behaviour.  Backwards-compat regression guard."
+(ert-deftest tibetan-sentence-segment-claude-sections-full-mode-list ()
+  "§5.22 follow-up (2026-05-21):  with `--compressed-for-render'
+unset (full-layout default), the accessor returns the always-
+strip list — `(\"** Detailed Dictionary\")'.  DD is dropped
+from sentence files regardless of compressed flag (DD bloats
+multi-segment sentence files;  per-segment seg-NNN.org files
+keep it as the dictionary reference).
+
+Pre-§5.22-follow-up:  accessor returned `'()' in full mode."
   (should (fboundp 'tibetan-sentence--segment-claude-sections))
   (let ((tibetan-sentence--compressed-for-render nil))
-    (should (equal (tibetan-sentence--segment-claude-sections) '()))))
+    (should (equal (tibetan-sentence--segment-claude-sections)
+                   '("** Detailed Dictionary")))))
 
 (ert-deftest tibetan-sentence-segment-claude-sections-compressed-list ()
   "With `tibetan-sentence--compressed-for-render' bound to a truthy
@@ -1680,11 +1686,20 @@ real output (which varies with vocab DB state)."
       (delete-directory dir t))))
 
 (ert-deftest tibetan-sentence-create-file-leaves-full-layout-without-header ()
-  "Backwards-compat:  source file WITHOUT the
-`#+TIBETAN_SENTENCE_COMPRESSED:' header produces the full
-sent-NNN.org layout — all 11 level-2 sections survive in
-`* Tibetan Analysis'.  Regression guard against accidental
-flag drift."
+  "Source file WITHOUT the `#+TIBETAN_SENTENCE_COMPRESSED:' header
+produces the FULL sent-NNN.org layout — all the segment-renderer
+level-2 sections survive EXCEPT `** Detailed Dictionary'.
+
+§5.22 follow-up (2026-05-21):  DD is now always-stripped from
+sentence files regardless of the compressed flag.  Rationale:
+sentence files aggregate multiple segments → DD bloats to 20+
+entries on a typical multi-segment sentence;  the per-segment
+seg-NNN.org files already carry those entries for prep-time
+lookup, and the sentence file is for flow reading not deep
+dictionary work.
+
+Per-segment seg-NNN.org files are UNAFFECTED — they still carry
+the full DD as the bottom section of `* Tibetan Analysis'."
   (let* ((dir (make-temp-file "sent-full-" t))
          (source-file (expand-file-name "source.org" dir))
          (analysis-folder (expand-file-name "analysis" dir)))
@@ -1720,7 +1735,9 @@ flag drift."
                        (insert-file-contents
                         (expand-file-name "sent-002.org" analysis-folder))
                        (buffer-string))))
-            ;; All 11 segment-renderer level-2 sections survive.
+            ;; All segment-renderer level-2 sections survive EXCEPT
+            ;; `** Detailed Dictionary' — always-stripped from
+            ;; sentence files per §5.22 follow-up (2026-05-21).
             (should (string-match-p "^\\*\\* Wylie Transliteration$" out))
             (should (string-match-p "^\\*\\* Phonetics$" out))
             (should (string-match-p "^\\*\\* Interlinear Gloss$" out))
@@ -1732,18 +1749,35 @@ flag drift."
             (should (string-match-p
                      "^\\*\\* Verb Classification (Hill 2010)$" out))
             (should (string-match-p "^\\*\\* Provided Translations$" out))
-            (should (string-match-p "^\\*\\* Detailed Dictionary$" out))))
+            ;; Detailed Dictionary is ALWAYS dropped from sentence
+            ;; files — even in non-compressed (full) mode.
+            (should-not (string-match-p "^\\*\\* Detailed Dictionary$" out))))
       (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-strip-always-drops-detailed-dictionary ()
+  "§5.22 follow-up (2026-05-21):  `** Detailed Dictionary' is in the
+sentence-stripper's filter list regardless of the compressed
+flag — sentence files never carry DD.  Per-segment seg-NNN.org
+files keep DD;  this is a sentence-renderer behaviour only.
+
+Asserts the accessor returns DD on the list in BOTH modes."
+  (let ((tibetan-sentence--compressed-for-render nil))
+    (should (member "** Detailed Dictionary"
+                    (tibetan-sentence--segment-claude-sections))))
+  (let ((tibetan-sentence--compressed-for-render t))
+    (should (member "** Detailed Dictionary"
+                    (tibetan-sentence--segment-claude-sections)))))
 
 (ert-deftest tibetan-sentence-strip-compresses-when-flag-set ()
   "`tibetan-sentence--strip-segment-claude-sections' filters the heavy
 sections out of segment-renderer content when the compressed flag is
-set, and is a no-op when it's not.
+set, and drops only `** Detailed Dictionary' in full mode (§5.22
+follow-up, 2026-05-21:  DD is always-stripped from sentence files).
 
 Compressed-mode test:  build a content blob with all 11 level-2
 sections, assert post-filter only 4 remain (Vocab + Translation +
 Grammar + Provided Translations).  Full-mode test:  same input,
-assert all 11 sections still present."
+assert all 11 EXCEPT `** Detailed Dictionary' still present."
   (let ((content
          (concat
           "** Wylie Transliteration\nfoo\n\n"
@@ -1772,7 +1806,8 @@ assert all 11 sections still present."
       (should-not (string-match-p
                    "^\\*\\* Verb Classification (Hill 2010)$" out))
       (should-not (string-match-p "^\\*\\* Detailed Dictionary$" out)))
-    ;; Full mode (default) — all 11 sections pass through unchanged.
+    ;; Full mode (default) — all 11 sections pass through EXCEPT
+    ;; `** Detailed Dictionary' (always-stripped per §5.22 follow-up).
     (let* ((tibetan-sentence--compressed-for-render nil)
            (out (tibetan-sentence--strip-segment-claude-sections content)))
       (should (string-match-p "^\\*\\* Wylie Transliteration$" out))
@@ -1786,7 +1821,7 @@ assert all 11 sections still present."
       (should (string-match-p
                "^\\*\\* Verb Classification (Hill 2010)$" out))
       (should (string-match-p "^\\*\\* Provided Translations$" out))
-      (should (string-match-p "^\\*\\* Detailed Dictionary$" out)))))
+      (should-not (string-match-p "^\\*\\* Detailed Dictionary$" out)))))
 
 ;; ============================================================================
 ;; HELPER FUNCTION
