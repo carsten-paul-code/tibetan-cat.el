@@ -857,6 +857,115 @@ silently destroying the upstream-Claude / DM artefacts."
 ;; and DD — is left for follow-up;  this guard makes the export
 ;; class crash-safe regardless of how the divergence happens.
 
+;; ============================================================================
+;; §5.23 (2026-05-22) — Migration: unsuffixed → suffixed analysis filenames
+;; ============================================================================
+;;
+;; Older analysis folders (pre-§5.23) carry `seg-NNN.org' /
+;; `sent-NNN.org' filenames without the per-source short-name suffix.
+;; That worked for single-source folders (Milarepa) but caused silent
+;; overwrites in multi-source folders (MA Reading:  gal-chen, lam-rim,
+;; title-colophon all colliding on seg-001..seg-021).
+;;
+;; This helper walks a folder, reads each file's `#+SOURCE:' link to
+;; identify its source-doc, derives the short-name via
+;; `tibetan-analysis-make-short-name', and renames the file in place:
+;;   `seg-006.org'  →  `seg-006-gal.org' (if source = gal-chen-nyi-shu.org)
+;;
+;; Idempotent — already-suffixed filenames are left alone.  Skips files
+;; with no `#+SOURCE:' link (the short-name can't be derived).
+
+;;;###autoload
+(defun tibetan-analysis-migrate-suffix-in-folder (&optional folder)
+  "Walk FOLDER and rename unsuffixed analysis files to suffixed form.
+
+For each `seg-NNN.org' or `sent-NNN.org' in FOLDER that lacks a
+short-name suffix, reads the file's `#+SOURCE:' header to identify
+the source document, derives a short-name via
+`tibetan-analysis-make-short-name', and renames the file in place
+to `seg-NNN-SHORT.org' / `sent-NNN-SHORT.org'.
+
+Already-suffixed filenames are skipped (idempotent).  Files
+without a `#+SOURCE:' link are skipped (no source to derive
+short-name from).  Returns a plist summary:
+  (:folder F :total N :renamed N-ren :skipped N-skip :failed N-bad)
+
+FOLDER defaults to the analysis folder of the current buffer
+\(via `tibetan-analysis-get-folder', falling back to
+`default-directory').  Interactive callers get a final-state
+`message'.
+
+§5.23 (2026-05-22) — companion to the create-file fix that
+restored per-source filename suffixes.  Existing pre-§5.23
+folders need a one-shot run of this command to migrate;  newly-
+created files after the fix are already suffixed at creation."
+  (interactive)
+  (let* ((folder (or folder
+                     (and (buffer-file-name)
+                          (tibetan-analysis-get-folder))
+                     (read-directory-name "Analysis folder: " nil nil t)))
+         (all (and (file-directory-p folder)
+                   (directory-files folder t
+                                    "\\`\\(seg\\|sent\\)-[0-9]+\\.org\\'")))
+         (renamed 0) (skipped 0) (failed 0)
+         (results '()))
+    (unless all
+      (user-error "No unsuffixed analysis files in %s" folder))
+    (dolist (path all)
+      (let* ((base (file-name-nondirectory path))
+             (prefix (if (string-prefix-p "sent-" base) "sent" "seg"))
+             (num (and (string-match "\\`\\(?:seg\\|sent\\)-\\([0-9]+\\)\\.org\\'" base)
+                       (match-string 1 base)))
+             (source-rel (with-temp-buffer
+                           (insert-file-contents path)
+                           (goto-char (point-min))
+                           (when (re-search-forward
+                                  "^#\\+SOURCE:[ \t]*\\[\\[file:\\([^]:]+\\)"
+                                  nil t)
+                             (match-string 1))))
+             (source-abs (and source-rel
+                              (expand-file-name
+                               source-rel (file-name-directory path))))
+             (short (and source-abs
+                         (tibetan-analysis-make-short-name source-abs)))
+             (new-base (and short num
+                            (format "%s-%s-%s.org" prefix num short)))
+             (new-path (and new-base
+                            (expand-file-name new-base
+                                              (file-name-directory path)))))
+        (cond
+         ((null short)
+          (cl-incf skipped)
+          (push (list :file base :status :no-source) results))
+         ((file-exists-p new-path)
+          ;; Target already exists — don't clobber.
+          (cl-incf skipped)
+          (push (list :file base :status :target-exists :target new-base)
+                results))
+         (t
+          (condition-case e
+              (progn
+                (rename-file path new-path)
+                (cl-incf renamed)
+                (push (list :file base :status :renamed :to new-base)
+                      results))
+            (error
+             (cl-incf failed)
+             (push (list :file base :status :error
+                         :error (error-message-string e))
+                   results)))))))
+    (let ((summary `(:folder ,folder
+                     :total ,(length all)
+                     :renamed ,renamed
+                     :skipped ,skipped
+                     :failed ,failed
+                     :results ,(nreverse results))))
+      (message
+       "Suffix migration:  %d renamed / %d skipped / %d failed of %d files in %s"
+       renamed skipped failed (length all)
+       (file-name-nondirectory (directory-file-name folder)))
+      summary)))
+
 ;;;###autoload
 (defun tibetan-analysis-strip-dangling-term-links-in-folder (&optional folder)
   "Walk FOLDER (default: analysis/ next to current source) and strip

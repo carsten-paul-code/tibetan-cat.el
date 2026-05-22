@@ -775,6 +775,58 @@ file only]' fallback template."
   "Test that file creation function exists."
   (should (fboundp 'tibetan-analysis-create-file)))
 
+(ert-deftest tibetan-analysis-migrate-suffix-in-folder-renames ()
+  "§5.23 (2026-05-22):  `tibetan-analysis-migrate-suffix-in-folder'
+reads each unsuffixed `seg-NNN.org' / `sent-NNN.org' file's
+`#+SOURCE:' link, derives a short-name via
+`tibetan-analysis-make-short-name', and renames the file in
+place.  Idempotent — already-suffixed files are skipped;
+files with no `#+SOURCE:' link are skipped.  Files where the
+target name already exists are NOT clobbered."
+  (should (fboundp 'tibetan-analysis-migrate-suffix-in-folder))
+  (let* ((dir (make-temp-file "ttest-migrate-" t))
+         (analysis (expand-file-name "analysis" dir))
+         (src-a (expand-file-name "alpha-src.org" dir))
+         (src-b (expand-file-name "beta-src.org" dir)))
+    (unwind-protect
+        (progn
+          (make-directory analysis)
+          (with-temp-file src-a (insert "#+TITLE: A\n"))
+          (with-temp-file src-b (insert "#+TITLE: B\n"))
+          ;; Create three analysis files: two unsuffixed (one each
+          ;; from alpha/beta), one already-suffixed (idempotency test),
+          ;; one without #+SOURCE: (no-source test).
+          (with-temp-file (expand-file-name "seg-001.org" analysis)
+            (insert "#+SOURCE: [[file:../alpha-src.org::*Segment 1][a/1]]\n"))
+          (with-temp-file (expand-file-name "seg-002.org" analysis)
+            (insert "#+SOURCE: [[file:../beta-src.org::*Segment 2][b/2]]\n"))
+          (with-temp-file (expand-file-name "seg-003-alpha.org" analysis)
+            (insert "#+SOURCE: [[file:../alpha-src.org::*Segment 3][a/3]]\n"))
+          (with-temp-file (expand-file-name "seg-004.org" analysis)
+            (insert "#+TITLE: orphan, no SOURCE link\n"))
+          (let ((result (tibetan-analysis-migrate-suffix-in-folder analysis)))
+            ;; 2 unsuffixed renamed; 1 orphan skipped (no SOURCE).
+            ;; The already-suffixed file isn't in the input list at all
+            ;; (regex filters to unsuffixed only).
+            (should (= 2 (plist-get result :renamed)))
+            (should (= 1 (plist-get result :skipped))))
+          ;; New names exist; old names gone.
+          (should (file-exists-p
+                   (expand-file-name "seg-001-alpha.org" analysis)))
+          (should (file-exists-p
+                   (expand-file-name "seg-002-beta.org" analysis)))
+          (should-not (file-exists-p
+                       (expand-file-name "seg-001.org" analysis)))
+          (should-not (file-exists-p
+                       (expand-file-name "seg-002.org" analysis)))
+          ;; Already-suffixed file untouched.
+          (should (file-exists-p
+                   (expand-file-name "seg-003-alpha.org" analysis)))
+          ;; Orphan untouched (no source to derive short-name from).
+          (should (file-exists-p
+                   (expand-file-name "seg-004.org" analysis))))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-analysis-create-file-emits-suffixed-filename ()
   "§5.23 (2026-05-22):  `tibetan-analysis-create-file' threads its
 SOURCE-FILE argument through `tibetan-analysis-get-filepath',
