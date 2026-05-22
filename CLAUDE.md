@@ -3,7 +3,14 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-05-21 (§5.22 final: sentence-analysis
+editing. Last updated 2026-05-22 (§5.23 added: per-source
+filename suffix `seg-NNN-SHORT.org' for ALL new analysis files;
+fixes silent multi-source overwrite in MA Reading folder.
+Migration helper `tibetan-analysis-migrate-suffix-in-folder'
+renames existing files based on each file's `#+SOURCE:' link.
+Ran on Yogācārabhūmi (96) + MA Reading (39); created + Claude-
+filled 23 previously-overwritten MA Reading segs.  Previous:
+§5.22 final: sentence-analysis
 files unconditionally render the in-class compressed layout —
 Vocabulary + Translation + Grammar (with the converb-rich
 `*** Particles' section) + Provided Translations only;  7
@@ -235,8 +242,8 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-05-21, post-§5.22 final):  **1955 tests,
-1954 expected, 0 unexpected failures, 1 intentional skip
+Current state (2026-05-22, post-§5.23):  **1960 tests, 1959
+expected, 0 unexpected failures, 1 intentional skip
 (compound-analysis-callable).**  Carsten runs this after every
 change and expects it to stay green.
 
@@ -1806,6 +1813,137 @@ file scaffolds (`tibetan-analysis-create-file' for segment files,
 HTML / PDF / LaTeX export of any analysis file no longer
 includes an auto-generated table of contents or numbered
 section prefixes (`1. My Notes' / `1.1. …').
+
+### 5.23 Per-source filename suffix for analysis files (done, 2026-05-22)
+
+Class-use feedback (2026-05-22):  the MA Reading folder shares
+one `analysis/` between four source documents (`gal-chen-nyi-
+shu.org', `lam-rim-thun-cig.org', `title-colophon.org', `reading-
+companion.org').  Each source numbers segments from 1 — so
+`Segment 6' exists in BOTH gal-chen AND lam-rim AND title-
+colophon → all three wanted to write `seg-006.org' in the same
+folder → second writer silently overwrote first.
+
+Visible damage:  on inspection 2026-05-22, gal-chen had 22 seg
+analysis files (segs 0-21), lam-rim had 17 seg files (numbered
+22-38 — its TRUE segs 22-38), and lam-rim's segs 1-21 +
+title-colophon's segs 1-2 were entirely MISSING (silent
+overwrite by gal-chen, which was created first).
+
+#### Root cause
+
+`tibetan-analysis-make-short-name' (line 549, infrastructure
+existed) derives a short-name suffix from any source file
+\(`gal-chen-nyi-shu.org' → `gal',  `Milarepa-prepared.org' →
+`milarepa', etc.).  `tibetan-analysis-get-filepath' emits
+`seg-NNN-SHORT.org' when given a source-file argument, plain
+`seg-NNN.org' when not.
+
+`tibetan-analysis-create-file' (line 659) called `(tibetan-
+analysis-get-filepath seg-id)' WITHOUT source-file → wrote to
+the UNSUFFIXED path.  Per §5.8.3 (2026-04-20), this was a
+deliberate fix for the inverse bug (skip-check used suffixed,
+create wrote unsuffixed → every C-c u B overwrote existing
+seg-NNN.org silently).  The §5.8.3 fix locked both paths to the
+UNSUFFIXED form, which worked for single-source folders
+(Milarepa) but broke multi-source folders.
+
+Sentence files (`sent-NNN.org') already used the suffix in some
+paths — saw `sent-001-lam.org' alongside `sent-001.org' in the
+MA Reading folder — confirming the infrastructure works.
+
+#### Fix — pass source-file in BOTH create-path AND skip-check
+
+Restoring §5.8.3's symmetry but in the OTHER direction:  both
+sides now produce / look at the SUFFIXED path.  Three call-sites
+updated:
+
+  · `tibetan-analysis-create-file' (line 659)         — the writer.
+  · `tibetan-auto-analyze-document' (auto-analysis    — the batch
+    line 403)                                            skip-check.
+  · `tibetan-open-segment-analysis' (line 4040)       — interactive
+                                                         `C-c u A'.
+  · `tibetan--reanalyze-segment-impl' (line 4219)     — interactive
+                                                         `C-c u R'.
+                                                         Backwards-
+                                                         compat:
+                                                         falls back
+                                                         to UNSUFFIXED
+                                                         when
+                                                         SUFFIXED
+                                                         absent.
+
+Going forward, ALL new analysis files carry the per-source
+suffix.  Multi-source folders are collision-free.
+
+#### Migration helper
+
+`tibetan-analysis-migrate-suffix-in-folder' (autoloaded) walks
+FOLDER, for each unsuffixed `seg-NNN.org' / `sent-NNN.org' reads
+the `#+SOURCE:' header to derive the source-doc path, computes
+short-name, and renames in place.  Idempotent:  already-suffixed
+files filtered by directory regex;  orphan files without
+`#+SOURCE:' skipped;  target-already-exists conflict detected
+and skipped rather than clobbered.
+
+Returns plist summary `(:folder F :total N :renamed N-ren
+:skipped N-skip :failed N-bad :results RESULTS)'.  Interactive
+callers get a final `message'.
+
+#### Migrations run 2026-05-22
+
+  · Yogācārabhūmi (`gotrapatala.org', single source):  96
+    files renamed to `seg-NNN-gotrapat.org' /
+    `sent-NNN-gotrapat.org'.  3 skipped (Emacs `.org~' backup
+    files, correctly excluded by regex).
+  · MA Readings (multi-source, 4 sources):  39 files renamed.
+    1 skipped (an orphan `sent-001.org' without `#+SOURCE:'
+    link — predates the auto-creator; user can hand-rename or
+    delete).
+  · Milarepa (Tibetisch IV):  NOT migrated (single-source,
+    no collision urgency).  User can run the migration command
+    when convenient;  `--reanalyze-segment-impl' backwards-compat
+    fallback handles UNSUFFIXED files until then.
+
+After MA Reading migration:  ran `tibetan-auto-analyze-document'
+on `lam-rim-thun-cig.org' + `title-colophon.org' which created
+the previously-overwritten 23 missing analysis files (21 lam-rim
+segs 1-21 + 2 title-colophon segs 1-2).  Then fired Claude+DM
+for the 23 newly-created files via `:re-request-claude
+:missing-only' (yesterday's §5.22-follow-up policy) — only the
+empty files got API calls;  the 58 already-populated files
+were correctly skipped.  All 23 now carry real Claude
+Vocabulary / Translation + DM Translation.
+
+#### Commits (3)
+
+| Commit | Subject |
+|---|---|
+| 1c8332d | Code fix:  always suffix seg/sent filenames |
+| 1c99d90 | Migration helper for unsuffixed analysis filenames |
+| (this)  | CLAUDE.md §5.23 entry + final tally |
+
+#### Tests (+2)
+
+  · `create-file-emits-suffixed-filename' — asserts the
+    SUFFIXED filename is written;  legacy UNSUFFIXED file is NOT.
+  · `migrate-suffix-in-folder-renames' — temp-folder fixture
+    with two unsuffixed files (different sources), one
+    already-suffixed, one orphan;  asserts:  2 renamed, 1 orphan
+    skipped, already-suffixed untouched, new names exist, old
+    names gone.
+
+Suite total:  1958 → 1960 / 1959 expected / 0 unexpected / 1
+skipped.  `make compile' clean.
+
+#### Files changed
+
+| Path | Role |
+|------|------|
+| `persist/tibetan-analysis-persist.el` | `create-file' threads source-file;  `open-segment-analysis' + `reanalyze-segment-impl' wrappers; `migrate-suffix-in-folder' command |
+| `persist/tibetan-auto-analysis.el` | Skip-check threads source-file (preserves §5.8.3 symmetry) |
+| `test/tibetan-analysis-persist-test.el` | +2 ERT specs |
+| `CLAUDE.md` | §5.23 added |
 
 ## 6. Open work (prioritised)
 

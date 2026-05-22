@@ -662,9 +662,15 @@
                    (search-forward "**** Segment 1")
                    (tibetan-open-segment-analysis))
                  (kill-buffer buf)))
+             ;; §5.23 (2026-05-22):  new filename scheme uses
+             ;; `seg-NNN-SHORT.org' suffixed with the source short-name
+             ;; (`classroom.org' → short-name `classroo' truncated to
+             ;; 8 chars by `tibetan-analysis-make-short-name').
              (setq result
                    (list
-                    :seg (file-exists-p (expand-file-name "seg-001.org" analysis-dir))
+                    :seg (not (null
+                               (directory-files analysis-dir nil
+                                                "^seg-001.*\\.org$")))
                     :sent (not (null
                                 (directory-files analysis-dir nil "^sent-.*\\.org$"))))))
     :when result
@@ -697,9 +703,12 @@
                    (search-forward "*** Segment 1")
                    (tibetan-open-segment-analysis))
                  (kill-buffer buf)))
+             ;; §5.23 (2026-05-22):  filename scheme suffix.
              (setq result
                    (list
-                    :seg (file-exists-p (expand-file-name "seg-001.org" analysis-dir))
+                    :seg (not (null
+                               (directory-files analysis-dir nil
+                                                "^seg-001.*\\.org$")))
                     :par (file-exists-p (expand-file-name "par-001.org" analysis-dir)))))
     :when result
     :then ((should (plist-get result :seg))
