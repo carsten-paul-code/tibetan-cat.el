@@ -390,17 +390,18 @@ Progress is shown in the echo area."
              ;; sources return cons-pairs and folio is nil.  Threaded
              ;; into create-file below.
              (seg-folio (when triple-p (nth 2 seg)))
-             ;; IMPORTANT: do NOT pass source-file here.
-             ;; `tibetan-analysis-get-filepath' with a source-file arg
-             ;; returns `seg-NNN-<shortname>.org' (suffixed), but
-             ;; `tibetan-analysis-create-file' internally calls
-             ;; `get-filepath' WITHOUT source-file and writes to the
-             ;; unsuffixed `seg-NNN.org'.  Passing source-file here
-             ;; would mean the skip-check looks for a file that
-             ;; never exists — so existing `seg-NNN.org' files get
-             ;; OVERWRITTEN instead of skipped.  Keep the path in
-             ;; sync by matching what create-file actually writes.
-             (filepath (tibetan-analysis-get-filepath seg-num)))
+             ;; §5.23 (2026-05-22):  pass source-file to get the
+             ;; SUFFIXED path `seg-NNN-<shortname>.org' (e.g.
+             ;; `seg-006-gal.org' for `gal-chen-nyi-shu.org').  This
+             ;; restores the §5.8.3 symmetry — both this skip-check
+             ;; AND `tibetan-analysis-create-file' now pass
+             ;; source-file, so both write to / look at the SAME
+             ;; SUFFIXED path.  Previously both paths used the
+             ;; UNSUFFIXED path, which silently collided when
+             ;; multiple sources shared an analysis/ folder (MA
+             ;; Readings:  gal-chen / lam-rim / title-colophon
+             ;; overwrote each other on seg-1..seg-21).
+             (filepath (tibetan-analysis-get-filepath seg-num source-file)))
 
         (tibetan-auto--report-progress current total
                                         (format "Segment %d" seg-num))

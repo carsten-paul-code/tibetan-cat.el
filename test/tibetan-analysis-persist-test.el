@@ -775,6 +775,38 @@ file only]' fallback template."
   "Test that file creation function exists."
   (should (fboundp 'tibetan-analysis-create-file)))
 
+(ert-deftest tibetan-analysis-create-file-emits-suffixed-filename ()
+  "§5.23 (2026-05-22):  `tibetan-analysis-create-file' threads its
+SOURCE-FILE argument through `tibetan-analysis-get-filepath',
+producing the SUFFIXED filename `seg-NNN-SHORT.org' (e.g.
+`seg-007-src.org' for a source named `src.org').  Was previously
+UNSUFFIXED — broke multi-source folders by silent overwrite.
+
+The short-name is derived by `tibetan-analysis-make-short-name'.
+For `src.org' the short-name is `src'."
+  (skip-unless (fboundp 'tibetan-analysis-create-file))
+  (let* ((dir (make-temp-file "ttest-suffix-" t))
+         (source-file (expand-file-name "src.org" dir))
+         (buf nil))
+    (unwind-protect
+        (progn
+          (with-temp-file source-file (insert "#+TITLE: Src\n"))
+          (setq buf (find-file-noselect source-file))
+          (with-current-buffer buf
+            (let ((path (tibetan-analysis-create-file
+                         7 "བདུད།" source-file
+                         "** Wylie\nbdud\n" nil)))
+              (should (file-exists-p path))
+              (should (string-match-p "/seg-007-src\\.org\\'" path))
+              ;; The legacy UNSUFFIXED path must NOT have been written.
+              (let ((unsuffixed (replace-regexp-in-string
+                                 "-src\\.org\\'" ".org" path)))
+                (should-not (file-exists-p unsuffixed))))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-analysis-create-file-disables-toc-and-section-numbering ()
   "§5.22 follow-up (2026-05-21):  segment scaffold emits
 `#+OPTIONS: toc:nil num:nil' so HTML / PDF / LaTeX export of

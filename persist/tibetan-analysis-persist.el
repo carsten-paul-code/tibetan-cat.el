@@ -655,8 +655,20 @@ Yogācārabhūmi sources).  When non-nil, written as a `:PROPERTIES:'
 drawer under the `* Tibetan Text' heading so the reader can see
 which folio they're on.  P6 (CLAUDE.md §6, addressed 2026-05-05)
 restores the folio that §5.8.2's drawer-aware extractor was
-correctly stripping from the source segment body."
-  (let* ((filepath (tibetan-analysis-get-filepath seg-id))
+correctly stripping from the source segment body.
+
+§5.23 (2026-05-22):  threads SOURCE-FILE through
+`tibetan-analysis-get-filepath' so writes go to the SUFFIXED
+path `seg-NNN-SHORT.org' (e.g. `seg-006-gal.org' for
+`gal-chen-nyi-shu.org').  Was previously UNSUFFIXED — that
+worked for single-source folders but caused silent overwrites
+when multiple source files shared one analysis/ folder (MA
+Readings: gal-chen / lam-rim / title-colophon all collided on
+seg-1..seg-21).  The §5.8.3 fix that originally dropped this
+argument was symmetric — to keep the skip-check + create-path
+matching, the skip-check in
+`tibetan-auto-analyze-document' has the matching change."
+  (let* ((filepath (tibetan-analysis-get-filepath seg-id source-file))
          (hash (tibetan-analysis-compute-hash tibetan-text))
          (date (format-time-string "%Y-%m-%d"))
          (source-name (file-name-nondirectory source-file))
@@ -4025,8 +4037,12 @@ sentence."
     (unless seg-data
       (error "Not in a segment or paragraph"))
 
-    (let* ((filepath (tibetan-analysis-get-filepath seg-id))
-           (source-file (buffer-file-name))
+    (let* ((source-file (buffer-file-name))
+           ;; §5.23 (2026-05-22):  thread source-file so the lookup
+           ;; resolves to the SUFFIXED `seg-NNN-SHORT.org' path —
+           ;; matches what `tibetan-analysis-create-file' writes
+           ;; post-§5.23.
+           (filepath (tibetan-analysis-get-filepath seg-id source-file))
            (exists (file-exists-p filepath)))
 
       (if exists
@@ -4200,7 +4216,18 @@ segment > sentence > paragraph > legacy, most-specific-wins."
     (unless seg-data
       (error "Not in a segment or paragraph"))
 
-    (let ((filepath (tibetan-analysis-get-filepath seg-id)))
+    ;; §5.23 (2026-05-22):  thread source-file (= current buffer)
+    ;; so the lookup resolves to `seg-NNN-SHORT.org'.  Falls back to
+    ;; UNSUFFIXED `seg-NNN.org' for backward compatibility:  if the
+    ;; suffixed file is absent but the unsuffixed one exists (older
+    ;; pre-migration analyses), use it instead.
+    (let* ((source-file (buffer-file-name))
+           (suffixed (tibetan-analysis-get-filepath seg-id source-file))
+           (unsuffixed (tibetan-analysis-get-filepath seg-id))
+           (filepath (cond
+                      ((file-exists-p suffixed) suffixed)
+                      ((file-exists-p unsuffixed) unsuffixed)
+                      (t suffixed))))
       (unless (file-exists-p filepath)
         (error "No analysis file exists. Use C-c u A to create one first"))
 
