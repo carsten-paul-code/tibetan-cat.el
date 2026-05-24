@@ -78,6 +78,25 @@
   (require 'tibetan-glossary-loader))
 
 ;; ============================================================================
+;; SHARED PATHS (canonical zettelkasten path constants)
+;; ============================================================================
+
+;; The buddhist-studies project ships a `shared-paths.el' file at
+;; ~/buddhist-studies/scripts/zettelkasten/ (via the emacs-zettelkasten
+;; submodule).  When available it defines `zk/zettelkasten-directory',
+;; `zk/thesaurus-directory', etc. as the single source of truth shared
+;; across the main Emacs, the research Emacs, and this CAT tool.
+;;
+;; Soft-load: if the file is missing (workshop demo on a fresh machine,
+;; CI environment, etc.) the configuration blocks below fall back to
+;; their pre-shared-paths literal values, so the tool still loads.
+(condition-case nil
+    (load (expand-file-name
+           "~/buddhist-studies/scripts/zettelkasten/shared-paths.el")
+          nil t)
+  (error nil))
+
+;; ============================================================================
 ;; LOAD CORE MODULES
 ;; ============================================================================
 
@@ -193,10 +212,18 @@
 ;; Path to the Bialek Portfolio org file for Particle Overview generation.
 ;; The interlinear gloss works without it (using inline Bialek data), but
 ;; the Particle Overview section gains Portfolio excerpts when this is set.
+;;
+;; Course-specific path (Tibetisch III, WS25-26).  Not a structural part
+;; of the zettelkasten infrastructure, so doesn't get its own constant in
+;; shared-paths.el — but we build it off `zk/buddhist-studies-root' when
+;; available to localise the only iCloud-prefix string.
 (when (boundp 'tibetan-interlinear-portfolio-file)
   (setq tibetan-interlinear-portfolio-file
         (expand-file-name
-         "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/WS25-26/Hausarbeiten/Tibetisch III/Hausarbeit_Tibetisch_III.org")))
+         "WS25-26/Hausarbeiten/Tibetisch III/Hausarbeit_Tibetisch_III.org"
+         (if (boundp 'zk/buddhist-studies-root)
+             zk/buddhist-studies-root
+           "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/"))))
 
 ;; ============================================================================
 ;; CONFIGURATION — THESAURUS (Pass 5b)
@@ -214,18 +241,22 @@
 ;; Subsequent edits to thesaurus zettels are the user's own.
 (when (boundp 'tibetan-thesaurus-directory)
   (setq tibetan-thesaurus-directory
-        (expand-file-name
-         "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/thesaurus/")))
+        (if (boundp 'zk/thesaurus-directory)
+            zk/thesaurus-directory
+          (expand-file-name
+           "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/thesaurus/"))))
 
 (when (boundp 'tibetan-thesaurus-kramer-source-directory)
   (setq tibetan-thesaurus-kramer-source-directory
-        (expand-file-name
-         ;; Moved 2026-04-24 under `knowledge/' as part of the buddhist-
-         ;; studies tree reorganisation that pulls notes out from the
-         ;; root.  Old path `.../buddhist-studies/zettelkasten/' — the
-         ;; directory itself was `git mv'd, IDs/Denote filenames
-         ;; unchanged, so existing thesaurus zettels keep working.
-         "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/knowledge/zettelkasten/")))
+        ;; Lives under `knowledge/' since 2026-04-24 (buddhist-studies
+        ;; tree reorganisation).  Denote IDs unchanged, so existing
+        ;; thesaurus zettels keep resolving.  Path comes from
+        ;; `zk/zettelkasten-directory' (the canonical constant) when
+        ;; shared-paths.el is loaded; otherwise the literal iCloud path.
+        (if (boundp 'zk/zettelkasten-directory)
+            zk/zettelkasten-directory
+          (expand-file-name
+           "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/knowledge/zettelkasten/"))))
 
 ;; Thesaurus init is more specific than `*.org' in the Kramer source
 ;; directory (the zettelkasten holds many non-Kramer files too).  The
