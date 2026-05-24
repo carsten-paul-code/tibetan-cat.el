@@ -113,6 +113,11 @@ Pass nil for any arg to leave that body empty."
   "Return a sentence-layout analysis body (four Claude sections at level 3).
 Pass nil for any of the CLAUDE-* args to leave that body empty.
 
+The third arg is named CLAUDE-CONTEXT for backwards-compat with
+existing call sites;  §5.24 (2026-05-22) renames the heading to
+`*** Concept Notes' at level 3 (the body content is independent
+of the heading name).
+
 The layout mirrors a real sent-NNN.org as produced by
 `tibetan-sentence-persist': a `#+SEGMENTS:' header (the canonical
 marker that distinguishes sentence files from segment files) and
@@ -136,7 +141,7 @@ Claude subsections at level 3."
    "*** Claude Grammar\n"
    (or claude-grammar "")
    "\n\n"
-   "*** Claude Context\n"
+   "*** Concept Notes\n"
    (or claude-context "")
    "\n\n"
    "* Working Translation\n\n\n"
@@ -166,7 +171,7 @@ parse the same way."
     (should (string-match-p "bdag" (plist-get parsed :vocabulary)))
     (should (string-match-p "Ergative" (plist-get parsed :grammar)))
     (should (string-match-p "first-person reflective"
-                            (downcase (plist-get parsed :context))))))
+                            (downcase (plist-get parsed :concepts))))))
 
 (ert-deftest tibetan-claude-sections-parse-partial ()
   "Missing sections come back nil, not empty string."
@@ -178,7 +183,7 @@ parse the same way."
     (should (equal (plist-get parsed :translation) "Done."))
     (should (equal (plist-get parsed :grammar) "Ergative marker."))
     (should (null (plist-get parsed :vocabulary)))
-    (should (null (plist-get parsed :context)))))
+    (should (null (plist-get parsed :concepts)))))
 
 (ert-deftest tibetan-claude-sections-parse-only-translation ()
   "Only Translation present — Vocabulary, Grammar, and Context are nil."
@@ -187,7 +192,7 @@ parse the same way."
     (should (equal (plist-get parsed :translation) "Foo."))
     (should (null (plist-get parsed :vocabulary)))
     (should (null (plist-get parsed :grammar)))
-    (should (null (plist-get parsed :context)))))
+    (should (null (plist-get parsed :concepts)))))
 
 (ert-deftest tibetan-claude-sections-parse-legacy-fallback ()
   "A response with NO `## ' headings is treated as legacy translation."
@@ -195,7 +200,7 @@ parse the same way."
          (parsed (tibetan-analysis--parse-claude-sections response)))
     (should (string-match-p "By me" (plist-get parsed :translation)))
     (should (null (plist-get parsed :grammar)))
-    (should (null (plist-get parsed :context)))))
+    (should (null (plist-get parsed :concepts)))))
 
 (ert-deftest tibetan-claude-sections-parse-empty-input ()
   "Nil or empty input returns plist with all nils.
@@ -208,7 +213,7 @@ the gptel pipeline."
       (should (null (plist-get parsed :translation)))
       (should (null (plist-get parsed :vocabulary)))
       (should (null (plist-get parsed :grammar)))
-      (should (null (plist-get parsed :context))))))
+      (should (null (plist-get parsed :concepts))))))
 
 (ert-deftest tibetan-claude-sections-parse-out-of-order ()
   "Headings out of canonical order are still extracted into the right slot."
@@ -221,7 +226,7 @@ the gptel pipeline."
          (parsed (tibetan-analysis--parse-claude-sections response)))
     (should (equal (plist-get parsed :translation) "T body."))
     (should (equal (plist-get parsed :grammar)     "G body."))
-    (should (equal (plist-get parsed :context)     "C body."))))
+    (should (equal (plist-get parsed :concepts)     "C body."))))
 
 (ert-deftest tibetan-claude-sections-parse-trims-whitespace ()
   "Bodies are trimmed; leading/trailing blank lines are removed."
@@ -490,7 +495,13 @@ order requires:
 
 (ert-deftest tibetan-claude-sections-ensure-sentence-layout-keeps-level-3 ()
   "Sentence-layout buffers (no `** Wylie Transliteration') keep the
-four-section level-3 layout and create Vocabulary/Context/Grammar if missing."
+four-section level-3 layout and create Vocabulary / Concept Notes /
+Grammar if missing.
+
+§5.24 (2026-05-22):  the fourth heading is renamed from
+`*** Claude Context' to `*** Concept Notes' (sentence files keep
+L3;  legacy `Claude Context' migrates via Step 6 of
+`--migrate-legacy-claude-headings')."
   (tibetan-sections-test--with-analysis
       (tibetan-sections-test--sentence-scaffold "T body" nil nil)
     (with-temp-buffer
@@ -501,7 +512,7 @@ four-section level-3 layout and create Vocabulary/Context/Grammar if missing."
         (should     (string-match-p "^\\*\\*\\* Claude Translation$" content))
         (should     (string-match-p "^\\*\\*\\* Claude Vocabulary$"  content))
         (should     (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
-        (should     (string-match-p "^\\*\\*\\* Claude Context$"     content))
+        (should     (string-match-p "^\\*\\*\\* Concept Notes$"      content))
         ;; NO level-2 Claude Translation heading must appear in sentence files.
         (should-not (string-match-p "^\\*\\* Translation$"    content))))))
 
@@ -518,7 +529,7 @@ level 3 — all are read into the plist.  Context is absent and therefore nil."
       (should (equal (plist-get p :translation) "Translation X"))
       (should (equal (plist-get p :vocabulary)  "Vocab Z"))
       (should (equal (plist-get p :grammar)     "Grammar Y"))
-      (should (null  (plist-get p :context))))))
+      (should (null  (plist-get p :concepts))))))
 
 (ert-deftest tibetan-claude-sections-read-sentence-layout-four-headings ()
   "Sentence-layout file: all four headings at level 3 are read into the plist."
@@ -529,7 +540,7 @@ level 3 — all are read into the plist.  Context is absent and therefore nil."
       (should (equal (plist-get p :translation) "Translation X"))
       (should (equal (plist-get p :vocabulary)  "Vocab W"))
       (should (equal (plist-get p :grammar)     "Grammar Y"))
-      (should (equal (plist-get p :context)     "Context Z")))))
+      (should (equal (plist-get p :concepts)     "Context Z")))))
 
 (ert-deftest tibetan-claude-sections-read-legacy-claude-heading ()
   "A file with only `*** Claude' (no Translation/Grammar/Context) still
@@ -543,7 +554,7 @@ yields a translation via the legacy fallback."
     (let ((p (tibetan-analysis--read-claude-sections analysis-file)))
       (should (equal (plist-get p :translation) "Legacy body."))
       (should (null  (plist-get p :grammar)))
-      (should (null  (plist-get p :context))))))
+      (should (null  (plist-get p :concepts))))))
 
 (ert-deftest tibetan-claude-sections-read-skips-placeholders ()
   "`[Requesting...]' / `[Claude unavailable...]' / `[Translation not available...]'
@@ -569,8 +580,12 @@ bodies count as nothing-to-preserve."
 
 (ert-deftest tibetan-claude-sections-insert-round-trip-segment ()
   "Segment layout: insert a response and read Translation + Vocabulary +
-Grammar back.  Any `## Context' in the response is parsed but dropped
-\(no Context heading exists in segment layout)."
+Grammar + Concept Notes back.
+
+§5.24 (2026-05-22):  segment layout now has `** Concept Notes' at
+LEVEL 2 (was previously absent for segment files).  Legacy
+`## Context' heading in the response is still parsed and routed
+to the same `:concepts' slot for migration."
   (tibetan-sections-test--with-analysis
       (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
     (let ((response (concat "## Translation\n"
@@ -589,16 +604,21 @@ Grammar back.  Any `## Context' in the response is parsed but dropped
         (should (equal (plist-get p :translation) "By me, the work was done."))
         (should (string-match-p "bdag" (plist-get p :vocabulary)))
         (should (equal (plist-get p :grammar)     "Ergative on agent."))
-        ;; No Context heading → :context nil.
-        (should (null (plist-get p :context))))
-      ;; And on disk, no `*** Claude Context' was silently created.
+        ;; §5.24:  segment layout now writes `** Concept Notes' L2.
+        (should (equal (plist-get p :concepts)    "First-person reflection.")))
+      ;; On disk:  `** Concept Notes' present at L2;  legacy
+      ;; `*** Claude Context' NOT present.
       (with-temp-buffer
         (insert-file-contents analysis-file)
-        (should-not (string-match-p "^\\*\\*\\* Claude Context$"
-                                    (buffer-string)))))))
+        (should     (string-match-p "^\\*\\* Concept Notes$"     (buffer-string)))
+        (should-not (string-match-p "^\\*\\*\\* Claude Context$" (buffer-string)))))))
 
 (ert-deftest tibetan-claude-sections-insert-round-trip-sentence ()
-  "Sentence layout: insert a four-section response and read all four back."
+  "Sentence layout: insert a four-section response and read all four back.
+
+§5.24 (2026-05-22):  the fourth heading is now `*** Concept Notes'
+at L3 (was `*** Claude Context');  legacy `## Context' heading
+still parses and routes to the same `:concepts' slot."
   (tibetan-sections-test--with-analysis
       (tibetan-sections-test--sentence-scaffold
        "[Requesting translation...]" nil nil)
@@ -608,7 +628,7 @@ Grammar back.  Any `## Context' in the response is parsed but dropped
                             "bdag, noun, \"I/self\"\n\n"
                             "## Grammar\n"
                             "Ergative on agent.\n\n"
-                            "## Context\n"
+                            "## Concept Notes\n"
                             "First-person reflection.\n")))
       (tibetan-analysis--insert-claude-sections response analysis-file)
       (let ((buf (find-buffer-visiting analysis-file)))
@@ -617,7 +637,7 @@ Grammar back.  Any `## Context' in the response is parsed but dropped
         (should (equal (plist-get p :translation) "By me, the work was done."))
         (should (string-match-p "bdag" (plist-get p :vocabulary)))
         (should (equal (plist-get p :grammar)     "Ergative on agent."))
-        (should (equal (plist-get p :context)     "First-person reflection."))))))
+        (should (equal (plist-get p :concepts)    "First-person reflection."))))))
 
 (ert-deftest tibetan-claude-sections-insert-only-overwrites-present ()
   "Segment layout: if Claude returns only Translation, the existing Grammar
@@ -683,8 +703,10 @@ creates `*** Claude Grammar' at level 3 under `** Grammar' (U4
 
 (ert-deftest tibetan-claude-sections-restore-round-trip-segment ()
   "Segment layout: `--restore-claude-sections' writes Translation +
-Vocabulary + Grammar back faithfully.  A :context in the plist is
-dropped (no heading)."
+Vocabulary + Grammar + Concept Notes back faithfully.
+
+§5.24 (2026-05-22):  segment layout now has `** Concept Notes' at
+LEVEL 2 — `:concepts' is written to that slot, not dropped."
   (tibetan-sections-test--with-analysis
       (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
     (tibetan-analysis--restore-claude-sections
@@ -692,17 +714,18 @@ dropped (no heading)."
      (list :translation "Restored T"
            :vocabulary  "Restored V"
            :grammar     "Restored G"
-           :context     "Discarded C"))
+           :concepts    "Restored C"))
     (let ((buf (find-buffer-visiting analysis-file)))
       (when buf (kill-buffer buf)))
     (let ((p (tibetan-analysis--read-claude-sections analysis-file)))
       (should (equal (plist-get p :translation) "Restored T"))
       (should (equal (plist-get p :vocabulary)  "Restored V"))
       (should (equal (plist-get p :grammar)     "Restored G"))
-      ;; :context was not written anywhere — no heading exists.
-      (should (null (plist-get p :context))))
+      ;; §5.24:  :concepts now written at L2 `** Concept Notes'.
+      (should (equal (plist-get p :concepts)    "Restored C")))
     (with-temp-buffer
       (insert-file-contents analysis-file)
+      (should     (string-match-p "^\\*\\* Concept Notes$"     (buffer-string)))
       (should-not (string-match-p "^\\*\\*\\* Claude Context$" (buffer-string))))))
 
 (ert-deftest tibetan-claude-sections-restore-round-trip-sentence ()
@@ -715,14 +738,14 @@ dropped (no heading)."
      (list :translation "Restored T"
            :vocabulary  "Restored V"
            :grammar     "Restored G"
-           :context     "Restored C"))
+           :concepts     "Restored C"))
     (let ((buf (find-buffer-visiting analysis-file)))
       (when buf (kill-buffer buf)))
     (let ((p (tibetan-analysis--read-claude-sections analysis-file)))
       (should (equal (plist-get p :translation) "Restored T"))
       (should (equal (plist-get p :vocabulary)  "Restored V"))
       (should (equal (plist-get p :grammar)     "Restored G"))
-      (should (equal (plist-get p :context)     "Restored C")))))
+      (should (equal (plist-get p :concepts)     "Restored C")))))
 
 (ert-deftest tibetan-claude-sections-restore-partial-leaves-others ()
   "Segment layout: a partial plist (only :grammar) leaves :translation
@@ -748,16 +771,16 @@ safety for files migrated from older versions)."
     ;; Simulate reanalysis: read the file, then restore the same plist
     ;; we just read so the Context body should round-trip.
     (let* ((p0 (tibetan-analysis--read-claude-sections analysis-file)))
-      (should (equal (plist-get p0 :context) "Original C body."))
+      (should (equal (plist-get p0 :concepts) "Original C body."))
       (tibetan-analysis--restore-claude-sections
        analysis-file
        (list :translation (plist-get p0 :translation)
              :grammar     (plist-get p0 :grammar)
-             :context     (plist-get p0 :context)))
+             :concepts     (plist-get p0 :concepts)))
       (let ((buf (find-buffer-visiting analysis-file)))
         (when buf (kill-buffer buf)))
       (let ((p1 (tibetan-analysis--read-claude-sections analysis-file)))
-        (should (equal (plist-get p1 :context) "Original C body."))))))
+        (should (equal (plist-get p1 :concepts) "Original C body."))))))
 
 (ert-deftest tibetan-claude-sections-restore-legacy-wrapper ()
   "`--restore-claude-translation' wraps a string in {:translation STR}."
@@ -770,7 +793,7 @@ safety for files migrated from older versions)."
     (let ((p (tibetan-analysis--read-claude-sections analysis-file)))
       (should (equal (plist-get p :translation) "Wrapped translation only."))
       (should (null (plist-get p :grammar)))
-      (should (null (plist-get p :context))))))
+      (should (null (plist-get p :concepts))))))
 
 ;; ============================================================================
 ;; --read-analysis-parser-sections + --format-parser-grounding
@@ -849,10 +872,12 @@ sections, the user prompt contains the grounding block."
 
 (ert-deftest tibetan-claude-sections-request-end-to-end ()
   "Stubbed Claude call: a response with Translation + Vocabulary + Grammar
-\(and a Context we expect to be dropped) lands under the segment-layout
-headings — `** Claude Translation' at level 2, `*** Claude Grammar' at
-level 3 under `** Grammar' (U4 2026-04-24), `*** Claude Vocabulary' at
-level 3 inside Provided Translations — on the analysis file."
+\(and Concept Notes) lands under the segment-layout headings —
+`** Translation' at L2, `*** Claude Grammar' at L3 under `**
+Grammar' (U4 2026-04-24), `** Claude Vocabulary' at L2 (§5.21
+Commit 2/7), `** Concept Notes' at L2 (§5.24, 2026-05-22).
+Legacy `## Context' in the response is parsed and routed to
+the `:concepts' slot for migration."
   (tibetan-sections-test--with-analysis
       (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
     (setq tibetan-sections-test--captured-callback nil)
@@ -889,7 +914,9 @@ level 3 inside Provided Translations — on the analysis file."
       (should (equal (plist-get p :translation) "E2E translation."))
       (should (equal (plist-get p :vocabulary)  "E2E vocabulary."))
       (should (equal (plist-get p :grammar)     "E2E grammar."))
-      (should (null (plist-get p :context))))
+      ;; §5.24:  segment layout now writes `** Concept Notes' L2;
+      ;; legacy `## Context' response routes to `:concepts'.
+      (should (equal (plist-get p :concepts)    "E2E context.")))
     (with-temp-buffer
       (insert-file-contents analysis-file)
       (let ((content (buffer-string)))
@@ -901,6 +928,8 @@ level 3 inside Provided Translations — on the analysis file."
         (should     (string-match-p "^\\*\\*\\* Claude Grammar$"     content))
         ;; Post-U4: Claude Grammar is NOT at level 2 any more.
         (should-not (string-match-p "^\\*\\* Claude Grammar$"        content))
+        ;; §5.24:  `** Concept Notes' present;  legacy NOT.
+        (should     (string-match-p "^\\*\\* Concept Notes$"         content))
         (should-not (string-match-p "^\\*\\*\\* Claude Context$"     content))))))
 
 ;; ============================================================================

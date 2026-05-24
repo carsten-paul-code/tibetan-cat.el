@@ -387,10 +387,21 @@ Translations'.  My Notes / Working Translation are AT THE TOP
     ;; No more TOP-LEVEL `* Provided Translations'.  It's a nested
     ;; level-2 inside `* Tibetan Analysis' (segment shape).
     (should-not (string-match-p "^\\* Provided Translations$" body))
-    ;; Sentence-specific level-3 entries.
+    ;; Sentence-specific level-3 entries.  §5.24 (2026-05-22):
+    ;; `*** Claude Context' retired from L3 inject list — the
+    ;; renamed `** Concept Notes' lives at L2 (segment-renderer-
+    ;; emitted, kept in the §5.22 compressed strip set).  Only
+    ;; assert L2 Concept Notes when the segment renderer ran (the
+    ;; fallback `* Wylie' path doesn't emit it).
     (should (string-match-p "^\\*\\*\\* Roehrich$"          body))
     (should (string-match-p "^\\*\\*\\* Class Translation$" body))
-    (should (string-match-p "^\\*\\*\\* Claude Context$"    body))
+    ;; Only the FULL segment renderer emits `** Concept Notes';  the
+    ;; fallback path (used in this test since `/tmp/f.org' isn't a
+    ;; real source) emits a minimal `** Wylie' + `** Claude
+    ;; Translation' template only.  Use `** Phonetics' as a probe
+    ;; for "full renderer ran" — it's emitted only by the full path.
+    (when (string-match-p "^\\*\\* Phonetics$" body)
+      (should (string-match-p "^\\*\\* Concept Notes$"      body)))
     ;; User sections + Footnotes.
     (should (string-match-p "^\\* Working Translation$"     body))
     (should (string-match-p "^\\* My Notes$"                body))
@@ -1598,6 +1609,8 @@ real output (which varies with vocab DB state)."
                    "** Claude Vocabulary\nfoo = thing\n\n"
                    "** Translation\nThe thing.\n\n"
                    "** DharmaMitra Translation\nThe thing (DM).\n\n"
+                   ;; §5.24 (2026-05-22):  Concept Notes L2 placeholder.
+                   "** Concept Notes\n[Awaiting Claude…]\n\n"
                    "** Grammar\n*** Particles\n=ERG=\n\n"
                    "** Sentence Structure\n[clauses]\n\n"
                    "** Verb Classification (Hill 2010)\n[verbs]\n\n"
@@ -1630,9 +1643,11 @@ real output (which varies with vocab DB state)."
                          "^\\*\\* Verb Classification (Hill 2010)$" out))
             (should-not (string-match-p "^\\*\\* Detailed Dictionary$" out))
             ;; Sentence-only L3 extras still injected under PT.
+            ;; §5.24:  Concept Notes moved out of L3 inject — it's
+            ;; now at L2 via the segment renderer.
             (should (string-match-p "^\\*\\*\\* Roehrich$" out))
             (should (string-match-p "^\\*\\*\\* Class Translation$" out))
-            (should (string-match-p "^\\*\\*\\* Claude Context$" out))
+            (should (string-match-p "^\\*\\* Concept Notes$" out))
             ;; Top-level user + footer sections survive.
             (should (string-match-p "^\\* My Notes$" out))
             (should (string-match-p "^\\* Working Translation$" out))

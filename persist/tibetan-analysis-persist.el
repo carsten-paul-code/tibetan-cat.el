@@ -3105,6 +3105,11 @@ For each Bialek-detected particle in BIALEK-ANALYSIS:
     "** Claude Translation"
     "** Translation"
     "** DharmaMitra Translation"
+    ;; §5.24 (2026-05-22):  Concept Notes (Buddhist / Sanskrit
+    ;; technical glossary) — Claude-populated, placed between the
+    ;; AI translations and Grammar.  Reader-flow:  Translation →
+    ;; Concept Notes → Grammar.
+    "** Concept Notes"
     "** Grammar"
     "** Sentence Structure"
     "** Verb Classification (Hill 2010)"
@@ -3552,6 +3557,20 @@ unused-arg warning without breaking the public API."
             ;; ============================================================
             (insert "** DharmaMitra Translation\n")
             (insert "[Awaiting DharmaMitra…]\n\n")
+
+            ;; ============================================================
+            ;; ** Concept Notes (§5.24, 2026-05-22).  Class-reading
+            ;; surface for Buddhist + Sanskrit technical concepts,
+            ;; lineage / person / place names, doxography.  Replaces
+            ;; the retired narrative-arc `*** Claude Context' (which
+            ;; sat inside Provided Translations in sentence files
+            ;; only).  Placement:  after the two AI translations,
+            ;; before Grammar — reader-flow `read → concept lookup
+            ;; → grammar'.  Populated asynchronously by Claude's
+            ;; `## Concept Notes' response section.
+            ;; ============================================================
+            (insert "** Concept Notes\n")
+            (insert "[Awaiting Claude…]\n\n")
 
             ;; ============================================================
             ;; SECTION 2: Word / Particle List

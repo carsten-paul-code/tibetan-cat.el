@@ -595,18 +595,18 @@ auto-analysis block at all."
 
 (defconst tibetan-sentence--scaffold-sentence-only-l3-entries
   '(("Roehrich" .         "[Hand-paste the published Roehrich English here]")
-    ("Class Translation" . "[Working class translation here]")
-    ("Claude Context" .    "[Awaiting Claude…]"))
+    ("Class Translation" . "[Working class translation here]"))
   "Sentence-specific level-3 entries to inject into the nested
 `** Provided Translations' block of a sent-NNN.org file.
 
 Cons cells `(HEADING . PLACEHOLDER-BODY)'.  Heading order is
 preserved — Roehrich (curated reference) before Class Translation
-\(class-paste) before Claude Context (sentence-only discourse
-output).  Together with the segment-renderer's `*** Claude
-Vocabulary' / `*** Claude Particles' placeholders, these complete
-the level-3 inventory under the sentence file's `** Provided
-Translations'.")
+\(class-paste).
+
+§5.24 (2026-05-22):  `Claude Context' retired from this list.
+The renamed `** Concept Notes' lives at L2 in both segment and
+sentence files (emitted by the segment renderer);  no L3 inject
+needed.")
 
 (defun tibetan-sentence--inject-sentence-l3-entries (buffer)
   "Inject sentence-only level-3 entries into the nested
@@ -900,8 +900,18 @@ Updates `#+SEGMENTS:' / `#+TIBETAN_HASH:' / `#+LAST_ANALYZED:'."
                filepath "Claude Translation")))
          (claude-grammar-body
           (tibetan-sentence--read-third-level-body filepath "Claude Grammar"))
-         (claude-context-body
-          (tibetan-sentence--read-third-level-body filepath "Claude Context"))
+         ;; §5.24 (2026-05-22):  rename `Claude Context' → `Concept
+         ;; Notes' + promote to L2.  Reader checks legacy L3 names
+         ;; (Claude Context, Concept Notes-at-L3 from interim
+         ;; sentence layout) and current L2 `** Concept Notes' —
+         ;; first non-nil wins, so already-migrated files keep their
+         ;; L2 body, legacy files migrate on this regenerate pass.
+         (concept-notes-body
+          (or (tibetan-sentence--read-l2-body filepath "Concept Notes")
+              (tibetan-sentence--read-third-level-body
+               filepath "Concept Notes")
+              (tibetan-sentence--read-third-level-body
+               filepath "Claude Context")))
          (claude-vocabulary-body
           (tibetan-sentence--read-third-level-body filepath "Claude Vocabulary"))
          (claude-particles-body
@@ -958,9 +968,13 @@ Updates `#+SEGMENTS:' / `#+TIBETAN_HASH:' / `#+LAST_ANALYZED:'."
         (when (plist-get trans :class)
           (tibetan-sentence--set-l3-body-in-buffer
            buf "Class Translation" (plist-get trans :class)))
-        (when claude-context-body
-          (tibetan-sentence--set-l3-body-in-buffer
-           buf "Claude Context" claude-context-body))
+        ;; §5.24 (2026-05-22):  write preserved Concept Notes body
+        ;; into the new L2 `** Concept Notes' slot (segment-renderer
+        ;; emits that placeholder, so the slot already exists in the
+        ;; new scaffold).
+        (when concept-notes-body
+          (tibetan-sentence--set-l2-body-in-buffer
+           buf "Concept Notes" concept-notes-body))
         (when claude-vocabulary-body
           (tibetan-sentence--set-l3-body-in-buffer
            buf "Claude Vocabulary" claude-vocabulary-body))
@@ -1030,17 +1044,35 @@ ground truth in the user prompt.  Treat that grounding as \
 authoritative for case and verb tagging; narrate it pedagogically, \
 flag disagreements rather than silently overruling.
 
-## Context
-Locate the sentence in the wider arc of the passage.  For rnam-thar \
-(spiritual biography), this means: which biographical episode, \
-which lineage / institutional reference, which hagiographical \
-convention is being deployed (formulaic ordination / encounter / \
-realisation / death episodes, honorific verb choice for the \
-subject).  For blo sbyong or other didactic verse, this means: \
-which step in the rhetorical pattern, which tradition-internal \
-function the key terms serve.  Keep it to 2–4 sentences.  Do NOT \
-speculate beyond what the source metadata and per-segment glossary \
-support.
+## Concept Notes
+Identify any notable technical concepts in THIS sentence and give \
+each a brief encyclopedia-style note for a graduate-classroom \
+reader:  Buddhist doctrine and category-lists, doxographical \
+school / tradition references, lineage and person names, place \
+names, Sanskrit-derived technical terms.
+
+For each concept (0–3 entries per sentence is the typical range):
+- **Tibetan term (Skt. / Pali equivalent if relevant) — short gloss**
+  1–2 sentence explanation drawn from canonical or scholarly \
+sources.  Note the doctrinal-context (Madhyamaka, Yogācāra, lam-rim, \
+bKa'-gdams-pa, etc.) when relevant.  Cite primary sources only when \
+genuinely illuminating;  avoid bibliographic padding.
+
+If the sentence is purely narrative / mechanical and contains no \
+notable concepts, output EXACTLY (no other text in this section):
+  [No notable concepts in this passage]
+
+When your explanation references a SUB-CONCEPT that itself \
+warrants a gloss (e.g. \"one of the twelve dhutaguṇas\", \"in \
+the mahāyāna-saṃgraha framework\"), expand it with a 1-sentence \
+parenthetical gloss inline — so the reader gets enough context \
+without needing an external lookup.  One level of nesting is \
+enough;  don't recurse further.
+
+Aim for sentence-level aggregation — don't repeat what the per-\
+segment grounding (supplied in the user prompt) already covers at \
+finer granularity.  Be terse;  the whole section should fit in \
+~180 words including any nested sub-concept glosses.
 
 Use only these three headings.  No preamble, no closing remarks.
 

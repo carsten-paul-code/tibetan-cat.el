@@ -99,7 +99,7 @@
   "You are a specialist in Classical Tibetan (chos skad) translation \
 and philology, acting as a teaching assistant for a graduate classroom.
 
-Produce THREE sections, separated by the exact markdown headings \
+Produce FIVE sections, separated by the exact markdown headings \
 shown below, in this order and nothing else:
 
 ## Translation
@@ -244,6 +244,35 @@ reference for real IDs):
   mthu'i, 'i, 1.1.1, attributive
   bslabs nas, nas, 1.8.2, approx-sequential-temporal
   tshim nas, nas, 1.8.4, approx-causal-sequential
+
+## Concept Notes
+Identify any notable technical concepts in THIS segment and give \
+each a brief encyclopedia-style note for a graduate-classroom \
+reader:  Buddhist doctrine and category-lists, doxographical \
+school / tradition references, lineage and person names, place \
+names, Sanskrit-derived technical terms.
+
+For each concept (0–3 entries per segment is the typical range):
+- **Tibetan term (Skt. / Pali equivalent if relevant) — short gloss**
+  1–2 sentence explanation drawn from canonical or scholarly \
+sources.  Note the doctrinal-context (Madhyamaka, Yogācāra, lam-rim, \
+bKa'-gdams-pa, etc.) when relevant.  Cite primary sources only when \
+genuinely illuminating;  avoid bibliographic padding.
+
+If the segment is purely narrative / mechanical and contains no \
+notable concepts, output EXACTLY (no other text in this section):
+  [No notable concepts in this passage]
+
+When your explanation references a SUB-CONCEPT that itself \
+warrants a gloss (e.g. \"one of the twelve dhutaguṇas\", \"in \
+the mahāyāna-saṃgraha framework\"), expand it with a 1-sentence \
+parenthetical gloss inline — so the reader gets enough context \
+without needing an external lookup.  One level of nesting is \
+enough;  don't recurse further.
+
+Avoid recapitulating the ## Vocabulary section above — that's word \
+glosses;  this is conceptual depth.  Be terse;  the whole section \
+should fit in ~180 words including any nested sub-concept glosses.
 
 Use only these headings. No preamble, no closing remarks.
 
@@ -1399,9 +1428,16 @@ failures are reported via `message' and the placeholder."
 
 (defun tibetan-analysis--parse-claude-sections (response)
   "Split RESPONSE on `## …' Translation / Vocabulary / Grammar /
-Particles / Context markdown headings.
+Particles / `Concept Notes' (or legacy `Context') markdown headings.
 Returns a plist with `:translation' / `:vocabulary' / `:grammar' /
-`:particles' / `:context' string-or-nil values.
+`:particles' / `:concepts' string-or-nil values.
+
+§5.24 (2026-05-22):  the legacy `## Context' heading is accepted
+for backwards compatibility (older Claude responses still
+delivered after a prompt change but before the model picks up
+the rename) and routed to the `:concepts' slot.  The elisp key
+`:context' is retired in favour of `:concepts'.
+
 Missing sections are nil (not empty string) so the writer can leave
 the old org body in place when Claude omitted a section.  When
 RESPONSE contains no recognised heading, the whole (trimmed) string is
@@ -1422,8 +1458,8 @@ is now produced by separate Claude calls (see
 parser.  This Tibetan parser goes back to its pre-Phase-B
 five-key shape."
   (let ((result (list :translation nil :vocabulary nil :grammar nil
-                      :particles nil :context nil))
-        (re "^## \\(Translation\\|Vocabulary\\|Grammar\\|Particles\\|Context\\)[ \t]*$"))
+                      :particles nil :concepts nil))
+        (re "^## \\(Translation\\|Vocabulary\\|Grammar\\|Particles\\|Concept Notes\\|Context\\)[ \t]*$"))
     (when (and response (stringp response) (not (string-empty-p response)))
       (with-temp-buffer
         (insert response)
@@ -1436,9 +1472,15 @@ five-key shape."
           (goto-char (point-min))
           (let ((matches '()))
             (while (re-search-forward re nil t)
-              (push (list (intern (downcase (match-string 1)))
-                          (match-end 0))
-                    matches))
+              ;; §5.24:  `Concept Notes' and legacy `Context' both
+              ;; route to the `:concepts' key.  Symbol-key lookup
+              ;; mapping below.
+              (let* ((raw (match-string 1))
+                     (key (cond
+                           ((string= raw "Concept Notes") 'concepts)
+                           ((string= raw "Context") 'concepts)
+                           (t (intern (downcase raw))))))
+                (push (list key (match-end 0)) matches)))
             (setq matches (nreverse matches))
             (cl-loop for (cell . rest) on matches
                      for key = (car cell)
@@ -1462,9 +1504,9 @@ five-key shape."
 (defconst tibetan-analysis--claude-section-order
   '((:translation "Translation"        2)
     (:vocabulary  "Claude Vocabulary"  2)
+    (:concepts    "Concept Notes"      2)
     (:grammar     "Claude Grammar"     3)
-    (:particles   "Claude Particles"   3)
-    (:context     "Claude Context"     3))
+    (:particles   "Claude Particles"   3))
   "Canonical order, heading names, and org levels for Claude sections.
 Each entry is (KEY HEADING LEVEL).
 
@@ -1783,13 +1825,113 @@ Both branches are no-ops when nothing to migrate."
               (tibetan-analysis--delete-claude-l2-section
                "Claude Vocabulary" buffer)
               (tibetan-analysis--insert-claude-vocabulary-heading
+               (current-buffer) body))))
+        ;; Step 5 (segment only, §5.24, 2026-05-22):  promote
+        ;; legacy `*** Claude Context' (L3) → new `** Concept Notes'
+        ;; (L2).  Same shape as Step 4 vocabulary promotion:
+        ;; preserve body verbatim, clear any L2 placeholder, insert
+        ;; at the canonical L2 slot.  Body content is preserved as-is
+        ;; (it's the OLD narrative-arc content from the pre-§5.24
+        ;; prompt — user can re-fire Claude to get the new concept-
+        ;; notes content).
+        (unless (tibetan-analysis--claude-l2-has-real-content-p
+                 "Concept Notes" buffer)
+          (goto-char (point-min))
+          (when (re-search-forward "^\\*\\*\\* Claude Context$" nil t)
+            (let* ((heading-start (line-beginning-position))
+                   (body-start (progn (forward-line 1) (point)))
+                   (body-end
+                    (save-excursion
+                      (if (re-search-forward
+                           (tibetan-analysis--claude-stop-re 3) nil t)
+                          (line-beginning-position)
+                        (point-max))))
+                   (body (string-trim
+                          (buffer-substring-no-properties
+                           body-start body-end))))
+              (delete-region heading-start body-end)
+              (tibetan-analysis--delete-claude-l2-section
+               "Concept Notes" buffer)
+              (tibetan-analysis--insert-concept-notes-heading
                (current-buffer) body))))))
-      ;; Step 5 (sentence only): reparent any level-3 Claude subsection
+      ;; Step 6 (sentence only, §5.24, 2026-05-22):  rename legacy
+      ;; `*** Claude Context' → `*** Concept Notes' at L3 (sentence
+      ;; layout keeps L3 placement).  Idempotent.
+      (unless (tibetan-analysis--claude-segment-layout-p buffer)
+        (goto-char (point-min))
+        (while (re-search-forward "^\\*\\*\\* Claude Context$" nil t)
+          (replace-match "*** Concept Notes" t t)))
+      ;; Step 7 (sentence only): reparent any level-3 Claude subsection
       ;; that previously landed outside `* Provided Translations' back
       ;; into it.  Repairs files written by the pre-fix regenerate run
       ;; that appended orphaned Claude headings at end-of-buffer.
       (unless (tibetan-analysis--claude-segment-layout-p buffer)
         (tibetan-analysis--reparent-orphaned-claude-subsections buffer))))
+
+(defun tibetan-analysis--insert-concept-notes-heading (buffer body)
+  "Insert `** Concept Notes' with BODY into BUFFER.
+
+§5.24 (2026-05-22):  the heading is placed AFTER the existing
+`** Translation' (Claude) and `** DharmaMitra Translation' if
+present, BEFORE `** Grammar'.  Reader-flow:  read Translation
+→ glance at Concept Notes for technical terms → read Grammar.
+
+Placement fallbacks (in decreasing preference):
+  · After `** DharmaMitra Translation' body.
+  · After `** Translation' / `** Claude Translation' body.
+  · After `** Claude Vocabulary' body.
+  · After `** Wylie Transliteration' body.
+  · End of buffer (defensive).
+
+BODY may be empty — the heading is still created with a `[Awaiting
+Claude…]' placeholder body."
+  (with-current-buffer buffer
+    (save-excursion
+      (let* ((effective-body
+              (if (and body (stringp body) (not (string-empty-p body)))
+                  body
+                "[Awaiting Claude…]"))
+             (insert-pos
+              (cond
+               ((save-excursion
+                  (goto-char (point-min))
+                  (when (re-search-forward
+                         "^\\*\\* DharmaMitra Translation$" nil t)
+                    (forward-line 1)
+                    (if (re-search-forward "^\\*\\* " nil t)
+                        (line-beginning-position)
+                      (point-max)))))
+               ((save-excursion
+                  (goto-char (point-min))
+                  (when (re-search-forward
+                         "^\\*\\* \\(?:Translation\\|Claude Translation\\)$"
+                         nil t)
+                    (forward-line 1)
+                    (if (re-search-forward "^\\*\\* " nil t)
+                        (line-beginning-position)
+                      (point-max)))))
+               ((save-excursion
+                  (goto-char (point-min))
+                  (when (re-search-forward
+                         "^\\*\\* Claude Vocabulary$" nil t)
+                    (forward-line 1)
+                    (if (re-search-forward "^\\*\\* " nil t)
+                        (line-beginning-position)
+                      (point-max)))))
+               ((save-excursion
+                  (goto-char (point-min))
+                  (when (re-search-forward
+                         "^\\*\\* Wylie Transliteration$" nil t)
+                    (forward-line 1)
+                    (if (re-search-forward "^\\*\\* " nil t)
+                        (line-beginning-position)
+                      (point-max)))))
+               (t (point-max)))))
+        (goto-char insert-pos)
+        ;; Trim any leading blank lines at insert-pos so we don't
+        ;; accumulate excess vertical whitespace.
+        (skip-chars-backward " \t\n")
+        (insert (format "\n\n** Concept Notes\n%s\n\n" effective-body))))))
 
 (defun tibetan-analysis--insert-claude-vocabulary-heading (buffer body)
   "Insert `** Claude Vocabulary' with BODY into BUFFER.
@@ -2165,6 +2307,15 @@ whichever target heading is still missing.  Idempotent."
         ;; body, delete the legacy heading, ensure the U4 target
         ;; exists, drop the body under it.
         (tibetan-analysis--migrate-claude-grammar-to-u4)
+        ;; §5.24 (2026-05-22):  ensure `** Concept Notes' exists at
+        ;; level 2.  Placement after DharmaMitra Translation / Claude
+        ;; Translation / Claude Vocabulary — see
+        ;; `--insert-concept-notes-heading' for the full preference
+        ;; ladder.  Idempotent — skipped when L2 heading exists.
+        (unless (save-excursion
+                  (goto-char (point-min))
+                  (re-search-forward "^\\*\\* Concept Notes$" nil t))
+          (tibetan-analysis--insert-concept-notes-heading buffer nil))
         ;; Ensure `*** Claude Particles' exists inside Provided
         ;; Translations (Pass 6c).  Place after `*** Claude Vocabulary'
         ;; if present; otherwise at the end of Provided Translations.
@@ -2227,8 +2378,13 @@ whichever target heading is still missing.  Idempotent."
        ;; at all) still appends at end of buffer so the headings
        ;; exist SOMEWHERE for the replace-body path to find.
        (t
+        ;; §5.24 (2026-05-22):  `Claude Context' → `Concept Notes'.
+        ;; The migration helper (Step 6) already renames any legacy
+        ;; `*** Claude Context' in this buffer to `*** Concept Notes',
+        ;; so by the time we ensure-headings the new heading is what
+        ;; we should look for / create.
         (dolist (heading '("Claude Translation" "Claude Vocabulary"
-                           "Claude Grammar" "Claude Context"))
+                           "Claude Grammar" "Concept Notes"))
           (unless (save-excursion
                     (goto-char (point-min))
                     (re-search-forward
@@ -2332,7 +2488,7 @@ a single buffer's layout drives heading levels consistently."
     '((:translation "Claude Translation" 3)
       (:vocabulary  "Claude Vocabulary"  3)
       (:grammar     "Claude Grammar"     3)
-      (:context     "Claude Context"     3))))
+      (:concepts    "Concept Notes"      3))))
 
 (defcustom tibetan-analysis-auto-regen-on-claude-arrival t
   "When non-nil, the Grammar section is re-rendered after Claude
@@ -2510,15 +2666,18 @@ and known error markers so we don't re-persist dead content."
 (defun tibetan-analysis--read-claude-sections (filepath)
   "Return preserved Claude content in FILEPATH as a plist.
 Keys: `:translation', `:vocabulary', `:grammar', `:particles',
-`:context'.  Each value is a non-empty string or nil.  Reads
-from the current layout (Translation and Grammar at level 2;
-Vocabulary at level 3 inside Provided Translations) and falls
+`:concepts'.  Each value is a non-empty string or nil.  Reads
+from the current layout (Translation, Vocabulary, and Concept
+Notes at level 2;  Grammar / Particles at level 3) and falls
 back to the legacy level-3 placements so old analysis files do
 not lose their work on reanalysis.
 
-A legacy `*** Claude Context' body is still read when present and
-returned as `:context' for round-trip safety, but it is never
-written back.
+§5.24 (2026-05-22):  the `:context' slot is renamed to
+`:concepts' and its heading promoted from level-3 `*** Claude
+Context' to level-2 `** Concept Notes' (sentence files keep
+level 3 — see `--claude-effective-section-order' else branch).
+Reader does dual-name match so existing `*** Claude Context'
+bodies migrate naturally on first regen.
 
 Phase 1 of two-language-parallel-analysis (2026-04-30):  the
 Phase B–D `:translation-sanskrit' / `:translation-combined' /
@@ -2567,16 +2726,22 @@ read / restore helpers in
            filepath "Claude Grammar" 3)))
         (particles (tibetan-analysis--read-claude-section-body
                     filepath "Claude Particles" 3))
-        ;; Preserve legacy Context body for round-trip safety; the
-        ;; writer never emits a Context heading so this only surfaces
-        ;; when an older analysis file still has one.
-        (context (tibetan-analysis--read-claude-section-body
-                  filepath "Claude Context" 3)))
+        ;; §5.24 (2026-05-22):  the canonical slot is `** Concept
+        ;; Notes' at level 2 for segment layout, `*** Concept Notes'
+        ;; at level 3 for sentence layout.  Reader checks both, plus
+        ;; legacy `*** Claude Context' at L3 for round-trip migration.
+        ;; First match wins.
+        (concepts (or (tibetan-analysis--read-claude-section-body
+                       filepath "Concept Notes" 2)
+                      (tibetan-analysis--read-claude-section-body
+                       filepath "Concept Notes" 3)
+                      (tibetan-analysis--read-claude-section-body
+                       filepath "Claude Context" 3))))
     (list :translation translation
           :vocabulary  vocabulary
           :grammar     grammar
           :particles   particles
-          :context     context)))
+          :concepts    concepts)))
 
 (defun tibetan-analysis--parse-claude-particles (body)
   "Parse a `*** Claude Particles' BODY into a list of particle tuples.
@@ -2645,36 +2810,27 @@ Returns non-nil when a request SHOULD be dispatched."
 
 (defun tibetan-analysis--restore-claude-sections (filepath sections)
   "Write SECTIONS (a plist) back into FILEPATH's Claude headings.
-SECTIONS has keys :translation, :vocabulary, :grammar, and optionally
-:context (legacy); any nil slot leaves the corresponding org body
-untouched.  Creates the target headings (`** Claude Translation',
-`*** Claude Vocabulary', `*** Claude Grammar') if they are missing,
-migrating legacy layouts on first encounter.  A :context value is
-only written when a `*** Claude Context' heading is already present
-in the file — legacy files keep their Context body intact, but the
-restore path will not create a new Context heading."
+SECTIONS has keys :translation, :vocabulary, :grammar, :particles,
+:concepts;  any nil slot leaves the corresponding org body
+untouched.  Creates the target headings if they are missing,
+migrating legacy layouts on first encounter.
+
+§5.24 (2026-05-22):  `:concepts' replaces the legacy `:context'
+slot.  Heading promoted from `*** Claude Context' (L3) to
+`** Concept Notes' (L2) for segment layout;  sentence layout keeps
+L3 (via the else branch of `--claude-effective-section-order')."
   (when (and sections (file-exists-p filepath))
     (let ((buf (find-file-noselect filepath)))
       (with-current-buffer buf
         (tibetan-analysis--ensure-claude-headings buf)
-        (dolist (entry (tibetan-analysis--claude-effective-section-order buf))
-          (let ((key (nth 0 entry))
-                (heading (nth 1 entry))
-                (level (nth 2 entry)))
-            (when (plist-get sections key)
-              (tibetan-analysis--replace-claude-section-body
-               buf heading (plist-get sections key) level))))
-        ;; Backwards-compatible :context round-trip for segment layout:
-        ;; the effective section order drops :context for segment buffers,
-        ;; but if a legacy `*** Claude Context' heading is present on disk
-        ;; we preserve the body round-trip instead of silently dropping it.
-        (when (and (plist-get sections :context)
-                   (tibetan-analysis--claude-segment-layout-p buf))
-          (save-excursion
-            (goto-char (point-min))
-            (when (re-search-forward "^\\*\\*\\* Claude Context$" nil t)
-              (tibetan-analysis--replace-claude-section-body
-               buf "Claude Context" (plist-get sections :context) 3))))
+        (let ((inhibit-modification-hooks t))
+          (dolist (entry (tibetan-analysis--claude-effective-section-order buf))
+            (let ((key (nth 0 entry))
+                  (heading (nth 1 entry))
+                  (level (nth 2 entry)))
+              (when (plist-get sections key)
+                (tibetan-analysis--replace-claude-section-body
+                 buf heading (plist-get sections key) level)))))
         ;; `--merge-claude-vocabulary' call retired 2026-05-20
         ;; (§5.21 Commit 2/7) — see insert path for rationale.
         (save-buffer)))))
