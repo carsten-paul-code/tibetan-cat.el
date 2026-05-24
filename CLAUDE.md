@@ -3,7 +3,11 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-05-24 (§5.24 added: `** Concept
+editing. Last updated 2026-05-24 (§5.25 added: thesaurus zettel
+cross-link in Concept Notes — Claude cites `[[id:ZID][zettel ↗]]'
+inline for any term that has a curated zettel in
+`~/Documents/tibetan-thesaurus/';  writer post-processes the
+response as a safety net.  §5.24 added: `** Concept
 Notes' replaces `*** Claude Context' — class-reading aid that
 surfaces Buddhist + Sanskrit technical concepts with encyclopedia
 notes instead of the old narrative-arc commentary.  Heading
@@ -247,7 +251,7 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-05-24, post-§5.24):  **1965 tests, 1964
+Current state (2026-05-24, post-§5.25):  **1971 tests, 1970
 expected, 0 unexpected failures, 1 intentional skip
 (compound-analysis-callable).**  Carsten runs this after every
 change and expects it to stay green.
@@ -2027,16 +2031,88 @@ concept-notes content in place.
 #### Pending follow-ups
 
 User raised two extensions during the class-reading review;
-neither is shipped in §5.24 itself:
+the first ships in §5.25 (below);  the second has no concrete
+proposal yet:
 
-1. **Thesaurus zettel cross-link** — when Claude's Concept
-   Notes mentions a term that has a thesaurus zettel in
-   `~/Documents/tibetan-thesaurus/`, link to it from the body
-   (`[[id:ZID][zettel ↗]]`).  Two architectures available:
-   pre-load zettels into the user prompt and let Claude cite,
-   OR post-process Claude's response by regex-matching bolded
-   Tibetan terms.  Awaiting decision on which path before
-   implementation.
+1. **Thesaurus zettel cross-link** — shipped as §5.25 (next
+   subsection).
+2. (none open)
+
+### 5.25 Thesaurus zettel cross-link in Concept Notes (done, 2026-05-24)
+
+Carsten's follow-up to §5.24's `** Concept Notes':  *"should
+also always check if there is a Zettel for this concept
+available."*  Where the user has a curated thesaurus zettel for
+a term that Claude discusses, the Concept Notes body should
+link to it directly — let the reader jump from the in-passage
+explanation to the zettel's full content.
+
+#### Architecture choice
+
+User picked option **(C) Both — prompt-cite + post-process
+safety net** from a three-way AskUserQuestion.  The two paths
+work together:
+
+  1. **Pre-load (in-prompt)**:  before each Claude call, walk
+     the passage's tokenised words, look each up in the
+     thesaurus, inject the matches into the user prompt with
+     instructions to cite as `[[id:ZID][zettel ↗]]'.  Claude
+     does the semantic matching — it knows which zettel
+     applies to the term *as used* in this context.
+
+  2. **Post-process (writer-side safety net)**:  after Claude
+     returns the Concept Notes body, scan bolded Tibetan terms
+     and auto-append `[[id:ZID][zettel ↗]]' to any line that
+     matches a zettel but didn't get cited in Claude's output.
+     Lines that already carry a link are skipped (idempotent).
+
+The two paths give robustness through overlap:  Claude usually
+cites correctly in-prompt;  the post-process catches the
+occasional miss.
+
+#### Three new helpers (`persist/tibetan-analysis-claude.el')
+
+| Helper | Returns |
+|---|---|
+| `--collect-zettel-references (tibetan-text)' | Deduplicated list of zettel plists matching tokens in `tibetan-text` (via `tibetan-thesaurus-lookup', Wylie key) |
+| `--format-zettel-references-block (zettels)' | User-prompt-injectable text block — header instructing Claude how to cite + one bullet per zettel (Wylie / ZID / Skt. / EN-or-DE primary) |
+| `--cross-link-zettels-in-body (body)' | Post-processed copy of `body` with `[[id:ZID][zettel ↗]]' appended to bolded-term lines that have a zettel but no link yet.  Idempotent. |
+
+All three are no-ops when the thesaurus module isn't loaded —
+silent fall-through preserves the no-zettel UX.
+
+#### Wiring
+
+  · `--build-claude-prompts' (segment) — injects the zettel
+    block right before "Produce the five sections now."
+  · `tibetan-sentence--build-claude-prompts' — same injection,
+    guarded by `fboundp' so the sentence module loads cleanly
+    without the analysis-claude module.
+  · `--insert-claude-sections' — pre-write step post-processes
+    the `:concepts' plist slot through `--cross-link-zettels-in-
+    body'.
+
+End-to-end flow:
+  1. Prompt builder collects relevant zettels.
+  2. User prompt carries the zettel block.
+  3. Claude emits Concept Notes with inline `[[id:ZID][zettel ↗]]'
+     citations.
+  4. Writer's post-process catches any zettel Claude missed,
+     auto-appends the link.
+  5. On-disk `** Concept Notes' carries clickable cross-links
+     to every relevant zettel.
+
+#### Verification
+
+  · `make test'        → 244 / 244 BDD specs pass.
+  · `make test-quick'  → 1971 / 1970 expected / 0 unexpected /
+                         1 intentional skip (compound-
+                         analysis-callable).
+  · `make compile'     → clean (pre-existing warnings only).
+
+#### Pending (truly open now)
+
+  · (none for the Concept Notes thread)
 
 ## 6. Open work (prioritised)
 
