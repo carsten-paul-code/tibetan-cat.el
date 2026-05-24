@@ -162,5 +162,9 @@
 ;; Combined document builder (C-c u C) — per-segment blocks + dedup appendix
 (condition-case nil (require 'tibetan-analysis-combine-test) (error nil))
 
+;; CAT → Zettel bridge: open the zettel for the word at point, optionally
+;; routed via emacsclient to the research Emacs instance.
+(condition-case nil (require 'tibetan-cat-zettel-bridge-test) (error nil))
+
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here

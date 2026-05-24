@@ -384,5 +384,114 @@ Loads glossaries and prepares the system for use."
   (message "  - Text classification (classical, verse, etc.)")
   (message "Authors: Developed for Buddhist Studies classroom use"))
 
+;; ============================================================================
+;; CAT → ZETTEL BRIDGE
+;; ============================================================================
+;;
+;; Open the zettelkasten entry for the Tibetan word under the cursor.
+;; When the research Emacs instance is running (separate Emacs process
+;; with a server matching `tibetan-cat-zettel-target-server'), the zettel
+;; opens THERE via emacsclient — so a dual-monitor workflow can keep CAT
+;; translation focus on one screen and zettel-arbeit on the other.
+;; Otherwise the zettel opens locally in the CAT Emacs.
+
+(defcustom tibetan-cat-zettel-target-server "research-emacs"
+  "Emacs server name of the Research instance for zettel lookups.
+
+When this server is running, `tibetan-cat-open-zettel-for-word-at-point'
+routes opens via emacsclient -s <server> so the zettel appears in the
+research instance instead of the CAT instance.  Configure the research
+instance to start the server with the matching name:
+
+  (require 'server)
+  (setq server-name \"research-emacs\")
+  (unless (server-running-p) (server-start))
+
+Empty string disables remote routing entirely."
+  :type 'string
+  :group 'tibetan-cat)
+
+(defun tibetan-cat--server-socket-path (server-name)
+  "Return the socket path for SERVER-NAME if it exists, else nil.
+Uses the `server-socket-dir' variable to resolve the path, then
+checks for existence (the file is created by `server-start' and
+removed when the server is stopped)."
+  (require 'server)
+  (when (and server-name (not (string-empty-p server-name)))
+    (let ((path (expand-file-name server-name server-socket-dir)))
+      (when (file-exists-p path) path))))
+
+;;;###autoload
+(defun tibetan-cat-open-zettel-for-word-at-point (&optional arg)
+  "Open the zettelkasten entry for the Wylie term under point.
+
+Tries (in order):
+  1. `tibetan-thesaurus--wylie-at-point' to read a `[wylie]'-bracket
+     token from the current line (Detailed Dictionary / Interlinear
+     Gloss layout).
+  2. Falls back to a `read-string' prompt when no bracketed token
+     is on the line.
+
+Resolves the term through `tibetan-zettel-lookup' which indexes the
+zettelkasten by normalised Wylie.
+
+Routing:
+  - With prefix arg \\[universal-argument]: open locally via `find-file'.
+  - Otherwise: if the research Emacs server is running (socket file at
+    \\='(server--socket-dir)/tibetan-cat-zettel-target-server\\='),
+    route via `emacsclient --no-wait'.  This sends the zettel to the
+    research instance — typical use case is a second monitor.
+  - Otherwise (no server, no prefix): open locally via `find-file'.
+
+When the lookup returns nil (no zettel for that Wylie), prompts the
+user whether to create one and (if confirmed) delegates to `denote'
+in the appropriate instance."
+  (interactive "P")
+  (require 'tibetan-zettel)
+  (require 'server)
+  (let* ((wylie (or (and (fboundp 'tibetan-thesaurus--wylie-at-point)
+                         (tibetan-thesaurus--wylie-at-point))
+                    (read-string "Wylie term: ")))
+         (entry (and wylie (not (string-empty-p (string-trim wylie)))
+                     (tibetan-zettel-lookup wylie)))
+         (file (and entry (plist-get entry :path)))
+         (socket (and (not arg)
+                      (tibetan-cat--server-socket-path
+                       tibetan-cat-zettel-target-server))))
+    (cond
+     ;; Hit + research server reachable + no prefix arg → emacsclient
+     ((and file socket)
+      (call-process "emacsclient" nil 0 nil
+                    "-s" tibetan-cat-zettel-target-server
+                    "--no-wait"
+                    file)
+      (message "Opened zettel for '%s' in research instance: %s"
+               wylie (file-name-nondirectory file)))
+     ;; Hit, but local routing (no server or prefix arg)
+     (file
+      (find-file file)
+      (message "Opened zettel for '%s' locally" wylie))
+     ;; No hit → offer to create
+     ((and wylie (not (string-empty-p (string-trim wylie))))
+      (when (y-or-n-p (format "No zettel for '%s'.  Create one? " wylie))
+        (cond
+         (socket
+          (call-process "emacsclient" nil 0 nil
+                        "-s" tibetan-cat-zettel-target-server
+                        "--no-wait"
+                        "--eval"
+                        (format "(denote %S)" wylie))
+          (message "Asked research instance to create zettel for '%s'" wylie))
+         ((fboundp 'denote)
+          (denote wylie))
+         (t
+          (message "denote not loaded — cannot create zettel for '%s'"
+                   wylie))))))))
+
+;; Bound under the CAT prefix `C-c u' (lowercase u) which CAT-tool owns.
+;; `Z' uppercase to distinguish from `z' (already taken by thesaurus
+;; bindings under `C-c u z').
+(global-set-key (kbd "C-c u Z") #'tibetan-cat-open-zettel-for-word-at-point)
+
 (provide 'tibetan-cat)
 ;;; tibetan-cat.el ends here
