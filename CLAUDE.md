@@ -3,7 +3,12 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-05-22 (§5.23 added: per-source
+editing. Last updated 2026-05-24 (§5.24 added: `** Concept
+Notes' replaces `*** Claude Context' — class-reading aid that
+surfaces Buddhist + Sanskrit technical concepts with encyclopedia
+notes instead of the old narrative-arc commentary.  Heading
+promoted from L3 to L2 (segment + sentence).  Migration
+automatic on first regenerate.  Previous:  §5.23 added: per-source
 filename suffix `seg-NNN-SHORT.org' for ALL new analysis files;
 fixes silent multi-source overwrite in MA Reading folder.
 Migration helper `tibetan-analysis-migrate-suffix-in-folder'
@@ -242,7 +247,7 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-05-22, post-§5.23):  **1960 tests, 1959
+Current state (2026-05-24, post-§5.24):  **1965 tests, 1964
 expected, 0 unexpected failures, 1 intentional skip
 (compound-analysis-callable).**  Carsten runs this after every
 change and expects it to stay green.
@@ -1944,6 +1949,94 @@ skipped.  `make compile' clean.
 | `persist/tibetan-auto-analysis.el` | Skip-check threads source-file (preserves §5.8.3 symmetry) |
 | `test/tibetan-analysis-persist-test.el` | +2 ERT specs |
 | `CLAUDE.md` | §5.23 added |
+
+### 5.24 `** Concept Notes' replaces `*** Claude Context' (done, 2026-05-24)
+
+Class-use feedback after the MA Reading class (2026-05-24).
+Carsten:  *"Claude Context isn't that useful at the moment.  In
+the class I got the idea, that we should reuse this for
+additional information about the segment/sentence if there is a
+Buddhist concept in the text that I get more information about
+it."*
+
+The pre-§5.24 `*** Claude Context' surfaced narrative-arc /
+discourse-position information — useful occasionally but not
+the high-value class artefact.  Higher-value:  Buddhist +
+Sanskrit technical concepts (doctrine, doxography, lineage and
+person and place names, category-lists like the five aggregates).
+Claude-provided encyclopedia notes that keep students in the
+text rather than breaking flow to look terms up.
+
+#### What changed
+
+| Aspect | Before | After |
+|---|---|---|
+| **Heading** (segment) | `*** Claude Context' (L3 inside Provided Translations) | `** Concept Notes' (L2, after DharmaMitra Translation, before Grammar) |
+| **Heading** (sentence) | `*** Claude Context' (L3 inside nested Provided Translations) | `** Concept Notes' (L2, segment-renderer-emitted, kept in §5.22 compressed strip) |
+| **Claude prompt section** | `## Context` — discourse-position narration | `## Concept Notes` — 0-3 technical-concept encyclopedia notes |
+| **Sub-concept handling** | n/a | 1-sentence parenthetical gloss inline (e.g. "one of the twelve dhutaguṇas (the canonical list of ascetic disciplines)") — one level of recursion |
+| **Empty-passage behaviour** | Claude wrote something even when narratively thin | Explicit `[No notable concepts in this passage]` placeholder |
+| **Elisp key** | `:context` | `:concepts` |
+| **Heading name flexibility** | Buddhist-only ("Claude Context") | Neutral — accommodates non-Buddhist terms (clans, places, lineages) |
+
+#### Migration
+
+Existing files migrate naturally on first regenerate post-§5.24:
+
+  · `--migrate-legacy-claude-headings' Step 5 (segment layout) /
+    Step 6 (sentence layout) renames `*** Claude Context' →
+    `** Concept Notes' (segment) or `*** Concept Notes' (sentence),
+    preserving body verbatim.
+  · Reader's fallback chain checks `** Concept Notes' L2 → `***
+    Concept Notes' L3 → legacy `*** Claude Context' L3.  First
+    non-nil wins, so an already-migrated file's L2 body takes
+    precedence over any stale L3 remnant.
+  · Parser `## Concept Notes` and legacy `## Context' both route
+    to the `:concepts' plist slot.
+
+Preserved bodies carry the OLD narrative-arc content from the
+pre-§5.24 prompt;  the user re-fires Claude (`C-c u R' or
+`:re-request-claude :missing-only' batch) to get fresh
+concept-notes content in place.
+
+#### Sentence renderer changes
+
+  · `tibetan-sentence--scaffold-sentence-only-l3-entries' drops
+    `Claude Context' from the L3 inject list — the renamed
+    `** Concept Notes' lives at L2 in both segment and sentence
+    files (single source of truth, no duplication).
+  · Sentence regenerate's preserved-body reader extended for
+    `** Concept Notes' L2 + `*** Concept Notes' L3 + legacy
+    `*** Claude Context' L3.  Writer uses the L2 path
+    (`--set-l2-body-in-buffer').
+
+#### Commits (2)
+
+| Commit  | Subject |
+|---------|---|
+| f6b3f67 | Code + tests:  heading rename, prompt rewrite, migration, parser/reader/writer all aligned |
+| (this)  | CLAUDE.md §5.24 entry |
+
+#### Verification
+
+  · `make test`        → 244 / 244 BDD specs pass.
+  · `make test-quick'  → 1965 / 1964 expected / 0 unexpected /
+                         1 intentional skip.
+  · `make compile`     → clean (no NEW warnings).
+
+#### Pending follow-ups
+
+User raised two extensions during the class-reading review;
+neither is shipped in §5.24 itself:
+
+1. **Thesaurus zettel cross-link** — when Claude's Concept
+   Notes mentions a term that has a thesaurus zettel in
+   `~/Documents/tibetan-thesaurus/`, link to it from the body
+   (`[[id:ZID][zettel ↗]]`).  Two architectures available:
+   pre-load zettels into the user prompt and let Claude cite,
+   OR post-process Claude's response by regex-matching bolded
+   Tibetan terms.  Awaiting decision on which path before
+   implementation.
 
 ## 6. Open work (prioritised)
 
