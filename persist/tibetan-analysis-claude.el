@@ -525,6 +525,175 @@ Tibetan term and second column is the gloss."
         (error nil)))
     (nreverse matches)))
 
+;; ============================================================================
+;; §5.25 (2026-05-24) — Thesaurus zettel cross-link for Concept Notes
+;; ============================================================================
+;;
+;; The `** Concept Notes' section (§5.24) gets per-term cross-links to
+;; thesaurus zettels in `~/Documents/tibetan-thesaurus/'.  Architecture
+;; (the user picked option C, "Both — prompt-cite + post-process safety
+;; net"):
+;;
+;;   1. PRE-LOAD:  before firing Claude, walk TIBETAN-TEXT, collect
+;;      thesaurus zettels for words/compounds that match, inject their
+;;      `ZID' / Wylie / Sanskrit / primary translation into the user
+;;      prompt.  Prompt instruction tells Claude to cite as
+;;      `[[id:ZID][zettel ↗]]' inline when discussing the term.
+;;   2. POST-PROCESS:  after Claude returns the Concept Notes body, scan
+;;      bolded Tibetan terms (`**…**'), look each up in the thesaurus,
+;;      and APPEND `[[id:ZID][zettel ↗]]' to any line that matches but
+;;      doesn't already carry the link.  Safety net for zettels Claude
+;;      missed in its in-prompt citation.
+;;
+;; Both paths are no-ops when the thesaurus module isn't loaded or no
+;; zettels match — silent fall-through preserves the no-zettel UX.
+
+(defun tibetan-analysis--collect-zettel-references (tibetan-text)
+  "Return a deduplicated list of thesaurus zettel plists for TIBETAN-TEXT.
+
+Walks the tokenised words/compounds in TIBETAN-TEXT (via
+`tibetan-tokenize-into-words'), looks each up in the thesaurus
+\(via `tibetan-thesaurus-lookup' using the Wylie key), and returns
+the unique zettels found.  Plist shape per element:
+
+  (:id ID :wylie WYLIE :sanskrit SKT :primary-en EN :primary-de DE
+   :path PATH)
+
+Deduplication is by `:id'.  Returns nil when the thesaurus module
+isn't loaded, the directory isn't configured, or no zettel
+matches.  Safe to call from prompt builders — wrapped in
+`condition-case' so a malformed zettel doesn't crash the analysis."
+  (when (and tibetan-text (stringp tibetan-text)
+             (fboundp 'tibetan-thesaurus-lookup)
+             (fboundp 'tibetan-tokenize-into-words))
+    (condition-case nil
+        (let ((tokens (tibetan-tokenize-into-words tibetan-text))
+              (seen (make-hash-table :test 'equal))
+              (results '()))
+          (dolist (tok tokens)
+            (let* ((wylie (condition-case nil
+                              (and (fboundp 'tibetan-to-wylie-fixed)
+                                   (let ((w (tibetan-to-wylie-fixed tok)))
+                                     (and w (string-trim w))))
+                            (error nil)))
+                   (zettels (and wylie
+                                 (not (string-empty-p wylie))
+                                 (tibetan-thesaurus-lookup wylie))))
+              (dolist (z zettels)
+                (let ((id (plist-get z :id)))
+                  (when (and id (not (gethash id seen)))
+                    (puthash id t seen)
+                    (push z results))))))
+          (nreverse results))
+      (error nil))))
+
+(defun tibetan-analysis--format-zettel-references-block (zettels)
+  "Format ZETTELS (list of plists) as an injectable user-prompt block.
+
+When non-empty, returns a string starting with two newlines + a
+header line + one bullet per zettel.  When ZETTELS is nil or
+empty, returns the empty string so the caller can unconditionally
+concat the result.
+
+Each bullet shows the Wylie key, the org ZID, the Sanskrit
+equivalent (if known), and the primary translation (English
+preferred, German fallback) — enough for Claude to recognise the
+term as it appears in the passage and to cite it correctly."
+  (if (null zettels)
+      ""
+    (concat
+     "\n\nAvailable thesaurus zettels for cross-link in the "
+     "## Concept Notes section.  When discussing a term listed below, "
+     "cite the matching zettel with the org-link format "
+     "`[[id:ZID][zettel ↗]]' immediately after the term — this lets "
+     "the reader jump from Concept Notes to the curated zettel.\n"
+     (mapconcat
+      (lambda (z)
+        (let* ((wylie (or (plist-get z :wylie) "?"))
+               (id    (or (plist-get z :id) "?"))
+               (skt   (plist-get z :sanskrit))
+               (en    (plist-get z :primary-en))
+               (de    (plist-get z :primary-de)))
+          (format "  - %s (ZID:%s)%s%s"
+                  wylie id
+                  (if (and skt (not (string-empty-p skt)))
+                      (format " ← Skt. %s" skt) "")
+                  (cond
+                   ((and en (not (string-empty-p en)))
+                    (format " — %s" en))
+                   ((and de (not (string-empty-p de)))
+                    (format " — %s" de))
+                   (t "")))))
+      zettels "\n"))))
+
+(defun tibetan-analysis--cross-link-zettels-in-body (body)
+  "Append `[[id:ZID][zettel ↗]]' links to bolded Tibetan terms in BODY.
+
+BODY is a string (typically the Concept Notes section's body
+returned by Claude).  For each line matching `- **<term>**…',
+extract the leading word, look it up in the thesaurus by Wylie,
+and append the zettel link to the line if the zettel exists AND
+the line doesn't already carry a `[[id:…]]' link.
+
+The leading-word extractor splits on whitespace / `(' so terms
+like `**'dod yon (Skt. pañca kāmaguṇa) — five sensory…**' yield
+the bare Wylie key `'dod yon' for lookup.  When Claude bolded the
+Tibetan-script form (`མཐུ'), the function first tries the script
+as-is (some thesauruses have script keys), then converts to Wylie
+and re-tries.
+
+Returns the modified BODY string.  No-op (returns BODY unchanged)
+when BODY is nil/empty, when the thesaurus module isn't loaded,
+or when no bolded terms match a zettel.  Wrapped in
+`condition-case' so any error in the regex / lookup path falls
+back to the unmodified body."
+  (if (or (null body) (not (stringp body))
+          (string-empty-p body)
+          (not (fboundp 'tibetan-thesaurus-lookup)))
+      body
+    (condition-case nil
+        (with-temp-buffer
+          (insert body)
+          (goto-char (point-min))
+          ;; Match line-starting `- **<term>**' (bullet + bold).  Claude's
+          ;; Concept Notes uses this format consistently per the §5.24
+          ;; prompt.  Avoid `**Concept**' mid-line matches that aren't
+          ;; the entry header.
+          (while (re-search-forward "^- \\*\\*\\([^*\n]+?\\)\\*\\*" nil t)
+            (let* ((bold (match-string 1))
+                   (eol-pos (line-end-position))
+                   (existing-line (buffer-substring-no-properties
+                                   (line-beginning-position) eol-pos)))
+              (unless (string-match-p "\\[\\[id:" existing-line)
+                ;; Extract just the leading word (Wylie or Tibetan) —
+                ;; strip anything after the first space, `(', `—', or `,'.
+                (let* ((first-word
+                        (and (string-match
+                              "\\`\\([^ (,—–-]+\\(?:[ ][^ (,—–]+\\)?\\)"
+                              bold)
+                             (string-trim (match-string 1 bold))))
+                       ;; Try lookup as-is first (script);  fall back to
+                       ;; Wylie conversion.
+                       (zettels
+                        (or (and first-word
+                                 (tibetan-thesaurus-lookup first-word))
+                            (and first-word
+                                 (fboundp 'tibetan-to-wylie-fixed)
+                                 (let ((w (condition-case nil
+                                              (string-trim
+                                               (tibetan-to-wylie-fixed
+                                                first-word))
+                                            (error nil))))
+                                   (and w (not (string-empty-p w))
+                                        (tibetan-thesaurus-lookup w))))))
+                       (z (car zettels))
+                       (id (and z (plist-get z :id))))
+                  (when id
+                    (goto-char eol-pos)
+                    (insert (format " [[id:%s][zettel ↗]]" id)))))))
+          (buffer-string))
+      (error body))))
+
 (defun tibetan-analysis--read-analysis-parser-sections (analysis-file)
   "Return a plist of parser-output sections extracted from ANALYSIS-FILE.
 Used to give Claude the tool's own grammatical analysis as grounding
@@ -1217,6 +1386,14 @@ first three args."
          ;; goes to a separate Sanskrit Claude call (Phase 2 module);
          ;; this Tibetan user prompt no longer mentions Sanskrit at
          ;; all — Tibetan-only, parallel-and-non-parallel-identical.
+         ;; §5.25 (2026-05-24):  inject thesaurus zettel references
+         ;; for any term in the passage that has a curated zettel.
+         ;; Claude uses these to cite `[[id:ZID][zettel ↗]]' inline
+         ;; in the Concept Notes section.  Empty string when no
+         ;; zettel matches — silent fall-through.
+         (zettel-block
+          (tibetan-analysis--format-zettel-references-block
+           (tibetan-analysis--collect-zettel-references tibetan-text)))
          (user (concat "Classical Tibetan passage:\n\n"
                        tibetan-text
                        (if wylie (format "\n\nWylie: %s" wylie) "")
@@ -1225,7 +1402,8 @@ first three args."
                        (or surrounding-block "")
                        (or grounding-block "")
                        (or references-block "")
-                       "\n\nProduce the four sections now.")))
+                       (or zettel-block "")
+                       "\n\nProduce the five sections now.")))
     (cons system user)))
 
 (defun tibetan-analysis--read-authinfo-key (host)
@@ -2538,6 +2716,17 @@ reanalyse."
         ;; floor.  Discovered when a batch run on Milarepa segs 62-72
         ;; logged `Claude insert failed: Match data clobbered' on every
         ;; segment despite the API returning content cleanly.
+        ;; §5.25 (2026-05-24):  post-process the Concept Notes body
+        ;; to append `[[id:ZID][zettel ↗]]' links to bolded Tibetan
+        ;; terms that have a thesaurus zettel — safety net for
+        ;; zettels Claude missed in its in-prompt citation.  No-op
+        ;; when no Concept Notes body, no thesaurus module loaded,
+        ;; or no zettels match.
+        (when (plist-get sections :concepts)
+          (setq sections
+                (plist-put sections :concepts
+                           (tibetan-analysis--cross-link-zettels-in-body
+                            (plist-get sections :concepts)))))
         (let ((inhibit-modification-hooks t))
           (tibetan-analysis--ensure-claude-headings buf)
           (dolist (entry (tibetan-analysis--claude-effective-section-order buf))

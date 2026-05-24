@@ -1159,12 +1159,23 @@ files for parser grounding; SOURCE-FILE the source org buffer path
                          (or src-block "")))
          (grounding-block
           (tibetan-sentence--collect-children-grounding seg-nums folder))
+         ;; §5.25 (2026-05-24):  inject thesaurus zettel references
+         ;; for any term in the sentence that has a curated zettel.
+         ;; Claude cites `[[id:ZID][zettel ↗]]' inline in Concept
+         ;; Notes;  the post-process writer is a safety net for
+         ;; zettels Claude missed.
+         (zettel-block
+          (and (fboundp 'tibetan-analysis--format-zettel-references-block)
+               (fboundp 'tibetan-analysis--collect-zettel-references)
+               (tibetan-analysis--format-zettel-references-block
+                (tibetan-analysis--collect-zettel-references tibetan-text))))
          (segs-csv (mapconcat #'number-to-string seg-nums ", "))
          (user (concat "Classical Tibetan sentence "
                        (format "(spans segments: %s):\n\n" segs-csv)
                        tibetan-text
                        (if wylie (format "\n\nWylie: %s" wylie) "")
                        (or grounding-block "")
+                       (or zettel-block "")
                        "\n\nProduce the three sections now.")))
     (cons system user)))
 

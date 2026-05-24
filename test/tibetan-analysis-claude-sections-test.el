@@ -1381,5 +1381,99 @@ not in the parallel-Sanskrit pipeline; only segment-layout
         ;; to the segment layout.
         (should-not (string-match-p "^\\*\\* Translation$" content))))))
 
+;; ============================================================================
+;; §5.25 (2026-05-24) — Thesaurus zettel cross-link helpers
+;; ============================================================================
+
+(ert-deftest tibetan-claude-zettel-format-block-empty ()
+  "`--format-zettel-references-block' with nil/empty input returns
+the empty string so the caller can unconditionally concat."
+  (should (equal "" (tibetan-analysis--format-zettel-references-block nil)))
+  (should (equal "" (tibetan-analysis--format-zettel-references-block '()))))
+
+(ert-deftest tibetan-claude-zettel-format-block-with-zettels ()
+  "`--format-zettel-references-block' renders zettel plists into a
+prompt-injectable block with a header and one bullet per zettel."
+  (let* ((zettels (list (list :id "abc-123"
+                              :wylie "bdag"
+                              :sanskrit "ātman"
+                              :primary-en "self, I"
+                              :primary-de nil)
+                        (list :id "xyz-789"
+                              :wylie "mthu"
+                              :sanskrit nil
+                              :primary-en nil
+                              :primary-de "Macht, Zauber")))
+         (block (tibetan-analysis--format-zettel-references-block zettels)))
+    (should (stringp block))
+    ;; Header is present and instructs Claude to cite via org-link.
+    (should (string-match-p "Concept Notes" block))
+    (should (string-match-p "\\[\\[id:ZID\\]\\[zettel" block))
+    ;; Bullets include ZID + Wylie + (Skt. or DE) + EN/DE primary.
+    (should (string-match-p "bdag (ZID:abc-123).*ātman.*self, I" block))
+    ;; German fallback when no English primary.
+    (should (string-match-p "mthu (ZID:xyz-789).*Macht, Zauber" block))))
+
+(ert-deftest tibetan-claude-zettel-cross-link-no-thesaurus-noop ()
+  "`--cross-link-zettels-in-body' is a no-op when the thesaurus
+module isn't loaded — returns BODY unchanged."
+  (cl-letf (((symbol-function 'tibetan-thesaurus-lookup) nil))
+    ;; fmakunbound-style: not fboundp, so the helper bails early.
+    (fmakunbound 'tibetan-thesaurus-lookup)
+    (unwind-protect
+        (let ((body "- **bdag** — self, I\n- **mthu** — power\n"))
+          (should (equal body
+                         (tibetan-analysis--cross-link-zettels-in-body body))))
+      (defun tibetan-thesaurus-lookup (_) nil))))
+
+(ert-deftest tibetan-claude-zettel-cross-link-appends-link ()
+  "`--cross-link-zettels-in-body' appends `[[id:ZID][zettel ↗]]'
+to bolded Tibetan-term lines that match a thesaurus zettel."
+  (cl-letf (((symbol-function 'tibetan-thesaurus-lookup)
+             (lambda (wylie)
+               (cond
+                ((equal (string-trim wylie) "bdag")
+                 (list (list :id "abc-123" :wylie "bdag")))
+                (t nil))))
+            ((symbol-function 'tibetan-to-wylie-fixed)
+             (lambda (s) s)))
+    (let* ((body (concat "- **bdag** — self, I (Skt. ātman)\n"
+                         "- **mthu** — power, sorcery\n"))
+           (out (tibetan-analysis--cross-link-zettels-in-body body)))
+      ;; bdag has a zettel → link appended.
+      (should (string-match-p "bdag\\*\\*.*\\[\\[id:abc-123\\]\\[zettel" out))
+      ;; mthu has no zettel → no link.
+      (should-not (string-match-p "mthu\\*\\*.*\\[\\[id:" out)))))
+
+(ert-deftest tibetan-claude-zettel-cross-link-idempotent-existing-link ()
+  "`--cross-link-zettels-in-body' does NOT re-append a link when
+the line already carries one (idempotent for double-runs)."
+  (cl-letf (((symbol-function 'tibetan-thesaurus-lookup)
+             (lambda (wylie)
+               (cond
+                ((equal (string-trim wylie) "bdag")
+                 (list (list :id "abc-123" :wylie "bdag")))
+                (t nil))))
+            ((symbol-function 'tibetan-to-wylie-fixed)
+             (lambda (s) s)))
+    (let* ((body "- **bdag** — self [[id:abc-123][zettel ↗]]\n")
+           (out (tibetan-analysis--cross-link-zettels-in-body body)))
+      ;; Still exactly ONE link on the bdag line (not two).
+      (should (= 1 (let ((count 0)
+                         (start 0))
+                     (while (string-match "\\[\\[id:abc-123\\]" out start)
+                       (setq count (1+ count))
+                       (setq start (match-end 0)))
+                     count))))))
+
+(ert-deftest tibetan-claude-zettel-collect-references-no-thesaurus-nil ()
+  "`--collect-zettel-references' returns nil when the thesaurus
+module isn't loaded — silent fall-through."
+  (cl-letf (((symbol-function 'tibetan-thesaurus-lookup) nil))
+    (fmakunbound 'tibetan-thesaurus-lookup)
+    (unwind-protect
+        (should-not (tibetan-analysis--collect-zettel-references "བདག"))
+      (defun tibetan-thesaurus-lookup (_) nil))))
+
 (provide 'tibetan-analysis-claude-sections-test)
 ;;; tibetan-analysis-claude-sections-test.el ends here
