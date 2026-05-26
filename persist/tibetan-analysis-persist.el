@@ -4702,15 +4702,33 @@ without touching the file.  Otherwise return a plist:
                   (insert-file-contents source-file)
                   (buffer-substring-no-properties (point-min) (point-max)))
               (error nil))))
+         ;; §5.26 (2026-05-26):  preserve existing Claude content
+         ;; UNLESS the caller explicitly asked for a force-refresh.
+         ;; Was `(not re-request-claude)' before §5.22-follow-up —
+         ;; that treated `:missing-only' as truthy → preservation
+         ;; SKIPPED → regenerate wiped the file → `:missing-only'
+         ;; then fired Claude because the file LOOKED missing.
+         ;; Asynchronous Claude queue rate-limits / writer-hooks /
+         ;; user-quits-Emacs could swallow the responses, and the
+         ;; populated content was already gone — net effect:
+         ;; bulk silent data loss on a `:missing-only' batch run
+         ;; over a fully-populated folder (exactly what hit
+         ;; Carsten's Milarepa folder on 2026-05-24:  274 of 287
+         ;; seg-NNN.org files lost their Claude content).
+         ;;
+         ;; Now:  preserve UNLESS re-request-claude is the symbol
+         ;; `t' (force-refresh).  `nil' and `:missing-only' both
+         ;; preserve.
          (existing-sections
-          (and (not re-request-claude)
+          (and (not (eq re-request-claude t))
                (tibetan-analysis--read-claude-sections filepath)))
          (has-any-section
           (and existing-sections
                (or (plist-get existing-sections :translation)
                    (plist-get existing-sections :grammar)
                    (plist-get existing-sections :particles)
-                   (plist-get existing-sections :context)))))
+                   (plist-get existing-sections :concepts)
+                   (plist-get existing-sections :vocabulary)))))
     (cond
      ((null seg-id)
       `(:file ,filepath :ok nil

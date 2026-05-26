@@ -127,6 +127,49 @@ BODY-TAG is embedded so tests can assert regeneration happened."
       (when (file-exists-p file) (delete-file file))
       (when (file-exists-p tmp) (delete-directory tmp t)))))
 
+(ert-deftest tibetan-batch-reanalyze-missing-only-preserves-claude ()
+  "§5.26 (2026-05-26):  regression guard.  When
+`re-request-claude' is `:missing-only', regenerate-auto MUST
+preserve existing Claude content — same as when `re-request-
+claude' is nil.  Was buggy from §5.22-follow-up (2026-05-21)
+through §5.25 (2026-05-24):  `(and (not re-request-claude)
+read)' treated `:missing-only' as truthy → preservation skipped
+→ regenerate wiped the file → `:missing-only' then fired Claude
+because file looked missing.  Async / writer issues swallowed
+some responses, producing bulk silent data loss (274 / 287
+Milarepa seg-NNN.org files lost their Claude content on
+Carsten's 2026-05-24 batch run).
+
+The fix:  preserve UNLESS `re-request-claude' is the symbol `t'
+\(force-refresh).  `nil' and `:missing-only' both preserve."
+  (let* ((tmp (make-temp-file "tibetan-reanal-mo-" t))
+         (file (expand-file-name "seg-007.org" tmp))
+         (claude-body "Translation preserved across :missing-only."))
+    (unwind-protect
+        (progn
+          (tibetan-batch-test--sample-file file :claude claude-body)
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (tibetan-batch-test--stub-generate "REGEN-MO"))
+                    ;; Stub the Claude request fn so a populated file
+                    ;; isn't sent a fresh request mid-test;  we ONLY
+                    ;; want to verify preservation.
+                    ((symbol-function 'tibetan-analysis--request-claude-translation)
+                     (lambda (&rest _args) nil)))
+            (let ((r (tibetan-analysis-reanalyze-file
+                      file :re-request-claude :missing-only)))
+              (should (plist-get r :ok))
+              ;; `:claude-preserved' is t when existing content was
+              ;; read + restored — the assertion that catches the bug.
+              (should (plist-get r :claude-preserved))))
+          (with-temp-buffer
+            (insert-file-contents file)
+            (let ((content (buffer-string)))
+              (should (string-match-p "STUB REGEN-MO" content))
+              ;; Real claude body still present.
+              (should (string-match-p (regexp-quote claude-body) content)))))
+      (when (file-exists-p file) (delete-file file))
+      (when (file-exists-p tmp) (delete-directory tmp t)))))
+
 (ert-deftest tibetan-batch-reanalyze-placeholder-not-persisted ()
   "If the existing Claude body is just the placeholder, it is NOT
 preserved as a real translation — the regenerated placeholder stays."
