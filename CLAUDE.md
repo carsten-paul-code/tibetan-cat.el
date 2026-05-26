@@ -3,7 +3,15 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-05-24 (§5.25 added: thesaurus zettel
+editing. Last updated 2026-05-26 (§5.26: BUG fix — regenerate-
+auto preserves Claude content under `:missing-only' too;
+`(not re-request-claude)' was treating `:missing-only' as
+truthy → wipe.  Caused 274 / 287 Milarepa segs to lose Claude
+content on a 2026-05-24 batch run.  Fix:  preserve unless
+`re-request-claude' is the symbol `t'.  267 files restored
+from git blob `bc5cbe9' (the buddhist-studies/ folder is git-
+tracked).  Regression test locked in.  Previous: §5.25 added:
+thesaurus zettel
 cross-link in Concept Notes — Claude cites `[[id:ZID][zettel ↗]]'
 inline for any term that has a curated zettel in
 `~/Documents/tibetan-thesaurus/';  writer post-processes the
@@ -251,7 +259,7 @@ emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
 
 Or: `make test` from the project root.
 
-Current state (2026-05-24, post-§5.25):  **1971 tests, 1970
+Current state (2026-05-26, post-§5.26):  **1972 tests, 1971
 expected, 0 unexpected failures, 1 intentional skip
 (compound-analysis-callable).**  Carsten runs this after every
 change and expects it to stay green.
@@ -2113,6 +2121,124 @@ End-to-end flow:
 #### Pending (truly open now)
 
   · (none for the Concept Notes thread)
+
+### 5.26 BUG: `:missing-only` wiped Claude content + restore (done, 2026-05-26)
+
+Class-day discovery — Carsten ran `M-x tibetan-analysis-batch-
+reanalyze' on the Milarepa folder on 2026-05-24 with the default
+`:missing-only' answer (from the §5.22-follow-up three-way
+prompt), expecting populated files to be SKIPPED.  Result on
+inspection 2026-05-26 (today, just before class):  **274 of 287
+seg-NNN.org files lost their Claude content**.  Pure silent
+data loss.
+
+#### Root cause
+
+`tibetan-analysis-reanalyze-file' had the gate:
+
+    (existing-sections
+     (and (not re-request-claude)
+          (tibetan-analysis--read-claude-sections filepath)))
+
+When `re-request-claude' is `:missing-only', `(not :missing-only)'
+is nil → `existing-sections' is nil → the file's populated Claude
+content is NEVER READ INTO MEMORY before the regenerate-auto
+write.  regenerate-auto overwrites the file with the fresh
+scaffold → content gone.  `:missing-only' then sees an empty
+file and queues a Claude refire.  Async queue (concurrency 3
+over 284 files) + writer hooks / rate limits / network +
+user-quits-Emacs all conspire to lose most responses.
+
+The `--should-fire-claude-p' policy added in §5.22-follow-up
+gated the API CALL correctly, but didn't gate the WIPE.
+
+#### Fix
+
+One-line gate change:
+
+    (and (not (eq re-request-claude t))
+         (tibetan-analysis--read-claude-sections filepath))
+
+Now `nil' AND `:missing-only' both preserve;  only literal `t'
+(explicit force-refresh) wipes.  Matches the user's stated
+expectation:  *"if Claude/DharmaMitra are in the analyses it
+should stay there except a renew is explicit requested."*
+
+Also extended `has-any-section' to look at `:concepts' (the
+§5.24 rename of `:context') and `:vocabulary' — both are
+populated-Claude indicators that should trigger the restore
+path.  Previously a file with only Vocabulary (no Translation
+yet) would have been treated as "no Claude content" and wiped
+even with the gate fixed.
+
+Regression test (`tibetan-batch-reanalyze-missing-only-
+preserves-claude') verified to FAIL without the gate fix, PASS
+with it.  Locked in so this can't silently regress again.
+
+#### Disaster recovery — restored from git
+
+Carsten's `~/.../buddhist-studies/' folder is a git repo.  The
+pre-wipe versions of all 284 Milarepa seg-NNN.org files were
+preserved in commit `bc5cbe9' (the original `SS26: bring
+semester coursework into git' commit).  Built a one-shot Elisp
+script (`/tmp/restore-milarepa-claude.el', not checked in;  it's
+a one-time tool):
+
+  1. For each unsuffixed seg-NNN.org in the Milarepa analysis/
+     folder, check if it has the `[Awaiting Claude…]' / `[Requesting
+     translation...]' placeholder.
+  2. If yes, fetch the git-blob version from `bc5cbe9'.
+  3. Parse the git version's Claude bodies via `--read-claude-
+     sections' (which handles legacy `*** Claude Translation' L2
+     / `*** Claude Vocabulary' L3 / `** Claude Grammar' L2 / etc.
+     thanks to its fallback chain).
+  4. If the parsed plist has any populated slot, call
+     `--restore-claude-sections' to write the bodies back into
+     the current (new-§5.24-layout) file.
+
+Result:  **267 files restored** from git blobs (zero API
+spend);  12 were already populated (skipped — restore is
+idempotent);  3 had no Claude content even in the git version
+(true bottom of the well);  2 not in git (recently-created files
+that postdated the `bc5cbe9' commit).
+
+Post-restore tally:  **280 / 287 seg files have populated
+Claude Vocabulary + Translation**.  The 7 still empty are split
+between the 3 that never had content + the 2 not-in-git + 2
+edge cases (seg-IDs from non-Milarepa source debris in the
+folder).  Effectively complete recovery for class.
+
+#### Commits
+
+| Commit  | Subject |
+|---------|---|
+| a66b8a7 | BUG: regenerate-auto preserves content under :missing-only too (gate fix + regression test) |
+| (this)  | CLAUDE.md §5.26 entry |
+
+#### Verification
+
+  · `make test'       → 244 / 244 BDD specs pass.
+  · `make test-quick' → 1972 / 1971 expected / 0 unexpected /
+                        1 intentional skip.  +1 regression test.
+  · `make compile'    → clean.
+
+#### Lessons captured
+
+1. **`(not X)' is treacherous when X is a symbol that's not just
+   `nil' / `t'.**  `:missing-only' is non-nil — `(not :missing-
+   only)' returns nil, NOT t.  When the legacy code path was
+   "preserve unless force-refresh", that should have been
+   `(not (eq X t))', not `(not X)'.
+
+2. **Policy gates should be CONSISTENT across the pipeline.**
+   §5.22-follow-up added `:missing-only' semantics at the
+   API-call site but left the wipe-decision-site with the old
+   `(not re-request-claude)' check.  Two policy gates with
+   different semantics ate the content.
+
+3. **Per-file restore from git is FAR cheaper than re-firing
+   Claude.**  267 API calls saved by checking
+   `git show bc5cbe9:analysis/seg-NNN.org' before queueing.
 
 ## 6. Open work (prioritised)
 
