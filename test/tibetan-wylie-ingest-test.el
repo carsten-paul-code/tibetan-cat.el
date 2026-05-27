@@ -393,58 +393,131 @@ so the user sees Python's diagnostic without consulting `*Messages*'."
 ;; SHAD NORMALISATION
 ;; ============================================================================
 
-(ert-deftest tibetan-wylie-ingest-normalize-shads-string-double-space ()
-  "`| |' (single + space + single — standard Wylie double-shad)
-collapses to `//'."
+(ert-deftest tibetan-wylie-ingest-normalize-shads-grammar-double-space ()
+  "Grammar mode:  `| |' (standard Wylie double-shad) collapses
+to `//' so the Python script splits the paragraph at each
+sentence boundary."
   (should (equal "phyag tshal//de ngan"
+                 (tibetan-wylie-ingest--normalize-shads-string
+                  "phyag tshal| |de ngan" 'grammar))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-shads-reading-double-space ()
+  "Reading mode (default):  `| |' becomes `/ /' (two shads + space)
+so the paragraph stays as ONE segment — one reading chunk = one
+paragraph."
+  (should (equal "phyag tshal/ /de ngan"
+                 (tibetan-wylie-ingest--normalize-shads-string
+                  "phyag tshal| |de ngan" 'reading)))
+  ;; Default is reading-mode.
+  (should (equal "phyag tshal/ /de ngan"
                  (tibetan-wylie-ingest--normalize-shads-string
                   "phyag tshal| |de ngan"))))
 
-(ert-deftest tibetan-wylie-ingest-normalize-shads-string-multi-space ()
-  "Multiple spaces between the two pipes still collapse to `//'."
+(ert-deftest tibetan-wylie-ingest-normalize-shads-grammar-multi-space ()
+  "Grammar:  multiple spaces between the two pipes collapse to `//'."
   (should (equal "phyag tshal//de ngan"
                  (tibetan-wylie-ingest--normalize-shads-string
-                  "phyag tshal|   |de ngan"))))
+                  "phyag tshal|   |de ngan" 'grammar))))
 
-(ert-deftest tibetan-wylie-ingest-normalize-shads-string-adjacent-double ()
-  "`||' (no space) maps to `//'."
+(ert-deftest tibetan-wylie-ingest-normalize-shads-reading-multi-space ()
+  "Reading:  multiple spaces between the two pipes still collapse
+to `/ /' (single normalised space) so the script doesn't see `//'."
+  (let ((out (tibetan-wylie-ingest--normalize-shads-string
+              "phyag tshal|   |de ngan" 'reading)))
+    (should (equal "phyag tshal/ /de ngan" out))
+    (should-not (string-match-p "//" out))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-shads-grammar-adjacent-double ()
+  "Grammar:  `||' (no space) → `//'."
   (should (equal "phyag tshal//de ngan"
                  (tibetan-wylie-ingest--normalize-shads-string
-                  "phyag tshal||de ngan"))))
+                  "phyag tshal||de ngan" 'grammar))))
 
-(ert-deftest tibetan-wylie-ingest-normalize-shads-string-lone-pipe ()
-  "Lone `|' (no adjacent partner) maps to `/'."
+(ert-deftest tibetan-wylie-ingest-normalize-shads-reading-adjacent-double ()
+  "Reading:  `||' (no space — no whitespace was consumed by step 1)
+maps each `|' to `/' individually → `//' which DOES split.
+
+This is an intentional design choice — `||' (no space) is an
+unambiguous segment-boundary signal even in reading-class Wylie
+sources;  the user-friendly `| |' form (with space) is what
+gets preserved as a within-paragraph double-shad."
+  (let ((out (tibetan-wylie-ingest--normalize-shads-string
+              "phyag tshal||de ngan" 'reading)))
+    (should (equal "phyag tshal//de ngan" out))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-shads-lone-pipe-both-modes ()
+  "Lone `|' (no adjacent partner) maps to `/' in both modes."
   (should (equal "phyag tshal/ sangs rgyas/"
                  (tibetan-wylie-ingest--normalize-shads-string
-                  "phyag tshal| sangs rgyas|"))))
+                  "phyag tshal| sangs rgyas|" 'reading)))
+  (should (equal "phyag tshal/ sangs rgyas/"
+                 (tibetan-wylie-ingest--normalize-shads-string
+                  "phyag tshal| sangs rgyas|" 'grammar))))
 
-(ert-deftest tibetan-wylie-ingest-normalize-shads-string-idempotent ()
-  "Body with no `|' is unchanged (idempotent re-run)."
+(ert-deftest tibetan-wylie-ingest-normalize-shads-idempotent-both-modes ()
+  "Body with no `|' is unchanged (idempotent re-run) in both modes."
   (let ((body "phyag tshal// sangs rgyas/"))
     (should (equal body
-                   (tibetan-wylie-ingest--normalize-shads-string body)))))
+                   (tibetan-wylie-ingest--normalize-shads-string
+                    body 'reading)))
+    (should (equal body
+                   (tibetan-wylie-ingest--normalize-shads-string
+                    body 'grammar)))))
 
-(ert-deftest tibetan-wylie-ingest-normalize-shads-end-to-end ()
-  "`tibetan-wylie-ingest-normalize-shads' rewrites the body in
-PATH and returns the count of `|' chars converted.  Title /
-metadata + post-body sections are untouched."
+(ert-deftest tibetan-wylie-ingest-normalize-shads-end-to-end-grammar ()
+  "`tibetan-wylie-ingest-normalize-shads PATH 'grammar' rewrites
+the body for sentence-level segments — `| |' → `//' so the
+script splits at each sentence boundary."
   (let ((dir (make-temp-file "shad-norm-" t)))
     (unwind-protect
         (let ((src (expand-file-name "foo.org" dir)))
           (with-temp-file src
-            (insert "#+TITLE: T (note | inside)\n\n"
-                    "* Tibetan Text\n"
-                    "phyag tshal| |de ngan|\n"
-                    "\n* Notes\nA note with | inside\n"))
-          (let ((n (tibetan-wylie-ingest-normalize-shads src)))
+            (insert "#+TITLE: T\n\n* Tibetan Text\n"
+                    "phyag tshal| |de ngan|\n"))
+          (let ((n (tibetan-wylie-ingest-normalize-shads src 'grammar)))
             (should (= 3 n))
             (let ((out (with-temp-buffer (insert-file-contents src)
                                          (buffer-string))))
-              (should (string-match-p
-                       "#\\+TITLE: T (note | inside)" out))
-              (should (string-match-p
-                       "A note with | inside" out))
               (should (string-match-p "phyag tshal//de ngan/" out)))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-shads-end-to-end-reading ()
+  "`tibetan-wylie-ingest-normalize-shads PATH 'reading' (or no
+class-mode) preserves paragraph-level segmentation — `| |' →
+`/ /' which the Python script does NOT split at."
+  (let ((dir (make-temp-file "shad-norm-r-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "foo.org" dir)))
+          (with-temp-file src
+            (insert "#+TITLE: T\n\n* Tibetan Text\n"
+                    "phyag tshal| |de ngan|\n"))
+          (let ((n (tibetan-wylie-ingest-normalize-shads src 'reading)))
+            (should (= 3 n))
+            (let ((out (with-temp-buffer (insert-file-contents src)
+                                         (buffer-string))))
+              ;; Reading-mode output contains `/ /' (two shads + space),
+              ;; NOT `//' (which would trigger script-level split).
+              (should (string-match-p "phyag tshal/ /de ngan/" out))
+              (should-not (string-match-p "phyag tshal//" out)))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-shads-preserves-title-and-notes ()
+  "Title / metadata + post-body sections are untouched even when
+they contain `|' characters."
+  (let ((dir (make-temp-file "shad-preserve-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "foo.org" dir)))
+          (with-temp-file src
+            (insert "#+TITLE: T (note | inside)\n\n"
+                    "* Tibetan Text\nphyag tshal|\n"
+                    "\n* Notes\nA note with | inside\n"))
+          (tibetan-wylie-ingest-normalize-shads src 'reading)
+          (let ((out (with-temp-buffer (insert-file-contents src)
+                                       (buffer-string))))
+            (should (string-match-p
+                     "#\\+TITLE: T (note | inside)" out))
+            (should (string-match-p
+                     "A note with | inside" out))))
       (delete-directory dir t))))
 
 ;; ============================================================================

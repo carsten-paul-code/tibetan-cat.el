@@ -163,6 +163,31 @@ line appears)."
               (should-not (string-match-p "#\\+TIBETAN_AUTHOR" out)))))
       (delete-directory dir t))))
 
+(ert-deftest tibetan-document-prep-wizard-class-mode-fresh-defaults-to-reading ()
+  "§5.27 Phase 8c:  the early class-mode reader (called BEFORE
+source acquisition, so no existing-header lookup) defaults to
+`reading' — the more common case per the §5.22-final user-
+feedback note."
+  (let (captured-default)
+    (cl-letf (((symbol-function 'completing-read)
+               (lambda (_p _coll _pred _req _init _hist default)
+                 (setq captured-default default)
+                 ;; Take whatever default the wizard offered.
+                 default)))
+      (let ((chosen
+             (tibetan-document-prep-wizard--read-class-mode-fresh)))
+        (should (eq 'reading chosen))
+        (should (string-match-p "reading" captured-default))))))
+
+(ert-deftest tibetan-document-prep-wizard-class-mode-fresh-respects-user ()
+  "Early class-mode reader honours the user's `grammar' choice
+even though the default is `reading'."
+  (cl-letf (((symbol-function 'completing-read)
+             (lambda (&rest _)
+               "grammar  — segment-focused (Tibetisch III/IV)")))
+    (should (eq 'grammar
+                (tibetan-document-prep-wizard--read-class-mode-fresh)))))
+
 (ert-deftest tibetan-document-prep-wizard-class-mode-writes-grammar ()
   "Class-mode step picks `grammar' → `#+TIBETAN_CLASS_MODE: grammar'
 is written, symbol returned."

@@ -336,31 +336,61 @@ Returns t when the body was actually rewritten."
 ;; SHAD NORMALISATION  --------------------------------------------------------
 ;; ============================================================================
 
-(defun tibetan-wylie-ingest--normalize-shads-string (body)
-  "Return BODY with Wylie pipe-shads normalised to slash-shads.
+(defun tibetan-wylie-ingest--normalize-shads-string (body &optional class-mode)
+  "Return BODY with Wylie pipe-shads normalised.
 
-Mapping:
-  · `| |' (single shad + space(s) + single shad — the standard
-          Wylie double-shad convention)  →  `//' (segment boundary
-          the Python script recognises)
-  · `||'  (adjacent double shad)         →  `//'
-  · lone `|'                              →  `/' (within-segment shad)
+CLASS-MODE controls how the standard-Wylie double-shad `| |' is
+treated;  it directly drives segment granularity downstream:
+
+  · `reading' (default) — `| |' → `/ /' (two single shads with a
+                          space).  The Python script's segment
+                          splitter (`text.split(\"//\")') doesn't
+                          fire on `/ /', so the surrounding
+                          paragraph stays as ONE segment.  Pyewts
+                          still renders the two-shad sequence as
+                          a Tibetan double-shad (`།  །') in the
+                          output.  Right for reading-class flow
+                          where one segment = one paragraph.
+
+  · `grammar'           — `| |' → `//'.  The script splits at
+                          every `//' boundary, so each `| |'-
+                          delimited sentence becomes its own
+                          segment.  Right for grammar-class
+                          flow where one segment = one sentence.
+
+Lone `|' (no adjacent partner) always maps to `/' in both modes —
+within-segment shad, cosmetic at the pyewts level.
 
 Pure-string operation;  used by `tibetan-wylie-ingest-normalize-
 shads' on the body region and by the validator's counter."
-  (let* ((step1 (replace-regexp-in-string "|[ \t]+|" "||" body))
+  (let* ((mode (or class-mode 'reading))
+         ;; Step 1: collapse `| {space(s)} |' to a canonical token so
+         ;; downstream substitutions can hit it as one unit.
+         (step1 (replace-regexp-in-string
+                 "|[ \t]+|"
+                 (if (eq mode 'grammar) "||" "PARA-DOUBLE-SHAD")
+                 body))
+         ;; Step 2: `||' (adjacent or merged from step 1) → `//'.
+         ;; Only fires when we collapsed in step 1 (grammar mode).
          (step2 (replace-regexp-in-string "||" "//" step1 nil t))
-         (step3 (replace-regexp-in-string "|" "/" step2 nil t)))
-    step3))
+         ;; Step 3: lone `|' → `/'.
+         (step3 (replace-regexp-in-string "|" "/" step2 nil t))
+         ;; Step 4: in reading mode, restore the placeholder to `/ /'
+         ;; (two single shads separated by a space — pyewts renders
+         ;; the standard Tibetan double-shad, but the script's
+         ;; segment splitter ignores it).
+         (step4 (if (eq mode 'grammar)
+                    step3
+                  (replace-regexp-in-string
+                   "PARA-DOUBLE-SHAD" "/ /" step3 nil t))))
+    step4))
 
-(defun tibetan-wylie-ingest-normalize-shads (path)
+(defun tibetan-wylie-ingest-normalize-shads (path &optional class-mode)
   "Normalise Wylie pipe-shads in PATH's `* Tibetan Text' body.
 
-Real-world Wylie sources (academic transcriptions, BDRC manual
-transcripts) routinely use `|' / `| |' for shads where the
-Python ingest script expects `/' / `//'.  This helper bridges
-the gap by rewriting the body in place;  metadata + title are
-untouched.
+CLASS-MODE (`reading' default, or `grammar') controls how the
+double-shad `| |' is rewritten — see
+`tibetan-wylie-ingest--normalize-shads-string' for the details.
 
 Returns the count of `|' characters that were converted.
 Idempotent — re-running on a body that no longer contains `|'
@@ -370,7 +400,7 @@ returns 0."
      path
      (lambda (body)
        (setq count (cl-count ?| body))
-       (tibetan-wylie-ingest--normalize-shads-string body)))
+       (tibetan-wylie-ingest--normalize-shads-string body class-mode)))
     count))
 
 ;; ============================================================================

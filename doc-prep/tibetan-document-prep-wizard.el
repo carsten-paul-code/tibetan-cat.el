@@ -73,17 +73,24 @@ flow.")
                                   (caar tibetan-document-prep-wizard--routes))))
     (cdr (assoc choice tibetan-document-prep-wizard--routes))))
 
-(defun tibetan-document-prep-wizard--run-wylie-ingest ()
+(defun tibetan-document-prep-wizard--run-wylie-ingest (&optional class-mode)
   "Prompt for a Wylie `.org' source, validate + convert + relocate.
 Returns the final source-file path (post-relocation into the
 configured `work in progress/' folder).
 
+CLASS-MODE (`reading' default | `grammar') controls the
+shad-normalisation grain so the resulting segments match the
+intended class type:  reading-class = one segment per paragraph,
+grammar-class = one segment per `| |'-delimited sentence.  See
+`tibetan-wylie-ingest-normalize-shads' for the details.
+
 When the source is bare (no `* Tibetan Text' heading) the wizard
 OFFERS to auto-wrap it before validation — bare Wylie files
-copy-pasted from a transcription don't carry the org-org wrapper
+copy-pasted from a transcription don't carry the org wrapper
 the converter requires, so this catches the common case without
 forcing the user to hand-edit."
-  (let* ((path (read-file-name "Wylie source (.org): " nil nil t))
+  (let* ((mode (or class-mode 'reading))
+         (path (read-file-name "Wylie source (.org): " nil nil t))
          (report (tibetan-wylie-ingest-validate-input path)))
     ;; Step 0:  if the source has no `* Tibetan Text' heading,
     ;; offer to wrap it in the canonical org structure.
@@ -103,18 +110,20 @@ Auto-wrap with `#+TITLE: %s' + `* Tibetan Text' header? "
        (t
         (user-error
          "Source has no `* Tibetan Text' heading — cannot convert"))))
-    ;; Step 0.5:  shad normalisation.  Real-world Wylie sources
-    ;; routinely use `|' / `| |' shads where the Python ingest
-    ;; script expects `/' / `//'.  Offer to rewrite the body.
+    ;; Step 0.5:  shad normalisation, class-mode-aware.
+    ;; Reading class:  `| |' → `/ /' (paragraphs stay as one segment).
+    ;; Grammar class:  `| |' → `//' (each sentence becomes a segment).
     (when (> (plist-get report :pipe-shad-count) 0)
       (let ((n (plist-get report :pipe-shad-count)))
         (when (y-or-n-p
                (format
                 "Body has %d pipe-shad char(s) (`|' / `| |').  \
-Normalise to `/' / `//' so the converter segments correctly? "
-                n))
-          (let ((rewritten (tibetan-wylie-ingest-normalize-shads path)))
-            (message "Normalised %d pipe-shad char(s)." rewritten)
+Normalise for %s-class segmentation? "
+                n (symbol-name mode)))
+          (let ((rewritten
+                 (tibetan-wylie-ingest-normalize-shads path mode)))
+            (message "Normalised %d pipe-shad char(s) (%s mode)."
+                     rewritten (symbol-name mode))
             (setq report (tibetan-wylie-ingest-validate-input path))))))
     ;; Step 0.6:  folio-marker normalisation.  `[141a.6]' → `[F:D141a6]'
     ;; so the script's regex extracts them as :FOLIO: org properties
@@ -145,12 +154,15 @@ Reshape to `[F:D...]' so the script extracts them as :FOLIO: properties? "
     ;; `work in progress/' and returns the new path.
     (tibetan-wylie-ingest-file path t)))
 
-(defun tibetan-document-prep-wizard--collect-source-file (route)
+(defun tibetan-document-prep-wizard--collect-source-file (route
+                                                         &optional class-mode)
   "Acquire a source-file path for the given ROUTE.
 Dispatches to the appropriate ingest helper;  returns the final
-absolute path."
+absolute path.  CLASS-MODE is threaded through to the Wylie
+route so shad normalisation matches the intended segment grain
+(reading = paragraphs, grammar = sentences)."
   (pcase route
-    ('wylie    (tibetan-document-prep-wizard--run-wylie-ingest))
+    ('wylie    (tibetan-document-prep-wizard--run-wylie-ingest class-mode))
     ('unicode  (read-file-name
                 "Tibetan-script source (.org): " nil nil t))
     ('existing (read-file-name
@@ -303,6 +315,25 @@ lines' so existing context lines are preserved."
   '(("grammar  — segment-focused (Tibetisch III/IV)" . grammar)
     ("reading  — sentence-focused (reading classes)" . reading))
   "Class mode choices.")
+
+(defun tibetan-document-prep-wizard--read-class-mode-fresh ()
+  "Prompt for class mode WITHOUT a source-file lookup.
+Used by the wizard's source-acquisition phase, where the source
+doesn't yet exist on disk in its final form (Wylie ingest still
+pending).  Returns the chosen symbol (`grammar' | `reading').
+
+The default is `reading' — Carsten's stated preferred class
+format and the more common case (per the §5.22-final user-
+feedback note in CLAUDE.md)."
+  (let* ((default-label
+           (or (car (rassq 'reading
+                           tibetan-document-prep-wizard--class-modes))
+               (caar tibetan-document-prep-wizard--class-modes)))
+         (labels (mapcar #'car tibetan-document-prep-wizard--class-modes))
+         (choice (completing-read
+                  "Class mode (informs Wylie segmentation grain): "
+                  labels nil t nil nil default-label)))
+    (cdr (assoc choice tibetan-document-prep-wizard--class-modes))))
 
 (defun tibetan-document-prep-wizard--read-class-mode (source-file)
   "Prompt for `#+TIBETAN_CLASS_MODE:'.  Default = existing value
@@ -514,12 +545,26 @@ suggestions not yet incorporated."
   (interactive)
   (setq tibetan-document-prep-wizard--state nil)
   (let* ((route (tibetan-document-prep-wizard--read-route))
+         ;; §5.27 Phase 8c (2026-05-27):  class mode is asked
+         ;; EARLY — before source acquisition — so the Wylie route's
+         ;; shad normaliser knows whether to map `| |' → `//'
+         ;; (grammar:  one segment per sentence) or `/ /' (reading:
+         ;; one segment per paragraph).  Without this up-front
+         ;; choice the converter defaults to grammar-grain
+         ;; segmentation which is wrong for reading classes.
+         (class-mode
+          (tibetan-document-prep-wizard--read-class-mode-fresh))
          (source-file
-          (tibetan-document-prep-wizard--collect-source-file route))
+          (tibetan-document-prep-wizard--collect-source-file
+           route class-mode))
          (state (list :input-route route
-                      :source-file source-file)))
+                      :source-file source-file
+                      :class-mode class-mode)))
     (unless (and source-file (file-exists-p source-file))
       (user-error "Wizard:  no source file acquired — aborting"))
+    ;; Now that source-file is final, write the class-mode header.
+    (tibetan-document-prep-wizard--write-header
+     source-file "TIBETAN_CLASS_MODE" (symbol-name class-mode))
     ;; Step 3 — target language.
     (setq state (plist-put state :target-lang
                            (tibetan-document-prep-wizard--read-target-lang
@@ -538,15 +583,12 @@ suggestions not yet incorporated."
     (setq state (plist-put state :context
                            (tibetan-document-prep-wizard--read-context-lines
                             source-file)))
-    ;; Step 7 — class mode.
-    (let ((mode (tibetan-document-prep-wizard--read-class-mode
-                 source-file)))
-      (setq state (plist-put state :class-mode mode))
-      ;; Step 8 — sentence detail (reading only).
-      (when (eq mode 'reading)
-        (setq state (plist-put state :sentence-detail
-                               (tibetan-document-prep-wizard--read-sentence-detail
-                                source-file)))))
+    ;; Step 7 — sentence detail (reading only).  Class mode already
+    ;; chosen above + header written.
+    (when (eq class-mode 'reading)
+      (setq state (plist-put state :sentence-detail
+                             (tibetan-document-prep-wizard--read-sentence-detail
+                              source-file))))
     ;; Step 9 — Resources/vocabulary.org scaffold.
     (when (y-or-n-p "Create `Resources/vocabulary.org' starter? ")
       (setq state (plist-put state :vocabulary-file
