@@ -63,6 +63,92 @@
       (should (equal (plist-get meta :author) "gTsang smyon He ru ka"))
       (should (equal (plist-get meta :sources) "fol. 1a1")))))
 
+;; ----------------------------------------------------------------------------
+;; §5.27 Phase 1 (2026-05-26):  Three NEW headers + metadata-reader extension.
+;;  · `#+TIBETAN_AUTHOR:' (single-line) — alternative to the PROPERTIES-drawer
+;;    `:AUTHOR:' for sources that don't use an org property drawer.  Reader
+;;    extends the existing `:author' plist key:  PROPERTIES `:AUTHOR:' wins,
+;;    falls back to `#+TIBETAN_AUTHOR:'.
+;;  · `#+TIBETAN_CLASS_MODE: grammar|reading' — controls whether downstream
+;;    commands default to segment-focus or sentence-focus.  New `:class-mode'
+;;    plist key.
+;;  · `#+TIBETAN_SENTENCE_DETAIL: compressed|detailed' — only meaningful when
+;;    class-mode is `reading';  switches the §5.22 strip-list.  New
+;;    `:sentence-detail' plist key.
+;;  · `#+TIBETAN_TEXT_TYPE:' — surfaced via new `:text-type' plist key (was
+;;    previously consumed only by `tibetan-text-classifier' directly).
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-metadata-reads-tibetan-author-header ()
+  "When the source has no PROPERTIES-drawer `:AUTHOR:' but has a
+`#+TIBETAN_AUTHOR:' line, the reader surfaces it as `:author'.
+Existing PROPERTIES-drawer behaviour is unchanged when present
+(higher priority)."
+  ;; Case 1:  header-only, no PROPERTIES drawer.
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_AUTHOR: rJe btsun Mi la ras pa\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :author)
+                     "rJe btsun Mi la ras pa"))))
+  ;; Case 2:  PROPERTIES drawer wins over header.
+  (tibetan-test--with-source
+      (concat "#+TITLE: T\n#+TIBETAN_AUTHOR: Header Author\n\n"
+              "* Subtree\n:PROPERTIES:\n:AUTHOR: Drawer Author\n:END:\n")
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :author) "Drawer Author"))))
+  ;; Case 3:  neither → nil.
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should-not (plist-get meta :author)))))
+
+(ert-deftest tibetan-metadata-reads-class-mode-header ()
+  "`#+TIBETAN_CLASS_MODE: grammar|reading' is surfaced as `:class-mode'
+on the metadata plist.  Values are lowercased.  Unknown / empty
+values return nil."
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_CLASS_MODE: grammar\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :class-mode) "grammar"))))
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_CLASS_MODE: READING\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :class-mode) "reading"))))
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should-not (plist-get meta :class-mode)))))
+
+(ert-deftest tibetan-metadata-reads-sentence-detail-header ()
+  "`#+TIBETAN_SENTENCE_DETAIL: compressed|detailed' is surfaced as
+`:sentence-detail' on the plist.  Values are lowercased."
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_SENTENCE_DETAIL: detailed\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :sentence-detail) "detailed"))))
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_SENTENCE_DETAIL: COMPRESSED\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :sentence-detail) "compressed"))))
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should-not (plist-get meta :sentence-detail)))))
+
+(ert-deftest tibetan-metadata-reads-text-type-header ()
+  "`#+TIBETAN_TEXT_TYPE:' is surfaced as `:text-type' on the metadata
+plist.  Previously consumed only by `tibetan-text-classifier' —
+§5.27 adds it to the prompt-side reader so Claude can be told the
+genre directly."
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_TEXT_TYPE: rnam-thar\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (equal (plist-get meta :text-type) "rnam-thar"))))
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should-not (plist-get meta :text-type)))))
+
 (ert-deftest tibetan-analysis-metadata-sentence-compressed-key-retired ()
   "§5.22 final (2026-05-21):  the `:sentence-compressed' plist key
 on `tibetan-analysis--read-source-metadata' is retired.

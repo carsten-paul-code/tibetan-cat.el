@@ -337,6 +337,31 @@ Keys:
                    identifier for the Tibetan-side parallel
                    (e.g. `BO_T06_D4037' for the Derge
                    Bodhisattvabhūmi).  nil when unset.
+  :text-type       value of `#+TIBETAN_TEXT_TYPE:' — canonical
+                   Tibetan genre tag (`rnam-thar', `lam-rim',
+                   `mgur', `mdo', `rgyud', `bstan-bcos',
+                   `snyan-ngag', `gtam-rgyud', `'grel-pa',
+                   `ti-ka', `gter-ma', `gdams-ngag', plus the
+                   legacy values `classical' / `madhyamaka-
+                   verse' / `sutra' / `commentary').  Threaded
+                   into Claude system prompt by callers that
+                   want to specialise the analysis to the
+                   genre.  nil when unset.  §5.27 Phase 1
+                   (2026-05-26).
+  :class-mode      value of `#+TIBETAN_CLASS_MODE: grammar|reading'
+                   — controls whether downstream commands default
+                   to segment-focus (Tibetan grammar classes,
+                   default) or sentence-focus (reading classes).
+                   Persistent per-document;  command prefix-args
+                   override ad-hoc.  §5.27 Phase 1 (2026-05-26).
+  :sentence-detail value of `#+TIBETAN_SENTENCE_DETAIL:
+                   compressed|detailed' — only meaningful when
+                   `:class-mode' is `reading'.  `compressed' =
+                   §5.22 default (Vocab + Translation + Grammar
+                   + Provided Translations, ~2 A4 pages).
+                   `detailed' = full §5.21 segment layout
+                   (sentence file mirrors a segment file's
+                   depth).  §5.27 Phase 1 (2026-05-26).
 
 §5.22 final (2026-05-21):  the `:sentence-compressed' plist key
 \(briefly added in §5.22 initial as an opt-in for compressed
@@ -344,9 +369,18 @@ sentence layout) is RETIRED.  Sentence files are now
 unconditionally compressed;  no per-source header is consumed.
 The `#+TIBETAN_SENTENCE_COMPRESSED:' line is ignored if present.
 
+§5.27 Phase 1 (2026-05-26):  `:author' reader extended.  In
+addition to the existing PROPERTIES-drawer `:AUTHOR:' path, a
+new `#+TIBETAN_AUTHOR:' single-line header is also recognised.
+Drawer wins when both are present (backwards-compatible);
+header-only sources (the wizard-created common case) get the
+same `:author' slot.
+
 Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
   (let (title work author sources ctx vocab corpus target-lang source-mode
-              dm-sanskrit-source dm-tibetan-source)
+              dm-sanskrit-source dm-tibetan-source
+              text-type class-mode sentence-detail
+              author-header)
     (when (and source-file (file-exists-p source-file))
       (condition-case nil
           (with-temp-buffer
@@ -384,6 +418,33 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
               (let ((val (string-trim (match-string 1))))
                 (unless (string-empty-p val)
                   (setq dm-tibetan-source val))))
+            ;; §5.27 Phase 1 (2026-05-26):  text-type / class-mode /
+            ;; sentence-detail / TIBETAN_AUTHOR — all single-line
+            ;; per-document headers.
+            (goto-char (point-min))
+            (when (re-search-forward
+                   "^#\\+TIBETAN_TEXT_TYPE:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (unless (string-empty-p val)
+                  (setq text-type (downcase val)))))
+            (goto-char (point-min))
+            (when (re-search-forward
+                   "^#\\+TIBETAN_CLASS_MODE:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (unless (string-empty-p val)
+                  (setq class-mode (downcase val)))))
+            (goto-char (point-min))
+            (when (re-search-forward
+                   "^#\\+TIBETAN_SENTENCE_DETAIL:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (unless (string-empty-p val)
+                  (setq sentence-detail (downcase val)))))
+            (goto-char (point-min))
+            (when (re-search-forward
+                   "^#\\+TIBETAN_AUTHOR:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (unless (string-empty-p val)
+                  (setq author-header val))))
             (goto-char (point-min))
             (while (re-search-forward
                     "^#\\+TIBETAN_CLAUDE_CONTEXT:[ \t]*\\(.*\\)$" nil t)
@@ -412,6 +473,11 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
                            "^:SOURCES:[ \t]*\\(.*\\)$" nil t)
                       (setq sources (string-trim (match-string 1)))))))))
         (error nil))) ;; close condition-case and outer `when source-file'
+    ;; §5.27 Phase 1 fallback:  PROPERTIES drawer `:AUTHOR:' wins
+    ;; (backwards-compat with existing files);  fall back to the
+    ;; new `#+TIBETAN_AUTHOR:' header when drawer is absent.
+    (unless author
+      (setq author author-header))
     (list :title title
           :work work
           :author author
@@ -422,7 +488,10 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
           :target-lang target-lang
           :source-mode source-mode
           :dm-sanskrit-source dm-sanskrit-source
-          :dm-tibetan-source dm-tibetan-source)))
+          :dm-tibetan-source dm-tibetan-source
+          :text-type text-type
+          :class-mode class-mode
+          :sentence-detail sentence-detail)))
 
 
 ;;;###autoload
