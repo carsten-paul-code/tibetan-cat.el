@@ -2240,6 +2240,143 @@ folder).  Effectively complete recovery for class.
    Claude.**  267 API calls saved by checking
    `git show bc5cbe9:analysis/seg-NNN.org' before queueing.
 
+### 5.27 Unified document-preparation wizard (done, 2026-05-27)
+
+**Problem.** Preparing a new Tibetan document for class analysis
+required six+ separate commands across two tooling surfaces (CLI
++ Emacs):  decide input route (OCR / Wylie / Tibetan-script
+paste), shell out to `doc-prep/tibetan-ybh-prep.py` if Wylie, mv
+the result into `work in progress/`, hand-edit the
+`#+TIBETAN_TARGET_LANG:` / `#+TIBETAN_TEXT_TYPE:` /
+`#+TIBETAN_CLAUDE_CONTEXT:` headers, run
+`tibetan-add-sentence-structure`, run `C-c u B`, run
+`tibetan-sentence-create-all` if reading-class.  No single
+entry-point, no genre help, no Claude pre-fill of metadata.
+
+**Decision.** One guided wizard exposing every decision as a
+prompt, with the Phase 1-5 building blocks composing under the
+hood.  `M-x tibetan-document-prep-wizard` (bound to `C-c o d`,
+menu *Tibetan > Document Preparation > Document Wizard
+(unified)...*).
+
+**Architecture.** Seven phases, all shipped 2026-05-27:
+
+  · **Phase 1** — Header plumbing.
+    `tibetan-analysis--read-source-metadata' (in
+    `persist/tibetan-analysis-claude.el') gains four new keys —
+    `:text-type', `:class-mode', `:sentence-detail', `:author' —
+    parsing the matching `#+TIBETAN_*:' single-line headers.
+    `:author' falls back to the PROPERTIES drawer's `:AUTHOR:'
+    entry for backwards compatibility.  See commit `5710e64'.
+
+  · **Phase 2** — Wylie ingest wrapper.
+    `doc-prep/tibetan-wylie-ingest.el' shells out to
+    `tibetan-ybh-prep.py' via `call-process'.  Pre-flight gates
+    check `python3' + `pyewts' + script presence;  validation
+    helper (`--validate-input', interactive variant
+    `-interactive') reports paragraph + segment counts and flags
+    suspicious characters (embedded Tibetan Unicode, smart
+    quotes / em-dashes) before conversion.  See commits
+    `9e03d5f' (wrapper) and `fcd8379' (post-ingest relocation
+    into `../work in progress/' — defcustom
+    `tibetan-doc-prep-work-in-progress-folder', default
+    `"work in progress"').
+
+  · **Phase 3** — Genre taxonomy + selectbox.
+    `doc-prep/tibetan-document-genres.el' carries a single
+    defconst with 14 entries — 12 traditional Tibetan genres
+    (rNam thar, Lam rim, mGur, mDo, rGyud, bsTan bcos, sNyan
+    ngag, gTam rgyud, 'Grel pa, Ṭīkā, gTer ma, gDams ngag) + 2
+    legacy keys (`classical' / `madhyamaka-verse').  Each entry
+    carries `:tibetan' (Wylie name), `:label' (display),
+    `:description', and `:claude-hint' (genre-tailored Claude
+    system-prompt guidance).  Reader
+    `tibetan-document-genres-read &optional default prompt'
+    runs `completing-read';  vertico / marginalia honour the
+    alist-mapped completion table.  See commit `682f093'.
+
+  · **Phase 4** — Async Claude metadata pre-fill.
+    `doc-prep/tibetan-document-prep-claude.el' fires a small
+    Claude call early in the wizard, asking for `{genre,
+    author, context}' as a JSON object.  Submitted via
+    `tibetan-claude-queue-submit' so throttle / retry / rate-
+    limit handling matches the rest of the pipeline.  Parser
+    tolerates code-fence wrapping;  unknown genre keys collapse
+    to `:genre nil';  `"unknown"' author (case-insensitive)
+    collapses to `:author nil'.  Result is cached as a buffer-
+    local plist `tibetan-document-prep--claude-suggestions';
+    interactive applier
+    `tibetan-document-prep-apply-claude-suggestions' (bound
+    `C-c o D') writes the headers and reverts the buffer.  See
+    commit `d0431d6'.
+
+  · **Phase 5** — Sentence-detail switch.  When the source
+    carries `#+TIBETAN_SENTENCE_DETAIL: detailed', the §5.22
+    7-entry strip-list is suppressed and `sent-NNN.org' files
+    carry the FULL §5.21 segment layout (all 11 L2 sections).
+    Wired via the dynamic var
+    `tibetan-sentence--detail-for-render', bound inside
+    `tibetan-sentence--scaffold' from the source-file's
+    metadata so both create-file AND regenerate paths inherit
+    the preference.  See commit `b2347da'.
+
+  · **Phase 6** — Wizard module.
+    `doc-prep/tibetan-document-prep-wizard.el' — pure
+    orchestration walking twelve steps:  input route → (Wylie)
+    validate + convert + relocate → target language → fire async
+    Claude → genre selectbox (Claude-suggested default) →
+    author + context (Claude-suggested defaults) → class mode →
+    (reading) sentence detail → optional Resources/vocabulary.org
+    scaffold → optional `tibetan-add-sentence-structure' →
+    optional `tibetan-auto-analyze-document' + (reading)
+    `tibetan-sentence-create-all' → final summary buffer.
+    Resume support is built in:  every step reads existing
+    header as completing-read default, so re-running on a
+    partially-prepared source just re-confirms each value.  See
+    commit `15fee53'.
+
+  · **Phase 7** — Menu + keybindings + docs.  Menu entries
+    *Document Wizard (unified)...* + *Apply Claude Metadata
+    Suggestions* land at the top of *Tibetan > Document
+    Preparation*;  the legacy OCR wizard is renamed *OCR /
+    Format Wizard...* one slot below.  Keymap `C-c o' gains
+    `d' (unified wizard), `D' (apply Claude suggestions),
+    `y' (Wylie ingest), `Y' (Wylie validate-only);  the legacy
+    `C-c o o' (OCR wizard) stays for backwards compatibility.
+
+**Verification.** ERT suite 1976 → 2081 specs (+105) all green;
+single pre-existing skip unchanged.  Compile clean.  Sanskrit-
+included documents are deliberately out of scope — users enable
+the parallel-Sanskrit path via the existing `C-c u z P' toggle.
+
+**User-facing recipe** (a Wylie source for the SS26 Tibetisch
+IV class):
+
+```
+~/buddhist-studies/SS26/Tibetisch IV/raw/foo.org   ← Wylie input
+M-x tibetan-document-prep-wizard      (or C-c o d)
+  Input route:    Wylie file (.org with Wylie body) ...
+  Wylie source:   ~/.../raw/foo.org
+  → validates, converts via pyewts, relocates to
+    ~/buddhist-studies/SS26/Tibetisch IV/work in progress/foo.org
+  Target language: de
+  → async Claude metadata call fires
+  Genre:           (Claude-suggested default or `classical')
+  Author:          (Claude-suggested or freeform)
+  Context line:    (Claude-suggested or freeform, RET to finish)
+  Class mode:      grammar | reading
+  Sentence detail: compressed | detailed   (reading mode only)
+  Create Resources/vocabulary.org? y
+  Run sentence-structure demotion? y
+  Run full Claude analysis now? y/n
+  → final summary buffer
+```
+
+When the async Claude call returns post-wizard:
+`M-x tibetan-document-prep-apply-claude-suggestions` (`C-c o D`)
+opens the source file and writes the cached suggestions into
+the metadata headers.
+
 ## 6. Open work (prioritised)
 
 ### P0 — Verify Detailed Dictionary on a real segment ✓ DONE 2026-04-15

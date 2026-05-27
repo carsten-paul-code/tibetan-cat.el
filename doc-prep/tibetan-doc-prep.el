@@ -30,6 +30,18 @@
 (declare-function tibetan-ocr-import-from-file "tibetan-ocr-runner" (file))
 (declare-function tibetan-ocr-import-from-buffer "tibetan-ocr-runner" ())
 
+;; §5.27 Phase 7:  autoloaded wizard + Wylie ingest commands bound
+;; into `tibetan-doc-prep-map' under `C-c o d/D/y/Y'.  Declared here
+;; so byte-compile doesn't warn about the module-load deferral.
+(declare-function tibetan-document-prep-wizard
+                  "tibetan-document-prep-wizard" ())
+(declare-function tibetan-document-prep-apply-claude-suggestions
+                  "tibetan-document-prep-claude" ())
+(declare-function tibetan-wylie-ingest-file
+                  "tibetan-wylie-ingest" (path &optional in-place skip-move))
+(declare-function tibetan-wylie-ingest-validate-input-interactive
+                  "tibetan-wylie-ingest" (path))
+
 ;; ============================================================================
 ;; CUSTOMIZATION
 ;; ============================================================================
@@ -584,8 +596,28 @@ FILE is the PDF or image to process."
 
 (defvar tibetan-doc-prep-map
   (let ((map (make-sparse-keymap)))
-    ;; Main wizard
+    ;; §5.27 Phase 6:  unified document-prep wizard (top-of-map).
+    (define-key map (kbd "d")
+      (lambda () (interactive)
+        (require 'tibetan-document-prep-wizard)
+        (call-interactively #'tibetan-document-prep-wizard)))
+    (define-key map (kbd "D")
+      (lambda () (interactive)
+        (require 'tibetan-document-prep-claude)
+        (call-interactively #'tibetan-document-prep-apply-claude-suggestions)))
+    ;; Legacy OCR wizard kept at `o' for backwards compatibility.
     (define-key map (kbd "o") #'tibetan-doc-prep-wizard)
+
+    ;; §5.27 Phase 2:  Wylie ingest building blocks.
+    (define-key map (kbd "y")
+      (lambda () (interactive)
+        (require 'tibetan-wylie-ingest)
+        (call-interactively #'tibetan-wylie-ingest-file)))
+    (define-key map (kbd "Y")
+      (lambda () (interactive)
+        (require 'tibetan-wylie-ingest)
+        (call-interactively
+         #'tibetan-wylie-ingest-validate-input-interactive)))
 
     ;; Individual steps
     (define-key map (kbd "r") #'tibetan-doc-prep-ocr)
@@ -612,7 +644,12 @@ FILE is the PDF or image to process."
   "Keymap for document preparation commands.
 
 Key bindings:
-  o   Full wizard
+  d   Unified document-prep wizard (§5.27 — Wylie / Tibetan-script /
+      existing / OCR + metadata + analysis kickoff in one flow)
+  D   Apply cached Claude metadata suggestions to current buffer
+  y   Wylie ingest (validate + convert);  C-u → in-place + relocate
+  Y   Wylie ingest — validate only (no conversion)
+  o   Legacy OCR / Format wizard (subsumed by `d' for new prep)
   r   OCR step only
   v   Validate buffer
   c   AI correct buffer

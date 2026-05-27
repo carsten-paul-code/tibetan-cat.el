@@ -41,6 +41,27 @@
 ;; Main orchestration
 (require 'tibetan-doc-prep)
 
+;; §5.27 Phase 6/7:  unified Tibetan document-preparation wizard.
+;; Autoload the wizard module + its dependencies (genre taxonomy,
+;; async Claude pre-fill, Wylie ingest wrapper) so `C-c o d' fires
+;; without an explicit require on the user's part.
+(autoload 'tibetan-document-prep-wizard
+  "tibetan-document-prep-wizard"
+  "Unified Tibetan document-preparation wizard (§5.27)."
+  t)
+(autoload 'tibetan-document-prep-apply-claude-suggestions
+  "tibetan-document-prep-claude"
+  "Apply the cached Claude metadata suggestions to the current buffer."
+  t)
+(autoload 'tibetan-wylie-ingest-file
+  "tibetan-wylie-ingest"
+  "Convert a Wylie source file to Tibetan Unicode via pyewts."
+  t)
+(autoload 'tibetan-wylie-ingest-validate-input-interactive
+  "tibetan-wylie-ingest"
+  "Show paragraph/segment counts + character warnings for a Wylie source."
+  t)
+
 ;; ============================================================================
 ;; STATUS MESSAGE
 ;; ============================================================================
@@ -63,7 +84,11 @@
   BDRC OCR:      %s
 
 Commands:
-  C-c o o  Full wizard
+  C-c o d  Unified document wizard (§5.27 — Wylie/Tibetan/OCR + metadata)
+  C-c o D  Apply cached Claude metadata suggestions
+  C-c o y  Wylie ingest (C-u → in-place + relocate)
+  C-c o Y  Wylie ingest — validate only
+  C-c o o  OCR / Format wizard (legacy, subsumed by `d')
   C-c o v  Validate buffer
   C-c o c  AI correct buffer
   C-c o f  Format buffer to org"
@@ -96,7 +121,9 @@ Commands:
 ;; INITIALIZATION MESSAGE
 ;; ============================================================================
 
-(message "Tibetan Doc-Prep loaded. Use C-c o o for wizard, M-x tibetan-doc-prep-init-status for status.")
+(message "Tibetan Doc-Prep loaded. Use C-c o d for the unified wizard \
+(§5.27), C-c o o for the legacy OCR wizard, M-x tibetan-doc-prep-init-status \
+for status.")
 
 (provide 'tibetan-doc-prep-init)
 ;;; tibetan-doc-prep-init.el ends here

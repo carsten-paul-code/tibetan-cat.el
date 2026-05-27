@@ -16,9 +16,28 @@
   "Menu for Tibetan CAT (Computer-Assisted Translation) tools."
   '("Tibetan"
     ("Document Preparation"
-     ["Preparation Wizard..." tibetan-doc-prep-wizard
-      :help "Full pipeline: Source → OCR → Validation → Formatting"
+     ;; §5.27 Phase 6:  unified wizard — Wylie / Tibetan-script /
+     ;; existing / OCR → headers → analysis kickoff in one flow.
+     ["Document Wizard (unified)... (C-c o d)"
+      tibetan-document-prep-wizard
+      :help "Walks input route → metadata → class mode → analysis kickoff in one guided flow.  Includes Wylie ingest, async Claude pre-fill, work-in-progress relocation."
+      :active (fboundp 'tibetan-document-prep-wizard)]
+     ["Apply Claude Metadata Suggestions"
+      tibetan-document-prep-apply-claude-suggestions
+      :help "Write the cached async-Claude genre/author/context suggestions into the current source file's headers."
+      :active (fboundp 'tibetan-document-prep-apply-claude-suggestions)]
+     "---"
+     ["OCR / Format Wizard..." tibetan-doc-prep-wizard
+      :help "Legacy OCR pipeline: Source → OCR → Validation → Formatting (subsumed by the unified wizard above for new prep)."
       :active (fboundp 'tibetan-doc-prep-wizard)]
+     ["Wylie Ingest (validate + convert)"
+      tibetan-wylie-ingest-file
+      :help "Validate a Wylie source file then convert via pyewts (tibetan-ybh-prep.py).  C-u prefix → in-place write + work-in-progress relocation."
+      :active (fboundp 'tibetan-wylie-ingest-file)]
+     ["Wylie Ingest — Validate Only"
+      tibetan-wylie-ingest-validate-input-interactive
+      :help "Show paragraph/segment counts + any non-Wylie character warnings without converting."
+      :active (fboundp 'tibetan-wylie-ingest-validate-input-interactive)]
      "---"
      ["Format Buffer (Segment)" tibetan-doc-format-buffer
       :help "Split buffer text at shad boundaries into numbered segments"
