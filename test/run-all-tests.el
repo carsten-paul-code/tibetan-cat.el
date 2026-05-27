@@ -169,5 +169,8 @@
 ;; §5.27 Phase 2:  Wylie ingest wrapper around `tibetan-ybh-prep.py'.
 (condition-case nil (require 'tibetan-wylie-ingest-test) (error nil))
 
+;; §5.27 Phase 3:  canonical Tibetan-text genre taxonomy + reader.
+(condition-case nil (require 'tibetan-document-genres-test) (error nil))
+
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here

@@ -16,6 +16,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'tibetan-document-genres)  ; §5.27 Phase 3:  canonical genre list
 
 ;; ============================================================================
 ;; CONSTANTS
@@ -275,10 +276,7 @@ Returns options plist."
                          "Folio style: "
                          '("heading" "inline" "property")
                          nil t nil nil "heading"))
-   :text-type (intern (completing-read
-                       "Text type: "
-                       '("classical" "madhyamaka-verse" "sutra" "commentary")
-                       nil t nil nil "classical"))))
+   :text-type (tibetan-document-genres-read 'classical "Text type / genre: ")))
 
 ;; ============================================================================
 ;; UTILITY FUNCTIONS

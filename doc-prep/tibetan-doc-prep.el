@@ -17,6 +17,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'tibetan-document-genres)  ; §5.27 Phase 3:  canonical genre list
 
 ;; External variable from cat-mode
 (defvar cat-mode-map nil "Keymap for cat-mode (declared for byte-compiler).")
@@ -375,12 +376,11 @@ Returns options plist."
                    ("Inline markers ([F:1a])" . inline)
                    ("Property drawers" . property)))
 
-   :text-type (tibetan-doc-prep--select-from-list
-               "Text type: "
-               '(("Classical prose" . classical)
-                 ("Madhyamaka verse" . madhyamaka-verse)
-                 ("Sutra" . sutra)
-                 ("Commentary" . commentary)))))
+   ;; §5.27 Phase 3:  read from the canonical 14-entry genre taxonomy
+   ;; \(`tibetan-document-genres-read') so the wizard's selectbox and
+   ;; this format dialog share one source of truth.
+   :text-type (tibetan-document-genres-read 'classical
+                                            "Text type / genre: ")))
 
 (defun tibetan-doc-prep--format-document (text source)
   "Format TEXT into org document.
