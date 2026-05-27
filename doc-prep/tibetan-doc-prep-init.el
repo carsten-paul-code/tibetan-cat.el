@@ -38,29 +38,11 @@
 ;; OCR runner (optional, requires BDRC OCR app)
 (require 'tibetan-ocr-runner)
 
-;; Main orchestration
+;; Main orchestration — also registers `autoload's for the §5.27
+;; wizard / Claude-apply / Wylie-ingest commands so the menu's
+;; `:active' predicate sees them as bound.  No duplicate autoloads
+;; needed here.
 (require 'tibetan-doc-prep)
-
-;; §5.27 Phase 6/7:  unified Tibetan document-preparation wizard.
-;; Autoload the wizard module + its dependencies (genre taxonomy,
-;; async Claude pre-fill, Wylie ingest wrapper) so `C-c o d' fires
-;; without an explicit require on the user's part.
-(autoload 'tibetan-document-prep-wizard
-  "tibetan-document-prep-wizard"
-  "Unified Tibetan document-preparation wizard (§5.27)."
-  t)
-(autoload 'tibetan-document-prep-apply-claude-suggestions
-  "tibetan-document-prep-claude"
-  "Apply the cached Claude metadata suggestions to the current buffer."
-  t)
-(autoload 'tibetan-wylie-ingest-file
-  "tibetan-wylie-ingest"
-  "Convert a Wylie source file to Tibetan Unicode via pyewts."
-  t)
-(autoload 'tibetan-wylie-ingest-validate-input-interactive
-  "tibetan-wylie-ingest"
-  "Show paragraph/segment counts + character warnings for a Wylie source."
-  t)
 
 ;; ============================================================================
 ;; STATUS MESSAGE

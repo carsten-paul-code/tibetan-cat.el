@@ -31,16 +31,24 @@
 (declare-function tibetan-ocr-import-from-buffer "tibetan-ocr-runner" ())
 
 ;; §5.27 Phase 7:  autoloaded wizard + Wylie ingest commands bound
-;; into `tibetan-doc-prep-map' under `C-c o d/D/y/Y'.  Declared here
-;; so byte-compile doesn't warn about the module-load deferral.
-(declare-function tibetan-document-prep-wizard
-                  "tibetan-document-prep-wizard" ())
-(declare-function tibetan-document-prep-apply-claude-suggestions
-                  "tibetan-document-prep-claude" ())
-(declare-function tibetan-wylie-ingest-file
-                  "tibetan-wylie-ingest" (path &optional in-place skip-move))
-(declare-function tibetan-wylie-ingest-validate-input-interactive
-                  "tibetan-wylie-ingest" (path))
+;; into `tibetan-doc-prep-map' under `C-c o d/D/y/Y'.  Registered as
+;; `autoload's (not `declare-function's) so `fboundp' returns t and
+;; the menu's `:active' predicate accepts them BEFORE the user
+;; touches any wizard command — `tibetan-doc-prep' is loaded by
+;; `tibetan-cat.el', so anything wired here is reachable.
+(autoload 'tibetan-document-prep-wizard
+  "tibetan-document-prep-wizard"
+  "Unified Tibetan document-preparation wizard (§5.27)." t)
+(autoload 'tibetan-document-prep-apply-claude-suggestions
+  "tibetan-document-prep-claude"
+  "Apply the cached Claude metadata suggestions to the current buffer." t)
+(autoload 'tibetan-wylie-ingest-file
+  "tibetan-wylie-ingest"
+  "Convert a Wylie source file to Tibetan Unicode via pyewts." t)
+(autoload 'tibetan-wylie-ingest-validate-input-interactive
+  "tibetan-wylie-ingest"
+  "Show paragraph/segment counts + character warnings for a Wylie source."
+  t)
 
 ;; ============================================================================
 ;; CUSTOMIZATION
