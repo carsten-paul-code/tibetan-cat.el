@@ -1707,6 +1707,217 @@ No mode flag — sentence files are always class-format."
                    "^\\*\\* Verb Classification (Hill 2010)$" out))
       (should-not (string-match-p "^\\*\\* Detailed Dictionary$" out)))))
 
+;; ----------------------------------------------------------------------------
+;; §5.27 Phase 5 (2026-05-26):  sentence-detail switch.  Per-document
+;; `#+TIBETAN_SENTENCE_DETAIL: detailed' header turns off the §5.22
+;; default strip-list and emits the full §5.21 segment layout in the
+;; sentence file.  Wired via the dynamic var
+;; `tibetan-sentence--detail-for-render', bound inside `--scaffold'
+;; from the source file's metadata.
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-sentence-detail-for-render-detailed-empties-strip-list ()
+  "§5.27 Phase 5:  when `tibetan-sentence--detail-for-render' is
+bound to the string \"detailed\", the strip-list accessor returns
+the empty list — no sections are filtered out and the sentence
+file gets the full §5.21 segment layout (all 11 L2 sections)."
+  (let ((tibetan-sentence--detail-for-render "detailed"))
+    (should (equal '() (tibetan-sentence--segment-claude-sections)))))
+
+(ert-deftest tibetan-sentence-detail-for-render-detailed-case-insensitive ()
+  "§5.27 Phase 5:  the accessor downcases its check so a header
+written as `#+TIBETAN_SENTENCE_DETAIL: Detailed' (mixed case)
+still suppresses the strip-list."
+  (let ((tibetan-sentence--detail-for-render "Detailed"))
+    (should (equal '() (tibetan-sentence--segment-claude-sections))))
+  (let ((tibetan-sentence--detail-for-render "DETAILED"))
+    (should (equal '() (tibetan-sentence--segment-claude-sections)))))
+
+(ert-deftest tibetan-sentence-detail-for-render-compressed-keeps-strip-list ()
+  "§5.27 Phase 5:  explicit \"compressed\" value preserves the
+§5.22 default 7-entry strip-list (sentence file collapses to the
+4 L2 sections in the in-class compressed layout)."
+  (let ((tibetan-sentence--detail-for-render "compressed"))
+    (let ((strip (tibetan-sentence--segment-claude-sections)))
+      (should (= 7 (length strip)))
+      (should (member "** Wylie Transliteration" strip))
+      (should (member "** Detailed Dictionary" strip)))))
+
+(ert-deftest tibetan-sentence-detail-for-render-nil-keeps-strip-list ()
+  "§5.27 Phase 5:  unbound / nil dynamic var = backwards-compatible
+§5.22 final behaviour — full 7-entry strip-list (compressed
+in-class layout is the default when no header is set)."
+  (let ((tibetan-sentence--detail-for-render nil))
+    (should (= 7 (length (tibetan-sentence--segment-claude-sections))))))
+
+(ert-deftest tibetan-sentence-detail-for-render-garbage-keeps-strip-list ()
+  "§5.27 Phase 5:  defensive — any string other than \"detailed\"
+\(case-insensitive) falls through to the compressed strip-list.
+Protects against typos in the per-document header."
+  (let ((tibetan-sentence--detail-for-render "verbose"))
+    (should (= 7 (length (tibetan-sentence--segment-claude-sections)))))
+  (let ((tibetan-sentence--detail-for-render "full"))
+    (should (= 7 (length (tibetan-sentence--segment-claude-sections))))))
+
+(ert-deftest tibetan-sentence-strip-segment-claude-sections-honours-detailed ()
+  "§5.27 Phase 5:  end-to-end through the strip helper — when the
+dynamic var is bound to \"detailed\", `--strip-segment-claude-
+sections' is a no-op:  every L2 section in the input survives in
+the output."
+  (let ((content
+         (concat
+          "** Wylie Transliteration\nfoo\n\n"
+          "** Phonetics\nfu\n\n"
+          "** Interlinear Gloss\nfoo bar\n\n"
+          "** Claude Vocabulary\nfoo = thing\n\n"
+          "** Translation\nThe thing.\n\n"
+          "** DharmaMitra Translation\nThe thing (DM).\n\n"
+          "** Grammar\n*** Particles\n=ERG=\n\n"
+          "** Sentence Structure\n[clauses]\n\n"
+          "** Verb Classification (Hill 2010)\n[verbs]\n\n"
+          "** Provided Translations\n\n\n"
+          "** Detailed Dictionary\n[deep]\n")))
+    (let* ((tibetan-sentence--detail-for-render "detailed")
+           (out (tibetan-sentence--strip-segment-claude-sections content)))
+      ;; All 11 L2 sections still present (no stripping).
+      (should (string-match-p "^\\*\\* Wylie Transliteration$" out))
+      (should (string-match-p "^\\*\\* Phonetics$" out))
+      (should (string-match-p "^\\*\\* Interlinear Gloss$" out))
+      (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
+      (should (string-match-p "^\\*\\* Translation$" out))
+      (should (string-match-p "^\\*\\* DharmaMitra Translation$" out))
+      (should (string-match-p "^\\*\\* Grammar$" out))
+      (should (string-match-p "^\\*\\* Sentence Structure$" out))
+      (should (string-match-p
+               "^\\*\\* Verb Classification (Hill 2010)$" out))
+      (should (string-match-p "^\\*\\* Provided Translations$" out))
+      (should (string-match-p "^\\*\\* Detailed Dictionary$" out)))))
+
+(ert-deftest tibetan-sentence-sentence-detail-from-source-reads-header ()
+  "§5.27 Phase 5:  `--sentence-detail-from-source' reads the
+`#+TIBETAN_SENTENCE_DETAIL:' header via the canonical metadata
+reader and returns its lowercased value as a string."
+  (let ((dir (make-temp-file "sent-detail-" t)))
+    (unwind-protect
+        (let ((source-file (expand-file-name "source.org" dir)))
+          (with-temp-file source-file
+            (insert "#+TITLE: T\n#+TIBETAN_SENTENCE_DETAIL: detailed\n"))
+          (should
+           (equal "detailed"
+                  (tibetan-sentence--sentence-detail-from-source source-file))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-sentence-detail-from-source-absent-is-nil ()
+  "§5.27 Phase 5:  no header → nil → downstream falls through to
+the compressed default."
+  (let ((dir (make-temp-file "sent-detail-" t)))
+    (unwind-protect
+        (let ((source-file (expand-file-name "source.org" dir)))
+          (with-temp-file source-file (insert "#+TITLE: T\n"))
+          (should-not
+           (tibetan-sentence--sentence-detail-from-source source-file)))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-sentence-detail-from-source-nil-arg ()
+  "§5.27 Phase 5:  defensive — nil SOURCE-FILE returns nil without
+signalling.  Scaffold may be called for ad-hoc sentences without
+a source binding."
+  (should-not (tibetan-sentence--sentence-detail-from-source nil)))
+
+(ert-deftest tibetan-sentence-create-file-detailed-header-keeps-layout ()
+  "§5.27 Phase 5 end-to-end:  source file carrying
+`#+TIBETAN_SENTENCE_DETAIL: detailed' makes `--create-file' emit
+the FULL §5.21 segment layout into sent-NNN.org — no L2 sections
+are stripped out of the embedded segment-renderer body."
+  (let* ((dir (make-temp-file "sent-detailed-" t))
+         (source-file (expand-file-name "source.org" dir))
+         (analysis-folder (expand-file-name "analysis" dir)))
+    (unwind-protect
+        (progn
+          (make-directory analysis-folder)
+          (with-temp-file source-file
+            (insert "#+TITLE: T\n#+TIBETAN_SENTENCE_DETAIL: detailed\n"))
+          (cl-letf
+              (((symbol-function 'tibetan-analysis-generate-content)
+                (lambda (&rest _args)
+                  (concat
+                   "** Wylie Transliteration\nfoo\n\n"
+                   "** Phonetics\nfu\n\n"
+                   "** Interlinear Gloss\nfoo bar\n\n"
+                   "** Claude Vocabulary\nfoo = thing\n\n"
+                   "** Translation\nThe thing.\n\n"
+                   "** DharmaMitra Translation\nThe thing (DM).\n\n"
+                   "** Concept Notes\n[Awaiting Claude…]\n\n"
+                   "** Grammar\n*** Particles\n=ERG=\n\n"
+                   "** Sentence Structure\n[clauses]\n\n"
+                   "** Verb Classification (Hill 2010)\n[verbs]\n\n"
+                   "** Provided Translations\n\n\n"
+                   "** Detailed Dictionary\n[deep]\n")))
+               ((symbol-function 'tibetan-analysis--filter-to-tibetan-lines)
+                (lambda (text) text))
+               ((symbol-function 'tibetan-sentence--filepath)
+                (lambda (n)
+                  (expand-file-name
+                   (format "sent-%03d.org" n) analysis-folder))))
+            (tibetan-sentence--create-file 1 '(1) "བདུད།" source-file))
+          (let ((out (with-temp-buffer
+                       (insert-file-contents
+                        (expand-file-name "sent-001.org" analysis-folder))
+                       (buffer-string))))
+            ;; All 11 L2 sections preserved in the detailed layout.
+            (should (string-match-p "^\\*\\* Wylie Transliteration$" out))
+            (should (string-match-p "^\\*\\* Phonetics$" out))
+            (should (string-match-p "^\\*\\* Interlinear Gloss$" out))
+            (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
+            (should (string-match-p "^\\*\\* Translation$" out))
+            (should (string-match-p "^\\*\\* DharmaMitra Translation$" out))
+            (should (string-match-p "^\\*\\* Grammar$" out))
+            (should (string-match-p "^\\*\\* Sentence Structure$" out))
+            (should (string-match-p
+                     "^\\*\\* Verb Classification (Hill 2010)$" out))
+            (should (string-match-p "^\\*\\* Provided Translations$" out))
+            (should (string-match-p "^\\*\\* Detailed Dictionary$" out))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-create-file-no-header-stays-compressed ()
+  "§5.27 Phase 5 backwards-compat:  source without
+`#+TIBETAN_SENTENCE_DETAIL:' keeps the §5.22 default compressed
+layout (7 sections stripped, 4 kept) — existing Milarepa-style
+sources analysed without the new header are unchanged."
+  (let* ((dir (make-temp-file "sent-default-" t))
+         (source-file (expand-file-name "source.org" dir))
+         (analysis-folder (expand-file-name "analysis" dir)))
+    (unwind-protect
+        (progn
+          (make-directory analysis-folder)
+          (with-temp-file source-file (insert "#+TITLE: T\n"))
+          (cl-letf
+              (((symbol-function 'tibetan-analysis-generate-content)
+                (lambda (&rest _args)
+                  (concat
+                   "** Wylie Transliteration\nfoo\n\n"
+                   "** Claude Vocabulary\nfoo = thing\n\n"
+                   "** Translation\nThe thing.\n\n"
+                   "** Detailed Dictionary\n[deep]\n")))
+               ((symbol-function 'tibetan-analysis--filter-to-tibetan-lines)
+                (lambda (text) text))
+               ((symbol-function 'tibetan-sentence--filepath)
+                (lambda (n)
+                  (expand-file-name
+                   (format "sent-%03d.org" n) analysis-folder))))
+            (tibetan-sentence--create-file 1 '(1) "བདུད།" source-file))
+          (let ((out (with-temp-buffer
+                       (insert-file-contents
+                        (expand-file-name "sent-001.org" analysis-folder))
+                       (buffer-string))))
+            ;; Wylie + DD stripped (compressed default).
+            (should-not (string-match-p "^\\*\\* Wylie Transliteration$" out))
+            (should-not (string-match-p "^\\*\\* Detailed Dictionary$" out))
+            ;; Kept sections still present.
+            (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
+            (should (string-match-p "^\\*\\* Translation$" out))))
+      (delete-directory dir t))))
+
 ;; ============================================================================
 ;; HELPER FUNCTION
 ;; ============================================================================

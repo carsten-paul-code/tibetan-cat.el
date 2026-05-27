@@ -403,18 +403,51 @@ structure (with converbs).\"  The opt-in machinery from §5.22
 initial (`#+TIBETAN_SENTENCE_COMPRESSED:' header, toggle command,
 keybinding) is retired in favour of unconditional compression.")
 
+(defvar tibetan-sentence--detail-for-render nil
+  "Dynamic binding:  the `:sentence-detail' value for the in-flight
+sentence-scaffold render.  When `detailed', the strip-list is
+suppressed so the embedded segment-renderer output passes
+through unmodified — sentence files mirror the full §5.21
+segment layout (Wylie / Phonetics / Interlinear / etc. all
+present).
+
+§5.27 Phase 5 (2026-05-26):  let-bound by
+`tibetan-sentence--create-file' and `tibetan-sentence--regenerate'
+based on the source-document's `#+TIBETAN_SENTENCE_DETAIL:'
+header.  Consumed by `--segment-claude-sections' below.
+
+Nil → default compressed behaviour from §5.22 final
+\(backwards-compatible).  String `\"detailed\"' → full §5.21
+layout.  Any other string treated as `compressed' (defensive).")
+
 (defun tibetan-sentence--segment-claude-sections ()
   "Return the list of level-2 headings to strip from segment-renderer
 output before embedding it in a sentence file.
 
-§5.22 final (2026-05-21):  unconditional — sentence files are
-always class-format.  Returns `tibetan-sentence--strip-list'
-verbatim.  Kept as a defun (rather than the user calling the
-defconst directly) so internal mocking + future strip-list
-variants stay easy to wire.
+§5.27 Phase 5 (2026-05-26):  consults
+`tibetan-sentence--detail-for-render':
+  · `\"detailed\"'  → empty list (no stripping;  full §5.21
+                       segment layout flows through).  Reader
+                       gets all 11 L2 sections in the sentence
+                       file — for thorough reading classes.
+  · `\"compressed\"' / nil / anything else → `--strip-list'
+                       (the §5.22 default 7-entry filter,
+                       sentence file collapses to 4 L2 sections,
+                       ~2 A4 pages).
+
+Pre-§5.27:  always returned `--strip-list' unconditionally
+\(§5.22 final).  The dynamic-var gate restores per-document
+control via the new `#+TIBETAN_SENTENCE_DETAIL:' header without
+re-introducing the retired toggle command — the wizard sets the
+header once, downstream renders honour it.
 
 Consumed by `--strip-segment-claude-sections' below."
-  tibetan-sentence--strip-list)
+  (if (and tibetan-sentence--detail-for-render
+           (stringp tibetan-sentence--detail-for-render)
+           (string= (downcase tibetan-sentence--detail-for-render)
+                    "detailed"))
+      '()
+    tibetan-sentence--strip-list))
 
 (defun tibetan-sentence--strip-segment-claude-sections (content)
   "Return CONTENT with segment-level Claude sections removed.
@@ -423,8 +456,9 @@ consistent with the rest of the tool.
 
 §5.22 (2026-05-21):  the strip list is now sourced from the defun
 `tibetan-sentence--segment-claude-sections', which consults the
-dynamic var `tibetan-sentence--compressed-for-render'.  See that
-accessor's docstring for the two-mode behaviour."
+dynamic var `tibetan-sentence--detail-for-render' (§5.27 Phase 5
+renamed from `--compressed-for-render').  See that accessor's
+docstring for the two-mode behaviour."
   (if (not (and content (stringp content) (not (string-empty-p content))))
       ""
     (let* ((split (tibetan-analysis--split-level2-sections content))
@@ -654,6 +688,19 @@ sentence-only entries don't get clobbered)."
                       (concat subtree
                               (format "*** %s\n%s\n\n" heading placeholder)))))))))))
 
+(defun tibetan-sentence--sentence-detail-from-source (source-file)
+  "Return the `:sentence-detail' string for SOURCE-FILE, or nil.
+Reads via `tibetan-analysis--read-source-metadata' so the
+heading is parsed by the canonical reader.  Safe when
+SOURCE-FILE is nil or the metadata module isn't loaded."
+  (when (and source-file
+             (fboundp 'tibetan-analysis--read-source-metadata))
+    (condition-case nil
+        (plist-get
+         (tibetan-analysis--read-source-metadata source-file)
+         :sentence-detail)
+      (error nil))))
+
 (defun tibetan-sentence--scaffold (sent-num seg-nums tibetan-text wylie source-file)
   "Return the scaffold body for a new sent-NNN.org file (as string).
 SENT-NUM is the sentence number, SEG-NUMS the list of contained
@@ -699,7 +746,18 @@ their rationale."
                            (file-name-nondirectory source-file)))
          (date (format-time-string "%Y-%m-%d"))
          (hash (tibetan-sentence--compute-hash tibetan-text))
-         (segs-csv (mapconcat #'number-to-string seg-nums ", ")))
+         (segs-csv (mapconcat #'number-to-string seg-nums ", "))
+         ;; §5.27 Phase 5:  consult the per-source
+         ;; `#+TIBETAN_SENTENCE_DETAIL:' header.  When the caller has
+         ;; already bound the dynamic var (e.g.  from a test or an
+         ;; ad-hoc command override), preserve that;  otherwise pull
+         ;; from the source file's metadata.  `--segment-claude-
+         ;; sections' consults the var to decide whether to strip the
+         ;; embedded segment-renderer output ("compressed", default)
+         ;; or emit the full §5.21 layout ("detailed").
+         (tibetan-sentence--detail-for-render
+          (or tibetan-sentence--detail-for-render
+              (tibetan-sentence--sentence-detail-from-source source-file))))
     (with-temp-buffer
       (insert (format "#+TITLE: Sentence %d Analysis\n" sent-num))
       (insert "#+STARTUP: showall\n")
