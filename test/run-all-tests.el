@@ -175,5 +175,8 @@
 ;; §5.27 Phase 4:  async Claude metadata pre-fill for the wizard.
 (condition-case nil (require 'tibetan-document-prep-claude-test) (error nil))
 
+;; §5.27 Phase 6:  unified document-preparation wizard orchestrator.
+(condition-case nil (require 'tibetan-document-prep-wizard-test) (error nil))
+
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here
