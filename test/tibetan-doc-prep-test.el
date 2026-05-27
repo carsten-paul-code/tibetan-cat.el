@@ -274,6 +274,116 @@
   (should (fboundp 'tibetan-doc-prep-init-status))
   (should (commandp 'tibetan-doc-prep-init-status)))
 
+;; ----------------------------------------------------------------------------
+;; §5.27 Phase 2 follow-up (2026-05-27):  post-ingest relocation into
+;; the configured `work in progress' sibling folder.  Mirrors the
+;; Milarepa-folder convention from the buddhist-studies repo.
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-doc-prep-resolve-wip-target-relative-default ()
+  "Default `work in progress' folder name is resolved as a SIBLING
+of the source's parent directory (one level up from the source
+itself).  Returns the destination's absolute path."
+  (let* ((tibetan-doc-prep-work-in-progress-folder "work in progress")
+         (target (tibetan-doc-prep--resolve-work-in-progress-target
+                  "/tmp/parent/raw/foo.org")))
+    (should (equal "/tmp/parent/work in progress/foo.org" target))))
+
+(ert-deftest tibetan-doc-prep-resolve-wip-target-absolute-folder ()
+  "When `--work-in-progress-folder' is an absolute path, the
+basename is appended directly — no sibling-of-parent computation."
+  (let* ((tibetan-doc-prep-work-in-progress-folder "/abs/wip")
+         (target (tibetan-doc-prep--resolve-work-in-progress-target
+                  "/tmp/parent/raw/foo.org")))
+    (should (equal "/abs/wip/foo.org" target))))
+
+(ert-deftest tibetan-doc-prep-resolve-wip-target-nil-disables ()
+  "Nil folder = feature off → resolver returns SOURCE-PATH
+unchanged (caller short-circuits the move)."
+  (let* ((tibetan-doc-prep-work-in-progress-folder nil)
+         (target (tibetan-doc-prep--resolve-work-in-progress-target
+                  "/tmp/foo.org")))
+    (should (equal "/tmp/foo.org" target))))
+
+(ert-deftest tibetan-doc-prep-move-to-wip-relocates-into-sibling ()
+  "End-to-end:  `--move-to-work-in-progress' creates the sibling
+`work in progress/' folder and renames the source file across.
+Returns the destination's absolute path;  source no longer exists
+at the original location."
+  (let ((dir (make-temp-file "wip-move-" t)))
+    (unwind-protect
+        (let* ((tibetan-doc-prep-work-in-progress-folder "work in progress")
+               (raw-dir (expand-file-name "raw" dir))
+               (source (expand-file-name "foo.org" raw-dir)))
+          (make-directory raw-dir t)
+          (with-temp-file source (insert "* Tibetan Text\nfoo //\n"))
+          (let ((moved (tibetan-doc-prep-move-to-work-in-progress source)))
+            (should (file-exists-p moved))
+            (should-not (file-exists-p source))
+            (should (string-match-p "work in progress/foo\\.org\\'" moved))
+            (should (string-match-p "Tibetan Text"
+                                    (with-temp-buffer
+                                      (insert-file-contents moved)
+                                      (buffer-string))))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-doc-prep-move-to-wip-creates-target-folder ()
+  "Missing target folder → helper `make-directory's it with the
+parents flag.  Wizard relies on this — the user never has to
+pre-create `work in progress/' by hand."
+  (let ((dir (make-temp-file "wip-mkdir-" t)))
+    (unwind-protect
+        (let* ((tibetan-doc-prep-work-in-progress-folder "work in progress")
+               (raw-dir (expand-file-name "raw" dir))
+               (source (expand-file-name "foo.org" raw-dir)))
+          (make-directory raw-dir t)
+          (with-temp-file source (insert "x"))
+          (should-not (file-directory-p
+                       (expand-file-name "work in progress" dir)))
+          (tibetan-doc-prep-move-to-work-in-progress source)
+          (should (file-directory-p
+                   (expand-file-name "work in progress" dir))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-doc-prep-move-to-wip-nil-folder-is-noop ()
+  "Feature disabled (folder = nil) → helper is a no-op:  source
+file stays in place, return value = original absolute path."
+  (let ((dir (make-temp-file "wip-noop-" t)))
+    (unwind-protect
+        (let* ((tibetan-doc-prep-work-in-progress-folder nil)
+               (source (expand-file-name "foo.org" dir)))
+          (with-temp-file source (insert "x"))
+          (let ((ret (tibetan-doc-prep-move-to-work-in-progress source)))
+            (should (file-exists-p source))
+            (should (equal (expand-file-name source) ret))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-doc-prep-move-to-wip-idempotent ()
+  "Calling twice in a row on a source already at the destination
+is a no-op the second time (the resolver returns the same path
+as the source, and the equal-check short-circuits the rename)."
+  (let ((dir (make-temp-file "wip-idem-" t)))
+    (unwind-protect
+        (let* ((tibetan-doc-prep-work-in-progress-folder "work in progress")
+               (raw-dir (expand-file-name "raw" dir))
+               (source (expand-file-name "foo.org" raw-dir)))
+          (make-directory raw-dir t)
+          (with-temp-file source (insert "x"))
+          (let ((moved (tibetan-doc-prep-move-to-work-in-progress source))
+                (twice nil))
+            ;; Second invocation:  pass the already-relocated path.
+            (setq twice (tibetan-doc-prep-move-to-work-in-progress moved))
+            (should (equal moved twice))
+            (should (file-exists-p moved))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-doc-prep-move-to-wip-missing-source-errors ()
+  "Defensive:  nonexistent source → `user-error' (no silent
+nothing-happens)."
+  (should-error
+   (tibetan-doc-prep-move-to-work-in-progress "/nonexistent/foo.org")
+   :type 'user-error))
+
 ;; ============================================================================
 ;; HELPER FUNCTION FOR RUNNING TESTS
 ;; ============================================================================

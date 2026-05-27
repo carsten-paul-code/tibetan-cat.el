@@ -74,6 +74,89 @@ If nil, uses same directory as source file."
                  (directory :tag "Specific directory"))
   :group 'tibetan-doc-prep)
 
+(defcustom tibetan-doc-prep-work-in-progress-folder "work in progress"
+  "Sibling folder name that receives a freshly prepared source file.
+
+§5.27 Phase 2 follow-up (2026-05-27):  after ingest (Wylie
+conversion / OCR import / paste-in) the prepared `.org' file is
+relocated UP one level into a sibling folder of this name so the
+buddhist-studies workflow folders mirror the established Milarepa
+pattern:
+
+  <semester>/<class>/<raw-input>/foo.org       ←  source (ingest input)
+  <semester>/<class>/work in progress/foo.org  ←  prepared file
+  <semester>/<class>/work in progress/analysis/seg-NNN-foo.org
+
+Set to nil to disable the post-ingest move entirely (the prepared
+file then stays in its source directory).  An absolute path is
+also accepted — when provided, the prepared file lands there
+unconditionally instead of in a relative sibling of the source."
+  :type '(choice (const :tag "Disabled — stay in source directory" nil)
+                 (string :tag "Sibling folder name (relative)")
+                 (directory :tag "Absolute target directory"))
+  :group 'tibetan-doc-prep)
+
+;; ============================================================================
+;; PATH RELOCATION
+;; ============================================================================
+
+(defun tibetan-doc-prep--resolve-work-in-progress-target (source-path)
+  "Return the absolute target path for SOURCE-PATH after relocation.
+
+Consults `tibetan-doc-prep-work-in-progress-folder':
+  · nil          → returns SOURCE-PATH unchanged (no move).
+  · relative     → resolved as a sibling of the source's parent
+                   directory:  `.../parent/<folder>/<basename>'.
+  · absolute     → used directly as the destination directory.
+
+The returned path is always absolute.  Does not create the
+destination directory — the move helper does that."
+  (let* ((source-abs (expand-file-name source-path))
+         (basename (file-name-nondirectory source-abs))
+         (folder tibetan-doc-prep-work-in-progress-folder))
+    (cond
+     ((null folder) source-abs)
+     ((file-name-absolute-p folder)
+      (expand-file-name basename folder))
+     (t
+      (let* ((src-dir (directory-file-name
+                       (file-name-directory source-abs)))
+             (parent (file-name-directory src-dir))
+             (dest-dir (expand-file-name folder parent)))
+        (expand-file-name basename dest-dir))))))
+
+(defun tibetan-doc-prep-move-to-work-in-progress (source-path)
+  "Relocate SOURCE-PATH into the configured work-in-progress folder.
+
+Resolves the destination via
+`tibetan-doc-prep--resolve-work-in-progress-target', creates the
+destination directory if absent, and renames the file across.
+Returns the new absolute path.
+
+Idempotent:  when SOURCE-PATH already resides at the resolved
+destination (or
+`tibetan-doc-prep-work-in-progress-folder' is nil), the function
+is a no-op and returns SOURCE-PATH unchanged.
+
+Existing destination files are overwritten — callers (the wizard,
+the Wylie ingest wrapper) confirm with the user before invoking."
+  (unless (and source-path (file-exists-p source-path))
+    (user-error "Source file not found:  %s" source-path))
+  (let* ((source-abs (expand-file-name source-path))
+         (target (tibetan-doc-prep--resolve-work-in-progress-target
+                  source-abs)))
+    (cond
+     ;; No-op:  feature disabled or source already at target.
+     ((or (null tibetan-doc-prep-work-in-progress-folder)
+          (equal source-abs target))
+      source-abs)
+     (t
+      (let ((dest-dir (file-name-directory target)))
+        (unless (file-directory-p dest-dir)
+          (make-directory dest-dir t))
+        (rename-file source-abs target t)
+        target)))))
+
 ;; ============================================================================
 ;; INTERNAL STATE
 ;; ============================================================================

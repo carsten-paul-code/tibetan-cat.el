@@ -315,8 +315,9 @@ Tibetan-Unicode body) is returned as a string."
       (delete-directory dir t))))
 
 (ert-deftest tibetan-wylie-ingest-file-in-place-mode-returns-path ()
-  "Happy path with IN-PLACE = t:  return value is the absolute path
-to the (now-overwritten) source, not the converter stdout."
+  "Happy path with IN-PLACE = t and the post-ingest relocation
+disabled via SKIP-MOVE:  return value is the absolute path of the
+overwritten source in its ORIGINAL location."
   (let ((dir (make-temp-file "wylie-happy-" t)))
     (unwind-protect
         (let ((src (expand-file-name "source.org" dir)))
@@ -329,8 +330,41 @@ to the (now-overwritten) source, not the converter stdout."
                ((symbol-function 'tibetan-wylie-ingest--invoke-script)
                 (lambda (_p _ip)
                   (list :exit-code 0 :stdout "" :stderr "Wrote 1 segments"))))
-            (let ((ret (tibetan-wylie-ingest-file src t)))
+            (let ((ret (tibetan-wylie-ingest-file src t t)))
               (should (equal (expand-file-name src) ret)))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-wylie-ingest-file-in-place-relocates-to-work-in-progress ()
+  "§5.27 Phase 2 follow-up:  IN-PLACE conversion (SKIP-MOVE nil)
+fires `tibetan-doc-prep-move-to-work-in-progress' after a
+successful run.  The prepared file ends up in the sibling
+`work in progress/' folder;  return value points there."
+  (require 'tibetan-doc-prep)
+  (let ((dir (make-temp-file "wylie-relocate-" t)))
+    (unwind-protect
+        (let* ((raw-dir (expand-file-name "raw" dir))
+               (src (expand-file-name "source.org" raw-dir))
+               (tibetan-doc-prep-work-in-progress-folder "work in progress"))
+          (make-directory raw-dir t)
+          (with-temp-file src (insert "* Tibetan Text\nrgyal po //\n"))
+          (cl-letf
+              (((symbol-function 'executable-find)
+                (lambda (_) "/usr/bin/python3"))
+               ((symbol-function 'tibetan-wylie-ingest--pyewts-available-p)
+                (lambda () t))
+               ;; Stub the converter:  pretend it wrote Tibetan
+               ;; Unicode in place (we leave the file untouched —
+               ;; the relocator only cares about the path).
+               ((symbol-function 'tibetan-wylie-ingest--invoke-script)
+                (lambda (_p _ip)
+                  (list :exit-code 0 :stdout "" :stderr "Wrote 1 segments"))))
+            (let ((ret (tibetan-wylie-ingest-file src t)))
+              ;; Source no longer in `raw/'.
+              (should-not (file-exists-p src))
+              ;; Landed in sibling `work in progress/'.
+              (should (file-exists-p ret))
+              (should (string-match-p
+                       "work in progress/source\\.org\\'" ret)))))
       (delete-directory dir t))))
 
 (ert-deftest tibetan-wylie-ingest-file-errors-when-script-nonzero-exit ()
@@ -363,7 +397,9 @@ so the user sees Python's diagnostic without consulting `*Messages*'."
   "Smoke test against the actual `tibetan-ybh-prep.py' converter
 when pyewts is installed.  Verifies the wrapper composes
 correctly with the script:  small Wylie input → in-place write →
-file contains Tibetan Unicode + `*** Segment N' headings."
+post-ingest relocation into the sibling `work in progress/' folder
+\(SKIP-MOVE = t suppresses the relocation so the test only
+exercises the conversion path)."
   (skip-unless (tibetan-wylie-ingest--pyewts-available-p))
   (let ((dir (make-temp-file "wylie-e2e-" t)))
     (unwind-protect
@@ -371,7 +407,8 @@ file contains Tibetan Unicode + `*** Segment N' headings."
           (with-temp-file src
             (insert "#+TITLE: T\n\n* Tibetan Text\n"
                     "rgyal po dgyes // btsun mo dgyes //\n"))
-          (tibetan-wylie-ingest-file src t)
+          ;; SKIP-MOVE = t → file stays at SRC, no relocation.
+          (tibetan-wylie-ingest-file src t t)
           (let ((out (with-temp-buffer
                        (insert-file-contents src)
                        (buffer-string))))

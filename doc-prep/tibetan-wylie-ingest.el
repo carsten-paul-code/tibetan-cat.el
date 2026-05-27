@@ -28,6 +28,13 @@
 
 (require 'cl-lib)
 
+;; Forward declaration:  the post-ingest relocation is delegated to
+;; `tibetan-doc-prep.el' (defined alongside us under doc-prep/).  We
+;; only call it under `fboundp', so a missing module degrades to "no
+;; move" rather than erroring.
+(declare-function tibetan-doc-prep-move-to-work-in-progress
+                  "tibetan-doc-prep" (source-path))
+
 ;; ============================================================================
 ;; CONFIGURATION
 ;; ============================================================================
@@ -286,7 +293,7 @@ threads the `--in-place' flag."
       (when (file-exists-p stderr-file) (delete-file stderr-file)))))
 
 ;;;###autoload
-(defun tibetan-wylie-ingest-file (path &optional in-place)
+(defun tibetan-wylie-ingest-file (path &optional in-place skip-move)
   "Convert PATH from Wylie to Tibetan Unicode via the bundled script.
 
 PATH is a source `.org' file carrying Wylie under `* Tibetan
@@ -294,9 +301,20 @@ Text'.  When IN-PLACE is non-nil the file is overwritten with the
 converted content;  otherwise the converter's stdout is returned
 as a string.
 
+After a successful IN-PLACE conversion, the prepared file is
+relocated into the configured work-in-progress folder via
+`tibetan-doc-prep-move-to-work-in-progress' (sibling of the
+source's parent dir, default name `work in progress').  Passing
+SKIP-MOVE non-nil disables the relocation — useful from tests or
+when the caller orchestrates the move itself.
+
 Signals a `user-error' when `python3' or `pyewts' aren't
 available, or when the script exits non-zero (stderr is included
 in the error message for diagnosis).
+
+Return value:
+  IN-PLACE  → absolute path of the prepared file (post-move).
+  stdout    → converter's stdout body as a string.
 
 Interactive callers receive a prefix-arg → IN-PLACE."
   (interactive
@@ -316,13 +334,23 @@ Interactive callers receive a prefix-arg → IN-PLACE."
        (if (and stderr (not (string-empty-p stderr)))
            (concat ":\n" (string-trim stderr))
          "")))
-    (when (called-interactively-p 'interactive)
-      (message "Wylie ingest:  %s  (%s)"
-               (if in-place "wrote in place" "captured to stdout")
-               (string-trim (or stderr ""))))
-    (if in-place
-        (expand-file-name path)
-      stdout)))
+    (cond
+     (in-place
+      (let ((final-path
+             (if (and (not skip-move)
+                      (fboundp 'tibetan-doc-prep-move-to-work-in-progress))
+                 (tibetan-doc-prep-move-to-work-in-progress path)
+               (expand-file-name path))))
+        (when (called-interactively-p 'interactive)
+          (message "Wylie ingest:  wrote %s  (%s)"
+                   (abbreviate-file-name final-path)
+                   (string-trim (or stderr ""))))
+        final-path))
+     (t
+      (when (called-interactively-p 'interactive)
+        (message "Wylie ingest:  captured to stdout  (%s)"
+                 (string-trim (or stderr ""))))
+      stdout))))
 
 (provide 'tibetan-wylie-ingest)
 ;;; tibetan-wylie-ingest.el ends here
