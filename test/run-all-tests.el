@@ -166,5 +166,8 @@
 ;; routed via emacsclient to the research Emacs instance.
 (condition-case nil (require 'tibetan-cat-zettel-bridge-test) (error nil))
 
+;; §5.27 Phase 2:  Wylie ingest wrapper around `tibetan-ybh-prep.py'.
+(condition-case nil (require 'tibetan-wylie-ingest-test) (error nil))
+
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here
