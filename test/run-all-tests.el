@@ -172,5 +172,8 @@
 ;; §5.27 Phase 3:  canonical Tibetan-text genre taxonomy + reader.
 (condition-case nil (require 'tibetan-document-genres-test) (error nil))
 
+;; §5.27 Phase 4:  async Claude metadata pre-fill for the wizard.
+(condition-case nil (require 'tibetan-document-prep-claude-test) (error nil))
+
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here
