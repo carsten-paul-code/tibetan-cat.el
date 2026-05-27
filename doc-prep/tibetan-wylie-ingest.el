@@ -188,17 +188,42 @@ slightly understates when a paragraph's trailing text has no `//'
     (list :paragraph-count para-count
           :estimated-segment-count segment-count)))
 
+(defun tibetan-wylie-ingest--count-pipe-shads (body)
+  "Return the count of `|' characters in BODY.  Used by the
+validator to flag Wylie sources that use the pipe-shad
+convention and would benefit from `--normalize-shads' before
+ingest."
+  (cl-count ?| body))
+
+(defun tibetan-wylie-ingest--count-non-standard-folios (body)
+  "Return the count of bracket-style folio markers in BODY that
+are NOT already in the canonical `[F:D...]' form the Python
+ingest script recognises.  Matches `[141a.6]' and `[141a6]'
+variants."
+  (let ((count 0)
+        (idx 0))
+    (while (string-match
+            tibetan-wylie-ingest--folio-regex body idx)
+      (cl-incf count)
+      (setq idx (match-end 0)))
+    count))
+
 (defun tibetan-wylie-ingest-validate-input (path)
   "Scan the Wylie source at PATH for structural issues.
 Returns a plist suitable for the wizard's pre-conversion report:
 
-  :path                       absolute source path
-  :has-tibetan-text-section   t  when `* Tibetan Text' is present
-  :paragraph-count            number of blank-line paragraphs in body
-  :estimated-segment-count    count of `//' (+ trailing) units in body
-  :tibetan-unicode-count      0 for a clean Wylie source
-  :non-ascii-count            0 for a clean Wylie source
+  :path                          absolute source path
+  :has-tibetan-text-section      t  when `* Tibetan Text' is present
+  :paragraph-count               number of blank-line paragraphs in body
+  :estimated-segment-count       count of `//' (+ trailing) units in body
+  :tibetan-unicode-count         0 for a clean Wylie source
+  :non-ascii-count               0 for a clean Wylie source
   :first-tibetan-unicode-pos  / :first-non-ascii-pos  — see scanner
+  :pipe-shad-count               count of `|' chars (suggests need for
+                                 `--normalize-shads' before ingest)
+  :non-standard-folio-count      count of `[NNNa.M]' markers that are
+                                 NOT in the script's `[F:D...]' form
+                                 (suggests `--normalize-folio-markers')
 
 Signals a `user-error' when PATH does not exist or is unreadable.
 Other-issue counts of zero indicate the file is structurally sound
@@ -209,13 +234,19 @@ pyewts which may emit replacement characters or simply skip them)."
     (user-error "Wylie source file not found:  %s" path))
   (let* ((body (tibetan-wylie-ingest--extract-tibetan-text-body path))
          (has-section (not (null body)))
-         (issues (tibetan-wylie-ingest--scan-body-for-issues (or body "")))
+         (body-str (or body ""))
+         (issues (tibetan-wylie-ingest--scan-body-for-issues body-str))
          (counts (tibetan-wylie-ingest--count-paragraphs-and-units
-                  (or body ""))))
+                  body-str))
+         (pipe-count (tibetan-wylie-ingest--count-pipe-shads body-str))
+         (folio-count
+          (tibetan-wylie-ingest--count-non-standard-folios body-str)))
     (append (list :path path
                   :has-tibetan-text-section has-section)
             counts
-            issues)))
+            issues
+            (list :pipe-shad-count pipe-count
+                  :non-standard-folio-count folio-count))))
 
 (defun tibetan-wylie-ingest--format-validation-report (report)
   "Render REPORT (the plist from `--validate-input') as a string."
@@ -242,7 +273,18 @@ pyewts which may emit replacement characters or simply skip them)."
               (plist-get report :non-ascii-count)
               (if (zerop (plist-get report :non-ascii-count))
                   ""
-                "  ⚠  smart-quotes / em-dashes / etc."))) "\n")))
+                "  ⚠  smart-quotes / em-dashes / etc."))
+      (format "  pipe-shad characters:    %d%s"
+              (plist-get report :pipe-shad-count)
+              (if (zerop (plist-get report :pipe-shad-count))
+                  ""
+                "  ⚠  script expects `//' — run `--normalize-shads'"))
+      (format "  non-standard folios:     %d%s"
+              (plist-get report :non-standard-folio-count)
+              (if (zerop (plist-get report :non-standard-folio-count))
+                  ""
+                "  ⚠  script expects `[F:D...]' — run `--normalize-folio-markers'")))
+     "\n")))
 
 ;;;###autoload
 (defun tibetan-wylie-ingest-validate-input-interactive (path)
@@ -254,6 +296,125 @@ Pops a `*Wylie Validate*' buffer with the report."
     (with-output-to-temp-buffer "*Wylie Validate*"
       (princ (tibetan-wylie-ingest--format-validation-report report)))
     report))
+
+;; ============================================================================
+;; BODY-REGION HELPER  --------------------------------------------------------
+;; ============================================================================
+
+(defun tibetan-wylie-ingest--apply-to-body (path fn)
+  "Read PATH, apply FN to its `* Tibetan Text' body, write back.
+
+FN is a one-argument function taking the body string (everything
+between the `* Tibetan Text' heading and the next top-level `* '
+heading) and returning a modified string.  Metadata headers,
+title, and any post-body sections are untouched.
+
+No-op (returns nil) when PATH has no `* Tibetan Text' heading.
+Returns t when the body was actually rewritten."
+  (unless (and path (file-exists-p path))
+    (user-error "File not found:  %s" path))
+  (with-temp-buffer
+    (insert-file-contents path)
+    (goto-char (point-min))
+    (when (re-search-forward "^\\* Tibetan Text[ \t]*$" nil t)
+      (forward-line 1)
+      (let* ((start (point))
+             (end (save-excursion
+                    (if (re-search-forward "^\\* " nil t)
+                        (line-beginning-position)
+                      (point-max))))
+             (body (buffer-substring-no-properties start end))
+             (transformed (funcall fn body)))
+        (unless (equal body transformed)
+          (delete-region start end)
+          (goto-char start)
+          (insert transformed)
+          (write-region (point-min) (point-max) path)
+          t)))))
+
+;; ============================================================================
+;; SHAD NORMALISATION  --------------------------------------------------------
+;; ============================================================================
+
+(defun tibetan-wylie-ingest--normalize-shads-string (body)
+  "Return BODY with Wylie pipe-shads normalised to slash-shads.
+
+Mapping:
+  · `| |' (single shad + space(s) + single shad — the standard
+          Wylie double-shad convention)  →  `//' (segment boundary
+          the Python script recognises)
+  · `||'  (adjacent double shad)         →  `//'
+  · lone `|'                              →  `/' (within-segment shad)
+
+Pure-string operation;  used by `tibetan-wylie-ingest-normalize-
+shads' on the body region and by the validator's counter."
+  (let* ((step1 (replace-regexp-in-string "|[ \t]+|" "||" body))
+         (step2 (replace-regexp-in-string "||" "//" step1 nil t))
+         (step3 (replace-regexp-in-string "|" "/" step2 nil t)))
+    step3))
+
+(defun tibetan-wylie-ingest-normalize-shads (path)
+  "Normalise Wylie pipe-shads in PATH's `* Tibetan Text' body.
+
+Real-world Wylie sources (academic transcriptions, BDRC manual
+transcripts) routinely use `|' / `| |' for shads where the
+Python ingest script expects `/' / `//'.  This helper bridges
+the gap by rewriting the body in place;  metadata + title are
+untouched.
+
+Returns the count of `|' characters that were converted.
+Idempotent — re-running on a body that no longer contains `|'
+returns 0."
+  (let ((count 0))
+    (tibetan-wylie-ingest--apply-to-body
+     path
+     (lambda (body)
+       (setq count (cl-count ?| body))
+       (tibetan-wylie-ingest--normalize-shads-string body)))
+    count))
+
+;; ============================================================================
+;; FOLIO-MARKER NORMALISATION  ------------------------------------------------
+;; ============================================================================
+
+(defconst tibetan-wylie-ingest--folio-regex
+  "\\[\\([0-9]+\\)\\([ab]\\)\\.?\\([0-9]+\\)\\]"
+  "Match `[<digits><ab>.?<digits>]' — the common bracket-folio
+convention in academic Tibetan transcriptions (e.g. `[141a.6]'
+= folio 141a, line 6).  Pure-digit / pure-letter runs only, so
+bibliographic ranges like `[141a.5–143b.4; pp. 285.5–290.4]'
+\(which contain dashes / semicolons) do NOT match and are left
+intact.")
+
+(defun tibetan-wylie-ingest--normalize-folio-markers-string (body)
+  "Return BODY with bracket-style folio markers reshaped to
+`[F:D<digits><ab><digits>]' so the Python script's
+`FOLIO_RE = r\"\\[F:D(\\d+[ab]\\d+)\\]\"' regex picks them up."
+  (replace-regexp-in-string
+   tibetan-wylie-ingest--folio-regex
+   "[F:D\\1\\2\\3]"
+   body))
+
+(defun tibetan-wylie-ingest-normalize-folio-markers (path)
+  "Reshape inline folio markers in PATH's `* Tibetan Text' body
+from `[141a.6]' to `[F:D141a6]' so the Python script extracts
+them as `:FOLIO:' org properties instead of leaving them
+embedded in the Wylie body (where pyewts would garble them).
+
+Returns the count of markers rewritten."
+  (let ((count 0))
+    (tibetan-wylie-ingest--apply-to-body
+     path
+     (lambda (body)
+       (let ((c 0))
+         (let ((idx 0))
+           (while (string-match
+                   tibetan-wylie-ingest--folio-regex body idx)
+             (cl-incf c)
+             (setq idx (match-end 0))))
+         (setq count c))
+       (tibetan-wylie-ingest--normalize-folio-markers-string body)))
+    count))
 
 ;; ============================================================================
 ;; AUTO-WRAP — make a bare Wylie file ingestable

@@ -103,6 +103,33 @@ Auto-wrap with `#+TITLE: %s' + `* Tibetan Text' header? "
        (t
         (user-error
          "Source has no `* Tibetan Text' heading — cannot convert"))))
+    ;; Step 0.5:  shad normalisation.  Real-world Wylie sources
+    ;; routinely use `|' / `| |' shads where the Python ingest
+    ;; script expects `/' / `//'.  Offer to rewrite the body.
+    (when (> (plist-get report :pipe-shad-count) 0)
+      (let ((n (plist-get report :pipe-shad-count)))
+        (when (y-or-n-p
+               (format
+                "Body has %d pipe-shad char(s) (`|' / `| |').  \
+Normalise to `/' / `//' so the converter segments correctly? "
+                n))
+          (let ((rewritten (tibetan-wylie-ingest-normalize-shads path)))
+            (message "Normalised %d pipe-shad char(s)." rewritten)
+            (setq report (tibetan-wylie-ingest-validate-input path))))))
+    ;; Step 0.6:  folio-marker normalisation.  `[141a.6]' → `[F:D141a6]'
+    ;; so the script's regex extracts them as :FOLIO: org properties
+    ;; instead of leaving them inline (where pyewts would garble them).
+    (when (> (plist-get report :non-standard-folio-count) 0)
+      (let ((n (plist-get report :non-standard-folio-count)))
+        (when (y-or-n-p
+               (format
+                "Body has %d bracket-style folio marker(s) (e.g. `[141a.6]').  \
+Reshape to `[F:D...]' so the script extracts them as :FOLIO: properties? "
+                n))
+          (let ((rewritten
+                 (tibetan-wylie-ingest-normalize-folio-markers path)))
+            (message "Reshaped %d folio marker(s)." rewritten)
+            (setq report (tibetan-wylie-ingest-validate-input path))))))
     (when (or (> (plist-get report :tibetan-unicode-count) 0)
               (> (plist-get report :non-ascii-count) 0))
       (let ((tib-count (plist-get report :tibetan-unicode-count))

@@ -390,6 +390,171 @@ so the user sees Python's diagnostic without consulting `*Messages*'."
       (delete-directory dir t))))
 
 ;; ============================================================================
+;; SHAD NORMALISATION
+;; ============================================================================
+
+(ert-deftest tibetan-wylie-ingest-normalize-shads-string-double-space ()
+  "`| |' (single + space + single — standard Wylie double-shad)
+collapses to `//'."
+  (should (equal "phyag tshal//de ngan"
+                 (tibetan-wylie-ingest--normalize-shads-string
+                  "phyag tshal| |de ngan"))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-shads-string-multi-space ()
+  "Multiple spaces between the two pipes still collapse to `//'."
+  (should (equal "phyag tshal//de ngan"
+                 (tibetan-wylie-ingest--normalize-shads-string
+                  "phyag tshal|   |de ngan"))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-shads-string-adjacent-double ()
+  "`||' (no space) maps to `//'."
+  (should (equal "phyag tshal//de ngan"
+                 (tibetan-wylie-ingest--normalize-shads-string
+                  "phyag tshal||de ngan"))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-shads-string-lone-pipe ()
+  "Lone `|' (no adjacent partner) maps to `/'."
+  (should (equal "phyag tshal/ sangs rgyas/"
+                 (tibetan-wylie-ingest--normalize-shads-string
+                  "phyag tshal| sangs rgyas|"))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-shads-string-idempotent ()
+  "Body with no `|' is unchanged (idempotent re-run)."
+  (let ((body "phyag tshal// sangs rgyas/"))
+    (should (equal body
+                   (tibetan-wylie-ingest--normalize-shads-string body)))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-shads-end-to-end ()
+  "`tibetan-wylie-ingest-normalize-shads' rewrites the body in
+PATH and returns the count of `|' chars converted.  Title /
+metadata + post-body sections are untouched."
+  (let ((dir (make-temp-file "shad-norm-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "foo.org" dir)))
+          (with-temp-file src
+            (insert "#+TITLE: T (note | inside)\n\n"
+                    "* Tibetan Text\n"
+                    "phyag tshal| |de ngan|\n"
+                    "\n* Notes\nA note with | inside\n"))
+          (let ((n (tibetan-wylie-ingest-normalize-shads src)))
+            (should (= 3 n))
+            (let ((out (with-temp-buffer (insert-file-contents src)
+                                         (buffer-string))))
+              (should (string-match-p
+                       "#\\+TITLE: T (note | inside)" out))
+              (should (string-match-p
+                       "A note with | inside" out))
+              (should (string-match-p "phyag tshal//de ngan/" out)))))
+      (delete-directory dir t))))
+
+;; ============================================================================
+;; FOLIO-MARKER NORMALISATION
+;; ============================================================================
+
+(ert-deftest tibetan-wylie-ingest-normalize-folio-string-with-dot ()
+  "`[141a.6]' → `[F:D141a6]'."
+  (should (equal "bla ma [F:D141a6] sangs rgyas"
+                 (tibetan-wylie-ingest--normalize-folio-markers-string
+                  "bla ma [141a.6] sangs rgyas"))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-folio-string-no-dot ()
+  "`[141a6]' (no separator dot) → `[F:D141a6]'."
+  (should (equal "bla ma [F:D141a6] sangs rgyas"
+                 (tibetan-wylie-ingest--normalize-folio-markers-string
+                  "bla ma [141a6] sangs rgyas"))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-folio-string-b-side ()
+  "B-side folios match the same regex."
+  (should (equal "[F:D141b1] foo [F:D143b4]"
+                 (tibetan-wylie-ingest--normalize-folio-markers-string
+                  "[141b.1] foo [143b.4]"))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-folio-string-skips-citation ()
+  "Bibliographic ranges with dashes / semicolons (e.g. the
+`[141a.5–143b.4; pp. 285.5–290.4]' header line) are NOT touched
+— the regex requires a pure `[digits<ab>.?digits]' shape."
+  (let ((cite "[141a.5–143b.4; pp. 285.5–290.4]"))
+    (should (equal cite
+                   (tibetan-wylie-ingest--normalize-folio-markers-string
+                    cite)))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-folio-string-skips-pp ()
+  "Bracketed page references (`[pp. 285.5]') are skipped."
+  (should (equal "[pp. 285.5]"
+                 (tibetan-wylie-ingest--normalize-folio-markers-string
+                  "[pp. 285.5]"))))
+
+(ert-deftest tibetan-wylie-ingest-normalize-folio-end-to-end ()
+  "End-to-end:  helper rewrites body markers + returns the
+conversion count.  Bracketed citations OUTSIDE the body are
+untouched."
+  (let ((dir (make-temp-file "folio-norm-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "foo.org" dir)))
+          (with-temp-file src
+            (insert "#+TITLE: T\n\n* Tibetan Text\n"
+                    "[141a.5–143b.4; pp. 285.5–290.4] bla ma\n"
+                    "phyag tshal [141a.6] de ngan [141b.1] song\n"))
+          (let ((n (tibetan-wylie-ingest-normalize-folio-markers src)))
+            (should (= 2 n))
+            (let ((out (with-temp-buffer (insert-file-contents src)
+                                         (buffer-string))))
+              ;; Citation header preserved.
+              (should (string-match-p
+                       "\\[141a\\.5–143b\\.4; pp\\. 285\\.5–290\\.4\\]" out))
+              ;; Folio markers reshaped.
+              (should (string-match-p "\\[F:D141a6\\]" out))
+              (should (string-match-p "\\[F:D141b1\\]" out)))))
+      (delete-directory dir t))))
+
+;; ============================================================================
+;; VALIDATOR — pipe-shad + folio counters
+;; ============================================================================
+
+(ert-deftest tibetan-wylie-ingest-validate-counts-pipe-shads ()
+  "Validator reports the body's `|' character count via
+`:pipe-shad-count'."
+  (let ((dir (make-temp-file "val-pipe-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "foo.org" dir)))
+          (with-temp-file src
+            (insert "* Tibetan Text\nphyag tshal| |de ngan|\n"))
+          (let ((report (tibetan-wylie-ingest-validate-input src)))
+            (should (= 3 (plist-get report :pipe-shad-count)))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-wylie-ingest-validate-counts-non-standard-folios ()
+  "Validator reports the body's non-standard folio-marker count
+via `:non-standard-folio-count'.  Already-canonical `[F:D...]'
+markers are NOT counted."
+  (let ((dir (make-temp-file "val-folio-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "foo.org" dir)))
+          (with-temp-file src
+            (insert "* Tibetan Text\n"
+                    "[141a.6] foo [141b.1] bar [F:D142a3] baz\n"))
+          (let ((report (tibetan-wylie-ingest-validate-input src)))
+            ;; Two `[NNNa.M]' markers (counted) + one `[F:D...]'
+            ;; (NOT counted — already canonical).
+            (should (= 2 (plist-get report :non-standard-folio-count)))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-wylie-ingest-validate-clean-body-zero-counts ()
+  "Clean ASCII Wylie body with `//' shads + `[F:D...]' folios →
+both counters are 0 (no normalisation suggestions surface)."
+  (let ((dir (make-temp-file "val-clean-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "foo.org" dir)))
+          (with-temp-file src
+            (insert "* Tibetan Text\n"
+                    "[F:D141a6] phyag tshal // de ngan //\n"))
+          (let ((report (tibetan-wylie-ingest-validate-input src)))
+            (should (zerop (plist-get report :pipe-shad-count)))
+            (should (zerop
+                     (plist-get report :non-standard-folio-count)))))
+      (delete-directory dir t))))
+
+;; ============================================================================
 ;; AUTO-WRAP — bare Wylie file gets canonical org structure
 ;; ============================================================================
 
