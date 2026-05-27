@@ -256,6 +256,49 @@ Pops a `*Wylie Validate*' buffer with the report."
     report))
 
 ;; ============================================================================
+;; AUTO-WRAP — make a bare Wylie file ingestable
+;; ============================================================================
+
+(defun tibetan-wylie-ingest-wrap-bare-source (path)
+  "Wrap PATH (a bare Wylie source) in the canonical org structure
+required by `tibetan-ybh-prep.py'.
+
+A `bare Wylie source' is a `.org' file that contains Wylie body
+content but has no `* Tibetan Text' heading — typically the
+result of pasting raw Wylie into a fresh file or downloading a
+plain-text Wylie transcription.
+
+Mutates the file in place:
+  #+TITLE: <basename-without-extension>
+
+  * Tibetan Text
+  <existing content unchanged>
+
+Returns PATH on success.  Idempotent — a file that ALREADY has
+`* Tibetan Text' is left untouched and the function signals a
+`user-error' so callers know to skip the wrap step."
+  (unless (and path (file-exists-p path))
+    (user-error "File not found:  %s" path))
+  (let ((existing
+         (with-temp-buffer
+           (insert-file-contents path)
+           (buffer-string))))
+    (when (string-match-p "^\\* Tibetan Text[ \t]*$" existing)
+      (user-error
+       "File already has `* Tibetan Text' heading — wrap not needed:  %s"
+       path))
+    (let* ((title (file-name-base path))
+           (already-has-title-p
+            (string-match-p "^#\\+TITLE:" existing))
+           (header (concat (unless already-has-title-p
+                             (format "#+TITLE: %s\n\n" title))
+                           "* Tibetan Text\n")))
+      (with-temp-file path
+        (insert header)
+        (insert existing))))
+  path)
+
+;; ============================================================================
 ;; INGEST  --------------------------------------------------------------------
 ;; ============================================================================
 

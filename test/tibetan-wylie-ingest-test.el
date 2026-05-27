@@ -390,6 +390,80 @@ so the user sees Python's diagnostic without consulting `*Messages*'."
       (delete-directory dir t))))
 
 ;; ============================================================================
+;; AUTO-WRAP — bare Wylie file gets canonical org structure
+;; ============================================================================
+
+(ert-deftest tibetan-wylie-ingest-wrap-bare-source-adds-title-and-heading ()
+  "Bare Wylie file (no `#+TITLE:', no `* Tibetan Text') → wrap adds
+both, with the basename as title and original content as body."
+  (let ((dir (make-temp-file "wylie-wrap-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "foo.org" dir)))
+          (with-temp-file src
+            (insert "bla ma dam pa rnams la phyag 'tshal lo|\n"))
+          (tibetan-wylie-ingest-wrap-bare-source src)
+          (let ((out (with-temp-buffer (insert-file-contents src)
+                                       (buffer-string))))
+            (should (string-match-p "^#\\+TITLE: foo$" out))
+            (should (string-match-p "^\\* Tibetan Text$" out))
+            ;; Original body content is preserved verbatim.
+            (should (string-match-p
+                     "bla ma dam pa rnams la phyag 'tshal lo|"
+                     out))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-wylie-ingest-wrap-bare-source-keeps-existing-title ()
+  "When the file already has `#+TITLE:' but no `* Tibetan Text',
+the wrap inserts ONLY the heading — no duplicate `#+TITLE:'."
+  (let ((dir (make-temp-file "wylie-wrap-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "foo.org" dir)))
+          (with-temp-file src
+            (insert "#+TITLE: My Wylie Doc\n\n"
+                    "bla ma|\n"))
+          (tibetan-wylie-ingest-wrap-bare-source src)
+          (let ((out (with-temp-buffer (insert-file-contents src)
+                                       (buffer-string))))
+            (should (string-match-p "^\\* Tibetan Text$" out))
+            ;; Only ONE #+TITLE: line.
+            (should (= 1 (cl-count "#+TITLE:" (split-string out "\n")
+                                   :test
+                                   (lambda (needle line)
+                                     (string-match-p
+                                      (regexp-quote needle) line)))))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-wylie-ingest-wrap-bare-source-errors-when-already-wrapped ()
+  "File that already has `* Tibetan Text' → `user-error' (wrap is
+not idempotent — caller should skip the wrap step)."
+  (let ((dir (make-temp-file "wylie-wrap-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "foo.org" dir)))
+          (with-temp-file src
+            (insert "#+TITLE: T\n* Tibetan Text\nbla ma|\n"))
+          (should-error (tibetan-wylie-ingest-wrap-bare-source src)
+                        :type 'user-error))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-wylie-ingest-wrap-then-validate-roundtrip ()
+  "End-to-end:  wrap a bare file, then `--validate-input' sees the
+heading and returns a positive plist."
+  (let ((dir (make-temp-file "wylie-wrap-rt-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "foo.org" dir)))
+          (with-temp-file src
+            (insert "[fol] bla ma dam pa| sangs rgyas|\n"))
+          ;; Validator sees no section.
+          (let ((before (tibetan-wylie-ingest-validate-input src)))
+            (should-not (plist-get before :has-tibetan-text-section)))
+          ;; Wrap, then re-validate.
+          (tibetan-wylie-ingest-wrap-bare-source src)
+          (let ((after (tibetan-wylie-ingest-validate-input src)))
+            (should (plist-get after :has-tibetan-text-section))
+            (should (> (plist-get after :paragraph-count) 0))))
+      (delete-directory dir t))))
+
+;; ============================================================================
 ;; END-TO-END — real Python invocation (skip-unless pyewts)
 ;; ============================================================================
 

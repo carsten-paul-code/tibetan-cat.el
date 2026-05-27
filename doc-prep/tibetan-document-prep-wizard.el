@@ -76,11 +76,33 @@ flow.")
 (defun tibetan-document-prep-wizard--run-wylie-ingest ()
   "Prompt for a Wylie `.org' source, validate + convert + relocate.
 Returns the final source-file path (post-relocation into the
-configured `work in progress/' folder)."
+configured `work in progress/' folder).
+
+When the source is bare (no `* Tibetan Text' heading) the wizard
+OFFERS to auto-wrap it before validation — bare Wylie files
+copy-pasted from a transcription don't carry the org-org wrapper
+the converter requires, so this catches the common case without
+forcing the user to hand-edit."
   (let* ((path (read-file-name "Wylie source (.org): " nil nil t))
          (report (tibetan-wylie-ingest-validate-input path)))
+    ;; Step 0:  if the source has no `* Tibetan Text' heading,
+    ;; offer to wrap it in the canonical org structure.
     (unless (plist-get report :has-tibetan-text-section)
-      (user-error "Source has no `* Tibetan Text' heading — cannot convert"))
+      (cond
+       ((y-or-n-p
+         (format "`%s' has no `* Tibetan Text' heading.  \
+Auto-wrap with `#+TITLE: %s' + `* Tibetan Text' header? "
+                 (file-name-nondirectory path)
+                 (file-name-base path)))
+        (tibetan-wylie-ingest-wrap-bare-source path)
+        (message "Wrapped %s with org header."
+                 (file-name-nondirectory path))
+        ;; Re-validate after the wrap so paragraph / segment counts
+        ;; reflect the now-wrapped body.
+        (setq report (tibetan-wylie-ingest-validate-input path)))
+       (t
+        (user-error
+         "Source has no `* Tibetan Text' heading — cannot convert"))))
     (when (or (> (plist-get report :tibetan-unicode-count) 0)
               (> (plist-get report :non-ascii-count) 0))
       (let ((tib-count (plist-get report :tibetan-unicode-count))
