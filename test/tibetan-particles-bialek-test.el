@@ -358,5 +358,17 @@ as terminative — the rule requires multi-piece compound context."
                   (and type (string-match-p "TERMINATIVE" type))))
               result))))
 
+(ert-deftest tibetan-bialek-gnas-not-ablative ()
+  "Standalone content word `གནས' (gnas — \"place / to abide\") must NOT
+be split into root `ག' + ablative `ནས'.  It visually ends in the
+ablative suffix but is a lexeme, not stem+ABL.  Same false-positive
+class the single-char ས/ལ/ར/ན guards already prevent."
+  (let ((result (tibetan-analyze-grammar-bialek "གནས")))
+    (should-not
+     (cl-some (lambda (a)
+                (let ((type (nth 2 a)))
+                  (and type (string-match-p "ABLATIVE" type))))
+              result))))
+
 (provide 'tibetan-particles-bialek-test)
 ;;; tibetan-particles-bialek-test.el ends here

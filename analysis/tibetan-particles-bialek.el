@@ -63,6 +63,26 @@ classical-Tibetan single-s ergative surfaces on a stem not listed
 here; add a test in `tibetan-particles-bialek-test.el' first (per
 CLAUDE.md rule 2 \"test first — regression-first for bugs\").")
 
+(defun tibetan-particles-bialek--ablative-suffix-splittable-p (word suffix)
+  "Non-nil when WORD ending in ablative SUFFIX (`ནས' or `ལས') should be
+split into stem + ablative, rather than being a lexeme that merely ends
+in those letters.
+
+Rejects two false-positive cases:
+  - the stem after stripping SUFFIX is a single bare letter (e.g.
+    གནས → ག): genuine attached ablatives leave a multi-letter stem,
+    while real case/converb ablatives normally arrive STANDALONE (after
+    a tsheg, so the stem is empty) — both of which are allowed here;
+  - WORD is itself a known verb (Hill 2010 DB), mirroring the
+    པས/བས causal-converb guard.
+
+A standalone particle (WORD = SUFFIX, empty stem) is allowed — the
+caller's standalone path handles it."
+  (and (string-suffix-p suffix word)
+       (/= (- (length word) (length suffix)) 1)
+       (not (and (fboundp 'tibetan-verb-lookup)
+                 (ignore-errors (tibetan-verb-lookup word))))))
+
 ;; ============================================================================
 ;; BIALEK GRAMMAR ANALYSIS - CASE PARTICLES
 ;; ============================================================================
@@ -228,7 +248,11 @@ Returns list of (particle word case function translation-guide bialek-ref)."
                   analysis))))
 
        ;; ========== ELATIVE/ABLATIVE (source, origin, starting point) ==========
-       ((or (string-suffix-p "ནས" word) (string-suffix-p "ལས" word))
+       ;; Guard: a word like གནས (gnas, "place / to abide") visually ends
+       ;; in `ནས' but is a lexeme, not stem+ablative.  See
+       ;; `tibetan-particles-bialek--ablative-suffix-splittable-p'.
+       ((or (tibetan-particles-bialek--ablative-suffix-splittable-p word "ནས")
+            (tibetan-particles-bialek--ablative-suffix-splittable-p word "ལས"))
         (let* ((particle (if (string-suffix-p "ནས" word) "ནས" "ལས"))
                (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
           (if (> (length root) 0)
@@ -408,7 +432,9 @@ Returns list of (particle word type function translation-guide bialek-ref)."
     (dolist (word words)
       (cond
        ;; ========== ABLATIVE CONVERB: ནས (sequential action) ==========
-       ((string-suffix-p "ནས" word)
+       ;; Same guard as the case analyser: don't treat a lexeme like
+       ;; གནས (root would be the bare letter ག) as stem + converb.
+       ((tibetan-particles-bialek--ablative-suffix-splittable-p word "ནས")
         (let* ((particle "ནས")
                (root (tibetan-particles-safe-substring word 0 (- (length word) (length particle)))))
           (if (> (length root) 0)
