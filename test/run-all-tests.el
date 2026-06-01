@@ -178,5 +178,23 @@
 ;; §5.27 Phase 6:  unified document-preparation wizard orchestrator.
 (condition-case nil (require 'tibetan-document-prep-wizard-test) (error nil))
 
+;; ---------------------------------------------------------------------------
+;; Visibility guard for the silent `(condition-case nil … (error nil))'
+;; pattern above.  That pattern lets a test file that fails to compile /
+;; load drop out INVISIBLY while the suite still reports green (and a
+;; file on disk that nobody `require'd never runs at all).  Re-attempt
+;; every `*-test.el' in this directory that is not yet a loaded feature
+;; and LOG loudly why it didn't load, so a broken / unwired test file is
+;; visible in batch output instead of silently vanishing.
+(let ((test-dir (file-name-directory (or load-file-name buffer-file-name))))
+  (dolist (f (directory-files test-dir nil "-test\\.el\\'"))
+    (let ((feature (intern (file-name-sans-extension f))))
+      (unless (featurep feature)
+        (condition-case err
+            (require feature)
+          (error
+           (message "WARNING: test file %s did not load (tests SKIPPED): %s"
+                    f (error-message-string err))))))))
+
 (provide 'run-all-tests)
 ;;; run-all-tests.el ends here
