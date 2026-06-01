@@ -579,15 +579,40 @@ unwritable."
         (save-buffer))
       t)))
 
+(defun tibetan-sanskrit-parallel-dm--sanitize-drawer-value (value)
+  "Collapse VALUE to a single line for safe use inside an org
+`:PROPERTIES:' drawer.  DM segment numbers / ranks and Claude's reason
+are untrusted text; an embedded newline followed by `:KEY: val' or
+`:END:' would forge a property entry or close the drawer early.  All
+whitespace runs (including newlines) collapse to a single space; the
+result is trimmed.  Nil-safe."
+  (string-trim
+   (replace-regexp-in-string "[ \t\r\n]+" " " (format "%s" (or value "")))))
+
+(defun tibetan-sanskrit-parallel-dm--sanitize-body (text)
+  "Neutralise org heading injection in untrusted body TEXT: prefix any
+line-leading run of `*' with a space so it renders as body text / a
+list item rather than a top-level heading.  Nil-safe."
+  (replace-regexp-in-string "^\\(\\*+\\)" " \\1" (format "%s" (or text ""))))
+
 (defun tibetan-sanskrit-parallel-dm--render-dharmamitra-section (proposal)
   "Render PROPOSAL as the body text of a `* Sanskrit (DharmaMitra)'
 section.  Pure function — no I/O.  Used by the analysis-file
 writer; also useful for tests that want to inspect the output
-shape without going through file I/O."
-  (let ((segnr (or (plist-get proposal :proposed-segmentnr) ""))
-        (rank (or (plist-get proposal :proposed-rank) ""))
-        (reason (or (plist-get proposal :reason) ""))
-        (sanskrit (or (plist-get proposal :proposed-sanskrit) "")))
+shape without going through file I/O.
+
+Untrusted DM / Claude fields are sanitised before insertion: drawer
+values (segment number / rank / reason) are collapsed to one line, and
+the Sanskrit body's line-leading `*' is neutralised — so a response
+cannot forge property-drawer entries or inject an org heading."
+  (let ((segnr (tibetan-sanskrit-parallel-dm--sanitize-drawer-value
+                (plist-get proposal :proposed-segmentnr)))
+        (rank (tibetan-sanskrit-parallel-dm--sanitize-drawer-value
+               (plist-get proposal :proposed-rank)))
+        (reason (tibetan-sanskrit-parallel-dm--sanitize-drawer-value
+                 (plist-get proposal :reason)))
+        (sanskrit (tibetan-sanskrit-parallel-dm--sanitize-body
+                   (or (plist-get proposal :proposed-sanskrit) ""))))
     (concat
      "* Sanskrit (DharmaMitra)\n"
      ":PROPERTIES:\n"

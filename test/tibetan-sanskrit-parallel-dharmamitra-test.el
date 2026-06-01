@@ -927,6 +927,35 @@ Footnotes — none touched by the writer."
 ;; DM apply-proposal (status-aware) — refactored to call analysis writer
 ;; ----------------------------------------------------------------------------
 
+(ert-deftest tibetan-skt-dm-render-section-neutralises-drawer-injection ()
+  "`--render-dharmamitra-section' must not let an untrusted :reason
+\(Claude text) forge property-drawer entries or close the drawer early.
+A newline + `:KEY: val' / `:END:' in the reason would otherwise inject
+a fake property or terminate the drawer."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--render-dharmamitra-section))
+  (let* ((p (list :proposed-segmentnr "5"
+                  :proposed-rank "1"
+                  :reason "real reason\n:END:\n:INJECTED: pwned\nmore"
+                  :proposed-sanskrit "iha bodhisattvaḥ"))
+         (out (tibetan-sanskrit-parallel-dm--render-dharmamitra-section p)))
+    ;; No forged property line.
+    (should-not (string-match-p "^:INJECTED:" out))
+    ;; Exactly one :END: (the drawer's own terminator).
+    (should (= 1 (cl-count-if (lambda (l) (string= l ":END:"))
+                              (split-string out "\n"))))
+    ;; The reason text is still carried (on one line), not dropped.
+    (should (string-match-p "real reason" out))))
+
+(ert-deftest tibetan-skt-dm-render-section-neutralises-heading-injection ()
+  "`--render-dharmamitra-section' must not let an untrusted Sanskrit
+body line beginning with `*' become a top-level org heading."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--render-dharmamitra-section))
+  (let* ((p (list :proposed-segmentnr "5" :proposed-rank "1" :reason "ok"
+                  :proposed-sanskrit "legit sanskrit\n* Injected Heading\nmore"))
+         (out (tibetan-sanskrit-parallel-dm--render-dharmamitra-section p)))
+    (should-not (string-match-p "^\\* Injected Heading$" out))
+    (should (string-match-p "Injected Heading" out))))
+
 (ert-deftest tibetan-skt-dm-apply-proposal-applies-change-status ()
   "Proposal with `:status' `change' calls the analysis-file writer
 (NOT a source writer).  Phase 7 architecture: source is never
