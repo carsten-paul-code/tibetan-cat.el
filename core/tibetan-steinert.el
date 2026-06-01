@@ -96,6 +96,11 @@ Returns nil (and warns once) if the DB is unavailable."
     (ignore-errors (sqlite-close tibetan-steinert--db))
     (setq tibetan-steinert--db nil)))
 
+;; The cached handle lives for the whole session (opened lazily, never
+;; closed by the lookup path).  Register cleanup so the SQLite fd is
+;; released on a clean Emacs exit rather than leaked.
+(add-hook 'kill-emacs-hook #'tibetan-steinert-close)
+
 ;; ---------------------------------------------------------------------------
 ;; Key normalisation
 ;; ---------------------------------------------------------------------------

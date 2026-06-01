@@ -104,5 +104,10 @@ enrichment (even if the primary gloss source had no Sanskrit field)."
       (should skt)
       (should (string-match-p "buddha" skt)))))
 
+(ert-deftest tibetan-steinert-registers-cleanup-on-exit ()
+  "The cached SQLite handle is released on Emacs exit: loading the
+module registers `tibetan-steinert-close' on `kill-emacs-hook'."
+  (should (memq 'tibetan-steinert-close kill-emacs-hook)))
+
 (provide 'tibetan-steinert-test)
 ;;; tibetan-steinert-test.el ends here
