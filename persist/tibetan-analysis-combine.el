@@ -93,7 +93,7 @@ into the new shape and others still carry the old shape."
                      (insert-file-contents filepath)
                      (goto-char (point-min))
                      (when (re-search-forward
-                            "^\\* \\(Tibetan Analysis\\|Auto-Analysis\\)" nil t)
+                            "^\\* \\(Tibetan Analysis\\|Auto-Analysis\\)[ \t]*$" nil t)
                        (let ((start (1+ (match-end 0)))
                              (end (or (save-excursion
                                         (when (re-search-forward
