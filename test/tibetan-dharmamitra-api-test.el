@@ -39,6 +39,18 @@ stream and returns the full translation string."
          (out (tibetan-dharmamitra-api--parse-sse-stream stream)))
     (should (string= out "In this context, a Bodhisattva gives generously."))))
 
+(ert-deftest tibetan-dharmamitra-api-parse-sse-handles-no-space-after-colon ()
+  "Parser tolerates the `data:{…}' framing (no space after the colon),
+which some SSE servers / proxies emit.  Hard-coding `data: ' (one
+space) silently dropped the whole stream, surfacing as a misleading
+`no content' / rate-limit diagnostic."
+  (let ((stream (concat
+                 "data:{\"choices\":[{\"delta\":{\"content\":\"abc\"}}]}\n\n"
+                 "data:{\"choices\":[{\"delta\":{\"content\":\"def\"}}]}\n\n"
+                 "data:[DONE]\n")))
+    (should (string= (tibetan-dharmamitra-api--parse-sse-stream stream)
+                     "abcdef"))))
+
 (ert-deftest tibetan-dharmamitra-api-parse-sse-handles-done-marker ()
   "Parser stops gracefully at `data: [DONE]' and returns content
 gathered up to that point."

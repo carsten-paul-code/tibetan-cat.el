@@ -116,8 +116,12 @@ adds caching and HTTP I/O around it."
   (let ((result ""))
     (when (stringp stream)
       (dolist (line (split-string stream "\n" t))
-        (when (string-prefix-p "data: " line)
-          (let ((payload (substring line 6)))
+        (when (string-prefix-p "data:" line)
+          ;; Tolerate both `data: {…}' and `data:{…}' framings — the
+          ;; space after the colon is optional in SSE and some servers/
+          ;; proxies omit it.  Strip the leading whitespace (if any)
+          ;; from the payload.
+          (let ((payload (string-trim-left (substring line 5))))
             (unless (string= payload "[DONE]")
               (condition-case nil
                   (let* ((obj (json-parse-string payload
