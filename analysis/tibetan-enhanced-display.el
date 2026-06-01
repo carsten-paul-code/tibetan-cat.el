@@ -287,10 +287,17 @@ Returns nil if no zero markers found or if inputs are invalid."
                  (english (alist-get 'english data))
                  (syllables (split-string form "་" t))
                (last-syl (car (last syllables)))
-               (has-marker (or (string-match "\\(ས\\|གིས\\|ཀྱིས\\|གྱིས\\)$" last-syl)
-                               (string= last-syl "ན")
-                               (string= last-syl "ལ")
-                               (member last-syl '("ར" "སུ" "ཏུ" "དུ")))))
+               ;; A bare ས must NOT count as a case marker on its own —
+               ;; it is the root-final consonant of content words like
+               ;; སེམས / ལུས / དུས, which are zero-marked, not ergative.
+               ;; Prefer the shared standalone-aware case detector (same
+               ;; helper `tibetan-analyze-arguments' uses); fall back to
+               ;; the multi-char ergative forms + explicit case markers
+               ;; (NO bare ས) when the segmenter isn't loaded.
+               (has-marker (if (fboundp 'tibetan-clause-seg--case-of)
+                               (tibetan-clause-seg--case-of last-syl)
+                             (or (string-match-p "\\(གིས\\|ཀྱིས\\|གྱིས\\)$" last-syl)
+                                 (member last-syl '("ན" "ལ" "ར" "སུ" "ཏུ" "དུ"))))))
           (unless has-marker
             (unless (or (string-match-p "གཞན་ཡང\\|དེ་ནས\\|དེའི་ཕྱིར" form)
                         (string-match-p "པའི་ཚེ\\|པའི་དུས\\|པའི་ཕྱིར\\|པས་ན" form))

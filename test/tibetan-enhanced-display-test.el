@@ -39,6 +39,19 @@
       ;; Should be list or nil
       (should (or (listp result) (null result))))))
 
+(ert-deftest tibetan-analyze-zero-markers-content-word-in-s-not-excluded ()
+  "A content word ending in a root-final ས (e.g. སེམས \"mind\", ལུས
+\"body\") is zero-marked, not ergative-marked, so it must NOT be
+excluded from zero-marker analysis.  The `has-marker' check previously
+matched any syllable ending in ས, dropping these (under-detection)."
+  (skip-unless (fboundp 'tibetan-analyze-zero-markers))
+  (let* ((verbs '(((lemma . "བྱེད"))))
+         (multiword-units '((0 0 "སེམས" ((english . "mind")))))
+         (words '("སེམས" "བྱེད"))
+         (result (tibetan-analyze-zero-markers verbs multiword-units words))
+         (forms (mapcar (lambda (i) (alist-get 'form i)) result)))
+    (should (member "སེམས" forms))))
+
 ;; ============================================================================
 ;; GET CLAIMED INDICES TESTS
 ;; ============================================================================
