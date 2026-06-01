@@ -735,14 +735,7 @@ Uses simple pattern matching - much faster than full verb analysis."
        ;; Copulas and existentials at end
        (string-match-p "ཡིན།[ \t]*$\\|མིན།[ \t]*$\\|ཡོད།[ \t]*$\\|མེད།[ \t]*$\\|འདུག།[ \t]*$\\|རེད།[ \t]*$" seg)
        ;; Honorific verbs at end
-       (string-match-p "གསུངས།[ \t]*$\\|བཞུགས།[ \t]*$\\|མཛད།[ \t]*$\\|གཟིགས།[ \t]*$" seg)
-       ;; NOT a converb ending (converbs chain to next clause)
-       (and (not (string-match-p "ནས།[ \t]*$\\|ཏེ།[ \t]*$\\|སྟེ།[ \t]*$\\|དེ།[ \t]*$" seg))
-            (not (string-match-p "ཅིང།[ \t]*$\\|ཞིང།[ \t]*$\\|ཤིང།[ \t]*$" seg))
-            (not (string-match-p "པས།[ \t]*$\\|བས།[ \t]*$" seg))
-            ;; If none of the above, check if it just ends with shad (simple clause)
-            ;; Group every 3 simple clauses into a sentence as fallback
-            nil)))))
+       (string-match-p "གསུངས།[ \t]*$\\|བཞུགས།[ \t]*$\\|མཛད།[ \t]*$\\|གཟིགས།[ \t]*$" seg)))))
 
 (defun tibetan--segment-has-main-verb-p (segment)
   "Check if SEGMENT likely contains a main verb (sentence-final).

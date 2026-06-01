@@ -544,11 +544,10 @@ Returns list of (particle word type function translation-guide bialek-ref)."
        ;; Note: ན as single-char particle only matches STANDALONE.
        ;; When "attached" (e.g., གཞན ending in ན), it's the final consonant.
        ;; Standalone ན after a verb stem marks conditional.
-       ((and (string= "ན" word)
-             ;; These are handled by their own rules above
-             (not (string-suffix-p "ནས" word))
-             (not (string-suffix-p "ནི" word))
-             (not (string-suffix-p "ནའང" word)))
+       ;; WORD is exactly "ན" here, so it cannot also end in ནས/ནི/ནའང —
+       ;; those longer forms are handled by their own rules above and
+       ;; need no guard at this branch.
+       ((string= "ན" word)
         (push (list "ན" word "CONVERBIAL: CONDITIONAL CONVERB"
                      "Conditional converb: standalone ན after verb stem"
                      "Translation: 'if [previous]' or 'when [previous]'"
