@@ -1541,13 +1541,18 @@ Returns the full text as a string, or nil if extraction fails."
                           (let ((result (string-trim (buffer-string))))
                             (unless (string-empty-p result) result)))))
                   (error nil))
-                ;; Method 2: python3 + pymupdf
+                ;; Method 2: python3 + pymupdf.  Pass the PDF path as
+                ;; sys.argv[1] rather than interpolating it into the
+                ;; script literal — a path containing a quote, backslash
+                ;; or newline would otherwise break out of the Python
+                ;; string (the old `replace-regexp-in-string "'" …' only
+                ;; escaped single quotes).
                 (condition-case nil
-                    (let ((script (format "
+                    (let ((script "
 import sys
 try:
     import fitz
-    doc = fitz.open('%s')
+    doc = fitz.open(sys.argv[1])
     text = []
     for page in doc:
         text.append(page.get_text())
@@ -1556,9 +1561,10 @@ try:
 except Exception as e:
     print('ERROR: ' + str(e), file=sys.stderr)
     sys.exit(1)
-" (replace-regexp-in-string "'" "\\\\'" pdf-path))))
+"))
                       (with-temp-buffer
-                        (when (= 0 (call-process "python3" nil t nil "-c" script))
+                        (when (= 0 (call-process "python3" nil t nil
+                                                 "-c" script pdf-path))
                           (let ((result (string-trim (buffer-string))))
                             (unless (string-empty-p result) result)))))
                   (error nil)))))
