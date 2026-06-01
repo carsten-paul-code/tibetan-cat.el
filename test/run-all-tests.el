@@ -31,6 +31,27 @@
 (require 'ert)
 (require 'org)
 
+;; Hermetic test run — no live network.  Several file-creating tests
+;; reach analysis create/open paths that auto-fire a DharmaMitra
+;; translation, and the mitra check-status test probes a local Ollama
+;; server; both issued real HTTP requests during `make test-quick'
+;; (violating "tests run without side effects" — the mitra test even
+;; claims "no network call" in its docstring).  Override the synchronous
+;; fetch with a stub that returns a minimal empty-body HTTP buffer, so
+;; every code path that reaches the network is fed a benign response.
+;; This sits BELOW --http-post / --url-retrieve, so those real functions
+;; (and their gnutls-verify-error bindings) still run; the TLS-
+;; enforcement specs override url-retrieve-synchronously via cl-letf,
+;; which shadows this advice cleanly.  The tibetan-auto-fire-*-on-create
+;; defcustom DEFAULTS are deliberately left at t (dedicated tests assert
+;; that), since gating here is at the transport layer instead.
+(advice-add 'url-retrieve-synchronously :override
+            (lambda (&rest _)
+              (let ((buf (generate-new-buffer " *tibetan-test-no-network*")))
+                (with-current-buffer buf (insert "HTTP/1.1 200 OK\n\n"))
+                buf))
+            '((name . tibetan-test-no-network)))
+
 ;; Load all test files
 (require 'tibetan-utils-test)
 (require 'tibetan-verb-classifier-test)
