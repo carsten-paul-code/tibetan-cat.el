@@ -133,6 +133,12 @@ Returns a list of clause alists — see commentary of this file.
 Each verb becomes exactly one clause.  The clause's span runs from the
 position after the previous clause's end up to and including the verb
 position (plus any trailing converb particle or final particle)."
+  ;; Defensive: VERBS must be a list of verb ALISTS.  This is a public
+  ;; entry point; a bare word-string slipping in (the §5.9 / P5 crash
+  ;; class) would make the many downstream `alist-get' calls raise
+  ;; `wrong-type-argument listp'.  Drop any non-alist element once, up
+  ;; front, so every later pass sees only well-formed verb alists.
+  (setq verbs (cl-remove-if-not (lambda (v) (consp (car-safe v))) verbs))
   (let* ((n (length words))
          ;; Only verbs we can locate in the word list: require numeric pos.
          ;; Also drop modal / reporter auxiliaries — those don't form

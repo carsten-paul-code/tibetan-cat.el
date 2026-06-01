@@ -457,5 +457,21 @@ that pattern so these MWUs are correctly classified as verbal."
                '(0 2 "FAKE་NOUN"
                    ((english . "instructor; teacher [Hopkins2015]"))))))
 
+(ert-deftest tibetan-round2-segment-tolerates-malformed-verbs ()
+  "`tibetan-clause-segment' is a public entry point; a malformed VERBS
+element (a bare word-string instead of a verb alist) must not crash
+with `wrong-type-argument listp' (the §5.9 / P5 crash class).  Such
+elements are ignored; valid verb alists are still processed."
+  (let ((words '("བདག" "གིས" "ལས" "བྱས")))
+    ;; All-malformed → no crash, no clauses from the junk.
+    (should (listp (tibetan-clause-segment words '("གྱུར" "junk") nil)))
+    ;; Mixed: the one valid verb alist is still segmented.
+    (let ((clauses (tibetan-clause-segment
+                    words
+                    (list "stray-string"
+                          (tibetan-round2-test--verb "བྱས" 3))
+                    nil)))
+      (should (= (length clauses) 1)))))
+
 (provide 'tibetan-round2-clause-segmenter-test)
 ;;; tibetan-round2-clause-segmenter-test.el ends here
