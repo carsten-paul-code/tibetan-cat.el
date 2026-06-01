@@ -237,7 +237,7 @@ tibetan-cat.el/
 ├── test/         ERT test suite, run-all-tests.el is the entry point
 ├── data/         dictionaries/steinert.db (SQLite, built via make)
 ├── Resources/    per-document vocabulary lists (user-curated)
-├── Makefile      `make test` runs the full batch suite
+├── Makefile      `make test` = ERT (test-quick) + BDD (test-bdd)
 └── tibetan-cat.el  top-level loader
 ```
 
@@ -252,17 +252,28 @@ Key invariants:
 
 ## 4. Running the tests
 
-```sh
-cd test
-emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
-```
+The project has TWO suites:
 
-Or: `make test` from the project root.
+- **ERT** — the unit / regression tests in `test/`.  This is the
+  primary gate.
+  ```sh
+  cd test
+  emacs -batch -l run-all-tests.el -f ert-run-tests-batch-and-exit 2>&1 | tail -25
+  ```
+  Or `make test-quick` from the project root.
+- **BDD** — the behaviour specs in `spec/`.  `make test-bdd`, or
+  `./run-specs.sh`.
 
-Current state (2026-05-26, post-§5.26):  **1972 tests, 1971
-expected, 0 unexpected failures, 1 intentional skip
-(compound-analysis-callable).**  Carsten runs this after every
-change and expects it to stay green.
+`make test` runs **both** (`test-quick` then `test-bdd`) and stops on
+the first failure — this is the full batch suite.  (Before 2026-06-01
+`make test` ran only the BDD specs and its `-f tibetan-bdd-run-all-specs`
+flag named a non-existent function that never executed; the spec suite
+also made a live dharmamitra.org request on every run.  Both fixed.)
+
+Current state (2026-06-01):  **ERT 2107 tests, 2106 expected, 0
+unexpected, 1 intentional skip (compound-analysis-callable); BDD
+244 / 244.**  Carsten runs `make test` after every change and expects
+it to stay green.
 
 When adding a test, always wire it into `test/run-all-tests.el` via
 `condition-case`. Otherwise the suite silently doesn't pick it up and

@@ -6,7 +6,7 @@ PACKAGE_NAME = tibetan-cat
 VERSION = 2.1.0
 INSTALL_DIR = ~/.emacs.d/tibetan-cat
 
-.PHONY: all install uninstall test clean compile help docs docs-bdd docs-ert docs-funcs build-steinert
+.PHONY: all install uninstall test test-quick test-bdd clean compile help docs docs-bdd docs-ert docs-funcs build-steinert
 
 all: help
 
@@ -58,8 +58,20 @@ uninstall:
 	@rm -rf $(INSTALL_DIR)
 	@echo "Uninstalled. Don't forget to remove the lines from your init.el"
 
-test:
-	@echo "Running tibetan-cat.el tests..."
+# Full batch suite: ERT unit/regression tests AND the BDD spec suite.
+# Each sub-target exits with its own status code (ert-run-tests-batch-
+# and-exit / run-specs.el's kill-emacs), so `make' stops on the first
+# failure.
+test: test-quick test-bdd
+	@echo "All tests passed (ERT + BDD)."
+
+# BDD spec suite.  spec/run-specs.el self-runs under `noninteractive'
+# (it requires every suite, runs tibetan-bdd-run-all, and kill-emacs's
+# with the report exit code), so no `-f' entry point is needed — the
+# previous `-f tibetan-bdd-run-all-specs' named a function that does not
+# exist and never executed (Emacs had already exited via the auto-run).
+test-bdd:
+	@echo "Running BDD specs..."
 	$(EMACS) --batch \
 		-L . \
 		-L core \
@@ -72,10 +84,10 @@ test:
 		-L doc-prep \
 		-L setup \
 		-L spec \
+		-L spec/suites \
 		-L test \
 		-l tibetan-cat.el \
-		-l spec/run-specs.el \
-		-f tibetan-bdd-run-all-specs
+		-l spec/run-specs.el
 
 test-quick:
 	@echo "Running quick tests..."
