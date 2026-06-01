@@ -545,26 +545,38 @@ suggestions not yet incorporated."
   (interactive)
   (setq tibetan-document-prep-wizard--state nil)
   (let* ((route (tibetan-document-prep-wizard--read-route))
-         ;; §5.27 Phase 8c (2026-05-27):  class mode is asked
-         ;; EARLY — before source acquisition — so the Wylie route's
-         ;; shad normaliser knows whether to map `| |' → `//'
-         ;; (grammar:  one segment per sentence) or `/ /' (reading:
-         ;; one segment per paragraph).  Without this up-front
-         ;; choice the converter defaults to grammar-grain
-         ;; segmentation which is wrong for reading classes.
+         ;; §5.27 Phase 8c (2026-05-27):  the WYLIE route asks class
+         ;; mode EARLY — before source acquisition — so its shad
+         ;; normaliser knows whether to map `| |' → `//' (grammar: one
+         ;; segment per sentence) or `/ /' (reading: one segment per
+         ;; paragraph).  Non-Wylie routes (existing / unicode) operate
+         ;; on a file that already exists and may carry
+         ;; `#+TIBETAN_CLASS_MODE:', so their prompt is DEFERRED until
+         ;; the source is known and seeded from that header (below) —
+         ;; re-running the wizard on a grammar-mode file no longer
+         ;; silently flips it to the `reading' default.
          (class-mode
-          (tibetan-document-prep-wizard--read-class-mode-fresh))
+          (when (eq route 'wylie)
+            (tibetan-document-prep-wizard--read-class-mode-fresh)))
          (source-file
           (tibetan-document-prep-wizard--collect-source-file
            route class-mode))
-         (state (list :input-route route
-                      :source-file source-file
-                      :class-mode class-mode)))
+         (state nil))
     (unless (and source-file (file-exists-p source-file))
       (user-error "Wizard:  no source file acquired — aborting"))
-    ;; Now that source-file is final, write the class-mode header.
-    (tibetan-document-prep-wizard--write-header
-     source-file "TIBETAN_CLASS_MODE" (symbol-name class-mode))
+    ;; Finalise class mode + write the `#+TIBETAN_CLASS_MODE:' header.
+    (if class-mode
+        ;; Wylie/early path:  --read-class-mode-fresh did not write the
+        ;; header (no source yet), so write it now.
+        (tibetan-document-prep-wizard--write-header
+         source-file "TIBETAN_CLASS_MODE" (symbol-name class-mode))
+      ;; Non-Wylie:  header-seeded prompt; --read-class-mode writes the
+      ;; header itself.
+      (setq class-mode
+            (tibetan-document-prep-wizard--read-class-mode source-file)))
+    (setq state (list :input-route route
+                      :source-file source-file
+                      :class-mode class-mode))
     ;; Step 3 — target language.
     (setq state (plist-put state :target-lang
                            (tibetan-document-prep-wizard--read-target-lang

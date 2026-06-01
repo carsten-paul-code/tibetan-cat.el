@@ -188,6 +188,28 @@ even though the default is `reading'."
     (should (eq 'grammar
                 (tibetan-document-prep-wizard--read-class-mode-fresh)))))
 
+(ert-deftest tibetan-document-prep-wizard-class-mode-seeds-from-existing-header ()
+  "On resume, the header-aware class-mode reader offers the file's
+existing `#+TIBETAN_CLASS_MODE:' value as the completing-read default —
+so re-running the wizard on an existing grammar-mode (non-Wylie) source
+does not silently flip it to the `reading' default.  This is the reader
+the wizard's non-Wylie path uses (the Wylie path keeps the early
+fresh-prompt that has no file to read yet)."
+  (let ((dir (make-temp-file "wiz-cls-seed-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "source.org" dir))
+              captured-default)
+          (with-temp-file src
+            (insert "#+TITLE: T\n#+TIBETAN_CLASS_MODE: grammar\n"))
+          (cl-letf (((symbol-function 'completing-read)
+                     (lambda (_p _coll _pred _req _init _hist default)
+                       (setq captured-default default)
+                       default)))
+            (let ((ret (tibetan-document-prep-wizard--read-class-mode src)))
+              (should (eq 'grammar ret))
+              (should (string-match-p "grammar" captured-default)))))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-document-prep-wizard-class-mode-writes-grammar ()
   "Class-mode step picks `grammar' → `#+TIBETAN_CLASS_MODE: grammar'
 is written, symbol returned."
