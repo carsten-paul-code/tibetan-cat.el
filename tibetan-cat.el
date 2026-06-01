@@ -403,13 +403,17 @@ routes opens via emacsclient -s <server> so the zettel appears in the
 research instance instead of the CAT instance.  Configure the research
 instance to start the server with the matching name:
 
-  (require 'server)
+  (require \='server)
   (setq server-name \"research-emacs\")
   (unless (server-running-p) (server-start))
 
 Empty string disables remote routing entirely."
   :type 'string
   :group 'tibetan-cat)
+
+;; Owned by server.el (required at runtime below); declare it special so
+;; the byte-compiler doesn't flag it as a free variable.
+(defvar server-socket-dir)
 
 (defun tibetan-cat--server-socket-path (server-name)
   "Return the socket path for SERVER-NAME if it exists, else nil.
