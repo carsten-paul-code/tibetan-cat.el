@@ -182,6 +182,48 @@ the Provided-Translations placement used by sentence-level sent-*.org."
           (should (tibetan-auto--claude-needs-request-p tmp)))
       (when (file-exists-p tmp) (delete-file tmp)))))
 
+(ert-deftest tibetan-auto-claude-needs-request-matches-current-translation-heading ()
+  "Matches the CURRENT segment heading `** Translation' (no `Claude'
+qualifier).
+
+Since the §5.18 layout revision (2026-05-04) the Tibetan Claude
+translation heading is `** Translation', not `** Claude Translation'.
+The detector's `^\\*+ Claude\\(?: Translation\\)?$' regex could not
+match it, so an empty current-layout file (body `[Requesting
+translation...]' or the §5.21 `[Awaiting Claude…]' placeholder) was
+treated as already-translated and never re-fired by the open path
+\(C-c u A) or by tibetan-auto-request-claude-translations (C-c u F)."
+  (skip-unless (fboundp 'tibetan-auto--claude-needs-request-p))
+  (let ((tmp (make-temp-file "claude-needs-" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp
+            (insert "* Tibetan Text\nསངས་རྒྱས།\n\n"
+                    "* Tibetan Analysis\n"
+                    "** Wylie Transliteration\nsangs rgyas\n\n"
+                    "** Translation\n"
+                    "[Awaiting Claude…]\n\n"
+                    "** Grammar\n\n"))
+          (should (tibetan-auto--claude-needs-request-p tmp)))
+      (when (file-exists-p tmp) (delete-file tmp)))))
+
+(ert-deftest tibetan-auto-claude-needs-request-nil-when-current-heading-filled ()
+  "Returns nil when the current `** Translation' heading holds a real
+\(non-placeholder) body — so a populated current-layout file is not
+needlessly re-fired."
+  (skip-unless (fboundp 'tibetan-auto--claude-needs-request-p))
+  (let ((tmp (make-temp-file "claude-needs-" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp
+            (insert "* Tibetan Text\nསངས་རྒྱས།\n\n"
+                    "* Tibetan Analysis\n"
+                    "** Translation\n"
+                    "I pay homage to the Buddha.\n\n"
+                    "** Grammar\nSome grammar notes.\n\n"))
+          (should-not (tibetan-auto--claude-needs-request-p tmp)))
+      (when (file-exists-p tmp) (delete-file tmp)))))
+
 (ert-deftest tibetan-auto-claude-needs-request-nil-when-filled ()
   "Returns nil when the Translation block holds a real (non-placeholder)
 translation body."

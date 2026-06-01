@@ -602,21 +602,24 @@ of analysis file FILEPATH.  Returns a trimmed string, or nil."
   "Non-nil if FILEPATH's Claude translation block is still a placeholder.
 
 Matches the Claude Translation heading at any supported depth and form:
+  * `^\\*+ Translation$'         (current — the §5.18 layout, 2026-05-04,
+                                  dropped the `Claude' qualifier on the
+                                  Tibetan-side translation heading)
+  * `^\\*+ Claude Translation$'  (pre-§5.18 structured layout)
   * `^\\*+ Claude$'              (legacy — singular Claude block)
-  * `^\\*+ Claude Translation$'  (current — structured three-part layout
-                                  where Translation lives separately from
-                                  Grammar/Vocabulary)
 
 A translation is considered missing when the body under the first such
 heading is blank, or begins with one of the standard placeholders:
-`[Requesting translation...]', `[Claude unavailable...]',
-`[Not available...]', or the `[Claude request failed...]' fail-stub."
+`[Requesting translation...]', `[Awaiting Claude…]' (§5.21 scaffold),
+`[Claude unavailable...]', `[Not available...]', or the `[Claude
+request failed...]' fail-stub."
   (when (and filepath (file-exists-p filepath))
     (with-temp-buffer
       (insert-file-contents filepath)
       (goto-char (point-min))
       (when (re-search-forward
-             "^\\*+ Claude\\(?: Translation\\)?[ \t]*$" nil t)
+             "^\\*+ \\(?:Claude\\(?: Translation\\)?\\|Translation\\)[ \t]*$"
+             nil t)
         (forward-line 1)
         (let* ((start (point))
                (end (if (re-search-forward "^\\*+ " nil t)
@@ -625,6 +628,7 @@ heading is blank, or begins with one of the standard placeholders:
                (body (string-trim (buffer-substring-no-properties start end))))
           (or (string-empty-p body)
               (string-match-p "\\`\\[Requesting translation" body)
+              (string-match-p "\\`\\[Awaiting" body)
               (string-match-p "\\`\\[Claude unavailable" body)
               (string-match-p "\\`\\[Not available" body)
               (string-match-p "\\`\\[Claude request failed" body)))))))
