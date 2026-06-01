@@ -1,9 +1,9 @@
-#+TITLE: tibetan-cat.el Function Reference
+#+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-05-24T17:23:43
+#+DATE: 2026-06-01T16:04:16
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  64 modules  ·  1128 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  68 modules  ·  1212 forms
 
 Regenerated automatically by:
 
@@ -20,8 +20,8 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#analysis/tibetan-enhanced-display.el][analysis/tibetan-enhanced-display.el]]  (16)
   - [[#analysis/tibetan-enhanced-parser.el][analysis/tibetan-enhanced-parser.el]]  (15)
   - [[#analysis/tibetan-interlinear.el][analysis/tibetan-interlinear.el]]  (21)
-  - [[#analysis/tibetan-mitra-translation.el][analysis/tibetan-mitra-translation.el]]  (23)
-  - [[#analysis/tibetan-particles-bialek.el][analysis/tibetan-particles-bialek.el]]  (7)
+  - [[#analysis/tibetan-mitra-translation.el][analysis/tibetan-mitra-translation.el]]  (24)
+  - [[#analysis/tibetan-particles-bialek.el][analysis/tibetan-particles-bialek.el]]  (8)
   - [[#analysis/tibetan-particles.el][analysis/tibetan-particles.el]]  (2)
   - [[#analysis/tibetan-translation-engine.el][analysis/tibetan-translation-engine.el]]  (10)
   - [[#analysis/tibetan-translation-suggest.el][analysis/tibetan-translation-suggest.el]]  (2)
@@ -29,38 +29,42 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#config/tibetan-keybindings.el][config/tibetan-keybindings.el]]  (3)
   - [[#config/tibetan-menu.el][config/tibetan-menu.el]]  (1)
   - [[#core/tibetan-dharmamitra-api.el][core/tibetan-dharmamitra-api.el]]  (13)
-  - [[#core/tibetan-dharmamitra-translation.el][core/tibetan-dharmamitra-translation.el]]  (10)
+  - [[#core/tibetan-dharmamitra-translation.el][core/tibetan-dharmamitra-translation.el]]  (11)
   - [[#core/tibetan-org-structure.el][core/tibetan-org-structure.el]]  (37)
   - [[#core/tibetan-phonetics.el][core/tibetan-phonetics.el]]  (17)
-  - [[#core/tibetan-sanskrit-parallel-dharmamitra.el][core/tibetan-sanskrit-parallel-dharmamitra.el]]  (20)
+  - [[#core/tibetan-sanskrit-parallel-dharmamitra.el][core/tibetan-sanskrit-parallel-dharmamitra.el]]  (22)
   - [[#core/tibetan-sanskrit-parallel.el][core/tibetan-sanskrit-parallel.el]]  (24)
   - [[#core/tibetan-steinert.el][core/tibetan-steinert.el]]  (14)
   - [[#core/tibetan-text-classifier.el][core/tibetan-text-classifier.el]]  (9)
   - [[#core/tibetan-thesaurus.el][core/tibetan-thesaurus.el]]  (34)
   - [[#core/tibetan-utils.el][core/tibetan-utils.el]]  (13)
   - [[#core/tibetan-vocabulary-detailed.el][core/tibetan-vocabulary-detailed.el]]  (38)
-  - [[#core/tibetan-vocabulary.el][core/tibetan-vocabulary.el]]  (50)
+  - [[#core/tibetan-vocabulary.el][core/tibetan-vocabulary.el]]  (47)
   - [[#core/tibetan-wylie.el][core/tibetan-wylie.el]]  (4)
   - [[#core/tibetan-zettel.el][core/tibetan-zettel.el]]  (51)
   - [[#data/tibetan-glossary-loader.el][data/tibetan-glossary-loader.el]]  (14)
   - [[#doc-prep/tibetan-doc-display.el][doc-prep/tibetan-doc-display.el]]  (13)
   - [[#doc-prep/tibetan-doc-format.el][doc-prep/tibetan-doc-format.el]]  (18)
   - [[#doc-prep/tibetan-doc-prep-init.el][doc-prep/tibetan-doc-prep-init.el]]  (3)
-  - [[#doc-prep/tibetan-doc-prep.el][doc-prep/tibetan-doc-prep.el]]  (31)
+  - [[#doc-prep/tibetan-doc-prep.el][doc-prep/tibetan-doc-prep.el]]  (34)
+  - [[#doc-prep/tibetan-document-genres.el][doc-prep/tibetan-document-genres.el]]  (9)
+  - [[#doc-prep/tibetan-document-prep-claude.el][doc-prep/tibetan-document-prep-claude.el]]  (13)
+  - [[#doc-prep/tibetan-document-prep-wizard.el][doc-prep/tibetan-document-prep-wizard.el]]  (22)
   - [[#doc-prep/tibetan-ocr-correct.el][doc-prep/tibetan-ocr-correct.el]]  (14)
   - [[#doc-prep/tibetan-ocr-runner.el][doc-prep/tibetan-ocr-runner.el]]  (17)
   - [[#doc-prep/tibetan-ocr-validate.el][doc-prep/tibetan-ocr-validate.el]]  (23)
   - [[#doc-prep/tibetan-segment-migrate.el][doc-prep/tibetan-segment-migrate.el]]  (12)
   - [[#doc-prep/tibetan-sentence-structure.el][doc-prep/tibetan-sentence-structure.el]]  (18)
-  - [[#persist/tibetan-analysis-claude.el][persist/tibetan-analysis-claude.el]]  (57)
+  - [[#doc-prep/tibetan-wylie-ingest.el][doc-prep/tibetan-wylie-ingest.el]]  (26)
+  - [[#persist/tibetan-analysis-claude.el][persist/tibetan-analysis-claude.el]]  (61)
   - [[#persist/tibetan-analysis-combine.el][persist/tibetan-analysis-combine.el]]  (14)
   - [[#persist/tibetan-analysis-combined.el][persist/tibetan-analysis-combined.el]]  (15)
-  - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (96)
+  - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (95)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (28)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
-  - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (54)
+  - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (59)
   - [[#persist/tibetan-structure-reorg.el][persist/tibetan-structure-reorg.el]]  (15)
   - [[#philology/tibetan-bialek-textbook-refs.el][philology/tibetan-bialek-textbook-refs.el]]  (2)
   - [[#philology/tibetan-madhyamaka-terms.el][philology/tibetan-madhyamaka-terms.el]]  (5)
@@ -75,7 +79,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#spec/suites/particle-analysis-spec.el][spec/suites/particle-analysis-spec.el]]  (1)
   - [[#spec/suites/tigress-story-spec.el][spec/suites/tigress-story-spec.el]]  (5)
   - [[#spec/tibetan-bdd.el][spec/tibetan-bdd.el]]  (22)
-  - [[#tibetan-cat.el][tibetan-cat.el]]  (7)
+  - [[#tibetan-cat.el][tibetan-cat.el]]  (8)
   - [[#workspace/tibetan-sentence-workspace.el][workspace/tibetan-sentence-workspace.el]]  (16)
 
 * INIT-EXAMPLE.el
@@ -430,7 +434,7 @@ position (plus any trailing converb particle or final particle).
 ** ~tibetan-clause-seg--multichar-suffix-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 264
+:LINE: 270
 :SIGNATURE: (tibetan-clause-seg--multichar-suffix-p pair)
 :END:
 
@@ -447,7 +451,7 @@ same rule at `analysis/tibetan-particles-bialek.el' (§terminative).
 ** ~tibetan-clause-seg--classify-word~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 276
+:LINE: 282
 :SIGNATURE: (tibetan-clause-seg--classify-word w)
 :END:
 
@@ -461,7 +465,7 @@ case particles match only as standalone — see
 ** ~tibetan-clause-seg--case-of~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 298
+:LINE: 304
 :SIGNATURE: (tibetan-clause-seg--case-of w)
 :END:
 
@@ -472,7 +476,7 @@ suffix (see `tibetan-clause-seg--multichar-suffix-p').
 ** ~tibetan-clause-seg--case-particle~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 314
+:LINE: 320
 :SIGNATURE: (tibetan-clause-seg--case-particle w)
 :END:
 
@@ -488,7 +492,7 @@ addition to the case symbol — e.g. legacy renderers that print
 ** ~tibetan-clause-seg--case-strip~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 337
+:LINE: 343
 :SIGNATURE: (tibetan-clause-seg--case-strip w)
 :END:
 
@@ -501,7 +505,7 @@ consonants.
 ** ~tibetan-clause-seg--verb-position-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 359
+:LINE: 365
 :SIGNATURE: (tibetan-clause-seg--verb-position-p pos verbs)
 :END:
 
@@ -510,7 +514,7 @@ consonants.
 ** ~tibetan-clause-seg--mwu-verbal-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 362
+:LINE: 368
 :SIGNATURE: (tibetan-clause-seg--mwu-verbal-p mwu-entry)
 :END:
 
@@ -531,7 +535,7 @@ directional / terminative glosses like `to Ko ron sa' or
 ** ~tibetan-clause-seg--mwu-span-at~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 393
+:LINE: 399
 :SIGNATURE: (tibetan-clause-seg--mwu-span-at pos mwu)
 :END:
 
@@ -541,7 +545,7 @@ MWU entries are (start end form meta).
 ** ~tibetan-np-chunk~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 399
+:LINE: 405
 :SIGNATURE: (tibetan-np-chunk words &optional clauses mwu)
 :END:
 
@@ -552,7 +556,7 @@ MWU spans are treated as atomic heads.  Returns a list of NP alists
 ** ~tibetan-clause-seg--lookup-case-frame~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 627
+:LINE: 633
 :SIGNATURE: (tibetan-clause-seg--lookup-case-frame lemma)
 :END:
 
@@ -561,7 +565,7 @@ Return the `case_frame' string for LEMMA via the verb classifier, or nil.
 ** ~tibetan-clause-seg--role-for-case~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 633
+:LINE: 639
 :SIGNATURE: (tibetan-clause-seg--role-for-case frame case-sym)
 :END:
 
@@ -570,7 +574,7 @@ Resolve CASE-SYM to a role given FRAME string.
 ** ~tibetan-build-argument-structure~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 650
+:LINE: 656
 :SIGNATURE: (tibetan-build-argument-structure clauses nps)
 :END:
 
@@ -583,7 +587,7 @@ commentary).
 ** ~tibetan-analyze-round2~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 681
+:LINE: 687
 :SIGNATURE: (tibetan-analyze-round2 words verbs &optional mwu)
 :END:
 
@@ -647,7 +651,7 @@ Run Round-2 end-to-end.  Returns an alist:
 ** ~tibetan-clause-seg--case-frame-role-map~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 618
+:LINE: 624
 :DEFAULT: '
 :END:
 
@@ -756,7 +760,7 @@ Returns nil if no zero markers found or if inputs are invalid.
 ** ~tibetan-analyze-arguments~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 361
+:LINE: 368
 :SIGNATURE: (tibetan-analyze-arguments verb multiword-units words &optional all-verbs)
 :END:
 
@@ -771,7 +775,7 @@ to the legacy behaviour of collecting every unit before VERB.
 ** ~tibetan-segment-info-enhanced~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 526
+:LINE: 533
 :SIGNATURE: (tibetan-segment-info-enhanced &optional silent)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -784,7 +788,7 @@ If SILENT is non-nil, return nil instead of error when not in segment.
 ** ~tibetan-build-compound-aware-segments~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1018
+:LINE: 1020
 :SIGNATURE: (tibetan-build-compound-aware-segments words multiword-units)
 :END:
 
@@ -795,7 +799,7 @@ Returns list of strings for display.
 ** ~tibetan-get-claimed-indices~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1049
+:LINE: 1051
 :SIGNATURE: (tibetan-get-claimed-indices multiword-units)
 :END:
 
@@ -805,7 +809,7 @@ Returns hash table for fast lookup.
 ** ~tibetan-extract-verbs-compound-aware~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1058
+:LINE: 1060
 :SIGNATURE: (tibetan-extract-verbs-compound-aware tibetan-text words multiword-units)
 :END:
 
@@ -1478,7 +1482,7 @@ Modification time of the Portfolio file when cache was built.
 ** ~tibetan-mitra-clear-cache~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 85
+:LINE: 92
 :SIGNATURE: (tibetan-mitra-clear-cache)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -1486,10 +1490,27 @@ Modification time of the Portfolio file when cache was built.
 
 Clear the translation cache.
 
+** ~tibetan-mitra--url-retrieve~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 102
+:SIGNATURE: (tibetan-mitra--url-retrieve url &optional timeout)
+:END:
+
+Like `url-retrieve-synchronously' for URL, with TLS certificate
+verification ENFORCED.
+
+Emacs' default `gnutls-verify-error' is nil, so a forged/MITM cert
+would NOT abort an https connection — the HuggingFace `Authorization:
+Bearer' token would be sent and the response trusted over an unverified
+channel.  Binding it to t makes a cert failure signal (callers already
+run inside condition-case).  Harmless for the localhost Ollama / local-
+server http endpoints.
+
 ** ~tibetan-mitra--ollama-translate~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 95
+:LINE: 120
 :SIGNATURE: (tibetan-mitra--ollama-translate tibetan-text)
 :END:
 
@@ -1498,7 +1519,7 @@ Translate TIBETAN-TEXT using Ollama backend.
 ** ~tibetan-mitra--ollama-available-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 120
+:LINE: 145
 :SIGNATURE: (tibetan-mitra--ollama-available-p)
 :END:
 
@@ -1507,7 +1528,7 @@ Check if Ollama is available and the model is loaded.
 ** ~tibetan-mitra--huggingface-translate~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 143
+:LINE: 168
 :SIGNATURE: (tibetan-mitra--huggingface-translate tibetan-text)
 :END:
 
@@ -1516,7 +1537,7 @@ Translate TIBETAN-TEXT using Hugging Face Inference API.
 ** ~tibetan-mitra--local-server-translate~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 178
+:LINE: 203
 :SIGNATURE: (tibetan-mitra--local-server-translate tibetan-text)
 :END:
 
@@ -1525,7 +1546,7 @@ Translate TIBETAN-TEXT using local Python server.
 ** ~tibetan-mitra-translate~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 200
+:LINE: 225
 :SIGNATURE: (tibetan-mitra-translate tibetan-text)
 :END:
 
@@ -1535,7 +1556,7 @@ Uses the backend specified in `tibetan-mitra-backend'.
 ** ~tibetan-mitra-translate-async~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 227
+:LINE: 252
 :SIGNATURE: (tibetan-mitra-translate-async tibetan-text callback)
 :END:
 
@@ -1544,7 +1565,7 @@ Translate TIBETAN-TEXT asynchronously, calling CALLBACK with result.
 ** ~tibetan-mitra-translate-region~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 246
+:LINE: 271
 :SIGNATURE: (tibetan-mitra-translate-region start end)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -1555,7 +1576,7 @@ Translate Tibetan text in region from START to END using Mitra.
 ** ~tibetan-mitra-translate-segment~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 259
+:LINE: 284
 :SIGNATURE: (tibetan-mitra-translate-segment)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -1566,7 +1587,7 @@ Translate current Tibetan segment using Mitra.
 ** ~tibetan-mitra-translate-dwim~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 275
+:LINE: 300
 :SIGNATURE: (tibetan-mitra-translate-dwim)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -1577,7 +1598,7 @@ Translate Tibetan text: region if active, else current segment.
 ** ~tibetan-mitra-setup-ollama~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 287
+:LINE: 312
 :SIGNATURE: (tibetan-mitra-setup-ollama)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -1588,7 +1609,7 @@ Display instructions for setting up Mitra in Ollama.
 ** ~tibetan-mitra-check-status~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 309
+:LINE: 334
 :SIGNATURE: (tibetan-mitra-check-status)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -1599,7 +1620,7 @@ Check status of Mitra translation backend.
 ** ~tibetan-mitra-format-for-display~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 338
+:LINE: 363
 :SIGNATURE: (tibetan-mitra-format-for-display translation)
 :END:
 
@@ -1608,7 +1629,7 @@ Format Mitra TRANSLATION for display in analysis buffer.
 ** ~tibetan-mitra-backend~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 31
+:LINE: 38
 :TYPE: '(choice (const
 :GROUP: tibetan-mitra
 :DEFAULT: 'ollama
@@ -1620,7 +1641,7 @@ Options: `ollama', `huggingface', `local-server'.
 ** ~tibetan-mitra-ollama-url~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 39
+:LINE: 46
 :TYPE: 'string
 :GROUP: tibetan-mitra
 :DEFAULT: "http://localhost:11434"
@@ -1631,7 +1652,7 @@ URL for Ollama API.
 ** ~tibetan-mitra-ollama-model~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 44
+:LINE: 51
 :TYPE: 'string
 :GROUP: tibetan-mitra
 :DEFAULT: "gemma2-mitra"
@@ -1643,7 +1664,7 @@ You need to create this model first - see `tibetan-mitra-setup-ollama'.
 ** ~tibetan-mitra-huggingface-model~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 50
+:LINE: 57
 :TYPE: 'string
 :GROUP: tibetan-mitra
 :DEFAULT: "billingsmoore/gemma-2-2b-mitra-e"
@@ -1654,7 +1675,7 @@ Hugging Face model identifier.
 ** ~tibetan-mitra-huggingface-token~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 55
+:LINE: 62
 :TYPE: '(choice (const
 :GROUP: tibetan-mitra
 :DEFAULT: nil
@@ -1666,7 +1687,7 @@ Get your token at: https://huggingface.co/settings/tokens
 ** ~tibetan-mitra-local-server-url~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 62
+:LINE: 69
 :TYPE: 'string
 :GROUP: tibetan-mitra
 :DEFAULT: "http://localhost:5000"
@@ -1677,7 +1698,7 @@ URL for local Python translation server.
 ** ~tibetan-mitra-timeout~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 67
+:LINE: 74
 :TYPE: 'integer
 :GROUP: tibetan-mitra
 :DEFAULT: 30
@@ -1688,7 +1709,7 @@ Timeout in seconds for translation requests.
 ** ~tibetan-mitra-cache-enabled~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 72
+:LINE: 79
 :TYPE: 'boolean
 :GROUP: tibetan-mitra
 :DEFAULT: t
@@ -1699,7 +1720,7 @@ Whether to cache translation results.
 ** ~tibetan-mitra--cache~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 81
+:LINE: 88
 :DEFAULT: (make-hash-table :test 'equal)
 :END:
 
@@ -1708,7 +1729,7 @@ Cache for Mitra translations.
 ** ~tibetan-mitra~  /customize group/
 :PROPERTIES:
 :KIND: defgroup
-:LINE: 26
+:LINE: 33
 :END:
 
 Gemma-2-Mitra-E translation integration.
@@ -1730,10 +1751,32 @@ Gemma-2-Mitra-E translation integration.
 Safely extract substring from STR between START and END.
 Returns empty string if indices are out of range or invalid.
 
+** ~tibetan-particles-bialek--ablative-suffix-splittable-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 66
+:SIGNATURE: (tibetan-particles-bialek--ablative-suffix-splittable-p word suffix)
+:END:
+
+Non-nil when WORD ending in ablative SUFFIX (`ནས' or `ལས') should be
+split into stem + ablative, rather than being a lexeme that merely ends
+in those letters.
+
+Rejects two false-positive cases:
+  - the stem after stripping SUFFIX is a single bare letter (e.g.
+    གནས → ག): genuine attached ablatives leave a multi-letter stem,
+    while real case/converb ablatives normally arrive STANDALONE (after
+    a tsheg, so the stem is empty) — both of which are allowed here;
+  - WORD is itself a known verb (Hill 2010 DB), mirroring the
+    པས/བས causal-converb guard.
+
+A standalone particle (WORD = SUFFIX, empty stem) is allowed — the
+caller's standalone path handles it.
+
 ** ~tibetan-analyze-cases-bialek~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 70
+:LINE: 90
 :SIGNATURE: (tibetan-analyze-cases-bialek tibetan-text)
 :END:
 
@@ -1743,7 +1786,7 @@ Returns list of (particle word case function translation-guide bialek-ref).
 ** ~tibetan-analyze-converbs-bialek~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 395
+:LINE: 419
 :SIGNATURE: (tibetan-analyze-converbs-bialek tibetan-text)
 :END:
 
@@ -1760,7 +1803,7 @@ Returns list of (particle word type function translation-guide bialek-ref).
 ** ~tibetan-tokenize-into-words~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 589
+:LINE: 614
 :SIGNATURE: (tibetan-tokenize-into-words tibetan-text)
 :END:
 
@@ -1775,7 +1818,7 @@ particles inside compound words (e.g., ལ in རྣལ་འབྱོར is NOT
 ** ~tibetan--syllable-internal-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 633
+:LINE: 658
 :SIGNATURE: (tibetan--syllable-internal-p syllable tokens)
 :END:
 
@@ -1787,7 +1830,7 @@ a standalone token.
 ** ~tibetan-analyze-grammar-bialek~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 657
+:LINE: 682
 :SIGNATURE: (tibetan-analyze-grammar-bialek tibetan-text)
 :END:
 
@@ -2019,7 +2062,7 @@ Returns verb entry alist if found, nil otherwise.
 ** ~tibetan-is-verb-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 755
+:LINE: 759
 :SIGNATURE: (tibetan-is-verb-p word)
 :END:
 
@@ -2044,7 +2087,7 @@ Hash table of Tibetan verbs with grammatical information.
 ** ~tibetan-increase-text-scale~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 421
+:LINE: 409
 :SIGNATURE: (tibetan-increase-text-scale)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -2055,7 +2098,7 @@ Increase Tibetan text scale by 0.1.
 ** ~tibetan-decrease-text-scale~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 427
+:LINE: 415
 :SIGNATURE: (tibetan-decrease-text-scale)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -2066,7 +2109,7 @@ Decrease Tibetan text scale by 0.1 (minimum 1.0).
 ** ~tibetan-thesaurus-prefix-map~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 244
+:LINE: 248
 :DEFAULT: (make-sparse-keymap)
 :END:
 
@@ -2082,7 +2125,7 @@ Keymap for thesaurus commands — prefix `C-c u z'.
 ** ~tibetan-cat-context-menu-map~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 238
+:LINE: 252
 :DEFAULT: (let ((map (make-sparse-keymap "Tibetan")))
     (define-key map [segment-info] '(menu-item "Segment Info" tibetan-segmen
 :END:
@@ -2099,7 +2142,7 @@ Context menu for Tibetan CAT operations.
 ** ~tibetan-dharmamitra-api--cache-key~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 84
+:LINE: 91
 :SIGNATURE: (tibetan-dharmamitra-api--cache-key endpoint body)
 :END:
 
@@ -2110,7 +2153,7 @@ semantically-equivalent requests together.
 ** ~tibetan-dharmamitra-api-clear-cache~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 91
+:LINE: 98
 :SIGNATURE: (tibetan-dharmamitra-api-clear-cache)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -2121,7 +2164,7 @@ Clear the DharmaMitra API in-memory cache.
 ** ~tibetan-dharmamitra-api--parse-sse-stream~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 102
+:LINE: 109
 :SIGNATURE: (tibetan-dharmamitra-api--parse-sse-stream stream)
 :END:
 
@@ -2142,7 +2185,7 @@ adds caching and HTTP I/O around it.
 ** ~tibetan-dharmamitra-api--build-chat-translate-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 139
+:LINE: 150
 :SIGNATURE: (tibetan-dharmamitra-api--build-chat-translate-body text &rest args)
 :END:
 
@@ -2157,7 +2200,7 @@ Returns a JSON-encoded string ready for the request body.
 ** ~tibetan-dharmamitra-api--build-search-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 159
+:LINE: 170
 :SIGNATURE: (tibetan-dharmamitra-api--build-search-body input &rest args)
 :END:
 
@@ -2179,7 +2222,7 @@ Returns a JSON-encoded string.
 ** ~tibetan-dharmamitra-api--http-post~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 195
+:LINE: 206
 :SIGNATURE: (tibetan-dharmamitra-api--http-post endpoint body)
 :END:
 
@@ -2195,7 +2238,7 @@ rest of the pipeline without touching the network.
 ** ~tibetan-dharmamitra-api-chat-translate~  /function (cl)/  ↗
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 231
+:LINE: 248
 :SIGNATURE: (tibetan-dharmamitra-api-chat-translate text &key (target-lang "english") (input-encoding "auto"))
 :AUTOLOAD: t
 :END:
@@ -2219,7 +2262,7 @@ without an HTTP call.  Use
 ** ~tibetan-dharmamitra-api-search~  /function (cl)/  ↗
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 296
+:LINE: 313
 :SIGNATURE: (tibetan-dharmamitra-api-search input &key (source-lang "auto") (target-lang "all")
            include-files (max-depth 50))
 :AUTOLOAD: t
@@ -2246,7 +2289,7 @@ Cached by request body hash; clear with
 ** ~tibetan-dharmamitra-api-base-url~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 51
+:LINE: 58
 :TYPE: 'string
 :GROUP: tibetan-dharmamitra-api
 :DEFAULT: "https://dharmamitra.org/api-search"
@@ -2259,7 +2302,7 @@ The relative paths `/chat-translate/v1/chat/completions' and
 ** ~tibetan-dharmamitra-api-token~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 59
+:LINE: 66
 :TYPE: 'string
 :GROUP: tibetan-dharmamitra-api
 :DEFAULT: "sthiramati"
@@ -2272,7 +2315,7 @@ issues a new one or you have a private deployment.
 ** ~tibetan-dharmamitra-api-timeout~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 66
+:LINE: 73
 :TYPE: 'integer
 :GROUP: tibetan-dharmamitra-api
 :DEFAULT: 30
@@ -2285,7 +2328,7 @@ takes 2-7 seconds.  The default 30 leaves headroom for slow links.
 ** ~tibetan-dharmamitra-api--cache~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 77
+:LINE: 84
 :DEFAULT: (make-hash-table :test 'equal)
 :END:
 
@@ -2297,7 +2340,7 @@ requests dedupe across the public API; cleared by
 ** ~tibetan-dharmamitra-api~  /customize group/
 :PROPERTIES:
 :KIND: defgroup
-:LINE: 46
+:LINE: 53
 :END:
 
 DharmaMitra HTTP client configuration.
@@ -2309,10 +2352,28 @@ DharmaMitra HTTP client configuration.
 :SOURCE_PATH: /Users/cp/tibetan-cat.el/core/tibetan-dharmamitra-translation.el
 :END:
 
-** ~tibetan-dharmamitra-translation--write-nested-tibetan-section~  /function/
+** ~tibetan-dharmamitra-translation--sanitize-body~  /function/
 :PROPERTIES:
 :KIND: defun
 :LINE: 33
+:SIGNATURE: (tibetan-dharmamitra-translation--sanitize-body text)
+:END:
+
+Neutralise org structural markers in untrusted TEXT before it is
+inserted into an analysis buffer.
+
+DharmaMitra responses are network/LLM text.  A body line beginning with
+`*' would otherwise become a top-level org heading mid-file — silently
+restructuring the document and confusing later regenerate passes that
+treat top-level headings as section boundaries.  Prefix any line-leading
+run of `*' with a space so the line renders as body text / a list item
+instead of a heading.  Returns TEXT unchanged when it carries no such
+line; nil-safe.
+
+** ~tibetan-dharmamitra-translation--write-nested-tibetan-section~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 52
 :SIGNATURE: (tibetan-dharmamitra-translation--write-nested-tibetan-section analysis-file translation)
 :END:
 
@@ -2336,7 +2397,7 @@ Returns t on success, nil otherwise.
 ** ~tibetan-dharmamitra-translation--delete-legacy-toplevel-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 103
+:LINE: 122
 :SIGNATURE: (tibetan-dharmamitra-translation--delete-legacy-toplevel-section buffer source-lang)
 :END:
 
@@ -2348,7 +2409,7 @@ reinserting the body at the new nested location.
 ** ~tibetan-dharmamitra-translation--insert-after-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 121
+:LINE: 140
 :SIGNATURE: (tibetan-dharmamitra-translation--insert-after-translation buffer translation)
 :END:
 
@@ -2370,7 +2431,7 @@ nil.
 ** ~tibetan-dharmamitra-translation--write-toplevel-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 166
+:LINE: 185
 :SIGNATURE: (tibetan-dharmamitra-translation--write-toplevel-section buffer-or-file translation source-lang)
 :END:
 
@@ -2387,7 +2448,7 @@ drawer carries `:LAST_TRANSLATED:' for freshness tracking.
 ** ~tibetan-dharmamitra-translation--write-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 205
+:LINE: 224
 :SIGNATURE: (tibetan-dharmamitra-translation--write-section analysis-file translation source-lang)
 :END:
 
@@ -2405,7 +2466,7 @@ Returns t on success, nil otherwise.
 ** ~tibetan-dharmamitra-translation-needs-request-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 244
+:LINE: 263
 :SIGNATURE: (tibetan-dharmamitra-translation-needs-request-p analysis-file &optional source-lang)
 :END:
 
@@ -2427,7 +2488,7 @@ refreshes.
 ** ~tibetan-dharmamitra-translation-needs-fire-on-open-p~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 292
+:LINE: 311
 :SIGNATURE: (tibetan-dharmamitra-translation-needs-fire-on-open-p analysis-file)
 :AUTOLOAD: t
 :END:
@@ -2453,7 +2514,7 @@ missing.  This predicate triggers when EITHER side needs work.
 ** ~tibetan-dharmamitra-translation-fire-tibetan~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 316
+:LINE: 335
 :SIGNATURE: (tibetan-dharmamitra-translation-fire-tibetan tibetan-text analysis-file)
 :AUTOLOAD: t
 :END:
@@ -2477,7 +2538,7 @@ Returns t on successful write, nil otherwise.
 ** ~tibetan-dharmamitra-translation-fire-sanskrit~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 346
+:LINE: 365
 :SIGNATURE: (tibetan-dharmamitra-translation-fire-sanskrit sanskrit-text analysis-file)
 :AUTOLOAD: t
 :END:
@@ -2507,7 +2568,7 @@ Returns t on successful write, nil otherwise.
 ** ~tibetan-dharmamitra-translation-fire-for-segment~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 388
+:LINE: 407
 :SIGNATURE: (tibetan-dharmamitra-translation-fire-for-segment tibetan-text analysis-file &optional source-file seg-id)
 :AUTOLOAD: t
 :END:
@@ -2944,7 +3005,7 @@ Uses simple pattern matching - much faster than full verb analysis.
 ** ~tibetan--segment-has-main-verb-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 747
+:LINE: 740
 :SIGNATURE: (tibetan--segment-has-main-verb-p segment)
 :END:
 
@@ -2960,7 +3021,7 @@ A segment has a main verb if:
 ** ~tibetan--segment-is-converb-only-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 770
+:LINE: 763
 :SIGNATURE: (tibetan--segment-is-converb-only-p segment)
 :END:
 
@@ -2977,7 +3038,7 @@ Converb particles include:
 ** ~tibetan--segment-ends-sentence-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 807
+:LINE: 800
 :SIGNATURE: (tibetan--segment-ends-sentence-p segment)
 :END:
 
@@ -2996,7 +3057,7 @@ Does NOT end sentence if:
 ** ~tibetan--segment-text~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 839
+:LINE: 832
 :SIGNATURE: (tibetan--segment-text text)
 :END:
 
@@ -3011,7 +3072,7 @@ Returns list of segment strings.
 ** ~tibetan-prepare-document-from-region~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 880
+:LINE: 873
 :SIGNATURE: (tibetan-prepare-document-from-region start end &optional title)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -3024,7 +3085,7 @@ Result replaces the region content.
 ** ~tibetan-prepare-new-document~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 895
+:LINE: 888
 :SIGNATURE: (tibetan-prepare-new-document)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -3566,10 +3627,35 @@ preserve-list machinery — `regenerate-auto' only rebuilds the
 Returns t on success, nil when ANALYSIS-FILE is missing or
 unwritable.
 
-** ~tibetan-sanskrit-parallel-dm--render-dharmamitra-section~  /function/
+** ~tibetan-sanskrit-parallel-dm--sanitize-drawer-value~  /function/
 :PROPERTIES:
 :KIND: defun
 :LINE: 582
+:SIGNATURE: (tibetan-sanskrit-parallel-dm--sanitize-drawer-value value)
+:END:
+
+Collapse VALUE to a single line for safe use inside an org
+`:PROPERTIES:' drawer.  DM segment numbers / ranks and Claude's reason
+are untrusted text; an embedded newline followed by `:KEY: val' or
+`:END:' would forge a property entry or close the drawer early.  All
+whitespace runs (including newlines) collapse to a single space; the
+result is trimmed.  Nil-safe.
+
+** ~tibetan-sanskrit-parallel-dm--sanitize-body~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 592
+:SIGNATURE: (tibetan-sanskrit-parallel-dm--sanitize-body text)
+:END:
+
+Neutralise org heading injection in untrusted body TEXT: prefix any
+line-leading run of `*' with a space so it renders as body text / a
+list item rather than a top-level heading.  Nil-safe.
+
+** ~tibetan-sanskrit-parallel-dm--render-dharmamitra-section~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 598
 :SIGNATURE: (tibetan-sanskrit-parallel-dm--render-dharmamitra-section proposal)
 :END:
 
@@ -3578,10 +3664,15 @@ section.  Pure function — no I/O.  Used by the analysis-file
 writer; also useful for tests that want to inspect the output
 shape without going through file I/O.
 
+Untrusted DM / Claude fields are sanitised before insertion: drawer
+values (segment number / rank / reason) are collapsed to one line, and
+the Sanskrit body's line-leading `*' is neutralised — so a response
+cannot forge property-drawer entries or inject an org heading.
+
 ** ~tibetan-sanskrit-parallel-dm--apply-proposal~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 602
+:LINE: 627
 :SIGNATURE: (tibetan-sanskrit-parallel-dm--apply-proposal analysis-file proposal)
 :END:
 
@@ -3598,7 +3689,7 @@ otherwise nil.
 ** ~tibetan-sanskrit-parallel-dm--apply-proposals~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 618
+:LINE: 643
 :SIGNATURE: (tibetan-sanskrit-parallel-dm--apply-proposals source-file proposals)
 :END:
 
@@ -3616,7 +3707,7 @@ itself is NEVER modified — verified by regression test.
 ** ~tibetan-sanskrit-parallel-dm--resolve-source-file~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 649
+:LINE: 688
 :SIGNATURE: (tibetan-sanskrit-parallel-dm--resolve-source-file)
 :END:
 
@@ -3628,7 +3719,7 @@ the source.  Falls back to a prompt.
 ** ~tibetan-sanskrit-parallel-dm-realign-document~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 661
+:LINE: 700
 :SIGNATURE: (tibetan-sanskrit-parallel-dm-realign-document &optional apply)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -3657,7 +3748,7 @@ segment; gotrapatala (97 segments) is roughly 5 minutes.
 ** ~tibetan-sanskrit-parallel-dm-realign-segment~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 708
+:LINE: 747
 :SIGNATURE: (tibetan-sanskrit-parallel-dm-realign-segment &optional apply)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -4244,7 +4335,7 @@ Close the Steinert DB connection if open (does not delete the file).
 ** ~tibetan-steinert--to-wylie-key~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 103
+:LINE: 108
 :SIGNATURE: (tibetan-steinert--to-wylie-key word)
 :END:
 
@@ -4254,7 +4345,7 @@ Returns nil if conversion isn't possible.
 ** ~tibetan-steinert-lookup~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 127
+:LINE: 132
 :SIGNATURE: (tibetan-steinert-lookup word &optional limit)
 :END:
 
@@ -4265,7 +4356,7 @@ LIMIT defaults to `tibetan-steinert-max-hits'.
 ** ~tibetan-steinert-sanskrit-for~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 153
+:LINE: 158
 :SIGNATURE: (tibetan-steinert-sanskrit-for word)
 :END:
 
@@ -4275,7 +4366,7 @@ Queries only the Sanskrit-indexed sources for cleanliness.
 ** ~tibetan-steinert-format-matches~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 188
+:LINE: 193
 :SIGNATURE: (tibetan-steinert-format-matches word &optional max-rows)
 :END:
 
@@ -4285,7 +4376,7 @@ or nil if none. MAX-ROWS caps the displayed rows (default 8).
 ** ~tibetan-steinert-url~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 208
+:LINE: 213
 :SIGNATURE: (tibetan-steinert-url wylie-term)
 :END:
 
@@ -4298,7 +4389,7 @@ Strips trailing particles like \='s, \='i suffixes for cleaner lookups.
 ** ~tibetan-steinert-url-org~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 223
+:LINE: 228
 :SIGNATURE: (tibetan-steinert-url-org wylie-term)
 :END:
 
@@ -6005,21 +6096,10 @@ Returns meaning with bilingual merge (English + German).
 Dictionary priority is controlled by `tibetan-dictionary-priority'
 and can be overridden per-buffer with #+TIBETAN_DICT_PRIORITY.
 
-** ~tibetan-detect-verb-with-suffix~  /function/
-:PROPERTIES:
-:KIND: defun
-:LINE: 962
-:SIGNATURE: (tibetan-detect-verb-with-suffix syllables start-idx)
-:END:
-
-Detect if SYLLABLES starting at START-IDX form a verb+suffix pattern.
-Returns (COMBINED-FORM BASE-VERB SUFFIX MEANING) or nil.
-Handles: verb་ཅིང་, verb་སྟེ་, verb་བར་, verb་བའི་, etc.
-
 ** ~tibetan-extract-vocab--tail-is-particle-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1005
+:LINE: 965
 :SIGNATURE: (tibetan-extract-vocab--tail-is-particle-p joined)
 :END:
 
@@ -6030,7 +6110,7 @@ in a case or converb particle listed in
 ** ~tibetan-extract-vocab--head-is-particle-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1014
+:LINE: 974
 :SIGNATURE: (tibetan-extract-vocab--head-is-particle-p joined)
 :END:
 
@@ -6047,7 +6127,7 @@ up `ལ་སྟོད' ("Latö, western Tsang") as a 2-syllable compound.
 ** ~tibetan-extract-vocabulary~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1029
+:LINE: 989
 :SIGNATURE: (tibetan-extract-vocabulary tibetan-text)
 :END:
 
@@ -6082,7 +6162,7 @@ populates the final `(word . meaning)' cell.
 ** ~tibetan-vocabulary-initialize~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1128
+:LINE: 1088
 :SIGNATURE: (tibetan-vocabulary-initialize)
 :END:
 
@@ -6101,7 +6181,7 @@ kept for users who install the package without the bundled data dir.
 ** ~reload-all-glossaries~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1153
+:LINE: 1113
 :SIGNATURE: (reload-all-glossaries)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -6114,7 +6194,7 @@ resets the idempotence guard and re-emits every bundled source.
 ** ~tibetan-vocab-extract-short-meaning~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1181
+:LINE: 1141
 :SIGNATURE: (tibetan-vocab-extract-short-meaning full-meaning)
 :END:
 
@@ -6124,7 +6204,7 @@ Returns just the core translation without lengthy explanations.
 ** ~tibetan-vocab-has-extended-info-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1203
+:LINE: 1163
 :SIGNATURE: (tibetan-vocab-has-extended-info-p full-meaning)
 :END:
 
@@ -6133,7 +6213,7 @@ Check if FULL-MEANING has extended information worth showing.
 ** ~tibetan-vocab-format-entry~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1209
+:LINE: 1169
 :SIGNATURE: (tibetan-vocab-format-entry tibetan-word full-meaning &optional format-type)
 :END:
 
@@ -6150,7 +6230,7 @@ Returns formatted string.
 ** ~tibetan-vocab-format-list~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1251
+:LINE: 1211
 :SIGNATURE: (tibetan-vocab-format-list vocab-pairs &optional format-type)
 :END:
 
@@ -6162,7 +6242,7 @@ Returns formatted string.
 ** ~tibetan-vocab-format-detailed-list~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1263
+:LINE: 1223
 :SIGNATURE: (tibetan-vocab-format-detailed-list vocab-pairs &optional for-org)
 :END:
 
@@ -6258,28 +6338,10 @@ Key: directory path, Value: hash-table of (term . definition)
 
 Current buffer's Resources vocabulary hash-table, or nil if none.
 
-** ~tibetan-converb-particles~  /constant/
-:PROPERTIES:
-:KIND: defconst
-:LINE: 947
-:DEFAULT: '
-:END:
-
-/(no docstring)/
-
-** ~tibetan-nominalized-suffixes~  /constant/
-:PROPERTIES:
-:KIND: defconst
-:LINE: 954
-:DEFAULT: '
-:END:
-
-/(no docstring)/
-
 ** ~tibetan-extract-vocab--particle-tails~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 987
+:LINE: 947
 :DEFAULT: '
 :END:
 
@@ -7418,7 +7480,7 @@ Use C-c u + / C-c u - to adjust interactively.
 ** ~tibetan-doc-format--split-at-shad~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 37
+:LINE: 38
 :SIGNATURE: (tibetan-doc-format--split-at-shad text)
 :END:
 
@@ -7428,7 +7490,7 @@ Preserves the shad at end of each segment.
 ** ~tibetan-doc-format--split-at-double-shad~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 45
+:LINE: 46
 :SIGNATURE: (tibetan-doc-format--split-at-double-shad text)
 :END:
 
@@ -7438,7 +7500,7 @@ Preserves the double-shad at end of each segment.
 ** ~tibetan-doc-format--split-preserve~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 53
+:LINE: 54
 :SIGNATURE: (tibetan-doc-format--split-preserve text)
 :END:
 
@@ -7447,7 +7509,7 @@ Split TEXT preserving original line breaks.
 ** ~tibetan-doc-format--split-text~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 57
+:LINE: 58
 :SIGNATURE: (tibetan-doc-format--split-text text line-break-style)
 :END:
 
@@ -7457,7 +7519,7 @@ Returns list of text segments.
 ** ~tibetan-doc-format--add-segment-markers~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 70
+:LINE: 71
 :SIGNATURE: (tibetan-doc-format--add-segment-markers lines &optional start-num with-trans)
 :END:
 
@@ -7470,7 +7532,7 @@ Returns list of marked lines.
 ** ~tibetan-doc-format-get-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 86
+:LINE: 87
 :SIGNATURE: (tibetan-doc-format-get-translation text seg-num)
 :END:
 
@@ -7481,7 +7543,7 @@ or nil if no block is found or the block is empty.
 ** ~tibetan-doc-format--extract-folio-markers~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 102
+:LINE: 103
 :SIGNATURE: (tibetan-doc-format--extract-folio-markers text)
 :END:
 
@@ -7492,7 +7554,7 @@ Returns alist of ((position . folio-num) ...).
 ** ~tibetan-doc-format--generate-header~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 123
+:LINE: 124
 :SIGNATURE: (tibetan-doc-format--generate-header source-info options)
 :END:
 
@@ -7501,7 +7563,7 @@ Generate org file header from SOURCE-INFO and OPTIONS.
 ** ~tibetan-doc-format--generate-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 150
+:LINE: 151
 :SIGNATURE: (tibetan-doc-format--generate-body text options)
 :END:
 
@@ -7516,7 +7578,7 @@ Recognised option keys:
 ** ~tibetan-doc-format~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 191
+:LINE: 192
 :SIGNATURE: (tibetan-doc-format text source-info options &optional output-path)
 :AUTOLOAD: t
 :END:
@@ -7544,7 +7606,7 @@ Returns path to created file.
 ** ~tibetan-doc-format--generate-output-path~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 223
+:LINE: 224
 :SIGNATURE: (tibetan-doc-format--generate-output-path source-info)
 :END:
 
@@ -7553,7 +7615,7 @@ Generate output file path from SOURCE-INFO.
 ** ~tibetan-doc-format-buffer~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 239
+:LINE: 240
 :SIGNATURE: (tibetan-doc-format-buffer)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -7565,7 +7627,7 @@ Prompts for formatting options.
 ** ~tibetan-doc-format-region~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 253
+:LINE: 254
 :SIGNATURE: (tibetan-doc-format-region start end)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -7576,7 +7638,7 @@ Format region between START and END into org document.
 ** ~tibetan-doc-format--prompt-options~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 264
+:LINE: 265
 :SIGNATURE: (tibetan-doc-format--prompt-options)
 :END:
 
@@ -7586,7 +7648,7 @@ Returns options plist.
 ** ~tibetan-doc-format-clean-ocr-artifacts~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 287
+:LINE: 285
 :SIGNATURE: (tibetan-doc-format-clean-ocr-artifacts text)
 :END:
 
@@ -7596,7 +7658,7 @@ Removes extra spaces, normalizes punctuation, etc.
 ** ~tibetan-doc-format-shad~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 24
+:LINE: 25
 :DEFAULT: "།"
 :END:
 
@@ -7605,7 +7667,7 @@ Tibetan single shad punctuation.
 ** ~tibetan-doc-format-double-shad~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 27
+:LINE: 28
 :DEFAULT: "༎"
 :END:
 
@@ -7614,7 +7676,7 @@ Tibetan double shad (nyis shad) punctuation.
 ** ~tibetan-doc-format-tsheg~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 30
+:LINE: 31
 :DEFAULT: "་"
 :END:
 
@@ -7630,7 +7692,7 @@ Tibetan tsheg (syllable separator).
 ** ~tibetan-doc-prep-init-status~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
-:LINE: 48
+:LINE: 51
 :SIGNATURE: (tibetan-doc-prep-init-status)
 :INTERACTIVE: t
 :END:
@@ -7640,7 +7702,7 @@ Show status of doc-prep module components.
 ** ~tibetan-doc-prep-init--load-glossaries~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 81
+:LINE: 88
 :SIGNATURE: (tibetan-doc-prep-init--load-glossaries)
 :END:
 
@@ -7661,10 +7723,50 @@ Load comprehensive glossaries if available.
 :SOURCE_PATH: /Users/cp/tibetan-cat.el/doc-prep/tibetan-doc-prep.el
 :END:
 
+** ~tibetan-doc-prep--resolve-work-in-progress-target~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 124
+:SIGNATURE: (tibetan-doc-prep--resolve-work-in-progress-target source-path)
+:END:
+
+Return the absolute target path for SOURCE-PATH after relocation.
+
+Consults `tibetan-doc-prep-work-in-progress-folder':
+  · nil          → returns SOURCE-PATH unchanged (no move).
+  · relative     → resolved as a sibling of the source's parent
+                   directory:  `.../parent/<folder>/<basename>'.
+  · absolute     → used directly as the destination directory.
+
+The returned path is always absolute.  Does not create the
+destination directory — the move helper does that.
+
+** ~tibetan-doc-prep-move-to-work-in-progress~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 149
+:SIGNATURE: (tibetan-doc-prep-move-to-work-in-progress source-path)
+:END:
+
+Relocate SOURCE-PATH into the configured work-in-progress folder.
+
+Resolves the destination via
+`tibetan-doc-prep--resolve-work-in-progress-target', creates the
+destination directory if absent, and renames the file across.
+Returns the new absolute path.
+
+Idempotent:  when SOURCE-PATH already resides at the resolved
+destination (or
+`tibetan-doc-prep-work-in-progress-folder' is nil), the function
+is a no-op and returns SOURCE-PATH unchanged.
+
+Existing destination files are overwritten — callers (the wizard,
+the Wylie ingest wrapper) confirm with the user before invoking.
+
 ** ~tibetan-doc-prep--select-from-list~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 97
+:LINE: 201
 :SIGNATURE: (tibetan-doc-prep--select-from-list prompt choices)
 :END:
 
@@ -7675,7 +7777,7 @@ Returns selected value.
 ** ~tibetan-doc-prep--yes-or-no~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 105
+:LINE: 209
 :SIGNATURE: (tibetan-doc-prep--yes-or-no prompt)
 :END:
 
@@ -7684,7 +7786,7 @@ Ask yes/no question with PROMPT.
 ** ~tibetan-doc-prep--select-source~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 114
+:LINE: 218
 :SIGNATURE: (tibetan-doc-prep--select-source)
 :END:
 
@@ -7694,7 +7796,7 @@ Returns plist with :type and :path or :text.
 ** ~tibetan-doc-prep--get-ocr-text~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 152
+:LINE: 256
 :SIGNATURE: (tibetan-doc-prep--get-ocr-text source)
 :END:
 
@@ -7705,7 +7807,7 @@ Otherwise, run BDRC OCR.
 ** ~tibetan-doc-prep--validate-text~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 183
+:LINE: 287
 :SIGNATURE: (tibetan-doc-prep--validate-text text)
 :END:
 
@@ -7715,7 +7817,7 @@ Returns validation result plist.
 ** ~tibetan-doc-prep--ai-correct~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 200
+:LINE: 304
 :SIGNATURE: (tibetan-doc-prep--ai-correct text validation)
 :END:
 
@@ -7725,7 +7827,7 @@ Returns corrected text.
 ** ~tibetan-doc-prep--review-flagged~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 241
+:LINE: 345
 :SIGNATURE: (tibetan-doc-prep--review-flagged validation)
 :END:
 
@@ -7734,7 +7836,7 @@ Display flagged items from VALIDATION for review.
 ** ~tibetan-doc-prep--show-changes~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 258
+:LINE: 362
 :SIGNATURE: (tibetan-doc-prep--show-changes changes)
 :END:
 
@@ -7743,7 +7845,7 @@ Display CHANGES made by AI correction.
 ** ~tibetan-doc-prep--select-format-options~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 277
+:LINE: 381
 :SIGNATURE: (tibetan-doc-prep--select-format-options)
 :END:
 
@@ -7753,7 +7855,7 @@ Returns options plist.
 ** ~tibetan-doc-prep--format-document~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 302
+:LINE: 405
 :SIGNATURE: (tibetan-doc-prep--format-document text source)
 :END:
 
@@ -7764,7 +7866,7 @@ Returns path to created file.
 ** ~tibetan-doc-prep--basic-format~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 325
+:LINE: 428
 :SIGNATURE: (tibetan-doc-prep--basic-format text output-file options title)
 :END:
 
@@ -7774,7 +7876,7 @@ Formats TEXT to OUTPUT-FILE with OPTIONS and TITLE.
 ** ~tibetan-doc-prep--show-summary~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 362
+:LINE: 465
 :SIGNATURE: (tibetan-doc-prep--show-summary source validation output-file)
 :END:
 
@@ -7785,7 +7887,7 @@ OUTPUT-FILE is the created file path.
 ** ~tibetan-doc-prep-wizard~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 382
+:LINE: 485
 :SIGNATURE: (tibetan-doc-prep-wizard)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -7797,7 +7899,7 @@ Guides through: Source → OCR → Validation → AI Correction → Formatting.
 ** ~tibetan-doc-prep-ocr~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 415
+:LINE: 518
 :SIGNATURE: (tibetan-doc-prep-ocr source-file)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -7808,7 +7910,7 @@ Run OCR on SOURCE-FILE only.
 ** ~tibetan-doc-prep-validate~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 429
+:LINE: 532
 :SIGNATURE: (tibetan-doc-prep-validate)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -7819,7 +7921,7 @@ Validate current buffer or region against dictionaries.
 ** ~tibetan-doc-prep-correct~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 441
+:LINE: 544
 :SIGNATURE: (tibetan-doc-prep-correct)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -7830,7 +7932,7 @@ AI-correct current buffer or region.
 ** ~tibetan-doc-prep-format~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 457
+:LINE: 560
 :SIGNATURE: (tibetan-doc-prep-format)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -7841,7 +7943,7 @@ Format current buffer into org document.
 ** ~tibetan-doc-prep-quick-pecha~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 472
+:LINE: 575
 :SIGNATURE: (tibetan-doc-prep-quick-pecha _file)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -7853,7 +7955,7 @@ FILE is the PDF or image to process.
 ** ~tibetan-doc-prep-quick-verse~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 483
+:LINE: 586
 :SIGNATURE: (tibetan-doc-prep-quick-verse _file)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -7865,7 +7967,7 @@ FILE is the PDF or image to process.
 ** ~tibetan-doc-prep-default-line-break~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 41
+:LINE: 62
 :TYPE: '(choice (const
 :GROUP: tibetan-doc-prep
 :DEFAULT: 'shad
@@ -7877,7 +7979,7 @@ Options: `shad' (།), `double-shad' (༎), `preserve' (keep original).
 ** ~tibetan-doc-prep-default-segments~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 49
+:LINE: 70
 :TYPE: 'boolean
 :GROUP: tibetan-doc-prep
 :DEFAULT: t
@@ -7888,7 +7990,7 @@ Whether to add segment markers by default.
 ** ~tibetan-doc-prep-default-folio-style~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 54
+:LINE: 75
 :TYPE: '(choice (const
 :GROUP: tibetan-doc-prep
 :DEFAULT: 'heading
@@ -7900,7 +8002,7 @@ Options: `heading' (* Folio 1a), `inline' ([F:1a]), `property' (drawer).
 ** ~tibetan-doc-prep-default-text-type~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 62
+:LINE: 83
 :TYPE: '(choice (const
 :GROUP: tibetan-doc-prep
 :DEFAULT: 'classical
@@ -7911,7 +8013,7 @@ Default text type for new documents.
 ** ~tibetan-doc-prep-output-directory~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 70
+:LINE: 91
 :TYPE: '(choice (const
 :GROUP: tibetan-doc-prep
 :DEFAULT: nil
@@ -7920,10 +8022,36 @@ Default text type for new documents.
 Default output directory for prepared documents.
 If nil, uses same directory as source file.
 
+** ~tibetan-doc-prep-work-in-progress-folder~  /customize variable/
+:PROPERTIES:
+:KIND: defcustom
+:LINE: 98
+:TYPE: '(choice (const
+:GROUP: tibetan-doc-prep
+:DEFAULT: "work in progress"
+:END:
+
+Sibling folder name that receives a freshly prepared source file.
+
+§5.27 Phase 2 follow-up (2026-05-27):  after ingest (Wylie
+conversion / OCR import / paste-in) the prepared `.org' file is
+relocated UP one level into a sibling folder of this name so the
+buddhist-studies workflow folders mirror the established Milarepa
+pattern:
+
+  <semester>/<class>/<raw-input>/foo.org       ←  source (ingest input)
+  <semester>/<class>/work in progress/foo.org  ←  prepared file
+  <semester>/<class>/work in progress/analysis/seg-NNN-foo.org
+
+Set to nil to disable the post-ingest move entirely (the prepared
+file then stays in its source directory).  An absolute path is
+also accepted — when provided, the prepared file lands there
+unconditionally instead of in a relative sibling of the source.
+
 ** ~cat-mode-map~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 22
+:LINE: 23
 :DEFAULT: nil
 :END:
 
@@ -7932,7 +8060,7 @@ Keymap for cat-mode (declared for byte-compiler).
 ** ~tibetan-doc-prep--current-source~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 81
+:LINE: 185
 :DEFAULT: nil
 :END:
 
@@ -7941,7 +8069,7 @@ Current source file/text being processed.
 ** ~tibetan-doc-prep--raw-text~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 84
+:LINE: 188
 :DEFAULT: nil
 :END:
 
@@ -7950,7 +8078,7 @@ Raw OCR/input text.
 ** ~tibetan-doc-prep--validation-result~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 87
+:LINE: 191
 :DEFAULT: nil
 :END:
 
@@ -7959,7 +8087,7 @@ Result of dictionary validation.
 ** ~tibetan-doc-prep--corrected-text~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 90
+:LINE: 194
 :DEFAULT: nil
 :END:
 
@@ -7968,18 +8096,21 @@ AI-corrected text.
 ** ~tibetan-doc-prep-map~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 502
+:LINE: 605
 :DEFAULT: (let ((map (make-sparse-keymap)))
-    ;; Main wizard
-    (define-key map (kbd "o") #'tibetan-doc-prep-wizard)
-
-    ;; In
+    ;; §5.27 Phase 6:  unified document-prep wizard (top-of-map).
+    (define-key map 
 :END:
 
 Keymap for document preparation commands.
 
 Key bindings:
-  o   Full wizard
+  d   Unified document-prep wizard (§5.27 — Wylie / Tibetan-script /
+      existing / OCR + metadata + analysis kickoff in one flow)
+  D   Apply cached Claude metadata suggestions to current buffer
+  y   Wylie ingest (validate + convert);  C-u → in-place + relocate
+  Y   Wylie ingest — validate only (no conversion)
+  o   Legacy OCR / Format wizard (subsumed by `d' for new prep)
   r   OCR step only
   v   Validate buffer
   c   AI correct buffer
@@ -7996,10 +8127,616 @@ Key bindings:
 ** ~tibetan-doc-prep~  /customize group/
 :PROPERTIES:
 :KIND: defgroup
-:LINE: 36
+:LINE: 57
 :END:
 
 Tibetan document preparation pipeline.
+
+
+* doc-prep/tibetan-document-genres.el
+:PROPERTIES:
+:CUSTOM_ID: doc-prep/tibetan-document-genres.el
+:SOURCE_PATH: /Users/cp/tibetan-cat.el/doc-prep/tibetan-document-genres.el
+:END:
+
+** ~tibetan-document-genres-keys~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 123
+:SIGNATURE: (tibetan-document-genres-keys)
+:END:
+
+Return the list of KEY symbols from the taxonomy, in order.
+
+** ~tibetan-document-genres-labels~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 127
+:SIGNATURE: (tibetan-document-genres-labels)
+:END:
+
+Return the list of `:label' strings from the taxonomy, in order.
+
+** ~tibetan-document-genres--entry-for~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 132
+:SIGNATURE: (tibetan-document-genres--entry-for key)
+:END:
+
+Return the PLIST for KEY (a symbol), or nil when unknown.
+
+** ~tibetan-document-genres-label-for~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 136
+:SIGNATURE: (tibetan-document-genres-label-for key)
+:END:
+
+Return the display label for KEY, or nil when unknown.
+
+** ~tibetan-document-genres-description-for~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 140
+:SIGNATURE: (tibetan-document-genres-description-for key)
+:END:
+
+Return the one-line description for KEY, or nil when unknown.
+
+** ~tibetan-document-genres-claude-hint-for~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 144
+:SIGNATURE: (tibetan-document-genres-claude-hint-for key)
+:END:
+
+Return the Claude system-prompt hint for KEY, or nil when unknown.
+Wizard / prompt builders append the returned line to Claude's
+system prompt when the document carries a known genre.
+
+** ~tibetan-document-genres-tibetan-for~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 150
+:SIGNATURE: (tibetan-document-genres-tibetan-for key)
+:END:
+
+Return the Wylie/Tibetan name for KEY, or nil when unknown.
+The legacy keys `classical' and `madhyamaka-verse' have no
+Tibetan-name analogue and return the empty string.
+
+** ~tibetan-document-genres-read~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 160
+:SIGNATURE: (tibetan-document-genres-read &optional default prompt)
+:END:
+
+Read a genre interactively via `completing-read'.
+
+Returns the KEY symbol of the chosen genre.  DEFAULT (when
+provided as a KEY symbol) preselects its label;  unrecognised
+DEFAULT falls through to no preselection.  PROMPT defaults to
+`"Genre: "'.
+
+The completing-read input is a `:label' string — Carsten's vertico/
+ivy/marginalia UI honours the alist mapping back to keys.
+
+** ~tibetan-document-genre-taxonomy~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 27
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+
+* doc-prep/tibetan-document-prep-claude.el
+:PROPERTIES:
+:CUSTOM_ID: doc-prep/tibetan-document-prep-claude.el
+:SOURCE_PATH: /Users/cp/tibetan-cat.el/doc-prep/tibetan-document-prep-claude.el
+:END:
+
+** ~tibetan-document-prep--extract-body-excerpt~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 75
+:SIGNATURE: (tibetan-document-prep--extract-body-excerpt source-file)
+:END:
+
+Return the first ~N words of SOURCE-FILE's `* Tibetan Text' body.
+
+N is `tibetan-document-prep-claude-excerpt-words'.  Returns nil
+when the file is unreadable, the section is absent, or the body
+is empty.  Skips org metadata headers and section headings — the
+excerpt is pure body text, ready for Claude.
+
+Words are split on whitespace;  Tibetan tshegs (U+0F0B) and
+shads (U+0F0D) are preserved within each whitespace-separated
+chunk so the excerpt remains parseable as Tibetan.
+
+** ~tibetan-document-prep--build-system-prompt~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 112
+:SIGNATURE: (tibetan-document-prep--build-system-prompt)
+:END:
+
+Return the system prompt instructing Claude to emit JSON metadata.
+
+Enumerates the 14 canonical genre keys so Claude picks from the
+exact set the wizard's selectbox understands;  asks for a tightly
+shaped JSON response so the parser stays simple.
+
+** ~tibetan-document-prep--build-user-prompt~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 145
+:SIGNATURE: (tibetan-document-prep--build-user-prompt excerpt)
+:END:
+
+Wrap EXCERPT in the user-prompt frame Claude expects.
+
+** ~tibetan-document-prep--strip-code-fence~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 156
+:SIGNATURE: (tibetan-document-prep--strip-code-fence response)
+:END:
+
+Return RESPONSE with surrounding ```json … ``` fences removed.
+
+Claude occasionally wraps a JSON response in code fences despite
+explicit instructions.  We strip them so the parser sees clean
+JSON.  Idempotent — input without fences passes through.
+
+** ~tibetan-document-prep--parse-claude-response~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 171
+:SIGNATURE: (tibetan-document-prep--parse-claude-response response)
+:END:
+
+Parse Claude's JSON RESPONSE into a metadata plist.
+
+Returns:
+  (:genre KEY-SYMBOL-OR-NIL
+   :author STRING-OR-NIL
+   :context LIST-OF-STRINGS)
+
+Unknown / malformed JSON → nil (caller falls back to no-suggestion
+behaviour).  Unknown genre keys (not in the taxonomy) → :genre nil,
+other fields preserved.  Author = "unknown" → :author nil so the
+wizard knows to fall through to the manual prompt.
+
+** ~tibetan-document-prep--upsert-single-line-header~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 231
+:SIGNATURE: (tibetan-document-prep--upsert-single-line-header key value)
+:END:
+
+In the current buffer, set `#+KEY: VALUE' (single-line header).
+
+Replaces an existing matching line in place;  otherwise inserts
+after the last existing `#+TIBETAN_…' / `#+TITLE:' line so the
+metadata block stays contiguous.
+
+** ~tibetan-document-prep--append-context-lines~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 262
+:SIGNATURE: (tibetan-document-prep--append-context-lines lines)
+:END:
+
+In the current buffer, append `#+TIBETAN_CLAUDE_CONTEXT: <line>'
+for each entry in LINES (a list of strings).  Existing context
+lines are preserved — the new ones go AFTER the last one (or
+after the final `#+TIBETAN_…' header when none exist yet).
+
+** ~tibetan-document-prep--apply-suggestions~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 305
+:SIGNATURE: (tibetan-document-prep--apply-suggestions source-file plist)
+:END:
+
+Write the suggestion PLIST's headers into SOURCE-FILE.
+
+Three header kinds are touched (each only when its value is
+non-nil):
+  · :genre   → `#+TIBETAN_TEXT_TYPE:'      (replaces existing)
+  · :author  → `#+TIBETAN_AUTHOR:'         (replaces existing)
+  · :context → appends one `#+TIBETAN_CLAUDE_CONTEXT:' per line
+               (existing context lines are preserved)
+
+No-op when SOURCE-FILE is unreadable or PLIST is nil.  Returns the
+SOURCE-FILE path on success.
+
+** ~tibetan-document-prep--ask-claude~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 341
+:SIGNATURE: (tibetan-document-prep--ask-claude source-file callback)
+:END:
+
+Submit a Claude metadata-suggestion request for SOURCE-FILE.
+
+Builds the excerpt + prompts, dispatches via
+`tibetan-claude-queue-submit' (so throttle / retry / rate-limit
+handling is shared with the rest of the Claude pipeline), and on
+success invokes CALLBACK with the parsed suggestion plist (or nil
+when Claude returned an unparseable / empty body).
+
+Signals a `user-error' when the prerequisites are missing
+(gptel not loaded, queue not loaded, source unreadable, body
+section absent) so callers see the actionable hint without a
+silent failure.
+
+** ~tibetan-document-prep-apply-claude-suggestions~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 401
+:SIGNATURE: (tibetan-document-prep-apply-claude-suggestions)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+Apply the cached Claude metadata suggestions to the current buffer.
+
+Reads from `tibetan-document-prep--claude-suggestions' (buffer-
+local;  set by the wizard's async callback).  Writes the
+suggestion plist's `:genre' / `:author' / `:context' fields into
+the buffer's file as `#+TIBETAN_TEXT_TYPE:' / `#+TIBETAN_AUTHOR:' /
+`#+TIBETAN_CLAUDE_CONTEXT:' headers, then reverts the buffer to
+pick up the new content.
+
+When no cached suggestions exist (Claude hasn't returned yet, or
+the wizard wasn't run) the command prints a polite message and
+returns nil.  Use \[tibetan-document-prep-wizard] to kick off a
+fresh metadata fetch.
+
+** ~tibetan-document-prep-claude-excerpt-words~  /customize variable/
+:PROPERTIES:
+:KIND: defcustom
+:LINE: 45
+:TYPE: 'integer
+:GROUP: tibetan-document-prep-claude
+:DEFAULT: 200
+:END:
+
+Word count of the Tibetan excerpt sent to Claude for metadata.
+
+200 words is enough for a confident genre signal (verse meter,
+honorific register, formulaic openings) without bloating the
+context window.  Increase if Claude's suggestions feel under-
+informed;  decrease to save tokens.
+
+** ~tibetan-document-prep--claude-suggestions~  /variable (buffer-local)/
+:PROPERTIES:
+:KIND: defvar-local
+:LINE: 59
+:DEFAULT: nil
+:END:
+
+Buffer-local plist of the latest Claude metadata suggestions.
+
+Shape:
+  (:genre KEY        ; symbol from `tibetan-document-genre-taxonomy'
+                     ; or nil when Claude couldn't decide
+   :author STR       ; suggested author name, or "unknown"
+   :context LIST)    ; list of 1-3 context strings
+
+Set by the wizard's async callback when Claude returns;  consumed
+by `tibetan-document-prep-apply-claude-suggestions'.
+
+** ~tibetan-document-prep-claude~  /customize group/
+:PROPERTIES:
+:KIND: defgroup
+:LINE: 40
+:END:
+
+Async Claude metadata pre-fill for the document-preparation wizard.
+
+
+* doc-prep/tibetan-document-prep-wizard.el
+:PROPERTIES:
+:CUSTOM_ID: doc-prep/tibetan-document-prep-wizard.el
+:SOURCE_PATH: /Users/cp/tibetan-cat.el/doc-prep/tibetan-document-prep-wizard.el
+:END:
+
+** ~tibetan-document-prep-wizard--read-route~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 69
+:SIGNATURE: (tibetan-document-prep-wizard--read-route)
+:END:
+
+Prompt the user for an INPUT ROUTE.  Returns the route key symbol.
+
+** ~tibetan-document-prep-wizard--run-wylie-ingest~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 76
+:SIGNATURE: (tibetan-document-prep-wizard--run-wylie-ingest &optional class-mode)
+:END:
+
+Prompt for a Wylie `.org' source, validate + convert + relocate.
+Returns the final source-file path (post-relocation into the
+configured `work in progress/' folder).
+
+CLASS-MODE (`reading' default | `grammar') controls the
+shad-normalisation grain so the resulting segments match the
+intended class type:  reading-class = one segment per paragraph,
+grammar-class = one segment per `| |'-delimited sentence.  See
+`tibetan-wylie-ingest-normalize-shads' for the details.
+
+When the source is bare (no `* Tibetan Text' heading) the wizard
+OFFERS to auto-wrap it before validation — bare Wylie files
+copy-pasted from a transcription don't carry the org wrapper
+the converter requires, so this catches the common case without
+forcing the user to hand-edit.
+
+** ~tibetan-document-prep-wizard--collect-source-file~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 157
+:SIGNATURE: (tibetan-document-prep-wizard--collect-source-file route
+                                                         &optional class-mode)
+:END:
+
+Acquire a source-file path for the given ROUTE.
+Dispatches to the appropriate ingest helper;  returns the final
+absolute path.  CLASS-MODE is threaded through to the Wylie
+route so shad normalisation matches the intended segment grain
+(reading = paragraphs, grammar = sentences).
+
+** ~tibetan-document-prep-wizard--read-target-lang~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 183
+:SIGNATURE: (tibetan-document-prep-wizard--read-target-lang source-file)
+:END:
+
+Prompt for `#+TIBETAN_TARGET_LANG:'.  Defaults to existing value
+or `de'.  Writes the header on the source file via
+`tibetan-document-prep--upsert-single-line-header'.
+
+** ~tibetan-document-prep-wizard--fire-async-claude~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 199
+:SIGNATURE: (tibetan-document-prep-wizard--fire-async-claude source-file)
+:END:
+
+Submit the async Claude metadata-suggestion call.
+
+Caches the response in `tibetan-document-prep--claude-suggestions'
+on the source's visiting buffer (creating it on the fly when the
+source isn't open).  Returns immediately — the wizard continues
+without waiting for Claude's reply.
+
+** ~tibetan-document-prep-wizard--read-genre~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 226
+:SIGNATURE: (tibetan-document-prep-wizard--read-genre source-file)
+:END:
+
+Prompt for `#+TIBETAN_TEXT_TYPE:' using the canonical selectbox.
+
+When Claude's async suggestion has already arrived (cached in
+the source buffer's local var) its `:genre' is used as the
+completing-read default;  otherwise existing-header value or
+`classical' is the fallback.
+
+** ~tibetan-document-prep-wizard--read-author~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 251
+:SIGNATURE: (tibetan-document-prep-wizard--read-author source-file)
+:END:
+
+Prompt for `#+TIBETAN_AUTHOR:'.  Default = Claude suggestion if
+present, otherwise existing header value, otherwise empty string.
+
+** ~tibetan-document-prep-wizard--read-context-lines~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 277
+:SIGNATURE: (tibetan-document-prep-wizard--read-context-lines source-file)
+:END:
+
+Prompt for `#+TIBETAN_CLAUDE_CONTEXT:' lines (multi-line).
+
+When Claude's async suggestion has arrived its `:context' list is
+offered as the default — user accepts with RET, edits inline, or
+clears and types fresh lines.  Empty input ends the loop.
+
+Lines are appended via `tibetan-document-prep--append-context-
+lines' so existing context lines are preserved.
+
+** ~tibetan-document-prep-wizard--read-class-mode-fresh~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 319
+:SIGNATURE: (tibetan-document-prep-wizard--read-class-mode-fresh)
+:END:
+
+Prompt for class mode WITHOUT a source-file lookup.
+Used by the wizard's source-acquisition phase, where the source
+doesn't yet exist on disk in its final form (Wylie ingest still
+pending).  Returns the chosen symbol (`grammar' | `reading').
+
+The default is `reading' — Carsten's stated preferred class
+format and the more common case (per the §5.22-final user-
+feedback note in CLAUDE.md).
+
+** ~tibetan-document-prep-wizard--read-class-mode~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 338
+:SIGNATURE: (tibetan-document-prep-wizard--read-class-mode source-file)
+:END:
+
+Prompt for `#+TIBETAN_CLASS_MODE:'.  Default = existing value
+or `grammar'.  Returns the chosen symbol (`grammar' | `reading').
+
+** ~tibetan-document-prep-wizard--read-sentence-detail~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 364
+:SIGNATURE: (tibetan-document-prep-wizard--read-sentence-detail source-file)
+:END:
+
+Prompt for `#+TIBETAN_SENTENCE_DETAIL:'.  Returns chosen symbol.
+
+** ~tibetan-document-prep-wizard--write-header~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 388
+:SIGNATURE: (tibetan-document-prep-wizard--write-header source-file key value)
+:END:
+
+Upsert `#+KEY: VALUE' into SOURCE-FILE.  Re-uses the Phase-4
+header writer so the wizard and the Claude-apply command share
+one implementation.
+
+** ~tibetan-document-prep-wizard--scaffold-resources~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 415
+:SIGNATURE: (tibetan-document-prep-wizard--scaffold-resources source-file)
+:END:
+
+Create `Resources/vocabulary.org' next to SOURCE-FILE if absent.
+Returns the path of the (created or pre-existing) file.
+
+** ~tibetan-document-prep-wizard--run-sentence-structure~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 432
+:SIGNATURE: (tibetan-document-prep-wizard--run-sentence-structure source-file)
+:END:
+
+Open SOURCE-FILE and run `tibetan-add-sentence-structure' on it.
+Demotes `*** Segment N' headings under `*** Sentence N' wrappers
+ready for analysis.
+
+** ~tibetan-document-prep-wizard--maybe-run-auto-analyze~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 442
+:SIGNATURE: (tibetan-document-prep-wizard--maybe-run-auto-analyze source-file
+                                                            class-mode)
+:END:
+
+Offer to run `tibetan-auto-analyze-document' on SOURCE-FILE.
+When CLASS-MODE is `reading', additionally offer to run
+`tibetan-sentence-create-all' afterwards.
+
+** ~tibetan-document-prep-wizard--format-summary~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 463
+:SIGNATURE: (tibetan-document-prep-wizard--format-summary state)
+:END:
+
+Render a human-readable summary of the wizard's STATE.
+
+** ~tibetan-document-prep-wizard~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 519
+:SIGNATURE: (tibetan-document-prep-wizard)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+Unified document-preparation wizard (§5.27).
+
+Walks through:
+  1. Input route (Wylie / Tibetan-script / existing / OCR).
+  2. (Wylie route) validate + convert via pyewts, relocate to
+     `work in progress/'.
+  3. Target language → `#+TIBETAN_TARGET_LANG:'.
+  4. Fire async Claude metadata suggestion (does NOT block).
+  5. Genre selectbox → `#+TIBETAN_TEXT_TYPE:'.
+  6. Author + context lines → `#+TIBETAN_AUTHOR:' + N x
+     `#+TIBETAN_CLAUDE_CONTEXT:'.
+  7. Class mode → `#+TIBETAN_CLASS_MODE:'.
+  8. (Reading class-mode) sentence detail → `#+TIBETAN_SENTENCE_DETAIL:'.
+  9. Resources/vocabulary.org scaffold.
+  10. Sentence-structure demotion (`*** Segment N' →
+      `*** Sentence N' wrappers).
+  11. Offer to run `tibetan-auto-analyze-document' +
+      (reading mode) `tibetan-sentence-create-all'.
+  12. Final summary buffer.
+
+When Claude's async suggestion arrives mid-wizard it's cached on
+the source's visiting buffer;  later wizard steps (genre, author,
+context) consult it as a default.  Post-wizard the user can run
+`M-x tibetan-document-prep-apply-claude-suggestions' to apply any
+suggestions not yet incorporated.
+
+** ~tibetan-document-prep-wizard--state~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 52
+:DEFAULT: nil
+:END:
+
+Transient plist of the in-flight wizard run.  Cleared on
+completion.  Carries `:source-file', `:input-route', whatever
+metadata has been gathered so far.  Internal to the wizard
+flow.
+
+** ~tibetan-document-prep-wizard--routes~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 62
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+** ~tibetan-document-prep-wizard--class-modes~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 314
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+** ~tibetan-document-prep-wizard--sentence-details~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 359
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+** ~tibetan-document-prep-wizard--vocabulary-template~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 401
+:DEFAULT: "#+TITLE: Per-document vocabulary
+#+OPTIONS: toc:nil num:nil
+
+* Vocabulary
+
+| Term | Definition |
+|------+------------|
+
+:END:
+
+Starter content for `Resources/vocabulary.org'.  Org-table
+format matches the parser in `tibetan-parse-wordlist-org' —
+filled-in rows are auto-loaded by `tibetan-load-resources-vocab'.
 
 
 * doc-prep/tibetan-ocr-correct.el
@@ -9048,6 +9785,409 @@ find zero segments and do nothing useful.
 /(no docstring)/
 
 
+* doc-prep/tibetan-wylie-ingest.el
+:PROPERTIES:
+:CUSTOM_ID: doc-prep/tibetan-wylie-ingest.el
+:SOURCE_PATH: /Users/cp/tibetan-cat.el/doc-prep/tibetan-wylie-ingest.el
+:END:
+
+** ~tibetan-wylie-ingest--python-available-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 70
+:SIGNATURE: (tibetan-wylie-ingest--python-available-p)
+:END:
+
+Return non-nil when the configured Python interpreter is on PATH.
+
+** ~tibetan-wylie-ingest--pyewts-available-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 76
+:SIGNATURE: (tibetan-wylie-ingest--pyewts-available-p)
+:END:
+
+Return non-nil when `pyewts' is importable in the configured Python.
+Runs `python3 -c "import pyewts"' and inspects the exit code.
+Caches nothing — caller should bind the result once per wizard
+run if the cost is a concern.
+
+** ~tibetan-wylie-ingest--require-pyewts-or-error~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 85
+:SIGNATURE: (tibetan-wylie-ingest--require-pyewts-or-error)
+:END:
+
+Signal a `user-error' when the Python prerequisites are missing.
+Used by `tibetan-wylie-ingest-file' as its single pre-flight gate
+so users see a clear hint instead of a stack trace from the
+shelled-out script.
+
+** ~tibetan-wylie-ingest--char-tibetan-unicode-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 114
+:SIGNATURE: (tibetan-wylie-ingest--char-tibetan-unicode-p ch)
+:END:
+
+Return non-nil when CH is in the Tibetan Unicode block.
+
+** ~tibetan-wylie-ingest--extract-tibetan-text-body~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 119
+:SIGNATURE: (tibetan-wylie-ingest--extract-tibetan-text-body path)
+:END:
+
+Return the body under the `* Tibetan Text' heading in PATH.
+Returns nil when the heading is absent.  Mirrors the Python
+script's `split_source' logic — body runs from the heading to the
+next top-level heading (or EOF).
+
+** ~tibetan-wylie-ingest--scan-body-for-issues~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 137
+:SIGNATURE: (tibetan-wylie-ingest--scan-body-for-issues body)
+:END:
+
+Walk BODY one char at a time, returning a plist of findings.
+Plist keys:
+  :tibetan-unicode-count   — number of chars in U+0F00..U+0FFF
+  :non-ascii-count         — number of non-ASCII, non-Tibetan chars
+  :first-tibetan-unicode-pos  / :first-non-ascii-pos  — 1-based
+                              char index into BODY of the FIRST
+                              occurrence (for user-friendly error
+                              snippets), or nil when absent.
+
+** ~tibetan-wylie-ingest--count-paragraphs-and-units~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 168
+:SIGNATURE: (tibetan-wylie-ingest--count-paragraphs-and-units body)
+:END:
+
+Return a plist `(:paragraph-count N :estimated-segment-count N)'.
+Paragraphs are blank-line-separated non-empty blocks (same rule
+the Python script uses).  Segment count = total `//' (double-shad)
+occurrences across the body, mirroring `split_paragraph_into_
+segments' — each `//' boundary becomes one segment.  Estimate
+slightly understates when a paragraph's trailing text has no `//'
+(that residual becomes a final segment), so add 1 per paragraph.
+
+** ~tibetan-wylie-ingest--count-pipe-shads~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 191
+:SIGNATURE: (tibetan-wylie-ingest--count-pipe-shads body)
+:END:
+
+Return the count of `|' characters in BODY.  Used by the
+validator to flag Wylie sources that use the pipe-shad
+convention and would benefit from `--normalize-shads' before
+ingest.
+
+** ~tibetan-wylie-ingest--count-non-standard-folios~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 207
+:SIGNATURE: (tibetan-wylie-ingest--count-non-standard-folios body)
+:END:
+
+Return the count of bracket-style folio markers in BODY that
+are NOT already in the canonical `[F:D...]' form the Python
+ingest script recognises.  Matches `[141a.6]' and `[141a6]'
+variants.
+
+** ~tibetan-wylie-ingest-validate-input~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 220
+:SIGNATURE: (tibetan-wylie-ingest-validate-input path)
+:END:
+
+Scan the Wylie source at PATH for structural issues.
+Returns a plist suitable for the wizard's pre-conversion report:
+
+  :path                          absolute source path
+  :has-tibetan-text-section      t  when `* Tibetan Text' is present
+  :paragraph-count               number of blank-line paragraphs in body
+  :estimated-segment-count       count of `//' (+ trailing) units in body
+  :tibetan-unicode-count         0 for a clean Wylie source
+  :non-ascii-count               0 for a clean Wylie source
+  :first-tibetan-unicode-pos  / :first-non-ascii-pos  — see scanner
+  :pipe-shad-count               count of `|' chars (suggests need for
+                                 `--normalize-shads' before ingest)
+  :non-standard-folio-count      count of `[NNNa.M]' markers that are
+                                 NOT in the script's `[F:D...]' form
+                                 (suggests `--normalize-folio-markers')
+
+Signals a `user-error' when PATH does not exist or is unreadable.
+Other-issue counts of zero indicate the file is structurally sound
+for the converter;  any non-zero count is advisory — the user can
+still proceed (the converter passes non-Wylie chars through to
+pyewts which may emit replacement characters or simply skip them).
+
+** ~tibetan-wylie-ingest--format-validation-report~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 260
+:SIGNATURE: (tibetan-wylie-ingest--format-validation-report report)
+:END:
+
+Render REPORT (the plist from `--validate-input') as a string.
+
+** ~tibetan-wylie-ingest-validate-input-interactive~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 299
+:SIGNATURE: (tibetan-wylie-ingest-validate-input-interactive path)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+Interactive wrapper around `tibetan-wylie-ingest-validate-input'.
+Pops a `*Wylie Validate*' buffer with the report.
+
+** ~tibetan-wylie-ingest--apply-to-body~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 313
+:SIGNATURE: (tibetan-wylie-ingest--apply-to-body path fn)
+:END:
+
+Read PATH, apply FN to its `* Tibetan Text' body, write back.
+
+FN is a one-argument function taking the body string (everything
+between the `* Tibetan Text' heading and the next top-level `* '
+heading) and returning a modified string.  Metadata headers,
+title, and any post-body sections are untouched.
+
+No-op (returns nil) when PATH has no `* Tibetan Text' heading.
+Returns t when the body was actually rewritten.
+
+** ~tibetan-wylie-ingest--normalize-shads-string~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 348
+:SIGNATURE: (tibetan-wylie-ingest--normalize-shads-string body &optional class-mode)
+:END:
+
+Return BODY with Wylie pipe-shads normalised.
+
+CLASS-MODE controls how the standard-Wylie double-shad `| |' is
+treated;  it directly drives segment granularity downstream:
+
+  · `reading' (default) — `| |' → `/ /' (two single shads with a
+                          space).  The Python script's segment
+                          splitter (`text.split("//")') doesn't
+                          fire on `/ /', so the surrounding
+                          paragraph stays as ONE segment.  Pyewts
+                          still renders the two-shad sequence as
+                          a Tibetan double-shad (`།  །') in the
+                          output.  Right for reading-class flow
+                          where one segment = one paragraph.
+
+  · `grammar'           — `| |' → `//'.  The script splits at
+                          every `//' boundary, so each `| |'-
+                          delimited sentence becomes its own
+                          segment.  Right for grammar-class
+                          flow where one segment = one sentence.
+
+Lone `|' (no adjacent partner) always maps to `/' in both modes —
+within-segment shad, cosmetic at the pyewts level.
+
+Pure-string operation;  used by `tibetan-wylie-ingest-normalize-
+shads' on the body region and by the validator's counter.
+
+** ~tibetan-wylie-ingest-normalize-shads~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 397
+:SIGNATURE: (tibetan-wylie-ingest-normalize-shads path &optional class-mode)
+:END:
+
+Normalise Wylie pipe-shads in PATH's `* Tibetan Text' body.
+
+CLASS-MODE (`reading' default, or `grammar') controls how the
+double-shad `| |' is rewritten — see
+`tibetan-wylie-ingest--normalize-shads-string' for the details.
+
+Returns the count of `|' characters that were converted.
+Idempotent — re-running on a body that no longer contains `|'
+returns 0.
+
+** ~tibetan-wylie-ingest--normalize-folio-markers-string~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 421
+:SIGNATURE: (tibetan-wylie-ingest--normalize-folio-markers-string body)
+:END:
+
+Return BODY with bracket-style folio markers reshaped to
+`[F:D<digits><ab><digits>]' so the Python script's
+`FOLIO_RE = r"\[F:D(\d+[ab]\d+)\]"' regex picks them up.
+
+** ~tibetan-wylie-ingest-normalize-folio-markers~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 430
+:SIGNATURE: (tibetan-wylie-ingest-normalize-folio-markers path)
+:END:
+
+Reshape inline folio markers in PATH's `* Tibetan Text' body
+from `[141a.6]' to `[F:D141a6]' so the Python script extracts
+them as `:FOLIO:' org properties instead of leaving them
+embedded in the Wylie body (where pyewts would garble them).
+
+Returns the count of markers rewritten.
+
+** ~tibetan-wylie-ingest-wrap-bare-source~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 455
+:SIGNATURE: (tibetan-wylie-ingest-wrap-bare-source path)
+:END:
+
+Wrap PATH (a bare Wylie source) in the canonical org structure
+required by `tibetan-ybh-prep.py'.
+
+A `bare Wylie source' is a `.org' file that contains Wylie body
+content but has no `* Tibetan Text' heading — typically the
+result of pasting raw Wylie into a fresh file or downloading a
+plain-text Wylie transcription.
+
+Mutates the file in place:
+  #+TITLE: <basename-without-extension>
+
+​  * Tibetan Text
+  <existing content unchanged>
+
+Returns PATH on success.  Idempotent — a file that ALREADY has
+`* Tibetan Text' is left untouched and the function signals a
+`user-error' so callers know to skip the wrap step.
+
+** ~tibetan-wylie-ingest--build-argv~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 498
+:SIGNATURE: (tibetan-wylie-ingest--build-argv path in-place)
+:END:
+
+Return the argv list for the Python converter.
+PATH is the source `.org' file (absolute), IN-PLACE non-nil
+threads the `--in-place' flag.
+
+** ~tibetan-wylie-ingest--invoke-script~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 508
+:SIGNATURE: (tibetan-wylie-ingest--invoke-script path in-place)
+:END:
+
+Run the converter on PATH.  Return a plist with :exit-code,
+:stdout, :stderr.  Stubbed by tests via `cl-letf' on
+`call-process'.
+
+** ~tibetan-wylie-ingest-file~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 532
+:SIGNATURE: (tibetan-wylie-ingest-file path &optional in-place skip-move)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+Convert PATH from Wylie to Tibetan Unicode via the bundled script.
+
+PATH is a source `.org' file carrying Wylie under `* Tibetan
+Text'.  When IN-PLACE is non-nil the file is overwritten with the
+converted content;  otherwise the converter's stdout is returned
+as a string.
+
+After a successful IN-PLACE conversion, the prepared file is
+relocated into the configured work-in-progress folder via
+`tibetan-doc-prep-move-to-work-in-progress' (sibling of the
+source's parent dir, default name `work in progress').  Passing
+SKIP-MOVE non-nil disables the relocation — useful from tests or
+when the caller orchestrates the move itself.
+
+Signals a `user-error' when `python3' or `pyewts' aren't
+available, or when the script exits non-zero (stderr is included
+in the error message for diagnosis).
+
+Return value:
+  IN-PLACE  → absolute path of the prepared file (post-move).
+  stdout    → converter's stdout body as a string.
+
+Interactive callers receive a prefix-arg → IN-PLACE.
+
+** ~tibetan-wylie-ingest-python-executable~  /customize variable/
+:PROPERTIES:
+:KIND: defcustom
+:LINE: 47
+:TYPE: 'string
+:GROUP: tibetan-wylie-ingest
+:DEFAULT: "python3"
+:END:
+
+Python interpreter used to run the Wylie ingest script.
+Must have the `pyewts' package importable.  The path is resolved
+via `executable-find' at call time, so a virtualenv-relative
+name is fine.
+
+** ~tibetan-wylie-ingest-script-path~  /customize variable/
+:PROPERTIES:
+:KIND: defcustom
+:LINE: 55
+:TYPE: 'file
+:GROUP: tibetan-wylie-ingest
+:DEFAULT: (let ((dir (file-name-directory
+              (or load-file-name buffer-file-name default-directory))))
+    (expand-file
+:END:
+
+Absolute path to the bundled `tibetan-ybh-prep.py' converter.
+Defaults to the script that ships alongside this Elisp module
+under `doc-prep/'.  Override only when running from a non-standard
+checkout.
+
+** ~tibetan-wylie-ingest--tibetan-unicode-range~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 107
+:DEFAULT: (cons #x0F00 #x0FFF)
+:END:
+
+Inclusive codepoint range (U+0F00..U+0FFF) of the Tibetan block.
+Used by the validator to flag bodies that already contain Tibetan
+Unicode — typically a sign the user accidentally pasted a converted
+file in place of the Wylie source.
+
+** ~tibetan-wylie-ingest--folio-regex~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 198
+:DEFAULT: "\\[\\([0-9]+\\)\\([ab]\\)\\.?\\([0-9]+\\)\\]"
+:END:
+
+Match `[<digits><ab>.?<digits>]' — the common bracket-folio
+convention in academic Tibetan transcriptions (e.g. `[141a.6]'
+= folio 141a, line 6).  Pure-digit / pure-letter runs only, so
+bibliographic ranges like `[141a.5–143b.4; pp. 285.5–290.4]'
+(which contain dashes / semicolons) do NOT match and are left
+intact.
+
+** ~tibetan-wylie-ingest~  /customize group/
+:PROPERTIES:
+:KIND: defgroup
+:LINE: 42
+:END:
+
+Wylie → Tibetan Unicode ingest settings.
+
+
 * persist/tibetan-analysis-claude.el
 :PROPERTIES:
 :CUSTOM_ID: persist/tibetan-analysis-claude.el
@@ -9057,7 +10197,7 @@ find zero segments and do nothing useful.
 ** ~tibetan-analysis--read-source-metadata~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 266
+:LINE: 295
 :SIGNATURE: (tibetan-analysis--read-source-metadata source-file)
 :END:
 
@@ -9105,6 +10245,31 @@ Keys:
                    identifier for the Tibetan-side parallel
                    (e.g. `BO_T06_D4037' for the Derge
                    Bodhisattvabhūmi).  nil when unset.
+  :text-type       value of `#+TIBETAN_TEXT_TYPE:' — canonical
+                   Tibetan genre tag (`rnam-thar', `lam-rim',
+                   `mgur', `mdo', `rgyud', `bstan-bcos',
+                   `snyan-ngag', `gtam-rgyud', `'grel-pa',
+                   `ti-ka', `gter-ma', `gdams-ngag', plus the
+                   legacy values `classical' / `madhyamaka-
+                   verse' / `sutra' / `commentary').  Threaded
+                   into Claude system prompt by callers that
+                   want to specialise the analysis to the
+                   genre.  nil when unset.  §5.27 Phase 1
+                   (2026-05-26).
+  :class-mode      value of `#+TIBETAN_CLASS_MODE: grammar|reading'
+                   — controls whether downstream commands default
+                   to segment-focus (Tibetan grammar classes,
+                   default) or sentence-focus (reading classes).
+                   Persistent per-document;  command prefix-args
+                   override ad-hoc.  §5.27 Phase 1 (2026-05-26).
+  :sentence-detail value of `#+TIBETAN_SENTENCE_DETAIL:
+                   compressed|detailed' — only meaningful when
+                   `:class-mode' is `reading'.  `compressed' =
+                   §5.22 default (Vocab + Translation + Grammar
+                   + Provided Translations, ~2 A4 pages).
+                   `detailed' = full §5.21 segment layout
+                   (sentence file mirrors a segment file's
+                   depth).  §5.27 Phase 1 (2026-05-26).
 
 §5.22 final (2026-05-21):  the `:sentence-compressed' plist key
 (briefly added in §5.22 initial as an opt-in for compressed
@@ -9112,12 +10277,19 @@ sentence layout) is RETIRED.  Sentence files are now
 unconditionally compressed;  no per-source header is consumed.
 The `#+TIBETAN_SENTENCE_COMPRESSED:' line is ignored if present.
 
+§5.27 Phase 1 (2026-05-26):  `:author' reader extended.  In
+addition to the existing PROPERTIES-drawer `:AUTHOR:' path, a
+new `#+TIBETAN_AUTHOR:' single-line header is also recognised.
+Drawer wins when both are present (backwards-compatible);
+header-only sources (the wizard-created common case) get the
+same `:author' slot.
+
 Safe when SOURCE-FILE is nil or does not exist — returns an empty plist.
 
 ** ~tibetan-analysis-set-source-target-lang~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 400
+:LINE: 498
 :SIGNATURE: (tibetan-analysis-set-source-target-lang source-file lang)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -9143,7 +10315,7 @@ be written to.
 ** ~tibetan-analysis--source-file-from-analysis~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 457
+:LINE: 555
 :SIGNATURE: (tibetan-analysis--source-file-from-analysis analysis-file)
 :END:
 
@@ -9155,7 +10327,7 @@ the directory of ANALYSIS-FILE.  Returns nil if nothing is found.
 ** ~tibetan-analysis--match-resources-vocab~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 473
+:LINE: 571
 :SIGNATURE: (tibetan-analysis--match-resources-vocab tibetan-text vocab-file)
 :END:
 
@@ -9163,10 +10335,79 @@ Return a list of (TERM . GLOSS) from VOCAB-FILE that occur in TIBETAN-TEXT.
 VOCAB-FILE is an org file containing a table whose first column is the
 Tibetan term and second column is the gloss.
 
+** ~tibetan-analysis--collect-zettel-references~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 620
+:SIGNATURE: (tibetan-analysis--collect-zettel-references tibetan-text)
+:END:
+
+Return a deduplicated list of thesaurus zettel plists for TIBETAN-TEXT.
+
+Walks the tokenised words/compounds in TIBETAN-TEXT (via
+`tibetan-tokenize-into-words'), looks each up in the thesaurus
+(via `tibetan-thesaurus-lookup' using the Wylie key), and returns
+the unique zettels found.  Plist shape per element:
+
+  (:id ID :wylie WYLIE :sanskrit SKT :primary-en EN :primary-de DE
+   :path PATH)
+
+Deduplication is by `:id'.  Returns nil when the thesaurus module
+isn't loaded, the directory isn't configured, or no zettel
+matches.  Safe to call from prompt builders — wrapped in
+`condition-case' so a malformed zettel doesn't crash the analysis.
+
+** ~tibetan-analysis--format-zettel-references-block~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 659
+:SIGNATURE: (tibetan-analysis--format-zettel-references-block zettels)
+:END:
+
+Format ZETTELS (list of plists) as an injectable user-prompt block.
+
+When non-empty, returns a string starting with two newlines + a
+header line + one bullet per zettel.  When ZETTELS is nil or
+empty, returns the empty string so the caller can unconditionally
+concat the result.
+
+Each bullet shows the Wylie key, the org ZID, the Sanskrit
+equivalent (if known), and the primary translation (English
+preferred, German fallback) — enough for Claude to recognise the
+term as it appears in the passage and to cite it correctly.
+
+** ~tibetan-analysis--cross-link-zettels-in-body~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 698
+:SIGNATURE: (tibetan-analysis--cross-link-zettels-in-body body)
+:END:
+
+Append `[[id:ZID][zettel ↗]]' links to bolded Tibetan terms in BODY.
+
+BODY is a string (typically the Concept Notes section's body
+returned by Claude).  For each line matching `- **<term>**…',
+extract the leading word, look it up in the thesaurus by Wylie,
+and append the zettel link to the line if the zettel exists AND
+the line doesn't already carry a `[[id:…]]' link.
+
+The leading-word extractor splits on whitespace / `(' so terms
+like `**'dod yon (Skt. pañca kāmaguṇa) — five sensory…**' yield
+the bare Wylie key `'dod yon' for lookup.  When Claude bolded the
+Tibetan-script form (`མཐུ'), the function first tries the script
+as-is (some thesauruses have script keys), then converts to Wylie
+and re-tries.
+
+Returns the modified BODY string.  No-op (returns BODY unchanged)
+when BODY is nil/empty, when the thesaurus module isn't loaded,
+or when no bolded terms match a zettel.  Wrapped in
+`condition-case' so any error in the regex / lookup path falls
+back to the unmodified body.
+
 ** ~tibetan-analysis--read-analysis-parser-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 499
+:LINE: 766
 :SIGNATURE: (tibetan-analysis--read-analysis-parser-sections analysis-file)
 :END:
 
@@ -9182,7 +10423,7 @@ Any missing section is nil.  Safe when ANALYSIS-FILE is nil or absent.
 ** ~tibetan-analysis--format-parser-grounding~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 541
+:LINE: 808
 :SIGNATURE: (tibetan-analysis--format-parser-grounding parser-sections)
 :END:
 
@@ -9193,7 +10434,7 @@ prompt.  Returns nil when every section is empty.
 ** ~tibetan-analysis--read-word-particle-list~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 568
+:LINE: 835
 :SIGNATURE: (tibetan-analysis--read-word-particle-list analysis-file)
 :END:
 
@@ -9205,7 +10446,7 @@ ANALYSIS-FILE is nil or does not exist.
 ** ~tibetan-analysis--format-segment-vocabulary~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 595
+:LINE: 862
 :SIGNATURE: (tibetan-analysis--format-segment-vocabulary analysis-file)
 :END:
 
@@ -9218,7 +10459,7 @@ empty so the prompt builder can skip it cleanly.
 ** ~tibetan-analysis--collect-paragraph-translations~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 626
+:LINE: 893
 :SIGNATURE: (tibetan-analysis--collect-paragraph-translations analysis-file)
 :END:
 
@@ -9233,7 +10474,7 @@ Returns nil when neither source has populated content.
 ** ~tibetan-analysis--build-comparison-prompts~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 681
+:LINE: 948
 :SIGNATURE: (tibetan-analysis--build-comparison-prompts tibetan-text translations)
 :END:
 
@@ -9250,7 +10491,7 @@ markdown sections (`## Comparison Matrix' and `## Diagnostic').
 ** ~tibetan-analysis--parse-comparison-response~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 732
+:LINE: 999
 :SIGNATURE: (tibetan-analysis--parse-comparison-response response)
 :END:
 
@@ -9266,7 +10507,7 @@ Returns plist (:matrix STRING :diagnostic STRING) where:
 ** ~tibetan-analysis--write-comparison-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 755
+:LINE: 1022
 :SIGNATURE: (tibetan-analysis--write-comparison-section analysis-file matrix-org diagnostic)
 :END:
 
@@ -9283,7 +10524,7 @@ canonical position.  Idempotent.
 ** ~tibetan-translation-comparison-refresh~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 805
+:LINE: 1072
 :SIGNATURE: (tibetan-translation-comparison-refresh)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -9302,7 +10543,7 @@ surfaced via `message' rather than signalled.
 ** ~tibetan-analysis--format-reference-translations~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 896
+:LINE: 1163
 :SIGNATURE: (tibetan-analysis--format-reference-translations analysis-file)
 :END:
 
@@ -9319,7 +10560,7 @@ and flag substantive divergences in the `## Grammar' section.
 ** ~tibetan-analysis--neighbor-analysis-file~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 954
+:LINE: 1221
 :SIGNATURE: (tibetan-analysis--neighbor-analysis-file analysis-file seg-id)
 :END:
 
@@ -9332,7 +10573,7 @@ ordering.  SEG-ID is an integer.
 ** ~tibetan-analysis--format-neighbor-segment~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 973
+:LINE: 1240
 :SIGNATURE: (tibetan-analysis--format-neighbor-segment analysis-file seg-id offset)
 :END:
 
@@ -9345,7 +10586,7 @@ neighbor does not exist or has no Tibetan text.
 ** ~tibetan-analysis--format-surrounding-segments~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1000
+:LINE: 1267
 :SIGNATURE: (tibetan-analysis--format-surrounding-segments analysis-file)
 :END:
 
@@ -9359,7 +10600,7 @@ segments.
 ** ~tibetan-analysis--build-claude-prompts~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1050
+:LINE: 1317
 :SIGNATURE: (tibetan-analysis--build-claude-prompts tibetan-text source-file &optional analysis-file)
 :END:
 
@@ -9389,7 +10630,7 @@ first three args.
 ** ~tibetan-analysis--read-authinfo-key~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1202
+:LINE: 1478
 :SIGNATURE: (tibetan-analysis--read-authinfo-key host)
 :END:
 
@@ -9400,7 +10641,7 @@ Returns the password string or nil.
 ** ~tibetan-analysis--ensure-gptel-ready~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1221
+:LINE: 1497
 :SIGNATURE: (tibetan-analysis--ensure-gptel-ready)
 :END:
 
@@ -9412,7 +10653,7 @@ Returns non-nil if gptel is ready to use.
 ** ~tibetan-analysis--write-claude-failure-stub~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1261
+:LINE: 1537
 :SIGNATURE: (tibetan-analysis--write-claude-failure-stub analysis-file msg)
 :END:
 
@@ -9425,7 +10666,7 @@ user can see at a glance which segments still need a real Claude pass.
 ** ~tibetan-analysis--claude-status-rate-limited-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1295
+:LINE: 1571
 :SIGNATURE: (tibetan-analysis--claude-status-rate-limited-p info)
 :END:
 
@@ -9434,7 +10675,7 @@ Non-nil when gptel callback INFO indicates HTTP 429 (rate limited).
 ** ~tibetan-analysis--request-claude-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1300
+:LINE: 1576
 :SIGNATURE: (tibetan-analysis--request-claude-translation tibetan-text analysis-file &optional source-file)
 :END:
 
@@ -9460,14 +10701,21 @@ failures are reported via `message' and the placeholder.
 ** ~tibetan-analysis--parse-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1400
+:LINE: 1676
 :SIGNATURE: (tibetan-analysis--parse-claude-sections response)
 :END:
 
 Split RESPONSE on `## …' Translation / Vocabulary / Grammar /
-Particles / Context markdown headings.
+Particles / `Concept Notes' (or legacy `Context') markdown headings.
 Returns a plist with `:translation' / `:vocabulary' / `:grammar' /
-`:particles' / `:context' string-or-nil values.
+`:particles' / `:concepts' string-or-nil values.
+
+§5.24 (2026-05-22):  the legacy `## Context' heading is accepted
+for backwards compatibility (older Claude responses still
+delivered after a prompt change but before the model picks up
+the rename) and routed to the `:concepts' slot.  The elisp key
+`:context' is retired in favour of `:concepts'.
+
 Missing sections are nil (not empty string) so the writer can leave
 the old org body in place when Claude omitted a section.  When
 RESPONSE contains no recognised heading, the whole (trimmed) string is
@@ -9491,7 +10739,7 @@ five-key shape.
 ** ~tibetan-analysis--claude-heading-re~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1502
+:LINE: 1791
 :SIGNATURE: (tibetan-analysis--claude-heading-re heading level)
 :END:
 
@@ -9500,7 +10748,7 @@ Regexp that anchors `HEADING' at org LEVEL at beginning-of-line.
 ** ~tibetan-analysis--claude-stop-re~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1508
+:LINE: 1797
 :SIGNATURE: (tibetan-analysis--claude-stop-re level)
 :END:
 
@@ -9509,7 +10757,7 @@ Regexp matching the start of any heading at org LEVEL or shallower.
 ** ~tibetan-analysis--claude-segment-layout-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1514
+:LINE: 1803
 :SIGNATURE: (tibetan-analysis--claude-segment-layout-p buffer)
 :END:
 
@@ -9533,7 +10781,7 @@ fresh per-segment scaffolds get Translation promoted to level 2.
 ** ~tibetan-analysis--claude-heading-inside-provided-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1554
+:LINE: 1843
 :SIGNATURE: (tibetan-analysis--claude-heading-inside-provided-p)
 :END:
 
@@ -9545,7 +10793,7 @@ and check whether its text is `Provided Translations'.
 ** ~tibetan-analysis--reparent-orphaned-claude-subsections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1564
+:LINE: 1853
 :SIGNATURE: (tibetan-analysis--reparent-orphaned-claude-subsections buffer)
 :END:
 
@@ -9565,7 +10813,7 @@ Translations section exists or when no orphans are found.
 ** ~tibetan-analysis--claude-l2-has-real-content-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1626
+:LINE: 1915
 :SIGNATURE: (tibetan-analysis--claude-l2-has-real-content-p heading-re buffer)
 :END:
 
@@ -9589,7 +10837,7 @@ level-3 content under `** Provided Translations'.
 ** ~tibetan-analysis--delete-claude-l2-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1665
+:LINE: 1954
 :SIGNATURE: (tibetan-analysis--delete-claude-l2-section heading-re buffer)
 :END:
 
@@ -9603,7 +10851,7 @@ with migrated content from a legacy level-3 location.
 ** ~tibetan-analysis--migrate-legacy-claude-headings~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1686
+:LINE: 1975
 :SIGNATURE: (tibetan-analysis--migrate-legacy-claude-headings buffer)
 :END:
 
@@ -9628,10 +10876,34 @@ Sentence-layout buffers (no `** Wylie Transliteration'):
 
 Both branches are no-ops when nothing to migrate.
 
+** ~tibetan-analysis--insert-concept-notes-heading~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 2118
+:SIGNATURE: (tibetan-analysis--insert-concept-notes-heading buffer body)
+:END:
+
+Insert `** Concept Notes' with BODY into BUFFER.
+
+§5.24 (2026-05-22):  the heading is placed AFTER the existing
+`** Translation' (Claude) and `** DharmaMitra Translation' if
+present, BEFORE `** Grammar'.  Reader-flow:  read Translation
+→ glance at Concept Notes for technical terms → read Grammar.
+
+Placement fallbacks (in decreasing preference):
+  · After `** DharmaMitra Translation' body.
+  · After `** Translation' / `** Claude Translation' body.
+  · After `** Claude Vocabulary' body.
+  · After `** Wylie Transliteration' body.
+  · End of buffer (defensive).
+
+BODY may be empty — the heading is still created with a `[Awaiting
+Claude…]' placeholder body.
+
 ** ~tibetan-analysis--insert-claude-vocabulary-heading~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1794
+:LINE: 2183
 :SIGNATURE: (tibetan-analysis--insert-claude-vocabulary-heading buffer body)
 :END:
 
@@ -9649,7 +10921,7 @@ two trailing newlines.
 ** ~tibetan-analysis--insert-claude-translation-heading~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1854
+:LINE: 2243
 :SIGNATURE: (tibetan-analysis--insert-claude-translation-heading buffer body)
 :END:
 
@@ -9666,7 +10938,7 @@ now `** Translation' (was `** Claude Translation'); see
 ** ~tibetan-analysis--migrate-claude-grammar-to-u4~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1911
+:LINE: 2300
 :SIGNATURE: (tibetan-analysis--migrate-claude-grammar-to-u4)
 :END:
 
@@ -9697,7 +10969,7 @@ caller's responsibility.
 ** ~tibetan-analysis--place-claude-grammar-heading~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1998
+:LINE: 2387
 :SIGNATURE: (tibetan-analysis--place-claude-grammar-heading)
 :END:
 
@@ -9720,7 +10992,7 @@ before invoking.
 ** ~tibetan-analysis--ensure-claude-headings~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2094
+:LINE: 2483
 :SIGNATURE: (tibetan-analysis--ensure-claude-headings buffer)
 :END:
 
@@ -9752,7 +11024,7 @@ whichever target heading is still missing.  Idempotent.
 ** ~tibetan-analysis--claude-body-md-h3-to-org~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2252
+:LINE: 2655
 :SIGNATURE: (tibetan-analysis--claude-body-md-h3-to-org body parent-level)
 :END:
 
@@ -9784,7 +11056,7 @@ are byte-identical pre- and post-Phase 4.
 ** ~tibetan-analysis--replace-claude-section-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2280
+:LINE: 2683
 :SIGNATURE: (tibetan-analysis--replace-claude-section-body buffer heading body &optional level)
 :END:
 
@@ -9804,7 +11076,7 @@ file.  Non-divergence bodies (no `### ' lines) are unchanged.
 ** ~tibetan-analysis--claude-effective-section-order~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2314
+:LINE: 2717
 :SIGNATURE: (tibetan-analysis--claude-effective-section-order buffer)
 :END:
 
@@ -9827,7 +11099,7 @@ a single buffer's layout drives heading levels consistently.
 ** ~tibetan-analysis--insert-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2354
+:LINE: 2757
 :SIGNATURE: (tibetan-analysis--insert-claude-sections response analysis-file)
 :END:
 
@@ -9851,7 +11123,7 @@ reanalyse.
 ** ~tibetan-analysis--parse-claude-vocabulary~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2442
+:LINE: 2856
 :SIGNATURE: (tibetan-analysis--parse-claude-vocabulary vocab-text)
 :END:
 
@@ -9864,7 +11136,7 @@ with `---' are skipped.
 ** ~tibetan-analysis--read-claude-section-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2467
+:LINE: 2881
 :SIGNATURE: (tibetan-analysis--read-claude-section-body filepath heading &optional level)
 :END:
 
@@ -9879,21 +11151,24 @@ and known error markers so we don't re-persist dead content.
 ** ~tibetan-analysis--read-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2510
+:LINE: 2924
 :SIGNATURE: (tibetan-analysis--read-claude-sections filepath)
 :END:
 
 Return preserved Claude content in FILEPATH as a plist.
 Keys: `:translation', `:vocabulary', `:grammar', `:particles',
-`:context'.  Each value is a non-empty string or nil.  Reads
-from the current layout (Translation and Grammar at level 2;
-Vocabulary at level 3 inside Provided Translations) and falls
+`:concepts'.  Each value is a non-empty string or nil.  Reads
+from the current layout (Translation, Vocabulary, and Concept
+Notes at level 2;  Grammar / Particles at level 3) and falls
 back to the legacy level-3 placements so old analysis files do
 not lose their work on reanalysis.
 
-A legacy `*** Claude Context' body is still read when present and
-returned as `:context' for round-trip safety, but it is never
-written back.
+§5.24 (2026-05-22):  the `:context' slot is renamed to
+`:concepts' and its heading promoted from level-3 `*** Claude
+Context' to level-2 `** Concept Notes' (sentence files keep
+level 3 — see `--claude-effective-section-order' else branch).
+Reader does dual-name match so existing `*** Claude Context'
+bodies migrate naturally on first regen.
 
 Phase 1 of two-language-parallel-analysis (2026-04-30):  the
 Phase B–D `:translation-sanskrit' / `:translation-combined' /
@@ -9907,7 +11182,7 @@ read / restore helpers in
 ** ~tibetan-analysis--parse-claude-particles~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2581
+:LINE: 3004
 :SIGNATURE: (tibetan-analysis--parse-claude-particles body)
 :END:
 
@@ -9921,7 +11196,7 @@ passages — those shouldn't crash the caller).
 ** ~tibetan-analysis--read-claude-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2602
+:LINE: 3025
 :SIGNATURE: (tibetan-analysis--read-claude-translation filepath)
 :END:
 
@@ -9933,7 +11208,7 @@ migrated yet.
 ** ~tibetan-analysis--claude-needs-request-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2609
+:LINE: 3032
 :SIGNATURE: (tibetan-analysis--claude-needs-request-p filepath)
 :END:
 
@@ -9953,7 +11228,7 @@ on files already populated.
 ** ~tibetan-analysis--should-fire-claude-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2627
+:LINE: 3050
 :SIGNATURE: (tibetan-analysis--should-fire-claude-p re-request-claude filepath)
 :END:
 
@@ -9973,24 +11248,25 @@ Returns non-nil when a request SHOULD be dispatched.
 ** ~tibetan-analysis--restore-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2646
+:LINE: 3069
 :SIGNATURE: (tibetan-analysis--restore-claude-sections filepath sections)
 :END:
 
 Write SECTIONS (a plist) back into FILEPATH's Claude headings.
-SECTIONS has keys :translation, :vocabulary, :grammar, and optionally
-:context (legacy); any nil slot leaves the corresponding org body
-untouched.  Creates the target headings (`** Claude Translation',
-`*** Claude Vocabulary', `*** Claude Grammar') if they are missing,
-migrating legacy layouts on first encounter.  A :context value is
-only written when a `*** Claude Context' heading is already present
-in the file — legacy files keep their Context body intact, but the
-restore path will not create a new Context heading.
+SECTIONS has keys :translation, :vocabulary, :grammar, :particles,
+:concepts;  any nil slot leaves the corresponding org body
+untouched.  Creates the target headings if they are missing,
+migrating legacy layouts on first encounter.
+
+§5.24 (2026-05-22):  `:concepts' replaces the legacy `:context'
+slot.  Heading promoted from `*** Claude Context' (L3) to
+`** Concept Notes' (L2) for segment layout;  sentence layout keeps
+L3 (via the else branch of `--claude-effective-section-order').
 
 ** ~tibetan-analysis--restore-claude-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2684
+:LINE: 3098
 :SIGNATURE: (tibetan-analysis--restore-claude-translation filepath translation)
 :END:
 
@@ -10000,7 +11276,7 @@ Legacy wrapper around `tibetan-analysis--restore-claude-sections'.
 ** ~tibetan-analysis-auto-regen-on-claude-arrival~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 2337
+:LINE: 2740
 :TYPE: 'boolean
 :GROUP: tibetan-cat
 :DEFAULT: t
@@ -10072,7 +11348,7 @@ source file's `#+TIBETAN_CLAUDE_CONTEXT:' headers.
 ** ~tibetan-analysis--claude-section-order~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 1462
+:LINE: 1751
 :DEFAULT: '
 :END:
 
@@ -11042,7 +12318,7 @@ Returns the full text as a string, or nil if extraction fails.
 ** ~tibetan-analysis--extract-segment-block~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1573
+:LINE: 1579
 :SIGNATURE: (tibetan-analysis--extract-segment-block text seg-num)
 :END:
 
@@ -11054,7 +12330,7 @@ end of text.  Returns nil if no matching segment heading is found.
 ** ~tibetan-analysis--filename-segment-number~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1595
+:LINE: 1601
 :SIGNATURE: (tibetan-analysis--filename-segment-number basename)
 :END:
 
@@ -11064,7 +12340,7 @@ Recognises markers like Segment-04, segment_4, seg-4.
 ** ~tibetan-analysis--find-reference-translations~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1603
+:LINE: 1609
 :SIGNATURE: (tibetan-analysis--find-reference-translations _tibetan-text &optional seg-num source-text)
 :END:
 
@@ -11093,7 +12369,7 @@ Returns list of (source-name . translation-text) pairs.
 ** ~tibetan-analysis--ensure-vocabulary~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1711
+:LINE: 1717
 :SIGNATURE: (tibetan-analysis--ensure-vocabulary)
 :END:
 
@@ -11120,27 +12396,17 @@ indirect or temp buffers).
 ** ~tibetan-analysis--get-particle-annotation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1757
+:LINE: 1763
 :SIGNATURE: (tibetan-analysis--get-particle-annotation word)
 :END:
 
 Get compact particle annotation for WORD.
 Returns string like \='(ERG)\=' or \='(LOC: if/when)\=' or nil.
 
-** ~tibetan-analysis--get-word-info~  /function/
-:PROPERTIES:
-:KIND: defun
-:LINE: 1802
-:SIGNATURE: (tibetan-analysis--get-word-info word multiword-units)
-:END:
-
-Get meaning and info for WORD, checking MULTIWORD-UNITS first.
-Returns alist with keys: meaning, wylie, is-verb, verb-info.
-
 ** ~tibetan-analysis--format-word-with-wylie~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1832
+:LINE: 1808
 :SIGNATURE: (tibetan-analysis--format-word-with-wylie word)
 :END:
 
@@ -11163,7 +12429,7 @@ Behaviour:
 ** ~tibetan-analysis--bialek-type~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1863
+:LINE: 1839
 :SIGNATURE: (tibetan-analysis--bialek-type word)
 :END:
 
@@ -11185,7 +12451,7 @@ still be classified as a whole.  Returns the `type' field (index
 ** ~tibetan-analysis--render-clause-structure~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1889
+:LINE: 1865
 :SIGNATURE: (tibetan-analysis--render-clause-structure words verbs multiword-units)
 :END:
 
@@ -11207,7 +12473,7 @@ lock-step with the rest of the generated file.
 ** ~tibetan-analysis--get-grammatical-role~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2005
+:LINE: 1981
 :SIGNATURE: (tibetan-analysis--get-grammatical-role word root-form verb-table)
 :END:
 
@@ -11226,7 +12492,7 @@ nil when nothing informative is available.
 ** ~tibetan-analysis--detect-verb-suffix~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2076
+:LINE: 2052
 :SIGNATURE: (tibetan-analysis--detect-verb-suffix word _root-form)
 :END:
 
@@ -11245,7 +12511,7 @@ bialek does not cover).
 ** ~tibetan-analysis--verb-morphology-gloss~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2091
+:LINE: 2067
 :SIGNATURE: (tibetan-analysis--verb-morphology-gloss root-form)
 :END:
 
@@ -11269,7 +12535,7 @@ like "verb: do" that hide the morphology.
 ** ~tibetan-analysis--wylie-like-token-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2155
+:LINE: 2131
 :SIGNATURE: (tibetan-analysis--wylie-like-token-p tok)
 :END:
 
@@ -11281,7 +12547,7 @@ tails that leak out of user wordlists, e.g. "dice kha phung la thong"
 ** ~tibetan-analysis--strip-wylie-tail~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2182
+:LINE: 2158
 :SIGNATURE: (tibetan-analysis--strip-wylie-tail gloss)
 :END:
 
@@ -11295,7 +12561,7 @@ only if at least one plain content token remains.
 ** ~tibetan-analysis--render-particle-skeleton~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2205
+:LINE: 2181
 :SIGNATURE: (tibetan-analysis--render-particle-skeleton tibetan-text _particles verbs)
 :END:
 
@@ -11318,7 +12584,7 @@ particles like `'i' / `'o'.
 ** ~tibetan-analysis--strip-folio-markers~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2319
+:LINE: 2295
 :SIGNATURE: (tibetan-analysis--strip-folio-markers text)
 :END:
 
@@ -11330,7 +12596,7 @@ whitespace left behind.
 ** ~tibetan-analysis--filter-to-tibetan-lines~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2330
+:LINE: 2306
 :SIGNATURE: (tibetan-analysis--filter-to-tibetan-lines text)
 :END:
 
@@ -11368,7 +12634,7 @@ bogus "set" gloss).
 ** ~tibetan-analysis--format-bilingual-gloss~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2370
+:LINE: 2346
 :SIGNATURE: (tibetan-analysis--format-bilingual-gloss gloss)
 :END:
 
@@ -11390,7 +12656,7 @@ unrelated reasons.
 ** ~tibetan-analysis--detailed-dict-is-particle-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2405
+:LINE: 2381
 :SIGNATURE: (tibetan-analysis--detailed-dict-is-particle-p tibetan)
 :END:
 
@@ -11405,7 +12671,7 @@ dump.
 ** ~tibetan-analysis--render-detailed-dictionary~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2419
+:LINE: 2395
 :SIGNATURE: (tibetan-analysis--render-detailed-dictionary tibetan-text vocab-pairs &optional bialek-analysis)
 :END:
 
@@ -11433,7 +12699,7 @@ keeps German // English pairs side by side.
 ** ~tibetan-analysis--particle-wylie-equivalent-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2651
+:LINE: 2627
 :SIGNATURE: (tibetan-analysis--particle-wylie-equivalent-p a b)
 :END:
 
@@ -11459,7 +12725,7 @@ forms for equality.
 ** ~tibetan-analysis--particle-wylie-normalise~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2675
+:LINE: 2651
 :SIGNATURE: (tibetan-analysis--particle-wylie-normalise s)
 :END:
 
@@ -11471,7 +12737,7 @@ like `la', `ni', `dang' are preserved verbatim.
 ** ~tibetan-analysis--buddhist-term-entry-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2689
+:LINE: 2665
 :SIGNATURE: (tibetan-analysis--buddhist-term-entry-p entry)
 :END:
 
@@ -11491,7 +12757,7 @@ of Buddhism (Four Immeasurables, Bodhicitta, Skandha, etc.).
 ** ~tibetan-analysis--collect-buddhist-terms~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2710
+:LINE: 2686
 :SIGNATURE: (tibetan-analysis--collect-buddhist-terms enriched-vocab-pairs)
 :END:
 
@@ -11517,7 +12783,7 @@ case.
 ** ~tibetan-analysis--format-buddhist-term-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2762
+:LINE: 2738
 :SIGNATURE: (tibetan-analysis--format-buddhist-term-body body &optional max-len)
 :END:
 
@@ -11532,7 +12798,7 @@ in the `*** Buddhist Terms' subsection.
 ** ~tibetan-analysis--render-buddhist-terms-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2784
+:LINE: 2760
 :SIGNATURE: (tibetan-analysis--render-buddhist-terms-section terms)
 :END:
 
@@ -11556,7 +12822,7 @@ invalidation.
 ** ~tibetan-analysis--render-grammar-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2827
+:LINE: 2803
 :SIGNATURE: (tibetan-analysis--render-grammar-section tibetan-text particles verbs
                                                               bialek-analysis
                                                               &optional
@@ -11613,7 +12879,7 @@ nil, the subsection is omitted.
 ** ~tibetan-analysis--render-particle-bullets~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2925
+:LINE: 2901
 :SIGNATURE: (tibetan-analysis--render-particle-bullets bialek-analysis claude-particles)
 :END:
 
@@ -11638,7 +12904,7 @@ For each Bialek-detected particle in BIALEK-ANALYSIS:
 ** ~tibetan-analysis--split-level2-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3168
+:LINE: 3149
 :SIGNATURE: (tibetan-analysis--split-level2-sections content)
 :END:
 
@@ -11652,7 +12918,7 @@ before the first level-2 heading is returned under the special key
 ** ~tibetan-analysis--extract-claude-grammar~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3200
+:LINE: 3181
 :SIGNATURE: (tibetan-analysis--extract-claude-grammar sections)
 :END:
 
@@ -11668,7 +12934,7 @@ unchanged.
 ** ~tibetan-analysis--reorder-auto-content~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3233
+:LINE: 3214
 :SIGNATURE: (tibetan-analysis--reorder-auto-content content)
 :END:
 
@@ -11683,7 +12949,7 @@ class level-2 section.
 ** ~tibetan-analysis--render-sanskrit-source~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3290
+:LINE: 3271
 :SIGNATURE: (tibetan-analysis--render-sanskrit-source sanskrit-plist)
 :END:
 
@@ -11718,7 +12984,7 @@ walker-driven gate (placeholder bodies → nil) applies.
 ** ~tibetan-analysis-generate-content~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3330
+:LINE: 3311
 :SIGNATURE: (tibetan-analysis-generate-content tibetan-text &optional seg-id source-text source-file)
 :END:
 
@@ -11761,7 +13027,7 @@ unused-arg warning without breaking the public API.
 ** ~tibetan-open-segment-analysis~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 4090
+:LINE: 4085
 :SIGNATURE: (tibetan-open-segment-analysis)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -11789,7 +13055,7 @@ sentence.
 ** ~tibetan--open-segment-analysis-impl~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4129
+:LINE: 4124
 :SIGNATURE: (tibetan--open-segment-analysis-impl)
 :END:
 
@@ -11798,7 +13064,7 @@ Segment-level implementation; see `tibetan-open-segment-analysis'.
 ** ~tibetan-reanalyze-segment~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 4293
+:LINE: 4288
 :SIGNATURE: (tibetan-reanalyze-segment)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -11811,7 +13077,7 @@ segment > sentence > paragraph > legacy, most-specific-wins.
 ** ~tibetan--reanalyze-segment-impl~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4315
+:LINE: 4310
 :SIGNATURE: (tibetan--reanalyze-segment-impl)
 :END:
 
@@ -11820,7 +13086,7 @@ Segment-level implementation; see `tibetan-reanalyze-segment'.
 ** ~tibetan-open-paragraph-analysis~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 4418
+:LINE: 4413
 :SIGNATURE: (tibetan-open-paragraph-analysis)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -11838,7 +13104,7 @@ right-side window.
 ** ~tibetan-reanalyze-paragraph~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 4475
+:LINE: 4470
 :SIGNATURE: (tibetan-reanalyze-paragraph)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -11852,7 +13118,7 @@ the segment-level `tibetan-reanalyze-segment' contract.
 ** ~tibetan-analysis--read-section-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4524
+:LINE: 4519
 :SIGNATURE: (tibetan-analysis--read-section-body filepath section-name)
 :END:
 
@@ -11863,7 +13129,7 @@ Works for top-level (* …) sections.
 ** ~tibetan-analysis--seg-id-from-filename~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4543
+:LINE: 4538
 :SIGNATURE: (tibetan-analysis--seg-id-from-filename filepath)
 :END:
 
@@ -11872,7 +13138,7 @@ Return the numeric segment id encoded in FILEPATH's basename, or nil.
 ** ~tibetan-analysis--fire-parallel-claude-with-plist~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4553
+:LINE: 4548
 :SIGNATURE: (tibetan-analysis--fire-parallel-claude-with-plist tibetan-text sanskrit-plist source-file analysis-file)
 :END:
 
@@ -11894,7 +13160,7 @@ Returns t when the Sanskrit call was dispatched, nil otherwise.
 ** ~tibetan-analysis--fire-parallel-mode-claude-calls~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4615
+:LINE: 4610
 :SIGNATURE: (tibetan-analysis--fire-parallel-mode-claude-calls tibetan-text source-file analysis-file)
 :END:
 
@@ -11910,7 +13176,7 @@ Sanskrit sibling is a placeholder.
 ** ~tibetan-analysis-reanalyze-file~  /function (cl)/
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 4637
+:LINE: 4632
 :SIGNATURE: (tibetan-analysis-reanalyze-file filepath &key source-file re-request-claude dry-run)
 :END:
 
@@ -11941,7 +13207,7 @@ without touching the file.  Otherwise return a plist:
 ** ~tibetan-analysis--folder-analysis-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4799
+:LINE: 4812
 :SIGNATURE: (tibetan-analysis--folder-analysis-files folder)
 :END:
 
@@ -11950,7 +13216,7 @@ Return the list of seg-NNN*.org files under FOLDER, sorted by seg-id.
 ** ~tibetan-analysis-batch-reanalyze~  /function (cl)/  ⚡  ↗
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 4810
+:LINE: 4823
 :SIGNATURE: (tibetan-analysis-batch-reanalyze &key folder source-file re-request-claude dry-run)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -12107,7 +13373,7 @@ Non-nil if faces have already been set up for this buffer.
 ** ~tibetan-analysis--priority-section-order~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 3100
+:LINE: 3076
 :DEFAULT: '
 :END:
 
@@ -12116,7 +13382,7 @@ Non-nil if faces have already been set up for this buffer.
 ** ~tibetan-analysis--claude-particles-for-render~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 3262
+:LINE: 3243
 :DEFAULT: nil
 :END:
 
@@ -12132,7 +13398,7 @@ output, identical to Pass 6b behaviour.
 ** ~tibetan-analysis--sanskrit-text-for-render~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 3272
+:LINE: 3253
 :DEFAULT: nil
 :END:
 
@@ -12773,20 +14039,22 @@ of analysis file FILEPATH.  Returns a trimmed string, or nil.
 Non-nil if FILEPATH's Claude translation block is still a placeholder.
 
 Matches the Claude Translation heading at any supported depth and form:
+​  * `^\*+ Translation$'         (current — the §5.18 layout, 2026-05-04,
+                                  dropped the `Claude' qualifier on the
+                                  Tibetan-side translation heading)
+​  * `^\*+ Claude Translation$'  (pre-§5.18 structured layout)
 ​  * `^\*+ Claude$'              (legacy — singular Claude block)
-​  * `^\*+ Claude Translation$'  (current — structured three-part layout
-                                  where Translation lives separately from
-                                  Grammar/Vocabulary)
 
 A translation is considered missing when the body under the first such
 heading is blank, or begins with one of the standard placeholders:
-`[Requesting translation...]', `[Claude unavailable...]',
-`[Not available...]', or the `[Claude request failed...]' fail-stub.
+`[Requesting translation...]', `[Awaiting Claude…]' (§5.21 scaffold),
+`[Claude unavailable...]', `[Not available...]', or the `[Claude
+request failed...]' fail-stub.
 
 ** ~tibetan-auto--analysis-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 632
+:LINE: 636
 :SIGNATURE: (tibetan-auto--analysis-files folder)
 :END:
 
@@ -12797,7 +14065,7 @@ we focus the batch on the segments used in class.
 ** ~tibetan-auto-request-claude-translations~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 641
+:LINE: 645
 :SIGNATURE: (tibetan-auto-request-claude-translations &optional force)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -13366,7 +14634,7 @@ Identifies shared topics and referent tracking.
 ** ~tibetan-compound-build-line-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 404
+:LINE: 399
 :SIGNATURE: (tibetan-compound-build-line-translation gloss verbs connectors line-idx total-lines)
 :END:
 
@@ -13380,7 +14648,7 @@ TOTAL-LINES is total number of lines.
 ** ~tibetan-compound-generate-translations-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 485
+:LINE: 480
 :SIGNATURE: (tibetan-compound-generate-translations-section lines connectors context)
 :END:
 
@@ -13392,7 +14660,7 @@ Returns org-mode formatted string with actual draft translations.
 ** ~tibetan-compound-generate-content~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 672
+:LINE: 667
 :SIGNATURE: (tibetan-compound-generate-content lines context)
 :END:
 
@@ -13402,7 +14670,7 @@ Returns org-mode formatted string.
 ** ~tibetan-compound-create-file~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 795
+:LINE: 790
 :SIGNATURE: (tibetan-compound-create-file compound-id lines source-file auto-content)
 :END:
 
@@ -13416,7 +14684,7 @@ Returns the filepath.
 ** ~tibetan-compound-check-sync~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 850
+:LINE: 845
 :SIGNATURE: (tibetan-compound-check-sync filepath lines)
 :END:
 
@@ -13426,7 +14694,7 @@ Returns t if hashes match, nil otherwise.
 ** ~tibetan-compound-regenerate-auto~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 862
+:LINE: 857
 :SIGNATURE: (tibetan-compound-regenerate-auto filepath lines context)
 :END:
 
@@ -13436,7 +14704,7 @@ Preserves user sections.
 ** ~tibetan-compound-find-existing~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 923
+:LINE: 918
 :SIGNATURE: (tibetan-compound-find-existing lines)
 :END:
 
@@ -13446,7 +14714,7 @@ Returns filepath if found, nil otherwise.
 ** ~tibetan-open-compound-analysis~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 943
+:LINE: 938
 :SIGNATURE: (tibetan-open-compound-analysis)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -13459,7 +14727,7 @@ Opens analysis in side window.
 ** ~tibetan-reanalyze-compound~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 986
+:LINE: 981
 :SIGNATURE: (tibetan-reanalyze-compound)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -13471,7 +14739,7 @@ Must be called from within a compound analysis buffer.
 ** ~tibetan-compound-analyze-document-structure~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1034
+:LINE: 1029
 :SIGNATURE: (tibetan-compound-analyze-document-structure)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -13483,7 +14751,7 @@ Returns a list of analysis results or nil if no structure found.
 ** ~tibetan-compound-analyze-verse-structure~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1046
+:LINE: 1041
 :SIGNATURE: (tibetan-compound-analyze-verse-structure lines)
 :END:
 
@@ -13698,10 +14966,35 @@ covers the heading line through (just before) the next `* ' heading
 or end-of-file, so it can be re-inserted verbatim if the section
 gets clobbered by regeneration.
 
+** ~tibetan-sentence--read-parallel-top-level-sections~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 376
+:SIGNATURE: (tibetan-sentence--read-parallel-top-level-sections filepath)
+:END:
+
+Return alist (HEADING-NAME . FULL-SECTION-TEXT) for the parallel-mode
+top-level sections present in FILEPATH.
+
+FULL-SECTION-TEXT covers the `* HEADING' line through just before the
+next top-level heading (or end-of-file), so it can be re-appended
+verbatim by the regenerate RESTORE phase.
+
+** ~tibetan-sentence--append-top-level-section~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 397
+:SIGNATURE: (tibetan-sentence--append-top-level-section buffer full-text)
+:END:
+
+Append FULL-TEXT (a `* Heading' … block) at the end of BUFFER.
+Ensures a blank-line separator before the new section.  No-op when
+FULL-TEXT is blank.
+
 ** ~tibetan-sentence--read-translation-bodies~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 361
+:LINE: 409
 :SIGNATURE: (tibetan-sentence--read-translation-bodies filepath)
 :END:
 
@@ -13712,25 +15005,36 @@ the corresponding heading has real content, not placeholder text).
 ** ~tibetan-sentence--segment-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 406
+:LINE: 471
 :SIGNATURE: (tibetan-sentence--segment-claude-sections)
 :END:
 
 Return the list of level-2 headings to strip from segment-renderer
 output before embedding it in a sentence file.
 
-§5.22 final (2026-05-21):  unconditional — sentence files are
-always class-format.  Returns `tibetan-sentence--strip-list'
-verbatim.  Kept as a defun (rather than the user calling the
-defconst directly) so internal mocking + future strip-list
-variants stay easy to wire.
+§5.27 Phase 5 (2026-05-26):  consults
+`tibetan-sentence--detail-for-render':
+  · `"detailed"'  → empty list (no stripping;  full §5.21
+                       segment layout flows through).  Reader
+                       gets all 11 L2 sections in the sentence
+                       file — for thorough reading classes.
+  · `"compressed"' / nil / anything else → `--strip-list'
+                       (the §5.22 default 7-entry filter,
+                       sentence file collapses to 4 L2 sections,
+                       ~2 A4 pages).
+
+Pre-§5.27:  always returned `--strip-list' unconditionally
+(§5.22 final).  The dynamic-var gate restores per-document
+control via the new `#+TIBETAN_SENTENCE_DETAIL:' header without
+re-introducing the retired toggle command — the wizard sets the
+header once, downstream renders honour it.
 
 Consumed by `--strip-segment-claude-sections' below.
 
 ** ~tibetan-sentence--strip-segment-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 419
+:LINE: 500
 :SIGNATURE: (tibetan-sentence--strip-segment-claude-sections content)
 :END:
 
@@ -13740,13 +15044,14 @@ consistent with the rest of the tool.
 
 §5.22 (2026-05-21):  the strip list is now sourced from the defun
 `tibetan-sentence--segment-claude-sections', which consults the
-dynamic var `tibetan-sentence--compressed-for-render'.  See that
-accessor's docstring for the two-mode behaviour.
+dynamic var `tibetan-sentence--detail-for-render' (§5.27 Phase 5
+renamed from `--compressed-for-render').  See that accessor's
+docstring for the two-mode behaviour.
 
 ** ~tibetan-sentence--role-display~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 442
+:LINE: 524
 :SIGNATURE: (tibetan-sentence--role-display role)
 :END:
 
@@ -13755,7 +15060,7 @@ Return a human-readable English label for an argument ROLE symbol.
 ** ~tibetan-sentence--render-main-clause~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 464
+:LINE: 546
 :SIGNATURE: (tibetan-sentence--render-main-clause tibetan-text)
 :END:
 
@@ -13774,7 +15079,7 @@ not signal — errors in the analyser fall through to nil.
 ** ~tibetan-sentence--append-main-clause~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 545
+:LINE: 627
 :SIGNATURE: (tibetan-sentence--append-main-clause content tibetan-text)
 :END:
 
@@ -13786,7 +15091,7 @@ returned unchanged.
 ** ~tibetan-sentence--render-auto-analysis~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 560
+:LINE: 642
 :SIGNATURE: (tibetan-sentence--render-auto-analysis tibetan-text)
 :END:
 
@@ -13812,7 +15117,7 @@ auto-analysis block at all.
 ** ~tibetan-sentence--inject-sentence-l3-entries~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 611
+:LINE: 693
 :SIGNATURE: (tibetan-sentence--inject-sentence-l3-entries buffer)
 :END:
 
@@ -13832,10 +15137,22 @@ Called from the scaffold (fresh files) and from `--regenerate'
 (after relocation of preserved bodies, so already-populated
 sentence-only entries don't get clobbered).
 
+** ~tibetan-sentence--sentence-detail-from-source~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 739
+:SIGNATURE: (tibetan-sentence--sentence-detail-from-source source-file)
+:END:
+
+Return the `:sentence-detail' string for SOURCE-FILE, or nil.
+Reads via `tibetan-analysis--read-source-metadata' so the
+heading is parsed by the canonical reader.  Safe when
+SOURCE-FILE is nil or the metadata module isn't loaded.
+
 ** ~tibetan-sentence--scaffold~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 657
+:LINE: 752
 :SIGNATURE: (tibetan-sentence--scaffold sent-num seg-nums tibetan-text wylie source-file)
 :END:
 
@@ -13883,7 +15200,7 @@ their rationale.
 ** ~tibetan-sentence--create-file~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 766
+:LINE: 872
 :SIGNATURE: (tibetan-sentence--create-file sent-num seg-nums tibetan-text source-file)
 :END:
 
@@ -13892,7 +15209,7 @@ Create a new `sent-NNN.org' file for SENT-NUM, return its path.
 ** ~tibetan-sentence--read-l2-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 783
+:LINE: 889
 :SIGNATURE: (tibetan-sentence--read-l2-body filepath heading)
 :END:
 
@@ -13903,7 +15220,7 @@ a placeholder.
 ** ~tibetan-sentence--set-l3-body-in-buffer~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 809
+:LINE: 915
 :SIGNATURE: (tibetan-sentence--set-l3-body-in-buffer buffer heading body)
 :END:
 
@@ -13913,7 +15230,7 @@ Heading must already exist in the buffer.
 ** ~tibetan-sentence--set-l2-body-in-buffer~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 828
+:LINE: 934
 :SIGNATURE: (tibetan-sentence--set-l2-body-in-buffer buffer heading body)
 :END:
 
@@ -13922,7 +15239,7 @@ Set the body under `** HEADING' in BUFFER to BODY (trimmed).
 ** ~tibetan-sentence--set-top-level-body-in-buffer~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 846
+:LINE: 952
 :SIGNATURE: (tibetan-sentence--set-top-level-body-in-buffer buffer heading body)
 :END:
 
@@ -13935,7 +15252,7 @@ in place;  callers ensure the heading is present first.
 ** ~tibetan-sentence--regenerate~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 860
+:LINE: 966
 :SIGNATURE: (tibetan-sentence--regenerate filepath sent-num seg-nums tibetan-text)
 :END:
 
@@ -13971,7 +15288,7 @@ Updates `#+SEGMENTS:' / `#+TIBETAN_HASH:' / `#+LAST_ANALYZED:'.
 ** ~tibetan-sentence--child-seg-filepath~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1061
+:LINE: 1215
 :SIGNATURE: (tibetan-sentence--child-seg-filepath seg-num &optional folder)
 :END:
 
@@ -13980,7 +15297,7 @@ Return absolute path to `seg-NNN.org' for SEG-NUM, or nil.
 ** ~tibetan-sentence--collect-children-grounding~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1068
+:LINE: 1222
 :SIGNATURE: (tibetan-sentence--collect-children-grounding seg-nums &optional folder)
 :END:
 
@@ -13992,7 +15309,7 @@ parser content.
 ** ~tibetan-sentence--build-claude-prompts~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1094
+:LINE: 1248
 :SIGNATURE: (tibetan-sentence--build-claude-prompts tibetan-text seg-nums source-file &optional folder)
 :END:
 
@@ -14006,7 +15323,7 @@ files for parser grounding; SOURCE-FILE the source org buffer path
 ** ~tibetan-sentence--source-file-from-analysis~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1143
+:LINE: 1308
 :SIGNATURE: (tibetan-sentence--source-file-from-analysis analysis-file)
 :END:
 
@@ -14015,7 +15332,7 @@ Return absolute source file referenced by sent-NNN.org ANALYSIS-FILE.
 ** ~tibetan-sentence--seg-nums-from-file~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1156
+:LINE: 1321
 :SIGNATURE: (tibetan-sentence--seg-nums-from-file filepath)
 :END:
 
@@ -14024,7 +15341,7 @@ Read the `#+SEGMENTS:' header value from FILEPATH and return a list of ints.
 ** ~tibetan-sentence--request-claude~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1168
+:LINE: 1333
 :SIGNATURE: (tibetan-sentence--request-claude tibetan-text seg-nums analysis-file &optional source-file folder)
 :END:
 
@@ -14042,7 +15359,7 @@ Translation section if retries are exhausted.
 ** ~tibetan-sentence-open-analysis~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1252
+:LINE: 1417
 :SIGNATURE: (tibetan-sentence-open-analysis)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -14058,7 +15375,7 @@ changed).
 ** ~tibetan-sentence-reanalyze~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1324
+:LINE: 1489
 :SIGNATURE: (tibetan-sentence-reanalyze)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -14073,7 +15390,7 @@ called with a prefix argument.
 ** ~tibetan-sentence-reanalyze-file~  /function (cl)/
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 1376
+:LINE: 1541
 :SIGNATURE: (tibetan-sentence-reanalyze-file filepath &key source-file re-request-claude dry-run)
 :END:
 
@@ -14091,7 +15408,7 @@ Returns plist:
 ** ~tibetan-sentence--folder-sentence-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1457
+:LINE: 1622
 :SIGNATURE: (tibetan-sentence--folder-sentence-files folder)
 :END:
 
@@ -14100,7 +15417,7 @@ Return sent-NNN*.org files in FOLDER, sorted by sentence id.
 ** ~tibetan-sentence-batch-reanalyze~  /function (cl)/  ⚡  ↗
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 1469
+:LINE: 1634
 :SIGNATURE: (tibetan-sentence-batch-reanalyze &key folder source-file re-request-claude dry-run)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -14119,7 +15436,7 @@ Returns plist:
 ** ~tibetan-sentence--analysis-folder~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1535
+:LINE: 1700
 :SIGNATURE: (tibetan-sentence--analysis-folder)
 :END:
 
@@ -14129,7 +15446,7 @@ Falls back to `<cwd>/analysis/' when not in a source buffer.
 ** ~tibetan-sentence-archive-analysis-folder~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1544
+:LINE: 1709
 :SIGNATURE: (tibetan-sentence-archive-analysis-folder &optional folder)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -14152,7 +15469,7 @@ generated sent files afterwards.
 ** ~tibetan-sentence-create-all~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1592
+:LINE: 1757
 :SIGNATURE: (tibetan-sentence-create-all)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -14173,7 +15490,7 @@ Reports created / skipped counts on completion.
 ** ~tibetan-sentence--fire-claude-on-new-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1691
+:LINE: 1856
 :SIGNATURE: (tibetan-sentence--fire-claude-on-new-files plists source-file)
 :END:
 
@@ -14188,7 +15505,7 @@ failures are swallowed to `message'.
 ** ~tibetan-sentence-resegment~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1746
+:LINE: 1911
 :SIGNATURE: (tibetan-sentence-resegment)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -14233,19 +15550,51 @@ turns it into one confirmable operation.
 
 Version of the sentence analysis file format.
 
-** ~tibetan-sentence--strip-list~  /constant/
+** ~tibetan-sentence--parallel-top-level-sections~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 372
+:LINE: 361
 :DEFAULT: '
 :END:
 
 /(no docstring)/
 
+** ~tibetan-sentence--strip-list~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 420
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+** ~tibetan-sentence--detail-for-render~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 454
+:DEFAULT: nil
+:END:
+
+Dynamic binding:  the `:sentence-detail' value for the in-flight
+sentence-scaffold render.  When `detailed', the strip-list is
+suppressed so the embedded segment-renderer output passes
+through unmodified — sentence files mirror the full §5.21
+segment layout (Wylie / Phonetics / Interlinear / etc. all
+present).
+
+§5.27 Phase 5 (2026-05-26):  let-bound by
+`tibetan-sentence--create-file' and `tibetan-sentence--regenerate'
+based on the source-document's `#+TIBETAN_SENTENCE_DETAIL:'
+header.  Consumed by `--segment-claude-sections' below.
+
+Nil → default compressed behaviour from §5.22 final
+(backwards-compatible).  String `"detailed"' → full §5.21
+layout.  Any other string treated as `compressed' (defensive).
+
 ** ~tibetan-sentence--main-clause-role-order~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 456
+:LINE: 538
 :DEFAULT: '
 :END:
 
@@ -14254,7 +15603,7 @@ Version of the sentence analysis file format.
 ** ~tibetan-sentence--scaffold-sentence-only-l3-entries~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 596
+:LINE: 678
 :DEFAULT: '
 :END:
 
@@ -14263,7 +15612,7 @@ Version of the sentence analysis file format.
 ** ~tibetan-sentence--claude-system-prompt~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 990
+:LINE: 1126
 :DEFAULT: "You are a specialist in Classical Tibetan (chos skad) translation \
 and philology, acting as a teaching assistant for a
 :END:
@@ -14380,16 +15729,22 @@ Move orphaned analysis file at FILEPATH to archive directory.
 :PROPERTIES:
 :KIND: defun
 :LINE: 263
-:SIGNATURE: (tibetan-reorg--generate-new-filename segment-num _source-file)
+:SIGNATURE: (tibetan-reorg--generate-new-filename segment-num source-file)
 :END:
 
 Generate filename for SEGMENT-NUM analysis.
-SOURCE-FILE is used for the short suffix.
+SOURCE-FILE supplies the per-source short-name suffix (§5.23):
+`seg-NNN-SHORT.org'.  Without it (or when no short name can be
+derived) falls back to the bare `seg-NNN.org'.  Producing the
+suffixed name keeps multi-source folders (e.g. MA Reading: gal-chen /
+lam-rim / title-colophon) collision-free — the §5.23 fix applied here
+to the reorg rename path, which previously always emitted the bare
+name and reintroduced the silent-overwrite collision.
 
 ** ~tibetan-reorg--execute-actions~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 272
+:LINE: 285
 :SIGNATURE: (tibetan-reorg--execute-actions actions analysis-dir source-file &optional dry-run)
 :END:
 
@@ -14402,7 +15757,7 @@ Returns plist with :renamed, :created, :archived, :kept counts.
 ** ~tibetan-reorganize-analysis-files~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 358
+:LINE: 371
 :SIGNATURE: (tibetan-reorganize-analysis-files &optional dry-run)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -14425,7 +15780,7 @@ Returns plist with reorganization statistics.
 ** ~tibetan-preview-reorganization~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 436
+:LINE: 449
 :SIGNATURE: (tibetan-preview-reorganization)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -15569,7 +16924,7 @@ Display Tibetan CAT version and feature summary.
 ** ~tibetan-cat--server-socket-path~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 414
+:LINE: 418
 :SIGNATURE: (tibetan-cat--server-socket-path server-name)
 :END:
 
@@ -15581,7 +16936,7 @@ removed when the server is stopped).
 ** ~tibetan-cat-open-zettel-for-word-at-point~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 425
+:LINE: 429
 :SIGNATURE: (tibetan-cat-open-zettel-for-word-at-point &optional arg)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -15627,7 +16982,7 @@ routes opens via emacsclient -s <server> so the zettel appears in the
 research instance instead of the CAT instance.  Configure the research
 instance to start the server with the matching name:
 
-  (require 'server)
+  (require ='server)
   (setq server-name "research-emacs")
   (unless (server-running-p) (server-start))
 
@@ -15650,6 +17005,14 @@ Empty string disables remote routing entirely.
 
 Version of Tibetan CAT system.
 
+** ~server-socket-dir~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 416
+:END:
+
+/(no docstring)/
+
 
 * workspace/tibetan-sentence-workspace.el
 :PROPERTIES:
@@ -15660,7 +17023,7 @@ Version of Tibetan CAT system.
 ** ~tibetan-get-sentence-at-point-any-format~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 56
+:LINE: 48
 :SIGNATURE: (tibetan-get-sentence-at-point-any-format)
 :END:
 
@@ -15670,7 +17033,7 @@ Returns plist with :number, :segments, :start, :end.
 ** ~tibetan-get-sentence-at-point~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 80
+:LINE: 72
 :SIGNATURE: (tibetan-get-sentence-at-point)
 :END:
 
@@ -15680,7 +17043,7 @@ sentence boundaries).
 ** ~tibetan-create-sentence-workspace~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 140
+:LINE: 132
 :SIGNATURE: (tibetan-create-sentence-workspace sentence-data)
 :END:
 
@@ -15689,7 +17052,7 @@ Create workspace buffer for SENTENCE-DATA.
 ** ~tibetan-prepare-sentence~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 272
+:LINE: 264
 :SIGNATURE: (tibetan-prepare-sentence)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -15702,7 +17065,7 @@ Works with both org structure (** Sentence) and old markers.
 ** ~tibetan-save-workspace~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 300
+:LINE: 292
 :SIGNATURE: (tibetan-save-workspace)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -15713,7 +17076,7 @@ Save current workspace to file.
 ** ~tibetan-export-workspace-pdf~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 308
+:LINE: 300
 :SIGNATURE: (tibetan-export-workspace-pdf)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -15725,7 +17088,7 @@ Uses minimal LaTeX setup - no title page, no TOC.
 ** ~tibetan-export-any-org-to-pdf~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 340
+:LINE: 332
 :SIGNATURE: (tibetan-export-any-org-to-pdf)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -15747,72 +17110,64 @@ Path to the current workspace file being edited.
 ** ~org-latex-classes~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 28
-:DEFAULT: nil
+:LINE: 35
 :END:
 
-LaTeX document classes for export.
+/(no docstring)/
 
 ** ~org-export-with-toc~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 31
-:DEFAULT: nil
+:LINE: 36
 :END:
 
-Org export option: whether to include table of contents.
+/(no docstring)/
 
 ** ~org-export-with-title~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 34
-:DEFAULT: nil
+:LINE: 37
 :END:
 
-Org export option: whether to include document title.
+/(no docstring)/
 
 ** ~org-export-with-author~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 37
-:DEFAULT: nil
+:LINE: 38
 :END:
 
-Org export option: whether to include author.
+/(no docstring)/
 
 ** ~org-export-with-date~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 40
-:DEFAULT: nil
+:LINE: 39
 :END:
 
-Org export option: whether to include date.
+/(no docstring)/
 
 ** ~org-latex-compiler~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 43
-:DEFAULT: nil
+:LINE: 40
 :END:
 
-LaTeX compiler to use for export.
+/(no docstring)/
 
 ** ~org-latex-pdf-process~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 46
-:DEFAULT: nil
+:LINE: 41
 :END:
 
-LaTeX PDF processing command.
+/(no docstring)/
 
 ** ~org-latex-default-class~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 49
-:DEFAULT: nil
+:LINE: 42
 :END:
 
-Default LaTeX document class for export.
+/(no docstring)/
 
