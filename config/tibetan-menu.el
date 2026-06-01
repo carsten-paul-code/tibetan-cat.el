@@ -78,12 +78,7 @@
      ["Batch Analyze All Segments (C-c u B)" tibetan-auto-analyze-document
       :help "Analyze all segments in buffer, with option to skip or regenerate existing"]
      ["Combine into One Document (C-c u C)" tibetan-analysis-combine-document
-      :help "Stitch every seg-NNN*.org into analysis/combined.org with consolidated appendix"]
-     "---"
-     ["Refresh DharmaMitra (C-c u D)" tibetan-refresh-dharmamitra-translation
-      :help "Re-request DharmaMitra translation (run in analysis file)"]
-     ["Copy DharmaMitra to Working (C-c u W)" tibetan-copy-dharmamitra-to-working
-      :help "Copy DharmaMitra translation to Working Translation section"])
+      :help "Stitch every seg-NNN*.org into analysis/combined.org with consolidated appendix"])
     ("Persistent Sentence Analysis"
      ["Open/Create Sentence Analysis (C-c s A)" tibetan-sentence-open-analysis
       :help "Open or create persistent analysis file for the sentence at point"

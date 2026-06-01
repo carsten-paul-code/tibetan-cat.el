@@ -389,22 +389,6 @@
   ;; - Helps debug connection issues
 
 ;; ============================================================================
-;; DHARMAMITRA IN ANALYSIS FILES - C-c u D
-;; ============================================================================
-
-(global-set-key (kbd "C-c u D") 'tibetan-refresh-dharmamitra-translation)
-  ;; Re-request DharmaMitra translation in an analysis file:
-  ;; - Run from within analysis file (seg-XXX.org)
-  ;; - Fetches fresh translation from DharmaMitra API
-  ;; - Updates the "- DharmaMitra:" line
-  ;; - Useful if original request failed or timed out
-
-(global-set-key (kbd "C-c u W") 'tibetan-copy-dharmamitra-to-working)
-  ;; Copy DharmaMitra translation to Working Translation section:
-  ;; - Copies DharmaMitra suggestion to your working area
-  ;; - Gives you a starting point for your own translation
-
-;; ============================================================================
 ;; DISPLAY SETTINGS - C-c u +/- (font size)
 ;; ============================================================================
 

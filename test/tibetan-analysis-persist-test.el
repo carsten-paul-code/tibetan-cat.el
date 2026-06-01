@@ -650,9 +650,12 @@ file only]' fallback template."
 ;; Note: The following functions are planned but not yet implemented:
 ;; - tibetan-collect-all-segments
 ;; - tibetan-analyze-all-segments
-;; - tibetan-refresh-dharmamitra-translation
-;; - tibetan-copy-dharmamitra-to-working
 ;; Tests for these functions are deferred until implementation is available.
+;;
+;; The DharmaMitra refresh/copy commands (tibetan-refresh-dharmamitra-
+;; translation / tibetan-copy-dharmamitra-to-working) were never
+;; implemented; their dead C-c u D / C-c u W bindings + menu items were
+;; removed (they raised void-function).
 
 ;; ============================================================================
 ;; ANALYSIS MODE HOOK TESTS (untested public function)
