@@ -747,6 +747,10 @@ Returns verb entry alist if found, nil otherwise."
     (let ((clean-word (string-trim word)))
       ;; Strip trailing punctuation (shad, double shad, etc.)
       (setq clean-word (replace-regexp-in-string "[།༎༔]+$" "" clean-word))
+      ;; Strip a trailing tsheg / whitespace left by an upstream
+      ;; case-stripping pass (e.g. `བདག་གིས' → `བདག་'); the DB keys are
+      ;; tsheg-free (CLAUDE.md §7 trailing-tsheg pitfall).
+      (setq clean-word (replace-regexp-in-string "[་ \t]+$" "" clean-word))
       ;; Try direct lookup
       (or (gethash clean-word tibetan-verb-database)
           ;; Try with common suffix variations

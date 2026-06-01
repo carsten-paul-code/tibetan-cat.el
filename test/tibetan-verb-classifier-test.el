@@ -21,6 +21,17 @@
     (should result)
     (should (string= "སྦྱིན" (alist-get 'lemma result)))))
 
+(ert-deftest tibetan-verb-lookup-with-trailing-tsheg ()
+  "Verbs with a trailing tsheg (་) are still found.
+A word arriving as `བྱིན་' (tsheg not yet stripped — e.g. from a
+case-stripping pass that left `STEM་') must match the DB key `བྱིན'.
+Mirrors CLAUDE.md §7: trailing-tsheg-after-stripping pitfall."
+  (let ((bare (tibetan-verb-lookup "བྱིན"))
+        (tsheg (tibetan-verb-lookup "བྱིན་")))
+    (should bare)
+    (should tsheg)
+    (should (equal bare tsheg))))
+
 (ert-deftest tibetan-verb-lookup-unknown-verb ()
   "Test that unknown words return nil."
   (should-not (tibetan-verb-lookup "ཨ་མ")))  ; "mother" - not a verb
