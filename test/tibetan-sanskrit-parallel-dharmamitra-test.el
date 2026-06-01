@@ -1014,6 +1014,29 @@ source."
                     "/tmp/x.org" '())))
       (should (= calls 0)))))
 
+(ert-deftest tibetan-skt-dm-apply-proposals-threads-source-file-for-suffix ()
+  "Apply-all must thread SOURCE-FILE into tibetan-analysis-get-filepath
+so the §5.23 per-source suffix resolves the correct seg-NNN-SHORT.org.
+
+Without it, get-filepath returns the bare seg-NNN.org and, in a
+multi-source analysis folder, the realign section is written to the
+wrong source's file (or a nonexistent path) — the §5.23 silent-
+overwrite class on the realign path."
+  (skip-unless (fboundp 'tibetan-sanskrit-parallel-dm--apply-proposals))
+  (tibetan-skt-dm-test--with-source-file-multi-segment
+   (let (captured-srcs)
+     (cl-letf (((symbol-function 'tibetan-analysis-get-filepath)
+                (lambda (seg-id &optional src)
+                  (push src captured-srcs)
+                  (format "/tmp/seg-%03d.org" seg-id)))
+               ((symbol-function 'tibetan-sanskrit-parallel-dm--apply-proposal)
+                (lambda (_file _p) t)))
+       (tibetan-sanskrit-parallel-dm--apply-proposals
+        source-file
+        (list (list :seg-id 1 :status 'change :proposed-sanskrit "a")))
+       ;; The suffix-aware call passed the real source file, not nil.
+       (should (member source-file captured-srcs))))))
+
 ;; ----------------------------------------------------------------------------
 ;; REGRESSION: source file is NEVER modified by apply (Phase 7 invariant)
 ;; ----------------------------------------------------------------------------

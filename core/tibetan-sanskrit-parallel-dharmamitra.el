@@ -631,11 +631,25 @@ itself is NEVER modified — verified by regression test."
       (with-current-buffer (find-file-noselect source-file)
         (dolist (p proposals)
           (let* ((seg-id (plist-get p :seg-id))
-                 (analysis-file (and seg-id
-                                     (fboundp 'tibetan-analysis-get-filepath)
-                                     (condition-case nil
-                                         (tibetan-analysis-get-filepath seg-id)
-                                       (error nil)))))
+                 ;; §5.23: resolve the per-source SUFFIXED path
+                 ;; (seg-NNN-SHORT.org) by threading SOURCE-FILE through
+                 ;; get-filepath, so a multi-source folder doesn't write
+                 ;; the realign section to the wrong source's file.
+                 ;; Fall back to the bare seg-NNN.org only for legacy
+                 ;; unmigrated folders where the suffixed file is absent
+                 ;; but the bare one exists.
+                 (analysis-file
+                  (and seg-id
+                       (fboundp 'tibetan-analysis-get-filepath)
+                       (condition-case nil
+                           (let ((suffixed (tibetan-analysis-get-filepath
+                                            seg-id source-file))
+                                 (bare (tibetan-analysis-get-filepath seg-id)))
+                             (if (or (file-exists-p suffixed)
+                                     (not (file-exists-p bare)))
+                                 suffixed
+                               bare))
+                         (error nil)))))
             (when (and analysis-file
                        (tibetan-sanskrit-parallel-dm--apply-proposal
                         analysis-file p))
