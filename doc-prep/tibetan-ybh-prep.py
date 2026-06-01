@@ -133,7 +133,7 @@ def format_segment(n: int, unicode_text: str, folios: list[str]) -> str:
 
 
 def split_source(source: str) -> tuple[str, str, str]:
-    """Split SOURCE into (prefix, body, suffix) around `* Tibetan Text' block.
+    r"""Split SOURCE into (prefix, body, suffix) around `* Tibetan Text' block.
 
     prefix — everything up to and including `* Tibetan Text\n' (+ blank)
     body   — from there up to the next `^\* ' heading or EOF
