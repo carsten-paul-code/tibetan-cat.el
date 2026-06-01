@@ -265,5 +265,28 @@ Callers can `or' against this."
              (lambda (_endpoint _body) "")))
     (should (null (tibetan-dharmamitra-api-chat-translate "x")))))
 
+(ert-deftest tibetan-dharmamitra-api-http-post-enforces-tls-verification ()
+  "`--http-post' must bind `gnutls-verify-error' to t around the
+`url-retrieve-synchronously' call.
+
+Emacs' default `gnutls-verify-error' is nil, meaning certificate
+failures do NOT abort the connection — the bearer token would be sent
+and the response trusted over an unverified (MITM-able) channel.  This
+test sets the global default to nil and captures the dynamic value of
+`gnutls-verify-error' at the moment `--http-post' contacts the server;
+it must be t."
+  (let ((captured 'unset)
+        (gnutls-verify-error nil))        ; hostile default
+    (cl-letf (((symbol-function 'url-retrieve-synchronously)
+               (lambda (&rest _)
+                 (setq captured gnutls-verify-error)
+                 ;; Return a minimal HTTP buffer so --http-post can parse.
+                 (let ((buf (generate-new-buffer " *tls-test*")))
+                   (with-current-buffer buf
+                     (insert "HTTP/1.1 200 OK\n\nok"))
+                   buf))))
+      (tibetan-dharmamitra-api--http-post "/x" "{}")
+      (should (eq captured t)))))
+
 (provide 'tibetan-dharmamitra-api-test)
 ;;; tibetan-dharmamitra-api-test.el ends here

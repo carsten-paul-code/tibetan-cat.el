@@ -208,7 +208,13 @@ rest of the pipeline without touching the network."
             ("Authorization" . ,(format "Bearer %s"
                                         tibetan-dharmamitra-api-token))
             ("Accept" . "application/json")))
-         (url-request-data (encode-coding-string body 'utf-8)))
+         (url-request-data (encode-coding-string body 'utf-8))
+         ;; Enforce TLS certificate verification.  Emacs' default
+         ;; `gnutls-verify-error' is nil — cert failures would NOT abort
+         ;; the connection, so the bearer token would be sent and the
+         ;; response trusted over an unverified (MITM-able) channel.
+         (gnutls-verify-error t)
+         (network-security-level 'high))
     (with-current-buffer
         (url-retrieve-synchronously url nil nil
                                     tibetan-dharmamitra-api-timeout)
