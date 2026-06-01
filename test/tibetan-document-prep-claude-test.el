@@ -185,6 +185,15 @@ string entries are trimmed."
          (parsed (tibetan-document-prep--parse-claude-response resp)))
     (should (equal '("line 1" "line 2") (plist-get parsed :context)))))
 
+(ert-deftest tibetan-document-prep-claude-parse-context-empty-strings-dropped ()
+  "Empty / whitespace-only context entries are dropped, not kept as
+\"\" — otherwise they inflate the wizard's context count and the
+apply-command message even though they write nothing."
+  (let* ((resp "{\"genre\": \"mgur\", \"author\": \"X\", \
+\"context\": [\"\", \"   \", \"real line\"]}")
+         (parsed (tibetan-document-prep--parse-claude-response resp)))
+    (should (equal '("real line") (plist-get parsed :context)))))
+
 ;; ============================================================================
 ;; HEADER WRITING — single-line upsert
 ;; ============================================================================

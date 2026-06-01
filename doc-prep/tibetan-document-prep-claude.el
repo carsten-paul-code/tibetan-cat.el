@@ -207,11 +207,18 @@ wizard knows to fall through to the manual prompt."
                                    s))))
                (context-clean
                 (and (listp context)
-                     (cl-remove-if-not
-                      #'stringp
-                      (mapcar (lambda (s)
-                                (and (stringp s) (string-trim s)))
-                              context)))))
+                     ;; Trim each entry and drop non-strings AND
+                     ;; empty/whitespace-only entries — the latter
+                     ;; would otherwise inflate the wizard's context
+                     ;; count and the apply message while writing
+                     ;; nothing.
+                     (delq nil
+                           (mapcar (lambda (s)
+                                     (and (stringp s)
+                                          (let ((trimmed (string-trim s)))
+                                            (unless (string-empty-p trimmed)
+                                              trimmed))))
+                                   context)))))
           (list :genre genre-key
                 :author author
                 :context context-clean))
