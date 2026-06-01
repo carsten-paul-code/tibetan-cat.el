@@ -551,8 +551,6 @@ If SILENT is non-nil, return nil instead of error when not in segment."
                       (error (format "[Wylie error: %s]" (error-message-string err)))))
              ;; Verb analysis (compound-aware)
              (verbs (tibetan-extract-verbs-compound-aware tibetan-text words multiword-units))
-             ;; DEBUG: Check what verbs contains
-             (_ (message "DEBUG verbs: %S" verbs))
              ;; DharmaMitra translation
              (translation (tibetan-get-dharmamitra-translation tibetan-text)))
 
@@ -828,11 +826,8 @@ If SILENT is non-nil, return nil instead of error when not in segment."
               (insert "\n"))
 
             ;; Zero marker analysis (topic vs. absolutive)
-            (message "DEBUG: About to call tibetan-analyze-zero-markers")
             (when verbs
-              (message "DEBUG: Calling tibetan-analyze-zero-markers with verbs=%S" verbs)
               (let ((zero-analysis (tibetan-analyze-zero-markers verbs multiword-units words)))
-                (message "DEBUG: zero-analysis returned: %S" zero-analysis)
                 (when zero-analysis
                   (insert "ZERO MARKER ANALYSIS:\n")
                   (tibetan-insert-separator)
