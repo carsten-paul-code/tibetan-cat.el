@@ -38,6 +38,13 @@
 (require 'cl-lib)
 (require 'json)
 (require 'url)
+;; gnutls / nsm own `gnutls-verify-error' / `network-security-level'.
+;; Require them so those variables are genuinely SPECIAL at both compile
+;; and run time — otherwise our `let' bindings around
+;; `url-retrieve-synchronously' (in --http-post) would be LEXICAL and
+;; url.el would never read them, silently defeating TLS verification.
+(require 'gnutls)
+(require 'nsm)
 
 ;; ============================================================================
 ;; CONFIGURATION

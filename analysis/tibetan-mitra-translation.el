@@ -18,6 +18,13 @@
 (require 'cl-lib)
 (require 'json)
 (require 'url)
+;; gnutls / nsm own `gnutls-verify-error' / `network-security-level'.
+;; Require them so those variables are genuinely SPECIAL at both compile
+;; and run time — otherwise the `let' binding in
+;; `tibetan-mitra--url-retrieve' would be LEXICAL and url.el would never
+;; read it, silently defeating TLS verification.
+(require 'gnutls)
+(require 'nsm)
 
 ;; ============================================================================
 ;; CONFIGURATION
