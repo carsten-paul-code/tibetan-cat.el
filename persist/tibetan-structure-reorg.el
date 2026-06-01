@@ -260,10 +260,23 @@ Updates internal references to NEW-SEGMENT-NUM."
                                 archive-dir))))
         (rename-file filepath archive-path)))))
 
-(defun tibetan-reorg--generate-new-filename (segment-num _source-file)
+(defun tibetan-reorg--generate-new-filename (segment-num source-file)
   "Generate filename for SEGMENT-NUM analysis.
-SOURCE-FILE is used for the short suffix."
-  (tibetan-analysis-segment-filename segment-num))
+SOURCE-FILE supplies the per-source short-name suffix (§5.23):
+`seg-NNN-SHORT.org'.  Without it (or when no short name can be
+derived) falls back to the bare `seg-NNN.org'.  Producing the
+suffixed name keeps multi-source folders (e.g. MA Reading: gal-chen /
+lam-rim / title-colophon) collision-free — the §5.23 fix applied here
+to the reorg rename path, which previously always emitted the bare
+name and reintroduced the silent-overwrite collision."
+  (let ((short (and source-file
+                    (fboundp 'tibetan-analysis-make-short-name)
+                    (tibetan-analysis-make-short-name source-file))))
+    (if (and short (not (string-empty-p short)))
+        (format "seg-%03d-%s.org"
+                (tibetan-analysis--extract-segment-number segment-num)
+                short)
+      (tibetan-analysis-segment-filename segment-num))))
 
 ;; ============================================================================
 ;; EXECUTION

@@ -208,6 +208,25 @@
       ;; Should mark segment 2 as needing creation
       (should (cl-find-if (lambda (a) (eq (plist-get a :action) 'create)) result)))))
 
+(ert-deftest tibetan-reorg-generate-new-filename-suffixed-multisource ()
+  "`tibetan-reorg--generate-new-filename' honours the §5.23 per-source
+short-name suffix when given a source file, so a reorg run in a
+multi-source folder does not rename files back to a bare seg-NNN.org
+\(which collides across sources)."
+  (skip-unless (fboundp 'tibetan-reorg--generate-new-filename))
+  ;; With a source file → suffixed name.
+  (let ((name (tibetan-reorg--generate-new-filename
+               1 "/tmp/gal-chen-nyi-shu.org")))
+    (should (string-match-p "^seg-001-.+\\.org$" name))
+    (should-not (string= name "seg-001.org")))
+  ;; Different source → different suffix (no collision).
+  (let ((a (tibetan-reorg--generate-new-filename 1 "/tmp/gal-chen-nyi-shu.org"))
+        (b (tibetan-reorg--generate-new-filename 1 "/tmp/lam-rim-thun-cig.org")))
+    (should-not (string= a b)))
+  ;; No source file → bare name (back-compat).
+  (should (string= (tibetan-reorg--generate-new-filename 1 nil)
+                   "seg-001.org")))
+
 ;; ============================================================================
 ;; FILE OPERATION TESTS
 ;; ============================================================================
