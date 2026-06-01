@@ -941,46 +941,6 @@ and can be overridden per-buffer with #+TIBETAN_DICT_PRIORITY."
     meaning))
 
 ;; ============================================================================
-;; CONVERB PATTERN DETECTION
-;; ============================================================================
-
-(defconst tibetan-converb-particles
-  '("ཅིང" "ཞིང" "ཤིང"    ; simultaneous converbs
-    "སྟེ" "ཏེ" "དེ"       ; sequential converbs
-    "ནས"                   ; "after" converb
-    )
-  "List of converb particles that attach to verb stems.")
-
-(defconst tibetan-nominalized-suffixes
-  '("བར" "པར"             ; terminative on nominalizer (for purpose/goal)
-    "བའི" "པའི"           ; genitive on nominalizer
-    "བས" "པས"             ; instrumental/causal on nominalizer
-    "བ" "པ"               ; plain nominalizer
-    )
-  "List of nominalized verb suffixes.")
-
-(defun tibetan-detect-verb-with-suffix (syllables start-idx)
-  "Detect if SYLLABLES starting at START-IDX form a verb+suffix pattern.
-Returns (COMBINED-FORM BASE-VERB SUFFIX MEANING) or nil.
-Handles: verb་ཅིང་, verb་སྟེ་, verb་བར་, verb་བའི་, etc."
-  (let ((num-syls (length syllables)))
-    (when (< (1+ start-idx) num-syls)
-      (let* ((syl1 (nth start-idx syllables))
-             (syl2 (nth (1+ start-idx) syllables))
-             (combined (concat syl1 "་" syl2)))
-        (cond
-         ;; Check if syl2 is a converb particle
-         ((member syl2 tibetan-converb-particles)
-          (let ((base-meaning (tibetan-lookup-word syl1)))
-            (when base-meaning
-              (list combined syl1 syl2 base-meaning))))
-         ;; Check if syl2 is a nominalized suffix
-         ((member syl2 tibetan-nominalized-suffixes)
-          (let ((base-meaning (tibetan-lookup-word syl1)))
-            (when base-meaning
-              (list combined syl1 syl2 base-meaning)))))))))
-
-;; ============================================================================
 ;; VOCABULARY EXTRACTION
 ;; ============================================================================
 

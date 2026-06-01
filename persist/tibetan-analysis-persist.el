@@ -1799,36 +1799,6 @@ Returns string like \\='(ERG)\\=' or \\='(LOC: if/when)\\=' or nil."
     "(TOP: as for)")
    (t nil)))
 
-(defun tibetan-analysis--get-word-info (word multiword-units)
-  "Get meaning and info for WORD, checking MULTIWORD-UNITS first.
-Returns alist with keys: meaning, wylie, is-verb, verb-info."
-  (let ((_info '())
-        (meaning nil)
-        (wylie nil))
-    ;; Check multiword-units first
-    (dolist (unit multiword-units)
-      (when (string= (nth 2 unit) word)
-        (let ((data (nth 3 unit)))
-          (setq meaning (alist-get 'english data))
-          (setq wylie (alist-get 'wylie data)))))
-    ;; If not found, try vocabulary
-    (unless meaning
-      (when (and (boundp 'tibetan-comprehensive-vocabulary)
-                 tibetan-comprehensive-vocabulary)
-        (setq meaning (gethash word tibetan-comprehensive-vocabulary))))
-    ;; If still not found, try tibetan-lookup-word
-    (unless meaning
-      (when (fboundp 'tibetan-lookup-word)
-        (setq meaning (tibetan-lookup-word word))))
-    ;; Get wylie if not already set
-    (unless wylie
-      (when (fboundp 'tibetan-to-wylie-fixed)
-        (condition-case nil
-            (setq wylie (tibetan-to-wylie-fixed word))
-          (error nil))))
-    `((meaning . ,meaning)
-      (wylie . ,wylie))))
-
 (defun tibetan-analysis--format-word-with-wylie (word)
   "Return WORD in the canonical `SCRIPT [wylie]' display form.
 

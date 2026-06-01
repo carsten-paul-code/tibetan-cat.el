@@ -539,10 +539,6 @@ body bytes verbatim (CLAUDE.md §6 user-content invariant)."
   "Test that particle annotation function exists."
   (should (fboundp 'tibetan-analysis--get-particle-annotation)))
 
-(ert-deftest tibetan-analysis-get-word-info-callable ()
-  "Test that word info function exists."
-  (should (fboundp 'tibetan-analysis--get-word-info)))
-
 ;; ============================================================================
 ;; CONTENT GENERATION TESTS
 ;; ============================================================================

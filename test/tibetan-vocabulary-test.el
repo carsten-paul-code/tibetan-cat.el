@@ -1009,45 +1009,6 @@ particle-stripping lookup and DD used a strict gethash lookup."
     (should (or (null result) (stringp result)))))
 
 ;; ============================================================================
-;; DETECT VERB WITH SUFFIX TESTS (untested public function)
-;; ============================================================================
-
-(ert-deftest tibetan-detect-verb-with-suffix-ba ()
-  "Test detecting verb with བ suffix."
-  (let ((syllables '("བ" "ྱ" "ས")))
-    (let ((result (tibetan-detect-verb-with-suffix syllables 0)))
-      (should (or (null result) (listp result) (stringp result))))))
-
-(ert-deftest tibetan-detect-verb-with-suffix-va ()
-  "Test detecting verb with ྭ suffix."
-  (let ((syllables '("ྭ")))
-    (let ((result (tibetan-detect-verb-with-suffix syllables 0)))
-      (should (or (null result) (listp result))))))
-
-(ert-deftest tibetan-detect-verb-with-suffix-ma ()
-  "Test detecting verb with མ suffix."
-  (let ((syllables '("མ")))
-    (let ((result (tibetan-detect-verb-with-suffix syllables 0)))
-      (should (or (null result) (listp result))))))
-
-(ert-deftest tibetan-detect-verb-with-suffix-no-suffix ()
-  "Test with syllables that don't form verb suffix."
-  (let ((syllables '("ང")))
-    (let ((result (tibetan-detect-verb-with-suffix syllables 0)))
-      (should (or (null result) (listp result))))))
-
-(ert-deftest tibetan-detect-verb-with-suffix-empty ()
-  "Test with empty syllables list."
-  (let ((result (tibetan-detect-verb-with-suffix '() 0)))
-    (should (or (null result) (listp result)))))
-
-(ert-deftest tibetan-detect-verb-with-suffix-out-of-range ()
-  "Test with start index out of range."
-  (let ((syllables '("བ")))
-    (let ((result (tibetan-detect-verb-with-suffix syllables 10)))
-      (should (or (null result) (listp result))))))
-
-;; ============================================================================
 ;; RESOURCE PATHS TESTS
 ;; ============================================================================
 
