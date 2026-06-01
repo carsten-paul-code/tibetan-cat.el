@@ -278,10 +278,22 @@ after the final `#+TIBETAN_…' header when none exist yet)."
                   "^#\\+\\(TIBETAN_[A-Z_]+\\|TITLE\\):.*$" nil t)
             (setq insert-after (line-end-position)))
           (goto-char insert-after))))
-      (dolist (line lines)
-        (let ((clean (string-trim line)))
-          (unless (string-empty-p clean)
-            (insert (format "\n#+TIBETAN_CLAUDE_CONTEXT: %s" clean))))))))
+      ;; Collect the context values already in the buffer so we don't
+      ;; append duplicates — re-running the wizard / re-applying Claude
+      ;; suggestions must be idempotent rather than accumulating
+      ;; identical #+TIBETAN_CLAUDE_CONTEXT: lines.
+      (let ((seen (save-excursion
+                    (goto-char (point-min))
+                    (let (vals)
+                      (while (re-search-forward
+                              "^#\\+TIBETAN_CLAUDE_CONTEXT: *\\(.*\\)$" nil t)
+                        (push (string-trim (match-string 1)) vals))
+                      vals))))
+        (dolist (line lines)
+          (let ((clean (string-trim line)))
+            (unless (or (string-empty-p clean) (member clean seen))
+              (push clean seen)
+              (insert (format "\n#+TIBETAN_CLAUDE_CONTEXT: %s" clean)))))))))
 
 (defun tibetan-document-prep--apply-suggestions (source-file plist)
   "Write the suggestion PLIST's headers into SOURCE-FILE.

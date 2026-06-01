@@ -256,6 +256,27 @@ last existing one — never re-ordering or removing."
                  (string-match
                   "#\\+TIBETAN_CLAUDE_CONTEXT: New line" out))))))
 
+(ert-deftest tibetan-document-prep-claude-append-context-dedups ()
+  "A context line that already exists is NOT appended again — so
+re-running the wizard / re-applying Claude suggestions is idempotent
+rather than accumulating duplicate `#+TIBETAN_CLAUDE_CONTEXT:' lines.
+Also dedups within the LINES argument itself."
+  (with-temp-buffer
+    (insert "#+TITLE: T\n"
+            "#+TIBETAN_CLAUDE_CONTEXT: Existing context\n"
+            "\n* Tibetan Text\nx\n")
+    ;; Re-append the existing line plus a duplicate-in-list new line.
+    (tibetan-document-prep--append-context-lines
+     '("Existing context" "Fresh line" "Fresh line"))
+    (let* ((out (buffer-string))
+           (count (lambda (s)
+                    (cl-count-if
+                     (lambda (l)
+                       (string= l (format "#+TIBETAN_CLAUDE_CONTEXT: %s" s)))
+                     (split-string out "\n")))))
+      (should (= 1 (funcall count "Existing context")))
+      (should (= 1 (funcall count "Fresh line"))))))
+
 (ert-deftest tibetan-document-prep-claude-append-context-skips-empty-entries ()
   "Empty / whitespace-only entries in LINES are silently dropped —
 no `#+TIBETAN_CLAUDE_CONTEXT:  ' line appears in the output."
