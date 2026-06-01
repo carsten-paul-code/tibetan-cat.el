@@ -130,10 +130,14 @@
   ;; - Also available via Menu: Tibetan > Batch Analyze All Segments
 
 ;; ============================================================================
-;; TRANSLATION COMPARISON - C-c u T
+;; TRANSLATION COMPARISON - C-c u c
 ;; ============================================================================
 
-(global-set-key (kbd "C-c u T") 'tibetan-translation-comparison-refresh)
+;; NOTE: lowercase `c' — uppercase `C-c u T' is the translate-region
+;; command below; `C-c u C' is combine-document.  This was previously
+;; (mis)bound to `C-c u T' as well, which collided with translate-region
+;; and left this command unreachable.
+(global-set-key (kbd "C-c u c") 'tibetan-translation-comparison-refresh)
   ;; Refresh the `* Translation Comparison' section of the current
   ;; par-NNN.org analysis file:
   ;; - Collects Lopez 2006 / Wangjié & Mulligan / DharmaMitra / etc.
