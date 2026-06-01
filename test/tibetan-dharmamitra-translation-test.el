@@ -190,6 +190,28 @@ untouched by the writer."
       (let ((s (buffer-string)))
         (should (string-match-p ":LAST_TRANSLATED:" s))))))
 
+(ert-deftest tibetan-dm-trans-write-section-neutralises-heading-injection ()
+  "A response body whose line begins with `*' must NOT become a
+top-level org heading mid-file.  Untrusted DM / network text is
+inserted into the analysis buffer; a `* ' line would silently
+restructure the document (and later regenerate passes treat top-level
+headings as section boundaries)."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation--write-section))
+  (tibetan-dm-trans-test--with-analysis-file
+      (tibetan-dm-trans-test--baseline-analysis)
+    (tibetan-dharmamitra-translation--write-section
+     analysis-file
+     "Legitimate translation line.\n* Injected Heading\nmore body text."
+     "Tibetan")
+    (with-temp-buffer
+      (insert-file-contents analysis-file)
+      (let ((s (buffer-string)))
+        ;; The injected line must NOT appear as a top-level heading.
+        (should-not (string-match-p "^\\* Injected Heading$" s))
+        ;; The text content is still present (neutralised, not dropped).
+        (should (string-match-p "Injected Heading" s))
+        (should (string-match-p "Legitimate translation line\\." s))))))
+
 ;; ============================================================================
 ;; Fire function — orchestrates API call + write
 ;; ============================================================================

@@ -27,6 +27,25 @@
 (require 'tibetan-sanskrit-parallel nil t)
 
 ;; ----------------------------------------------------------------------------
+;; Untrusted-text sanitiser
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-dharmamitra-translation--sanitize-body (text)
+  "Neutralise org structural markers in untrusted TEXT before it is
+inserted into an analysis buffer.
+
+DharmaMitra responses are network/LLM text.  A body line beginning with
+`*' would otherwise become a top-level org heading mid-file — silently
+restructuring the document and confusing later regenerate passes that
+treat top-level headings as section boundaries.  Prefix any line-leading
+run of `*' with a space so the line renders as body text / a list item
+instead of a heading.  Returns TEXT unchanged when it carries no such
+line; nil-safe."
+  (if (stringp text)
+      (replace-regexp-in-string "^\\(\\*+\\)" " \\1" text)
+    text))
+
+;; ----------------------------------------------------------------------------
 ;; Writer
 ;; ----------------------------------------------------------------------------
 
@@ -85,7 +104,7 @@ Returns t on success, nil otherwise."
             (insert (format ":LAST_TRANSLATED: %s\n"
                             (format-time-string "%Y-%m-%d")))
             (insert ":END:\n\n")
-            (insert translation)
+            (insert (tibetan-dharmamitra-translation--sanitize-body translation))
             (unless (string-suffix-p "\n" translation) (insert "\n"))
             (insert "\n"))
            ;; New layout with no placeholder yet:  insert after
@@ -158,7 +177,7 @@ nil."
           (insert (format ":LAST_TRANSLATED: %s\n"
                           (format-time-string "%Y-%m-%d")))
           (insert ":END:\n\n")
-          (insert translation)
+          (insert (tibetan-dharmamitra-translation--sanitize-body translation))
           (unless (string-suffix-p "\n" translation) (insert "\n"))
           (insert "\n")
           t)))))
@@ -198,7 +217,7 @@ drawer carries `:LAST_TRANSLATED:' for freshness tracking."
         (insert (format ":LAST_TRANSLATED: %s\n"
                         (format-time-string "%Y-%m-%d")))
         (insert ":END:\n\n")
-        (insert translation)
+        (insert (tibetan-dharmamitra-translation--sanitize-body translation))
         (unless (string-suffix-p "\n" translation) (insert "\n"))))
     t))
 
