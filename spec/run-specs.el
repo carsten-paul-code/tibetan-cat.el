@@ -41,6 +41,34 @@
 (require 'tibetan-auto-analysis nil t)       ; For auto-analysis batch processing
 (require 'tibetan-structure-reorg nil t)     ; For structure reorganization
 
+;; Make the spec run hermetic — no live network.  Several file-creating
+;; specs (segment-dispatch, paragraph-analysis, auto-analysis, …) reach
+;; an analysis-file create/open path that auto-fires a DharmaMitra
+;; translation, which issued a live HTTPS request to dharmamitra.org
+;; during `make test'.  That violates the "tests run without side
+;; effects" rule and makes the suite slow/flaky offline.
+;;
+;; Two layers, applied process-locally (this batch process always
+;; kill-emacs's below, so neither touches the ERT `*-defcustom-exists'
+;; default-value assertions which run in a separate process):
+;;   1. Disable the on-create auto-fire flags (the documented knob).
+;;   2. Hard-stub the DharmaMitra HTTP boundary as a catch-all, so ANY
+;;      fire path (on-create, on-open, realign, …) is network-free
+;;      regardless of its own gating.
+(when (boundp 'tibetan-auto-fire-dm-on-create)
+  (setq tibetan-auto-fire-dm-on-create nil))
+(when (boundp 'tibetan-auto-fire-claude-on-create)
+  (setq tibetan-auto-fire-claude-on-create nil))
+(with-eval-after-load 'tibetan-dharmamitra-api
+  (defun tibetan-dharmamitra-api--http-post (&rest _)
+    "Test stub — no network during the spec run."
+    nil))
+;; In case the api module is already loaded by the time we get here.
+(when (featurep 'tibetan-dharmamitra-api)
+  (defun tibetan-dharmamitra-api--http-post (&rest _)
+    "Test stub — no network during the spec run."
+    nil))
+
 ;; Load BDD framework
 (require 'tibetan-bdd)
 
