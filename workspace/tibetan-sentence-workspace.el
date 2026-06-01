@@ -25,29 +25,21 @@
 (defvar tibetan-workspace-file nil
   "Path to the current workspace file being edited.")
 
-(defvar org-latex-classes nil
-  "LaTeX document classes for export.")
-
-(defvar org-export-with-toc nil
-  "Org export option: whether to include table of contents.")
-
-(defvar org-export-with-title nil
-  "Org export option: whether to include document title.")
-
-(defvar org-export-with-author nil
-  "Org export option: whether to include author.")
-
-(defvar org-export-with-date nil
-  "Org export option: whether to include date.")
-
-(defvar org-latex-compiler nil
-  "LaTeX compiler to use for export.")
-
-(defvar org-latex-pdf-process nil
-  "LaTeX PDF processing command.")
-
-(defvar org-latex-default-class nil
-  "Default LaTeX document class for export.")
+;; These belong to org / ox-latex.  Declare them as special variables
+;; (to silence the byte-compiler where the export function let-binds /
+;; reads them) WITHOUT a value — a `(defvar NAME nil)' here would
+;; establish a nil default before ox-latex loads, turning ox-latex's
+;; own defining `defvar' into a no-op and wiping its built-in
+;; article/report/book classes (and the other defaults) for the whole
+;; session.  Bare `(defvar NAME)' declares without clobbering.
+(defvar org-latex-classes)
+(defvar org-export-with-toc)
+(defvar org-export-with-title)
+(defvar org-export-with-author)
+(defvar org-export-with-date)
+(defvar org-latex-compiler)
+(defvar org-latex-pdf-process)
+(defvar org-latex-default-class)
 
 ;; ============================================================================
 ;; SENTENCE DETECTION - UNIFIED
