@@ -195,6 +195,15 @@ convention and would benefit from `--normalize-shads' before
 ingest."
   (cl-count ?| body))
 
+(defconst tibetan-wylie-ingest--folio-regex
+  "\\[\\([0-9]+\\)\\([ab]\\)\\.?\\([0-9]+\\)\\]"
+  "Match `[<digits><ab>.?<digits>]' — the common bracket-folio
+convention in academic Tibetan transcriptions (e.g. `[141a.6]'
+= folio 141a, line 6).  Pure-digit / pure-letter runs only, so
+bibliographic ranges like `[141a.5–143b.4; pp. 285.5–290.4]'
+\(which contain dashes / semicolons) do NOT match and are left
+intact.")
+
 (defun tibetan-wylie-ingest--count-non-standard-folios (body)
   "Return the count of bracket-style folio markers in BODY that
 are NOT already in the canonical `[F:D...]' form the Python
@@ -406,15 +415,8 @@ returns 0."
 ;; ============================================================================
 ;; FOLIO-MARKER NORMALISATION  ------------------------------------------------
 ;; ============================================================================
-
-(defconst tibetan-wylie-ingest--folio-regex
-  "\\[\\([0-9]+\\)\\([ab]\\)\\.?\\([0-9]+\\)\\]"
-  "Match `[<digits><ab>.?<digits>]' — the common bracket-folio
-convention in academic Tibetan transcriptions (e.g. `[141a.6]'
-= folio 141a, line 6).  Pure-digit / pure-letter runs only, so
-bibliographic ranges like `[141a.5–143b.4; pp. 285.5–290.4]'
-\(which contain dashes / semicolons) do NOT match and are left
-intact.")
+;; (`tibetan-wylie-ingest--folio-regex' is defined earlier, next to the
+;; validator that first references it.)
 
 (defun tibetan-wylie-ingest--normalize-folio-markers-string (body)
   "Return BODY with bracket-style folio markers reshaped to
