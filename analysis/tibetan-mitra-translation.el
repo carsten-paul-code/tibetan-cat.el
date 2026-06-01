@@ -89,6 +89,24 @@ Get your token at: https://huggingface.co/settings/tokens"
   (message "Mitra translation cache cleared."))
 
 ;; ============================================================================
+;; HTTP wrapper — TLS-verified
+;; ============================================================================
+
+(defun tibetan-mitra--url-retrieve (url &optional timeout)
+  "Like `url-retrieve-synchronously' for URL, with TLS certificate
+verification ENFORCED.
+
+Emacs' default `gnutls-verify-error' is nil, so a forged/MITM cert
+would NOT abort an https connection — the HuggingFace `Authorization:
+Bearer' token would be sent and the response trusted over an unverified
+channel.  Binding it to t makes a cert failure signal (callers already
+run inside condition-case).  Harmless for the localhost Ollama / local-
+server http endpoints."
+  (let ((gnutls-verify-error t)
+        (network-security-level 'high))
+    (url-retrieve-synchronously url nil nil (or timeout tibetan-mitra-timeout))))
+
+;; ============================================================================
 ;; OLLAMA BACKEND
 ;; ============================================================================
 
@@ -109,7 +127,7 @@ Get your token at: https://huggingface.co/settings/tokens"
            'utf-8))
          (url (format "%s/api/generate" tibetan-mitra-ollama-url)))
     (with-current-buffer
-        (url-retrieve-synchronously url nil nil tibetan-mitra-timeout)
+        (tibetan-mitra--url-retrieve url)
       (goto-char (point-min))
       (re-search-forward "^$")
       (let* ((json-object-type 'alist)
@@ -123,7 +141,7 @@ Get your token at: https://huggingface.co/settings/tokens"
       (let* ((url-request-method "GET")
              (url (format "%s/api/tags" tibetan-mitra-ollama-url)))
         (with-current-buffer
-            (url-retrieve-synchronously url nil nil 5)
+            (tibetan-mitra--url-retrieve url 5)
           (goto-char (point-min))
           (re-search-forward "^$")
           (let* ((json-object-type 'alist)
@@ -160,7 +178,7 @@ Get your token at: https://huggingface.co/settings/tokens"
          (url (format "https://api-inference.huggingface.co/models/%s"
                       tibetan-mitra-huggingface-model)))
     (with-current-buffer
-        (url-retrieve-synchronously url nil nil tibetan-mitra-timeout)
+        (tibetan-mitra--url-retrieve url)
       (goto-char (point-min))
       (re-search-forward "^$")
       (let* ((json-object-type 'alist)
@@ -186,7 +204,7 @@ Get your token at: https://huggingface.co/settings/tokens"
            'utf-8))
          (url (format "%s/translate" tibetan-mitra-local-server-url)))
     (with-current-buffer
-        (url-retrieve-synchronously url nil nil tibetan-mitra-timeout)
+        (tibetan-mitra--url-retrieve url)
       (goto-char (point-min))
       (re-search-forward "^$")
       (let* ((json-object-type 'alist)
@@ -323,8 +341,8 @@ Uses the backend specified in `tibetan-mitra-backend'."
     ('local-server
      (condition-case nil
          (progn
-           (url-retrieve-synchronously
-            (format "%s/health" tibetan-mitra-local-server-url) nil nil 3)
+           (tibetan-mitra--url-retrieve
+            (format "%s/health" tibetan-mitra-local-server-url) 3)
            (message "Local server backend: OK"))
        (error
         (message "Local server backend: Not responding at %s"

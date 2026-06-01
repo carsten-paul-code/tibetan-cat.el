@@ -245,6 +245,18 @@
 ;; HELPER FUNCTION
 ;; ============================================================================
 
+(ert-deftest tibetan-mitra-url-retrieve-enforces-tls-verification ()
+  "`tibetan-mitra--url-retrieve' binds `gnutls-verify-error' to t around
+the network call, so the HuggingFace bearer token is never sent over an
+unverified (MITM-able) TLS connection."
+  (skip-unless (fboundp 'tibetan-mitra--url-retrieve))
+  (let ((captured 'unset)
+        (gnutls-verify-error nil))
+    (cl-letf (((symbol-function 'url-retrieve-synchronously)
+               (lambda (&rest _) (setq captured gnutls-verify-error) nil)))
+      (tibetan-mitra--url-retrieve "https://example.invalid/x" 1)
+      (should (eq captured t)))))
+
 (defun tibetan-mitra-translation-run-tests ()
   "Run all Mitra translation tests interactively."
   (interactive)
