@@ -270,10 +270,10 @@ the first failure — this is the full batch suite.  (Before 2026-06-01
 flag named a non-existent function that never executed; the spec suite
 also made a live dharmamitra.org request on every run.  Both fixed.)
 
-Current state (2026-06-01):  **ERT 2107 tests, 2106 expected, 0
-unexpected, 1 intentional skip (compound-analysis-callable); BDD
-244 / 244.**  Carsten runs `make test` after every change and expects
-it to stay green.
+Current state (2026-06-01, post-§5.28 audit):  **ERT 2119 tests, 2118
+expected, 0 unexpected, 1 intentional skip (compound-analysis-callable);
+BDD 244 / 244.**  Full `make compile` is clean (zero warnings).  Carsten
+runs `make test` after every change and expects it to stay green.
 
 When adding a test, always wire it into `test/run-all-tests.el` via
 `condition-case`. Otherwise the suite silently doesn't pick it up and
@@ -2387,6 +2387,81 @@ When the async Claude call returns post-wizard:
 `M-x tibetan-document-prep-apply-claude-suggestions` (`C-c o D`)
 opens the source file and writes the cached suggestions into
 the metadata headers.
+
+### 5.28 Opus 4.8 full-codebase audit + fixes (done, 2026-06-01)
+
+A comprehensive audit of the whole tree (correctness / security /
+design / dead code / test gaps), fanned out over parallel reviewers,
+followed by a fix pass.  Every fix was regression-test-first and is its
+own commit.  Suite 2107 → **2119** ERT (BDD 244/244); full `make
+compile` is now clean (zero warnings).
+
+**Two CRITICALs:**
+- **No TLS verification on outbound HTTPS** (`tibetan-dharmamitra-api`,
+  `tibetan-mitra-translation`).  `url-retrieve-synchronously` ran with
+  Emacs' default `gnutls-verify-error' = nil, so a forged/MITM cert did
+  not abort — the bearer token was sent and the response trusted over an
+  unverified channel.  Fixed by binding `gnutls-verify-error' t +
+  `network-security-level' 'high.  **Follow-up bug (also fixed):** the
+  bindings were LEXICAL under byte-compilation (the special vars weren't
+  declared), so the enforcement was silently inert in `.elc` —
+  `(require 'gnutls)`/`(require 'nsm)` makes them genuinely special.
+  Caught by `make compile`'s unused-lexical warning; now tested against
+  compiled code.
+- **Sentence regenerate wiped parallel-mode top-level sections**
+  (`* Sanskrit Analysis' / `* Combined Analysis' / DM-Sanskrit /
+  realign).  The §5.26 data-loss class on the un-patched sentence path —
+  latent (no current parallel-Sanskrit corpus uses sentence files) but
+  real.  `tibetan-sentence--regenerate' now preserves + re-appends them
+  (idempotent), mirroring the segment path.
+
+**HIGH:** dead `C-c u D`/`C-c u W` bindings (void-function) removed;
+`make test' fixed to run BOTH ERT + BDD (its `-f' named a non-existent
+function and only worked by accident) and made network-free (the BDD
+run hit dharmamitra.org live); `tibetan-auto--claude-needs-request-p'
+taught the post-§5.18 `** Translation' heading + `[Awaiting' placeholder
+(it was failing closed-as-populated, skipping real refires);
+§5.23 suffix threaded through the reorg-rename and DM-realign-apply
+paths (both wrote bare seg-NNN.org → multi-source collision); DM /
+realign responses sanitised before org insertion (line-leading `*' →
+heading injection; `:reason' newlines → forged property-drawer
+entries); leftover `DEBUG' messages stripped from `C-c u I'.
+
+**MEDIUM:** ནས/ལས ablative no longer over-matches lexemes like གནས;
+`tibetan-clause-segment' tolerates malformed VERBS (the §5.9/P5
+`wrong-type-argument listp' crash class); zero-marker analysis stops
+excluding root-final-ས content words (སེམས/ལུས); `tibetan-verb-lookup'
+trims a trailing tsheg; Steinert SQLite handle released on
+`kill-emacs-hook'; SSE parser tolerates `data:{…}' (no space); workspace
+defvars no longer wipe ox-latex's class defaults; wizard seeds class
+mode from the existing header on non-Wylie resume (was silently flipping
+grammar→reading); `#+TIBETAN_CLAUDE_CONTEXT:' append now dedups.
+
+**Two audit findings DISPROVEN on inspection** (recorded so they aren't
+re-investigated): the "German leaks into the English gloss slot"
+case-fold claim — `tibetan-extract-english-from-bilingual' /
+`-format-bilingual-meaning' are output-invariant, the predicates are
+dead but harmless; and the reading-mode adjacent-`||' "bug" — it is an
+intentional, test-locked design choice (`||' no-space = segment
+boundary even in reading mode; the spaced `| |' is the within-paragraph
+double-shad).
+
+**Cleanup:** removed grep-confirmed dead code (`--get-word-info',
+`tibetan-detect-verb-with-suffix' + its defconsts — which also resolved
+a `tibetan-converb-particles' name collision with the live
+clause-analysis copy —, a dead `(and … nil)' clause, redundant
+string-suffix guards, an empty banner, the `test-tibetan-functions.el'
+scratch file); added a run-all-tests.el visibility guard that warns
+about any `*-test.el' that fails to load (the `(condition-case nil …
+(error nil))' wiring silently swallows such failures); fixed a
+byte-compile forward-ref + a Python invalid-escape warning.
+
+**Deliberately NOT done** (Carsten's call): the M12 shared
+section-body-reader refactor; renaming `tibetan-analysis-combine.el'
+\(corpus-stitch) to disambiguate from `combined.el'; wiring/relocating
+the orphaned `setup/` modules.  Also left as enhancements, not bugs:
+auth-source lookup for a private DharmaMitra token (the default token is
+public), and the benign gptel sync-timeout reason-string race.
 
 ## 6. Open work (prioritised)
 
