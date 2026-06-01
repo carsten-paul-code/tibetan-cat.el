@@ -901,6 +901,72 @@ Cleans up the temp file and any analysis/ siblings on exit."
 ;; Translation / Claude Context / My Notes / Working Translation /
 ;; Footnotes) survive verbatim across the migration.
 
+(ert-deftest tibetan-sentence-regenerate-preserves-parallel-top-level-sections ()
+  "Regenerate must NOT destroy the parallel-mode top-level analysis
+sections (`* Sanskrit Analysis', `* Combined Analysis', `* DharmaMitra
+Translation (Sanskrit)', `* Sanskrit (DharmaMitra)', `* Sanskrit
+Text').
+
+A parallel-Sanskrit sentence file gets these sections written by
+tibetan-analysis--fire-parallel-claude-with-plist (the same writer the
+segment path uses).  The segment regenerate preserves them
+\(tibetan-analysis-get-user-sections lists them); the sentence
+regenerate did not, so it silently wiped Sanskrit + Combined Claude
+content — the §5.26 data-loss class on the un-patched sentence path."
+  (skip-unless (fboundp 'tibetan-sentence--regenerate))
+  (let* ((dir (make-temp-file "ttest-sent-parallel-" t))
+         (path (expand-file-name "sent-001.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file path
+            (insert "#+TITLE: Sentence 1 Analysis\n"
+                    "#+SEGMENTS: 1\n"
+                    "#+TIBETAN_HASH: oldhash\n"
+                    "#+CREATED: 2026-01-01\n"
+                    "#+LAST_ANALYZED: 2026-01-01\n\n"
+                    "* My Notes\nMN body\n\n"
+                    "* Working Translation\nWT body\n\n"
+                    "* Tibetan Text\nold text\n\n"
+                    "* Tibetan Analysis\n\n"
+                    "** Translation\nKeep this Tibetan translation.\n\n"
+                    "* Footnotes\nFN body\n\n"
+                    "* Sanskrit Analysis\n"
+                    "PRESERVE-ME sanskrit analysis body\n\n"
+                    "* Combined Analysis\n"
+                    "PRESERVE-ME combined analysis body\n\n"
+                    "* Sanskrit (DharmaMitra)\n"
+                    "PRESERVE-ME realign body\n"))
+          (tibetan-sentence--regenerate path 1 '(1) "བདག")
+          (let ((b (get-file-buffer path)))
+            (when b
+              (with-current-buffer b (set-buffer-modified-p nil))
+              (kill-buffer b)))
+          ;; Second regenerate — must be idempotent (re-appending the
+          ;; preserved sections must not duplicate them).
+          (tibetan-sentence--regenerate path 1 '(1) "བདག")
+          (let ((b (get-file-buffer path)))
+            (when b
+              (with-current-buffer b (set-buffer-modified-p nil))
+              (kill-buffer b)))
+          (with-temp-buffer
+            (insert-file-contents path)
+            (let ((s (buffer-string)))
+              (should (string-match-p "^\\* Sanskrit Analysis$" s))
+              (should (string-match-p "PRESERVE-ME sanskrit analysis body" s))
+              (should (string-match-p "^\\* Combined Analysis$" s))
+              (should (string-match-p "PRESERVE-ME combined analysis body" s))
+              (should (string-match-p "^\\* Sanskrit (DharmaMitra)$" s))
+              (should (string-match-p "PRESERVE-ME realign body" s))
+              ;; Idempotent — exactly one of each heading after two
+              ;; regenerate passes.
+              (should (= 1 (cl-count-if
+                            (lambda (l) (string= l "* Sanskrit Analysis"))
+                            (split-string s "\n"))))
+              (should (= 1 (cl-count-if
+                            (lambda (l) (string= l "* Combined Analysis"))
+                            (split-string s "\n")))))))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-sentence-regenerate-migrates-auto-analysis-heading ()
   "Legacy `* Auto-Analysis' parent → new `* Tibetan Analysis'.
 The rename is idempotent (re-running on already-migrated file is

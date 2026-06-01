@@ -358,6 +358,54 @@ gets clobbered by regeneration."
                     out)))))
       (nreverse out))))
 
+(defconst tibetan-sentence--parallel-top-level-sections
+  '("Sanskrit Text"
+    "Sanskrit Analysis"
+    "Combined Analysis"
+    "DharmaMitra Translation (Sanskrit)"
+    "Sanskrit (DharmaMitra)")
+  "Top-level analysis sections written by the parallel-Sanskrit Claude
+/ DharmaMitra pipeline (`tibetan-analysis--fire-parallel-claude-with-
+plist').  They live OUTSIDE `* Tibetan Analysis' and carry upstream
+Claude / DM content that must survive regenerate without re-firing —
+mirroring the segment path's `tibetan-analysis-get-user-sections'.
+The level-2 `** DharmaMitra Translation' (Tibetan side) is deliberately
+omitted: it is stripped from the compressed sentence layout (see
+`tibetan-sentence--strip-list').")
+
+(defun tibetan-sentence--read-parallel-top-level-sections (filepath)
+  "Return alist (HEADING-NAME . FULL-SECTION-TEXT) for the parallel-mode
+top-level sections present in FILEPATH.
+
+FULL-SECTION-TEXT covers the `* HEADING' line through just before the
+next top-level heading (or end-of-file), so it can be re-appended
+verbatim by the regenerate RESTORE phase."
+  (when (and filepath (file-exists-p filepath))
+    (let (out)
+      (with-temp-buffer
+        (insert-file-contents filepath)
+        (dolist (name tibetan-sentence--parallel-top-level-sections)
+          (let ((bounds (tibetan-sentence--find-section-bounds
+                         (current-buffer) name)))
+            (when bounds
+              (push (cons name
+                          (buffer-substring-no-properties
+                           (car bounds) (cdr bounds)))
+                    out)))))
+      (nreverse out))))
+
+(defun tibetan-sentence--append-top-level-section (buffer full-text)
+  "Append FULL-TEXT (a `* Heading' … block) at the end of BUFFER.
+Ensures a blank-line separator before the new section.  No-op when
+FULL-TEXT is blank."
+  (when (and full-text (not (string-empty-p (string-trim full-text))))
+    (with-current-buffer buffer
+      (goto-char (point-max))
+      (unless (bolp) (insert "\n"))
+      ;; Guarantee a blank line before the appended top-level section.
+      (unless (looking-back "\n\n" 2) (insert "\n"))
+      (insert (string-trim-right full-text) "\n"))))
+
 (defun tibetan-sentence--read-translation-bodies (filepath)
   "Read user-owned third-level translation bodies from FILEPATH.
 Returns plist `(:roehrich STR :class STR)' (each non-nil only when
@@ -974,6 +1022,15 @@ Updates `#+SEGMENTS:' / `#+TIBETAN_HASH:' / `#+LAST_ANALYZED:'."
           (tibetan-sentence--read-third-level-body filepath "Claude Vocabulary"))
          (claude-particles-body
           (tibetan-sentence--read-third-level-body filepath "Claude Particles"))
+         ;; Parallel-Sanskrit top-level sections (Sanskrit Text /
+         ;; Sanskrit Analysis / Combined Analysis / DM Sanskrit /
+         ;; realign).  Captured verbatim so regenerate-without-refire
+         ;; cannot silently destroy upstream Claude / DM content — the
+         ;; §5.26 data-loss class on the sentence path.  The fresh
+         ;; scaffold does not emit them (they are written by the fire
+         ;; pipeline, not the scaffold), so they are re-APPENDED below.
+         (parallel-sections
+          (tibetan-sentence--read-parallel-top-level-sections filepath))
          (source-file (tibetan-sentence--source-file-from-analysis filepath))
          (wylie (condition-case nil
                     (when (fboundp 'tibetan-to-wylie-fixed)
@@ -1045,6 +1102,13 @@ Updates `#+SEGMENTS:' / `#+TIBETAN_HASH:' / `#+LAST_ANALYZED:'."
         (dolist (section user-sections)
           (tibetan-sentence--set-top-level-body-in-buffer
            buf (car section) (cdr section)))
+        ;; Re-append the parallel-Sanskrit top-level sections captured
+        ;; above (the scaffold doesn't emit them).  Skip any that the
+        ;; rebuilt file somehow already carries, so the restore stays
+        ;; idempotent.
+        (dolist (sec parallel-sections)
+          (unless (tibetan-sentence--find-section-bounds buf (car sec))
+            (tibetan-sentence--append-top-level-section buf (cdr sec))))
         ;; Export safety:  strip Interlinear→DD dangling term-* links
         ;; (mirrors `tibetan-analysis-regenerate-auto' for segment
         ;; files;  the issue is the same — Interlinear emits link
