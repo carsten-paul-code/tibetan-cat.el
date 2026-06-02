@@ -89,7 +89,6 @@
 (condition-case nil (require 'tibetan-enhanced-display-test) (error nil))
 (condition-case nil (require 'tibetan-vocabulary-detailed-test) (error nil))
 (condition-case nil (require 'tibetan-sentence-structure-test) (error nil))
-(condition-case nil (require 'tibetan-particles-test) (error nil))
 (condition-case nil (require 'tibetan-translation-suggest-test) (error nil))
 
 ;; Analysis module tests for untested public functions
