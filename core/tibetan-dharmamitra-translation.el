@@ -272,40 +272,62 @@ Returns:
   nil when the section is present and populated, OR ANALYSIS-FILE
       is missing (caller can't write anyway)
 
+Heading location (matters — write/read must agree):
+  - Tibetan side:  since §5.20 (2026-05-19) the writer puts the
+    translation in the NESTED level-2 `** DharmaMitra Translation'
+    inside `* Tibetan Analysis'.  This predicate therefore checks
+    that heading FIRST, and accepts the legacy top-level
+    `* DharmaMitra Translation (Tibetan)' for unmigrated files.
+    (Before this fix it checked ONLY the legacy top-level heading,
+    never matched the nested section the writer actually fills, and
+    so always returned t — re-firing DM on every file open.)
+  - Other languages (Sanskrit):  top-level
+    `* DharmaMitra Translation (SOURCE-LANG)'.
+
+A body that is empty OR a `[Awaiting…' / `[Requesting…' placeholder
+counts as still-needing, so a freshly-rendered file (which carries the
+`[Awaiting DharmaMitra…]' placeholder) is correctly filled.
+
 Used by the existing-file open path so re-running `C-c u A' on a
 file that already has a DM translation doesn't re-fire the API
-unnecessarily.  Reanalysis (`C-c u R') bypasses this and always
-refreshes."
+unnecessarily.  Explicit reanalysis (`C-c u R') passes FORCE to
+`tibetan-dharmamitra-translation-fire-for-segment' to refresh anyway."
   (let ((source-lang (or source-lang "Tibetan")))
     (when (and analysis-file
                (stringp analysis-file)
                (file-exists-p analysis-file))
       (with-temp-buffer
         (insert-file-contents analysis-file)
-        (goto-char (point-min))
-        (let ((heading-re (format "^\\* DharmaMitra Translation (%s)[ \t]*$"
-                                  (regexp-quote source-lang))))
-          (cond
-           ;; Section absent → needs request.
-           ((not (re-search-forward heading-re nil t))
-            t)
-           ;; Section present — check body.
-           (t
-            (forward-line 1)
-            ;; Skip leading property drawer if any.
-            (when (looking-at-p "[ \t]*:PROPERTIES:[ \t]*$")
-              (when (re-search-forward "^[ \t]*:END:[ \t]*$" nil t)
-                (forward-line 1)))
-            (let* ((body-start (point))
-                   (body-end
-                    (or (save-excursion
-                          (when (re-search-forward "^\\*+ " nil t)
-                            (line-beginning-position)))
-                        (point-max)))
-                   (body (string-trim
-                          (buffer-substring-no-properties
-                           body-start body-end))))
-              (string-empty-p body)))))))))
+        (let ((heading-res
+               (if (string= source-lang "Tibetan")
+                   '("^\\*\\* DharmaMitra Translation[ \t]*$"
+                     "^\\* DharmaMitra Translation (Tibetan)[ \t]*$")
+                 (list (format "^\\* DharmaMitra Translation (%s)[ \t]*$"
+                               (regexp-quote source-lang))))))
+          (catch 'done
+            (dolist (heading-re heading-res)
+              (goto-char (point-min))
+              (when (re-search-forward heading-re nil t)
+                ;; Section present — decide from its body.
+                (forward-line 1)
+                (when (looking-at-p "[ \t]*:PROPERTIES:[ \t]*$")
+                  (when (re-search-forward "^[ \t]*:END:[ \t]*$" nil t)
+                    (forward-line 1)))
+                (let* ((body-start (point))
+                       (body-end
+                        (or (save-excursion
+                              (when (re-search-forward "^\\*+ " nil t)
+                                (line-beginning-position)))
+                            (point-max)))
+                       (body (string-trim
+                              (buffer-substring-no-properties
+                               body-start body-end))))
+                  (throw 'done
+                         (or (string-empty-p body)
+                             (string-prefix-p "[Awaiting" body)
+                             (string-prefix-p "[Requesting" body))))))
+            ;; No candidate heading found → section absent → needs request.
+            t))))))
 
 ;;;###autoload
 (defun tibetan-dharmamitra-translation-needs-fire-on-open-p (analysis-file)

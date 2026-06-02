@@ -303,11 +303,41 @@ overwriting a previous good translation with a failed one."
              analysis-file "Tibetan"))))
 
 (ert-deftest tibetan-dm-trans-needs-request-p-when-section-populated ()
-  "Predicate returns nil when the DM section has non-empty body."
+  "Predicate returns nil when the NESTED `** DharmaMitra Translation'
+section (the post-§5.20 Tibetan-side location the writer actually
+populates) has a real body.
+
+Regression for the DharmaMitra request storm:  the predicate searched
+the OBSOLETE top-level `* DharmaMitra Translation (Tibetan)' heading,
+never matched the nested section, and so always reported `needs
+request' — re-firing DM on every file open even when the section was
+full."
   (skip-unless (fboundp 'tibetan-dharmamitra-translation-needs-request-p))
   (tibetan-dm-trans-test--with-analysis-file
-      (concat (tibetan-dm-trans-test--baseline-analysis)
-              "\n* DharmaMitra Translation (Tibetan)\nA real translation.\n")
+      (replace-regexp-in-string
+       "\\[Awaiting DharmaMitra…\\]" "A real translation."
+       (tibetan-dm-trans-test--baseline-analysis))
+    (should-not (tibetan-dharmamitra-translation-needs-request-p
+                 analysis-file "Tibetan"))))
+
+(ert-deftest tibetan-dm-trans-needs-request-p-nested-placeholder-needs-request ()
+  "The `[Awaiting DharmaMitra…]' placeholder in the nested section
+counts as `needs request', so a freshly-rendered file still gets its
+DM translation filled."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-needs-request-p))
+  (tibetan-dm-trans-test--with-analysis-file
+      (tibetan-dm-trans-test--baseline-analysis)   ; nested [Awaiting DharmaMitra…]
+    (should (tibetan-dharmamitra-translation-needs-request-p
+             analysis-file "Tibetan"))))
+
+(ert-deftest tibetan-dm-trans-needs-request-p-legacy-toplevel-populated ()
+  "A legacy file (pre-§5.20) with a populated TOP-LEVEL
+`* DharmaMitra Translation (Tibetan)' and no nested section is still
+recognised as populated (back-compat)."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-needs-request-p))
+  (tibetan-dm-trans-test--with-analysis-file
+      (concat "#+TITLE: Seg\n\n* Tibetan Text\nབདག\n\n"
+              "* DharmaMitra Translation (Tibetan)\nLegacy real translation.\n")
     (should-not (tibetan-dharmamitra-translation-needs-request-p
                  analysis-file "Tibetan"))))
 
