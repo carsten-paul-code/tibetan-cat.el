@@ -51,16 +51,18 @@ Returns list of plists with :segment-num, :tibetan-text, :hash, :sentence-num."
     (goto-char (point-min))
     (let ((segments '())
           (current-sentence nil))
-      (while (re-search-forward "^\\*\\*\\(\\*?\\) \\(Sentence\\|Segment\\) \\([0-9]+\\)" nil t)
-        (let ((level (match-string 1))
-              (type (match-string 2))
-              (num (string-to-number (match-string 3))))
+      ;; Match Sentence / Segment headings at ANY depth (level-agnostic):
+      ;; the flat legacy layout uses Sentence@2 / Segment@3, while the
+      ;; canonical §2.12 reading layout nests them as Sentence@3 /
+      ;; Segment@4.  The old `^\*\*\*?' regex only saw levels 2-3, so it
+      ;; collected ZERO segments from the nested layout.
+      (while (re-search-forward "^\\*+ \\(Sentence\\|Segment\\) \\([0-9]+\\)" nil t)
+        (let ((type (match-string 1))
+              (num (string-to-number (match-string 2))))
           (cond
-           ;; Sentence heading (level 2)
-           ((and (string= level "") (string= type "Sentence"))
+           ((string= type "Sentence")
             (setq current-sentence num))
-           ;; Segment heading (level 3)
-           ((and (string= level "*") (string= type "Segment"))
+           ((string= type "Segment")
             (let ((text (tibetan-org-get-segment-text)))
               (when text
                 (push (list :segment-num num

@@ -83,6 +83,29 @@
       (should result)
       (should (string-match-p "སངས་རྒྱས" (plist-get (car result) :tibetan-text))))))
 
+(ert-deftest tibetan-reorg-collect-segments-nested-layout ()
+  "Collects segments from the canonical §2.12 reading layout — Sentence
+at level 3, Segment at level 4 (with a `**** Working Translation'
+sibling).  Regression: the collector's regex matched only heading
+levels 2-3, so it found ZERO segments in this layout and
+`tibetan-reorganize-analysis-files' errored \"No segments found\"."
+  (skip-unless (fboundp 'tibetan-reorg--collect-document-segments))
+  (with-temp-buffer
+    (insert "* Tibetan Text\n\n** Section 1\n\n*** Sentence 1\n\n"
+            "**** Segment 1\nབཀྲ་ཤིས།\n\n"
+            "**** Working Translation\n\n"
+            "**** Segment 2\nབདེ་ལེགས།\n\n")
+    (org-mode)
+    (when (fboundp 'org-set-regexps-and-options) (org-set-regexps-and-options))
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (let ((result (tibetan-reorg--collect-document-segments)))
+      (should (= 2 (length result)))
+      (should (= 1 (plist-get (car result) :segment-num)))
+      (should (= 1 (plist-get (car result) :sentence-num)))
+      (should (string-match-p "བཀྲ་ཤིས"
+                              (plist-get (car result) :tibetan-text))))))
+
 ;; ============================================================================
 ;; FILE INVENTORY TESTS
 ;; ============================================================================
