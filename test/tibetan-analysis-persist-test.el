@@ -1725,6 +1725,25 @@ into a converb `~gis~' wrap."
     (should (string-match-p "=gis=" map))
     (should-not (string-match-p "~gis~" map))))
 
+(ert-deftest tibetan-analysis-particle-skeleton-no-spurious-zero-on-overt-ergative ()
+  "The particle skeleton must NOT stamp `Ø' before a transitive verb when
+the immediately-preceding argument is already overtly case-marked (an
+ergative subject) — that spuriously marks an overt argument as zero.
+§5.21-deferred zero-marker fix.  When the pre-verbal slot is a bare
+content word (a genuine zero-marked object), Ø is still stamped."
+  (skip-unless (fboundp 'tibetan-analysis--render-particle-skeleton))
+  (let ((verbs (list '((lemma . "བྱེད")
+                       (transitivity . "Transitive")
+                       (case_frame . "Erg-Abs")))))
+    ;; Overt ergative subject immediately before the verb → NO Ø.
+    (let ((s (tibetan-analysis--render-particle-skeleton "བདག་གིས་བྱེད" nil verbs)))
+      (should (string-match-p "byed" s))
+      (should-not (string-match-p "Ø" s)))
+    ;; Bare (zero-marked) object before the verb → Ø is correct.
+    (let ((s (tibetan-analysis--render-particle-skeleton
+              "བདག་གིས་ཆོས་བྱེད" nil verbs)))
+      (should (string-match-p "Ø byed" s)))))
+
 (ert-deftest tibetan-analysis-particle-wylie-normalise ()
   "`--particle-wylie-normalise' strips the trailing `a' from
 mono-consonant + inherent-vowel forms so `ra' and `r' both

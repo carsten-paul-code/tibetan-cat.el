@@ -2287,8 +2287,25 @@ particles like `'i' / `'o'."
                 (when (and verb-wylie
                            (not (string-empty-p verb-wylie))
                            (string-match re result))
-                  (setq result
-                        (replace-match (concat "Ø " verb-wylie) t t result)))))))))
+                  ;; Only stamp Ø when the immediately-preceding token is a
+                  ;; BARE content word — a genuinely zero-marked argument.
+                  ;; Suppress it when that token is already markup: a
+                  ;; case marker (`=…=`, e.g. an overt ergative subject),
+                  ;; a converb boundary (`~…~`), or a final particle
+                  ;; (`*…*`).  Stamping Ø there wrongly marks an
+                  ;; already-cased argument as zero — the §5.21-deferred
+                  ;; "spurious Ø on transitive subjects" bug.
+                  (let* ((before (substring result 0 (match-beginning 0)))
+                         (prev (car (last (split-string
+                                           (string-trim-right before)
+                                           "[ \t]+" t)))))
+                    (when (and prev
+                               (not (string-match-p "\\`[=~*]" prev))
+                               ;; split-string clobbered the match data.
+                               (string-match re result))
+                      (setq result
+                            (replace-match (concat "Ø " verb-wylie)
+                                           t t result)))))))))))
 
     result))
 
