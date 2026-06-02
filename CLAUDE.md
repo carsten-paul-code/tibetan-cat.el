@@ -270,10 +270,12 @@ the first failure — this is the full batch suite.  (Before 2026-06-01
 flag named a non-existent function that never executed; the spec suite
 also made a live dharmamitra.org request on every run.  Both fixed.)
 
-Current state (2026-06-01, post-§5.28 audit):  **ERT 2119 tests, 2118
-expected, 0 unexpected, 1 intentional skip (compound-analysis-callable);
-BDD 244 / 244.**  Full `make compile` is clean (zero warnings).  Carsten
-runs `make test` after every change and expects it to stay green.
+Current state (2026-06-02, post-§5.30 audit round 2):  **ERT 2115
+tests, 2114 expected, 0 unexpected, 1 intentional skip
+(compound-analysis-callable); BDD 244 / 244.**  Full `make compile` is
+clean (zero warnings).  Carsten runs `make test` after every change and
+expects it to stay green.  (Count dropped vs §5.28's 2119 because dead
+modules/helpers + their tests were removed in §5.30.)
 
 When adding a test, always wire it into `test/run-all-tests.el` via
 `condition-case`. Otherwise the suite silently doesn't pick it up and
@@ -2462,6 +2464,75 @@ section-body-reader refactor; renaming `tibetan-analysis-combine.el'
 the orphaned `setup/` modules.  Also left as enhancements, not bugs:
 auth-source lookup for a private DharmaMitra token (the default token is
 public), and the benign gptel sync-timeout reason-string race.
+
+### 5.29 BUG: DharmaMitra re-fired populated sections on open (done, 2026-06-02)
+
+User report: "a lot of DharmaMitra requests" — opening an already-
+translated segment re-hit the DM API every time and overwrote the
+existing translation.  Two compounding bugs (split into two commits):
+
+- `tibetan-dharmamitra-translation-needs-request-p' searched the
+  OBSOLETE top-level `* DharmaMitra Translation (Tibetan)' heading, but
+  §5.20 moved the Tibetan section to the NESTED `** DharmaMitra
+  Translation' that the writer fills.  Read != write location → always
+  "needs request".  Fixed to read the nested heading (legacy top-level
+  fallback; `[Awaiting…' / `[Requesting…' count as still-needed).
+- `tibetan-dharmamitra-translation-fire-for-segment' fired the Tibetan
+  path UNCONDITIONALLY.  Added `&optional force'; each language fires
+  only when FORCE or its needs-request-p.  C-c u R passes FORCE=t;
+  batch passes (eq re-request-claude t).  Implements the policy: a
+  populated Claude/DM section is renewed only on explicit request.
+  (Claude's on-open fire was already gated by --claude-needs-request-p.)
+
+### 5.30 Opus 4.8 audit round 2 + fixes (done, 2026-06-02)
+
+A second whole-tree audit (the §5.28 fixes were re-verified present).
+Fixed, each regression-test-first, one commit each:
+
+- **H2** wizard metadata loss: header writes went to disk via
+  write-region while --fire-async-claude kept a stale visiting buffer;
+  the kickoff save-buffer then clobbered the headers.  New
+  `--edit-source' routes source mutations through the visiting buffer.
+- **M1** `tibetan-reorg--collect-document-segments' matched only heading
+  levels 2-3 → found ZERO segments in the canonical §2.12 nested layout
+  (Sentence@3 / Segment@4); now level-agnostic.
+- **M4** DharmaMitra dictionary lookup now negative-caches misses (was
+  re-hitting the network on every miss).
+- **M5** Steinert URL JSON built with json-encode (was a raw format
+  string → malformed JSON for quote/backslash terms).
+- **M6** Madhyamaka term match requires whole tsheg/shad-delimited units
+  (was raw substring match → e.g. `ལམ' inside `ལམས'); compound-internal
+  matches (`ལམ' in `ལམ་རིམ') remain an inherent-segmentation limitation.
+- **M7** removed contradictory duplicate `བཙོང' verb-DB entry (the `ཚོང'
+  alias pointed at the dead one).
+- **M8** moved reorg's load-time global-set-key (C-c u O / C-c u U) into
+  config/tibetan-keybindings.el; same for the duplicate C-c u P /
+  C-c s w / C-c s p / C-c e p module bindings.
+- **DEBUG** removed leftover message spam (workspace C-c s w; wylie
+  safe-substring + a provably-dead BUG message).
+- **Dead code** removed: module `analysis/tibetan-particles.el' (a
+  Schwieger duplicate of -bialek), `tibetan-steinert-format-matches',
+  `tibetan-extract-particle-text'.
+- **ocr-validate** the audit's "zero coverage" was a FALSE POSITIVE
+  (10 tests live in tibetan-doc-prep-test.el); added the two untested
+  paths (subscript-start, suspicious) + tidied a redundant format.
+
+**Deferred (need design / too risky for a cleanup pass — proposed as
+follow-ups):**
+- **H3** parallel-Sanskrit unscoped `** Translation' read: scoping the
+  reader alone broke a test because the WRITER + migrate/ensure helpers
+  also operate buffer-wide and round-trip the Sanskrit body.  A correct
+  fix needs reader+writer+migrate scoped together (or the Sanskrit
+  pipeline to use distinct heading names).  Latent — parallel-Sanskrit
+  docs only (gotrapaṭala), not the normal workflow.  Reverted the
+  partial change.
+- **M2** `tibetan-verb-lookup' blind `ས$' strip: purely latent (the
+  gethash guard prevents current misfires); a real fix needs noun-
+  awareness.  No reproducible bug → left.
+- **M9** `tibetan-auto--create-sentence-file' emits a legacy/orphan
+  layout: reconciling it with the canonical sentence creator is a
+  design task (the auto path doesn't collect per-sentence seg-nums);
+  legacy files migrate on regenerate anyway.
 
 ## 6. Open work (prioritised)
 
