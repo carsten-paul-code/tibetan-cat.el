@@ -31,6 +31,7 @@
 (require 'cl-lib)
 (require 'sqlite nil t) ;; built-in since Emacs 29
 (require 'url-util)     ;; for url-hexify-string in URL generation
+(require 'json)         ;; for json-encode in URL generation
 
 (defcustom tibetan-steinert-db-path
   (let* ((here (or load-file-name buffer-file-name))
@@ -219,9 +220,17 @@ Strips trailing particles like \\='s, \\='i suffixes for cleaner lookups."
   (when (and wylie-term (stringp wylie-term)
              (not (string-empty-p (string-trim wylie-term))))
     (let* ((term (string-trim (downcase wylie-term)))
-           ;; Build the JSON hash the Steinert SPA expects.
-           (json-str (format "{\"activeTerm\":\"%s\",\"lang\":\"tib\",\"inputLang\":\"tib\",\"currentListTerm\":\"%s\",\"forceLeftSideVisible\":false,\"offset\":0}"
-                             term term))
+           ;; Build the JSON hash the Steinert SPA expects via json-encode
+           ;; so a term containing a quote / backslash produces VALID JSON
+           ;; (a raw format string would emit broken JSON).  Alist order is
+           ;; preserved, matching the SPA's expected key order.
+           (json-str (json-encode
+                      `(("activeTerm" . ,term)
+                        ("lang" . "tib")
+                        ("inputLang" . "tib")
+                        ("currentListTerm" . ,term)
+                        ("forceLeftSideVisible" . :json-false)
+                        ("offset" . 0))))
            (encoded (url-hexify-string json-str)))
       (concat "https://dictionary.christian-steinert.de/#" encoded))))
 

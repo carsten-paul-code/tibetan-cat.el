@@ -109,5 +109,29 @@ enrichment (even if the primary gloss source had no Sanskrit field)."
 module registers `tibetan-steinert-close' on `kill-emacs-hook'."
   (should (memq 'tibetan-steinert-close kill-emacs-hook)))
 
+(ert-deftest tibetan-steinert-url-emits-valid-json ()
+  "The JSON hash fragment in a Steinert URL is valid JSON — including
+when the term contains a double quote or backslash.  Regression:  the
+fragment was built with a raw format string, so a quote/backslash in
+the term produced malformed JSON."
+  (skip-unless (fboundp 'tibetan-steinert-url))
+  (let* ((url (tibetan-steinert-url "ab\"c\\d"))
+         (frag (and url (substring url (1+ (string-match "#" url)))))
+         (json (and frag (decode-coding-string (url-unhex-string frag) 'utf-8)))
+         (parsed (and json (ignore-errors (json-parse-string json)))))
+    (should url)
+    (should parsed)                                     ; parses → valid JSON
+    (should (equal (gethash "activeTerm" parsed) "ab\"c\\d"))))
+
+(ert-deftest tibetan-steinert-url-plain-term-roundtrips ()
+  "A normal Wylie term round-trips through the URL's JSON fragment."
+  (skip-unless (fboundp 'tibetan-steinert-url))
+  (let* ((url (tibetan-steinert-url "mnyam med"))
+         (frag (substring url (1+ (string-match "#" url))))
+         (parsed (json-parse-string
+                  (decode-coding-string (url-unhex-string frag) 'utf-8))))
+    (should (equal (gethash "activeTerm" parsed) "mnyam med"))
+    (should (equal (gethash "lang" parsed) "tib"))))
+
 (provide 'tibetan-steinert-test)
 ;;; tibetan-steinert-test.el ends here
