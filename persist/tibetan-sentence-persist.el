@@ -422,7 +422,9 @@ the corresponding heading has real content, not placeholder text)."
     "** Phonetics"
     "** Interlinear Gloss"
     "** DharmaMitra Translation"
-    "** Sentence Structure"
+    ;; ** Sentence Structure is NO LONGER stripped (2026-06-02):  the
+    ;; full per-clause subject/object structure is the headline class
+    ;; tool for sentences and replaces the old `** Main Clause' summary.
     "** Verb Classification (Hill 2010)"
     "** Detailed Dictionary")
   "Level-2 headings dropped from the segment-renderer output before
@@ -521,124 +523,6 @@ docstring for the two-mode behaviour."
               (mapconcat (lambda (p) (concat (car p) "\n" (cdr p)))
                          sections "")))))
 
-(defun tibetan-sentence--role-display (role)
-  "Return a human-readable English label for an argument ROLE symbol."
-  (pcase role
-    ('agent     "SUBJECT (ERG)")        ; ergative-marked transitive subject
-    ('subject   "SUBJECT (ABS)")        ; unmarked intransitive subject
-    ('patient   "DIRECT OBJECT (ABS)")
-    ('recipient "INDIRECT OBJECT (DAT)")
-    ('location  "LOCATIVE (LOC)")
-    ('source    "SOURCE (ABL)")
-    ('goal      "GOAL (TERM)")
-    ('instrument "INSTRUMENT (INST)")
-    ('comitative "COMITATIVE (COM)")
-    (_ (if role (upcase (symbol-name role)) "?"))))
-
-(defconst tibetan-sentence--main-clause-role-order
-  '(agent subject patient recipient location goal source instrument comitative)
-  "Display order for argument roles in the `** Main Clause' section.
-Agent and subject are shown first (they're mutually exclusive for a
-given verb — transitive vs. intransitive frame), then patient
-(direct object), then recipient (indirect object), then remaining
-obliques in descending semantic salience.")
-
-(defun tibetan-sentence--render-main-clause (tibetan-text)
-  "Return the body of the `** Main Clause' section for TIBETAN-TEXT.
-
-Identifies the main finite verb (the verb of the last clause
-produced by the Round-2 segmenter — guaranteed to be finite, not
-nominalised) and lists its arguments (subject, direct object,
-indirect object, obliques) using the role labels assigned by
-`tibetan-build-argument-structure'.
-
-Returns nil when the renderer dependencies are unavailable or no
-main clause was found (the caller then omits the section).  Does
-not signal — errors in the analyser fall through to nil."
-  (when (and tibetan-text
-             (stringp tibetan-text)
-             (fboundp 'tibetan-parse-enhanced)
-             (fboundp 'tibetan-analyze-round2))
-    (condition-case _err
-        (let* ((parsed (tibetan-parse-enhanced tibetan-text))
-               (words (alist-get 'words parsed))
-               (mwus (alist-get 'multiword-units parsed))
-               (verbs (when (fboundp 'tibetan-extract-verbs-compound-aware)
-                        (tibetan-extract-verbs-compound-aware
-                         tibetan-text words mwus)))
-               (round2 (tibetan-analyze-round2 words verbs mwus))
-               (clauses (alist-get 'clauses round2))
-               (args-list (alist-get 'argument-structure round2))
-               (main-clause (car (last clauses))))
-          (when main-clause
-            (let* ((verb (alist-get 'verb main-clause))
-                   (match
-                    (and verb
-                         (cl-find-if
-                          (lambda (e)
-                            (equal (alist-get 'verb e) verb))
-                          args-list)))
-                   (frame (and match (alist-get 'case-frame match)))
-                   (arguments (and match (alist-get 'arguments match)))
-                   (lemma (and verb (listp verb) (alist-get 'lemma verb)))
-                   (meaning (and verb (listp verb)
-                                 (alist-get 'meaning verb))))
-              (with-temp-buffer
-                (cond
-                 (lemma
-                  (insert (format "- MAIN VERB: %s" lemma))
-                  (when meaning
-                    (insert (format " — %s" meaning)))
-                  (when frame
-                    (insert (format " [frame: %s]" frame)))
-                  (insert "\n"))
-                 (t
-                  (insert "- MAIN VERB: [unidentified finite verb]\n")))
-                (cond
-                 (arguments
-                  (dolist (role tibetan-sentence--main-clause-role-order)
-                    (let ((found
-                           (cl-find-if
-                            (lambda (a)
-                              (eq role (alist-get 'role a)))
-                            arguments)))
-                      (when found
-                        (let* ((np (alist-get 'np found))
-                               (head (and np (alist-get 'head np)))
-                               (case (and np (alist-get 'case np))))
-                          (when head
-                            (insert (format "- %s: %s%s\n"
-                                            (tibetan-sentence--role-display
-                                             role)
-                                            head
-                                            (if (and case
-                                                     (not (memq role
-                                                                '(agent
-                                                                  subject
-                                                                  patient))))
-                                                (format " [%s]"
-                                                        (symbol-name case))
-                                              "")))))))))
-                 ((not arguments)
-                  (insert "- ARGUMENTS: [none extracted — verb may lack a case frame in the classifier]\n")))
-                (buffer-string)))))
-      (error nil))))
-
-(defun tibetan-sentence--append-main-clause (content tibetan-text)
-  "Return CONTENT with a `** Main Clause' section appended.
-If `tibetan-sentence--render-main-clause' returns nil (no main
-clause detected, or the analyser is unavailable), CONTENT is
-returned unchanged."
-  (let ((body (tibetan-sentence--render-main-clause tibetan-text)))
-    (if (and body (not (string-empty-p (string-trim body))))
-        (concat (if (string-suffix-p "\n" content) content
-                  (concat content "\n"))
-                "** Main Clause\n"
-                body
-                (if (string-suffix-p "\n" body) "" "\n")
-                "\n")
-      content)))
-
 (defun tibetan-sentence--render-auto-analysis (tibetan-text)
   "Return the body of the `* Auto-Analysis' block for TIBETAN-TEXT.
 
@@ -670,9 +554,11 @@ auto-analysis block at all."
         (condition-case _err
             (let ((content (tibetan-analysis-generate-content tibetan-text)))
               (when (and content (not (string-empty-p content)))
-                (tibetan-sentence--append-main-clause
-                 (tibetan-sentence--strip-segment-claude-sections content)
-                 tibetan-text)))
+                ;; The full `** Sentence Structure' (now retained — see
+                ;; `tibetan-sentence--strip-list') carries the per-clause
+                ;; subject/object breakdown; no separate Main-Clause
+                ;; summary is appended.
+                (tibetan-sentence--strip-segment-claude-sections content)))
           (error nil))))))
 
 (defconst tibetan-sentence--scaffold-sentence-only-l3-entries

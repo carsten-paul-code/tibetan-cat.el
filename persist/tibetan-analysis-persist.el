@@ -1862,6 +1862,27 @@ still be classified as a whole.  Returns the `type' field (index
                                   "་" "" word)))))
       (and hit (nth 2 hit)))))
 
+(defconst tibetan-analysis--role-order
+  '(agent subject patient recipient location goal source instrument comitative)
+  "Display order for clause arguments — subject → object → obliques.")
+
+(defconst tibetan-analysis--role-labels
+  '((agent      . "SUBJECT (ERG)")
+    (subject    . "SUBJECT (ABS)")
+    (patient    . "DIRECT OBJECT (ABS)")
+    (recipient  . "INDIRECT OBJECT (DAT)")
+    (location   . "LOCATIVE (LOC)")
+    (goal       . "GOAL (TERM)")
+    (source     . "SOURCE (ABL)")
+    (instrument . "INSTRUMENT (INST)")
+    (comitative . "COMITATIVE (COM)"))
+  "Map Round-2 semantic roles to class-facing SUBJECT/OBJECT labels.")
+
+(defun tibetan-analysis--role-label (role)
+  "Return the class-facing label for semantic ROLE (a symbol)."
+  (or (cdr (assq role tibetan-analysis--role-labels))
+      (and role (upcase (symbol-name role)))))
+
 (defun tibetan-analysis--render-clause-structure (words verbs multiword-units)
   "Return a string rendering of Round-2 clause structure for insertion
 into the `** Clause Structure' section, or an empty string when no
@@ -1950,32 +1971,30 @@ lock-step with the rest of the generated file."
                     (insert (format " — %s"
                                     (car (split-string meaning "," t))))))
                 (insert "\n")
-                (when clause-nps
-                  (insert "    NPs: ")
-                  (let ((first t))
-                    (dolist (np clause-nps)
-                      (unless first (insert ", "))
-                      (setq first nil)
-                      (let ((head (alist-get 'head np))
-                            (kase (alist-get 'case np)))
-                        (insert (tibetan-analysis--format-word-with-wylie
-                                 head))
-                        (insert (format " (%s)" (or kase "—"))))))
-                  (insert "\n"))
-                (let ((arg-list (and clause-args
-                                     (alist-get 'arguments clause-args))))
-                  (when arg-list
-                    (insert "    Roles: ")
-                    (let ((first t))
-                      (dolist (a arg-list)
-                        (unless first (insert ", "))
-                        (setq first nil)
-                        (let ((role (alist-get 'role a))
-                              (np   (alist-get 'np a)))
-                          (insert (format "%s → %s" role
-                                          (tibetan-analysis--format-word-with-wylie
-                                           (alist-get 'head np)))))))
-                    (insert "\n"))))))
+                ;; Argument structure — one labelled line per role, in
+                ;; SUBJECT → OBJECT → oblique order, each showing the
+                ;; full noun phrase (its glued head).  Any NP with no
+                ;; resolved role is still listed so the structure is
+                ;; complete.
+                (let* ((arg-list (and clause-args
+                                      (alist-get 'arguments clause-args)))
+                       (covered (mapcar (lambda (a) (alist-get 'np a))
+                                        arg-list)))
+                  (dolist (role-sym tibetan-analysis--role-order)
+                    (dolist (a arg-list)
+                      (when (eq (alist-get 'role a) role-sym)
+                        (insert
+                         (format "    %s: %s\n"
+                                 (tibetan-analysis--role-label role-sym)
+                                 (tibetan-analysis--format-word-with-wylie
+                                  (alist-get 'head (alist-get 'np a))))))))
+                  (dolist (np clause-nps)
+                    (unless (memq np covered)
+                      (insert
+                       (format "    NP: %s (%s)\n"
+                               (tibetan-analysis--format-word-with-wylie
+                                (alist-get 'head np))
+                               (or (alist-get 'case np) "—")))))))))
           (buffer-string))))))
 
 (defun tibetan-analysis--get-grammatical-role (word root-form verb-table)

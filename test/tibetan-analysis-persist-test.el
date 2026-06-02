@@ -1366,8 +1366,45 @@ and any NPs found inside the clause, each routed through the
                   '("ཀོ་རོན་ས" "སླེབ") (list verb-entry) nil)))
         (should (string-match-p "Clause 1 \\[main\\]" out))
         (should (string-match-p "verb སླེབ \\[sleb\\]" out))
-        (should (string-match-p "NPs: ཀོ་རོན་ས \\[ko ron sa\\] (TERM)" out))
-        (should (string-match-p "goal → ཀོ་རོན་ས" out))))))
+        ;; Role rendered as a class-facing label with the full NP.
+        (should (string-match-p "GOAL (TERM): ཀོ་རོན་ས \\[ko ron sa\\]" out))))))
+
+(ert-deftest tibetan-analysis-render-clause-structure-labels-subject-object ()
+  "A transitive clause renders explicit SUBJECT / DIRECT OBJECT labels
+\(subject before object), each showing the full noun phrase — the
+class-facing structure view."
+  (let* ((verb-entry `((lemma . "བྱེད")
+                       (meaning . "to do, to make")
+                       (transitivity . "Transitive")
+                       (case_frame . "Erg-Abs")))
+         (subj `((start . 0) (end . 1) (head . "བདག") (case . ERG)))
+         (obj  `((start . 1) (end . 2) (head . "ཆོས") (case . nil)))
+         (clause `((start . 0) (end . 3)
+                   (type . main) (converb-type . nil) (converb-particle . nil)
+                   (verb . ,verb-entry)))
+         (r2 `((clauses . (,clause))
+               (nps . (,subj ,obj))
+               (argument-structure
+                . (((clause . ,clause)
+                    (verb . ,verb-entry)
+                    (case-frame . "Erg-Abs")
+                    (arguments . (((role . agent) (np . ,subj))
+                                  ((role . patient) (np . ,obj))))))))))
+    (cl-letf (((symbol-function 'tibetan-analyze-round2)
+               (lambda (_w _v &optional _m) r2))
+              ((symbol-function 'tibetan-to-wylie-fixed)
+               (lambda (w) (cond ((string= w "བྱེད") "byed")
+                                 ((string= w "བདག") "bdag")
+                                 ((string= w "ཆོས") "chos")
+                                 (t w)))))
+      (let* ((out (tibetan-analysis--render-clause-structure
+                   '("བདག" "ཆོས" "བྱེད") (list verb-entry) nil))
+             (subj-pos (string-match "SUBJECT (ERG): བདག" out))
+             (obj-pos  (string-match "DIRECT OBJECT (ABS): ཆོས" out)))
+        (should subj-pos)
+        (should obj-pos)
+        ;; Subject listed before object.
+        (should (< subj-pos obj-pos))))))
 
 (ert-deftest tibetan-analysis-render-clause-structure-dependent-shows-converb ()
   "A dependent clause shows the converb particle that licenses it."

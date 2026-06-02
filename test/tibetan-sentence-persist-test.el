@@ -459,39 +459,33 @@ present.  Now asserted ABSENT (compressed default)."
     ;; renamed for §5.18 alignment).
     (should-not (string-match-p "^\\* Auto-Analysis$" body))))
 
-(ert-deftest tibetan-sentence-main-clause-rendered-for-transitive ()
-  "An Erg-Abs transitive sentence (subject ERG + honorific verb
-present in the classifier DB) produces a `** Main Clause' section
-with a MAIN VERB line and the honorific verb's lemma.
-Uses `བཀའ་སྩལ' (present in the verb DB) to keep the assertion
-independent of the verb-extractor's past-stem resolution path."
-  (skip-unless (fboundp 'tibetan-analyze-round2))
-  (let* ((text "བཅོམ་ལྡན་འདས་ཀྱིས་བཀའ་སྩལ།")
-         (body (tibetan-sentence--render-main-clause text)))
-    (should body)
-    (should (string-match-p "^- MAIN VERB:" body))
-    (should (string-match-p "བཀའ་སྩལ" body))))
+(ert-deftest tibetan-sentence-keeps-full-sentence-structure ()
+  "Sentence files now RETAIN the full `** Sentence Structure' section
+\(the per-clause subject/object breakdown) — it is no longer stripped.
+Detailed Dictionary etc. stay stripped (reference, not the compressed
+class view)."
+  (skip-unless (fboundp 'tibetan-sentence--strip-segment-claude-sections))
+  (let* ((content (concat
+                   "** Translation\nt\n\n"
+                   "** Sentence Structure\n"
+                   "Clause 1 [main]: verb བྱེད\n"
+                   "    SUBJECT (ERG): བདག\n\n"
+                   "** Detailed Dictionary\ndd\n\n"))
+         (stripped (tibetan-sentence--strip-segment-claude-sections content)))
+    (should (string-match-p "\\*\\* Sentence Structure" stripped))
+    (should (string-match-p "SUBJECT (ERG): བདག" stripped))
+    (should-not (string-match-p "\\*\\* Detailed Dictionary" stripped))))
 
-(ert-deftest tibetan-sentence-main-clause-nil-for-no-text ()
-  "Empty / nil input returns nil (caller omits the section)."
-  (should (null (tibetan-sentence--render-main-clause nil)))
-  (should (null (tibetan-sentence--render-main-clause ""))))
-
-(ert-deftest tibetan-sentence-main-clause-nil-when-no-finite-verb ()
-  "Text with no finite verb (pure NP) returns nil — no main clause."
-  (skip-unless (fboundp 'tibetan-analyze-round2))
-  (should (null (tibetan-sentence--render-main-clause "ཆོས"))))
-
-(ert-deftest tibetan-sentence-main-clause-appears-in-auto-analysis ()
-  "The `** Main Clause' section is appended to the auto-analysis
-body emitted by `tibetan-sentence--render-auto-analysis' for a real
-Tibetan sentence with a recognised verb."
+(ert-deftest tibetan-sentence-auto-analysis-has-structure-not-main-clause ()
+  "The sentence auto-analysis now carries the full `** Sentence
+Structure' (subjects/objects for every clause) and no longer the
+main-clause-only `** Main Clause' summary."
   (skip-unless (fboundp 'tibetan-analyze-round2))
   (let ((content (tibetan-sentence--render-auto-analysis
                   "བཅོམ་ལྡན་འདས་ཀྱིས་བཀའ་སྩལ།")))
     (should content)
-    (should (string-match-p "^\\*\\* Main Clause$" content))
-    (should (string-match-p "MAIN VERB" content))))
+    (should (string-match-p "^\\*\\* Sentence Structure$" content))
+    (should-not (string-match-p "Main Clause" content))))
 
 (ert-deftest tibetan-sentence-scaffold-includes-provided-translations-nested ()
   "After §5.18 sentence alignment (2026-05-18), the scaffold's
@@ -1610,15 +1604,15 @@ heading (`^\\*+ ')."
 (ert-deftest tibetan-sentence-segment-claude-sections-strip-list ()
   "§5.22 final (2026-05-21):  sentence files are ALWAYS rendered in
 the compressed in-class layout.  The accessor returns a fixed
-7-entry strip list — no longer flag-conditional.
+6-entry strip list — no longer flag-conditional.
 
 Drops:  Wylie, Phonetics, Interlinear, DharmaMitra Translation,
-Sentence Structure, Verb Classification (Hill 2010), Detailed
-Dictionary.
+Verb Classification (Hill 2010), Detailed Dictionary.
 
 Keeps (implicitly, by NOT being in the strip list):
   · ** Claude Vocabulary
   · ** Translation
+  · ** Sentence Structure   (2026-06-02: full subject/object structure)
   · ** Grammar
   · ** Provided Translations
 
@@ -1631,14 +1625,16 @@ reading default;  per-segment seg-NNN.org files keep the full
   (should (fboundp 'tibetan-sentence--segment-claude-sections))
   (let ((strip (tibetan-sentence--segment-claude-sections)))
     (should (listp strip))
-    (should (= 7 (length strip)))
+    (should (= 6 (length strip)))
     (should (member "** Wylie Transliteration" strip))
     (should (member "** Phonetics" strip))
     (should (member "** Interlinear Gloss" strip))
     (should (member "** DharmaMitra Translation" strip))
-    (should (member "** Sentence Structure" strip))
     (should (member "** Verb Classification (Hill 2010)" strip))
     (should (member "** Detailed Dictionary" strip))
+    ;; Sentence Structure is NO LONGER stripped (2026-06-02) — the
+    ;; full per-clause subject/object structure stays in sentence files.
+    (should-not (member "** Sentence Structure" strip))
     ;; Kept sections must NOT be in the strip list.
     (should-not (member "** Claude Vocabulary" strip))
     (should-not (member "** Translation" strip))
@@ -1704,7 +1700,8 @@ real output (which varies with vocab DB state)."
             (should-not (string-match-p "^\\*\\* Interlinear Gloss$" out))
             (should-not (string-match-p "^\\*\\* DharmaMitra Translation$"
                                         out))
-            (should-not (string-match-p "^\\*\\* Sentence Structure$" out))
+            ;; Sentence Structure is now KEPT (2026-06-02).
+            (should (string-match-p "^\\*\\* Sentence Structure$" out))
             (should-not (string-match-p
                          "^\\*\\* Verb Classification (Hill 2010)$" out))
             (should-not (string-match-p "^\\*\\* Detailed Dictionary$" out))
@@ -1763,12 +1760,13 @@ No mode flag — sentence files are always class-format."
       (should (string-match-p "^\\*\\* Translation$" out))
       (should (string-match-p "^\\*\\* Grammar$" out))
       (should (string-match-p "^\\*\\* Provided Translations$" out))
-      ;; Dropped: 7 sections.
+      ;; Sentence Structure is now KEPT (2026-06-02).
+      (should (string-match-p "^\\*\\* Sentence Structure$" out))
+      ;; Dropped: 6 reference sections.
       (should-not (string-match-p "^\\*\\* Wylie Transliteration$" out))
       (should-not (string-match-p "^\\*\\* Phonetics$" out))
       (should-not (string-match-p "^\\*\\* Interlinear Gloss$" out))
       (should-not (string-match-p "^\\*\\* DharmaMitra Translation$" out))
-      (should-not (string-match-p "^\\*\\* Sentence Structure$" out))
       (should-not (string-match-p
                    "^\\*\\* Verb Classification (Hill 2010)$" out))
       (should-not (string-match-p "^\\*\\* Detailed Dictionary$" out)))))
@@ -1805,7 +1803,7 @@ still suppresses the strip-list."
 4 L2 sections in the in-class compressed layout)."
   (let ((tibetan-sentence--detail-for-render "compressed"))
     (let ((strip (tibetan-sentence--segment-claude-sections)))
-      (should (= 7 (length strip)))
+      (should (= 6 (length strip)))
       (should (member "** Wylie Transliteration" strip))
       (should (member "** Detailed Dictionary" strip)))))
 
@@ -1814,16 +1812,16 @@ still suppresses the strip-list."
 §5.22 final behaviour — full 7-entry strip-list (compressed
 in-class layout is the default when no header is set)."
   (let ((tibetan-sentence--detail-for-render nil))
-    (should (= 7 (length (tibetan-sentence--segment-claude-sections))))))
+    (should (= 6 (length (tibetan-sentence--segment-claude-sections))))))
 
 (ert-deftest tibetan-sentence-detail-for-render-garbage-keeps-strip-list ()
   "§5.27 Phase 5:  defensive — any string other than \"detailed\"
 \(case-insensitive) falls through to the compressed strip-list.
 Protects against typos in the per-document header."
   (let ((tibetan-sentence--detail-for-render "verbose"))
-    (should (= 7 (length (tibetan-sentence--segment-claude-sections)))))
+    (should (= 6 (length (tibetan-sentence--segment-claude-sections)))))
   (let ((tibetan-sentence--detail-for-render "full"))
-    (should (= 7 (length (tibetan-sentence--segment-claude-sections))))))
+    (should (= 6 (length (tibetan-sentence--segment-claude-sections))))))
 
 (ert-deftest tibetan-sentence-strip-segment-claude-sections-honours-detailed ()
   "§5.27 Phase 5:  end-to-end through the strip helper — when the
