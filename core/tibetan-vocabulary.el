@@ -831,28 +831,33 @@ Returns meaning if found, nil otherwise."
         (if (listp entry) (car entry) entry)))))
 
 (defun tibetan-lookup-word-in-dharmamitra (word)
-  "Look up WORD in DharmaMitra with caching.
-Returns meaning if found, nil otherwise."
-  (let ((cached (gethash word tibetan-dharmamitra-cache)))
-    (if cached
-        ;; Return cached result
-        cached
-      ;; Query DharmaMitra and cache result
-      (when (fboundp 'dharmamitra-text-get-translation)
-        (condition-case nil
-            (let ((dm-trans (dharmamitra-text-get-translation word)))
-              (when (and dm-trans
-                        (not (string-empty-p dm-trans))
-                        (not (string= dm-trans "null")))
-                (setq dm-trans (string-trim dm-trans))
-                ;; Clean up DharmaMitra output: remove quotes, "A/An/The" prefixes
-                (setq dm-trans (replace-regexp-in-string "^[\"']\\|[\"']$" "" dm-trans))
-                (setq dm-trans (replace-regexp-in-string "^\\(A\\|An\\|The\\) " "" dm-trans))
-                (setq dm-trans (downcase dm-trans))
-                ;; Cache it
-                (puthash word dm-trans tibetan-dharmamitra-cache)
-                dm-trans))
-          (error nil))))))
+  "Look up WORD in DharmaMitra with caching (positive AND negative).
+Returns meaning if found, nil otherwise.
+
+A miss is cached as the sentinel `none' so repeated lookups of an
+out-of-dictionary word during a batch do not re-hit the network on
+every call (previously only hits were cached)."
+  (let ((cached (gethash word tibetan-dharmamitra-cache 'absent)))
+    (cond
+     ((eq cached 'none) nil)                 ; cached miss
+     ((not (eq cached 'absent)) cached)      ; cached hit (a string)
+     (t
+      (let ((result
+             (when (fboundp 'dharmamitra-text-get-translation)
+               (condition-case nil
+                   (let ((dm-trans (dharmamitra-text-get-translation word)))
+                     (when (and dm-trans
+                                (not (string-empty-p dm-trans))
+                                (not (string= dm-trans "null")))
+                       (setq dm-trans (string-trim dm-trans))
+                       ;; Clean up DM output: strip quotes, "A/An/The".
+                       (setq dm-trans (replace-regexp-in-string "^[\"']\\|[\"']$" "" dm-trans))
+                       (setq dm-trans (replace-regexp-in-string "^\\(A\\|An\\|The\\) " "" dm-trans))
+                       (downcase dm-trans)))
+                 (error nil)))))
+        ;; Cache the outcome — `none' for a miss so we don't re-query.
+        (puthash word (or result 'none) tibetan-dharmamitra-cache)
+        result)))))
 
 (defun tibetan-format-bilingual-meaning (english german)
   "Format ENGLISH and GERMAN meanings, English first, German in brackets.

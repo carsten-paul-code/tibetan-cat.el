@@ -945,6 +945,30 @@ particle-stripping lookup and DD used a strict gethash lookup."
   (let ((result (tibetan-lookup-word-in-dharmamitra nil)))
     (should (or (null result) (stringp result)))))
 
+(ert-deftest tibetan-lookup-word-in-dharmamitra-negative-caches-misses ()
+  "A DharmaMitra MISS is cached, so a repeated lookup of an
+out-of-dictionary word does not re-hit the network.  Regression: only
+hits were cached, so every miss re-queried on each call."
+  (clrhash tibetan-dharmamitra-cache)
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'dharmamitra-text-get-translation)
+               (lambda (&rest _) (cl-incf calls) nil)))   ; always a miss
+      (should (null (tibetan-lookup-word-in-dharmamitra "ཟzzz")))
+      (should (null (tibetan-lookup-word-in-dharmamitra "ཟzzz")))
+      (should (= calls 1))))
+  (clrhash tibetan-dharmamitra-cache))
+
+(ert-deftest tibetan-lookup-word-in-dharmamitra-caches-hits ()
+  "A DharmaMitra HIT is cached (one query for repeated lookups)."
+  (clrhash tibetan-dharmamitra-cache)
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'dharmamitra-text-get-translation)
+               (lambda (&rest _) (cl-incf calls) "house")))
+      (should (equal "house" (tibetan-lookup-word-in-dharmamitra "ཁྱིམ")))
+      (should (equal "house" (tibetan-lookup-word-in-dharmamitra "ཁྱིམ")))
+      (should (= calls 1))))
+  (clrhash tibetan-dharmamitra-cache))
+
 ;; ============================================================================
 ;; FORMAT BILINGUAL MEANING TESTS (untested public function)
 ;; ============================================================================
