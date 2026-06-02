@@ -473,41 +473,6 @@ ordering."
   (should-not (tibetan-is-sentence-boundary-p "ནས།")))
 
 ;; ============================================================================
-;; EXTRACT PARTICLE TEXT TESTS
-;; ============================================================================
-
-(ert-deftest tibetan-extract-particle-text-string-input ()
-  "Test extracting text from string particle."
-  (skip-unless (fboundp 'tibetan-extract-particle-text))
-  (let ((result (tibetan-extract-particle-text "སོ")))
-    (should (listp result))
-    (should (= (length result) 1))
-    (should (equal (car result) "སོ"))))
-
-(ert-deftest tibetan-extract-particle-text-alist-input ()
-  "Test extracting text from alist format particle."
-  (skip-unless (fboundp 'tibetan-extract-particle-text))
-  (let ((result (tibetan-extract-particle-text '(type . ("སོ" "ཏོ")))))
-    (should (listp result))
-    (should (> (length result) 0))
-    ;; Should extract both particle texts
-    (should (member "སོ" result))))
-
-(ert-deftest tibetan-extract-particle-text-nil-input ()
-  "Test extracting text with nil input."
-  (skip-unless (fboundp 'tibetan-extract-particle-text))
-  (let ((result (tibetan-extract-particle-text nil)))
-    (should (or (null result) (listp result)))))
-
-(ert-deftest tibetan-extract-particle-text-returns-list ()
-  "Test that extract-particle-text returns a list."
-  (skip-unless (fboundp 'tibetan-extract-particle-text))
-  (let ((result (tibetan-extract-particle-text "ནས")))
-    (should (listp result))
-    (dolist (item result)
-      (should (stringp item)))))
-
-;; ============================================================================
 ;; RESET-STRUCTURE TESTS (dialogue-boundary re-segmentation workflow)
 ;; ============================================================================
 ;;

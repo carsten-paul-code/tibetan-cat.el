@@ -188,26 +188,6 @@ Queries only the Sanskrit-indexed sources for cleanliness."
           (mapconcat #'identity (nreverse out) "; "))))))
 
 ;; ---------------------------------------------------------------------------
-;; Convenience formatter (used by Detailed Dictionary renderer)
-;; ---------------------------------------------------------------------------
-
-(defun tibetan-steinert-format-matches (word &optional max-rows)
-  "Return a human-readable multi-line string of Steinert matches for WORD,
-or nil if none. MAX-ROWS caps the displayed rows (default 8)."
-  (let* ((hits (tibetan-steinert-lookup word (or max-rows 8))))
-    (when hits
-      (mapconcat
-       (lambda (h)
-         (let ((src (plist-get h :source))
-               (gl  (plist-get h :gloss)))
-           (format "    [%s] %s"
-                   (or src "?")
-                   (if (and gl (> (length gl) 220))
-                       (concat (substring gl 0 217) "...")
-                     (or gl "")))))
-       hits "\n"))))
-
-;; ---------------------------------------------------------------------------
 ;; Web URL generation
 ;; ---------------------------------------------------------------------------
 

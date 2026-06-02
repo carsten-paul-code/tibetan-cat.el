@@ -152,21 +152,6 @@ ends its own short sentence.  `ཅེས་སྐད' / `ཞེས་སྐད' 
 patterns (`...ces skad') close reported speech.  Both are
 STRONG boundaries on the rnam-thar corpus.")
 
-(defun tibetan-extract-particle-text (particle)
-  "Extract text from a particle, handling both string and list formats.
-If PARTICLE is a string, return it as a single-element list.
-If PARTICLE is a list like (type . (\"text1\" \"text2\")), extract all texts.
-Returns a list of strings, or nil if extraction fails."
-  (cond
-   ((stringp particle) (list particle))
-   ((and (listp particle) (cdr particle))
-    (let ((parts (cdr particle)))
-      (cond
-       ((stringp parts) (list parts))
-       ((listp parts) (cl-remove-if-not #'stringp parts))
-       (t nil))))
-   (t nil)))
-
 (defun tibetan--last-syllable (text)
   "Return the final tsheg-separated syllable of TEXT, or nil if none.
 Strips trailing shad, tsheg, and whitespace before splitting."
