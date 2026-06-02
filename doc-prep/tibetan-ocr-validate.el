@@ -370,7 +370,7 @@ Returns plist:
         (suspicious (plist-get validation-result :suspicious)))
 
     (concat
-     (format "=== OCR Validation Report ===\n\n")
+     "=== OCR Validation Report ===\n\n"
      (format "Total syllables: %d\n" total)
      (format "Valid:      %d (%.1f%%)\n"
              (length valid)

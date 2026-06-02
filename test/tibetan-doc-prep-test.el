@@ -186,6 +186,16 @@
     (should (listp variants))
     (should (member "པདག" variants))))
 
+(ert-deftest tibetan-ocr-validate-structure-rejects-subscript-start ()
+  "A syllable beginning with a subscript (ྐ) is structurally invalid."
+  (should-not (tibetan-ocr-validate--valid-syllable-structure-p "ྐབ")))
+
+(ert-deftest tibetan-ocr-validate-syllable-suspicious-status ()
+  "A non-Tibetan, non-punctuation, non-particle token validates as
+`suspicious' (exercises the final dispatch branch)."
+  (let ((result (tibetan-ocr-validate-syllable "xq")))
+    (should (eq (plist-get result :status) 'suspicious))))
+
 ;; ============================================================================
 ;; INTEGRATION TESTS
 ;; ============================================================================
