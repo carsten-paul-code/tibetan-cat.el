@@ -270,12 +270,11 @@ the first failure — this is the full batch suite.  (Before 2026-06-01
 flag named a non-existent function that never executed; the spec suite
 also made a live dharmamitra.org request on every run.  Both fixed.)
 
-Current state (2026-06-02, post-§5.30 audit round 2):  **ERT 2115
-tests, 2114 expected, 0 unexpected, 1 intentional skip
+Current state (2026-06-02, post-§5.31 grammar improvements):  **ERT
+2120 tests, 2119 expected, 0 unexpected, 1 intentional skip
 (compound-analysis-callable); BDD 244 / 244.**  Full `make compile` is
 clean (zero warnings).  Carsten runs `make test` after every change and
-expects it to stay green.  (Count dropped vs §5.28's 2119 because dead
-modules/helpers + their tests were removed in §5.30.)
+expects it to stay green.
 
 When adding a test, always wire it into `test/run-all-tests.el` via
 `condition-case`. Otherwise the suite silently doesn't pick it up and
@@ -2533,6 +2532,50 @@ follow-ups):**
   layout: reconciling it with the canonical sentence creator is a
   design task (the auto path doesn't collect per-sentence seg-nums);
   legacy files migrate on regenerate anyway.
+
+### 5.31 Grammar-section improvements + sentence-structure feature (done, 2026-06-02)
+
+Class-reading improvements to the per-segment + per-sentence analysis
+files (planned in `~/.claude/plans/synthetic-stargazing-anchor.md`).
+Five items, each test-first, one commit each:
+
+- **A. Zero-marker fix** (`tibetan-analysis--render-particle-skeleton`):
+  the persistent-file `Ø` is now stamped before a verb ONLY when the
+  immediately-preceding token is a bare content word — suppressed when
+  it is already markup (`=case=` / `~converb~` / `*final*`).  Fixes the
+  §5.21-deferred "spurious Ø on an overt ergative subject".
+- **B. Reading-optimized section order** (`--priority-section-order`):
+  Sentence Structure elevated ABOVE Grammar; Concept Notes demoted to a
+  reference block just above Detailed Dictionary.  Existing reorder
+  post-pass migrates files on regenerate.
+- **C. Hill verb stems** (`tibetan-verb-classifier`): a normalization
+  pass auto-indexes every entry's present/past/future/imperative stems
+  as lookup keys (8 were missing — e.g. སྨྲོས, ཐོབས, མཐོངས); new
+  `tibetan-verb-matched-stem' tags WHICH stem appeared, surfaced in Verb
+  Classification as `ATTESTED: <form> — perfect (past) stem'.
+- **D. Subjects/objects + full sentence structure** (the new feature):
+  `--render-clause-structure' now prints explicit SUBJECT / DIRECT
+  OBJECT / oblique labels (new `--role-order' / `--role-labels' /
+  `--role-label') with the full NP, ordered subject→object→oblique.
+  Sentence files: `** Sentence Structure' DROPPED from
+  `tibetan-sentence--strip-list' so the full per-clause structure
+  survives; the main-clause-only summary (`--render-main-clause' /
+  `--append-main-clause' / `--role-display' / `--main-clause-role-order')
+  retired/removed.
+- **E. Role-based highlighting**: new `tibetan-analysis-verb-face'
+  (blue) + `-structure-role-face' (green-bold); the Sentence Structure
+  role labels + clause verbs are font-locked (verified).  A Tibetan-
+  script base layer (`--tibetan-script-matcher', a FUNCTION matcher —
+  a `[ༀ-࿿]' char-range as a STRING in font-lock-keywords is silently
+  dropped when other keywords are present) colours Tibetan runs;  under
+  batch `font-lock-ensure' this base layer is inconsistent (jit-lock
+  artifact) — **eyeball + tune colours live**.
+
+NOTE: §5.21 layout (and now these changes on regenerate) apply to
+Milarepa; Yogācārabhūmi is still pre-§5.21 — propagating is a regenerate
+run (Carsten's call, and §5.29 governs Claude/DM re-firing).  The
+verb-extractor not recognising some past stems in running text
+(e.g. བལྟམས) is a separate data-coverage matter, not part of this batch.
 
 ## 6. Open work (prioritised)
 
