@@ -64,6 +64,45 @@ place — no duplicates."
             (should-not (string-match-p "#\\+TIBETAN_TARGET_LANG: de" out))))
       (delete-directory dir t))))
 
+(ert-deftest tibetan-document-prep-wizard-header-write-syncs-visiting-buffer ()
+  "--write-header must keep an EXISTING visiting buffer in sync with the
+header it writes.
+
+Regression for the stale-async-buffer clobber:  --fire-async-claude
+opens and keeps a visiting buffer (to hold the cached Claude
+suggestion).  If header writes go to disk only (write-region), that
+buffer stays stale, and the later kickoff steps (find-file-noselect +
+save-buffer for sentence-structure / auto-analyze) write the stale
+buffer back, dropping every #+TIBETAN_* header the wizard just wrote."
+  (skip-unless (fboundp 'tibetan-document-prep-wizard--write-header))
+  (let ((dir (make-temp-file "wiz-hdr-sync-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "source.org" dir)))
+          (with-temp-file src
+            (insert "#+TITLE: T\n\n* Tibetan Text\nབདག\n"))
+          (let ((buf (find-file-noselect src)))   ; the async-Claude buffer
+            (unwind-protect
+                (progn
+                  (tibetan-document-prep-wizard--write-header
+                   src "TIBETAN_TARGET_LANG" "de")
+                  ;; The visiting buffer must reflect the new header, so a
+                  ;; later save-buffer cannot clobber it.
+                  (with-current-buffer buf
+                    (should (string-match-p
+                             "^#\\+TIBETAN_TARGET_LANG: de$"
+                             (buffer-string)))
+                    ;; And an explicit save keeps it on disk.
+                    (save-buffer))
+                  (with-temp-buffer
+                    (insert-file-contents src)
+                    (should (string-match-p
+                             "^#\\+TIBETAN_TARGET_LANG: de$"
+                             (buffer-string)))))
+              (when (buffer-live-p buf)
+                (with-current-buffer buf (set-buffer-modified-p nil))
+                (kill-buffer buf)))))
+      (delete-directory dir t))))
+
 ;; ============================================================================
 ;; INDIVIDUAL STEPS
 ;; ============================================================================

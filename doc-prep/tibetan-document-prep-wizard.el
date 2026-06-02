@@ -305,10 +305,9 @@ lines' so existing context lines are preserved."
            (t
             (setq new-lines (append new-lines (list (string-trim line)))))))))
     (when new-lines
-      (with-temp-buffer
-        (insert-file-contents source-file)
-        (tibetan-document-prep--append-context-lines new-lines)
-        (write-region (point-min) (point-max) source-file)))
+      (tibetan-document-prep-wizard--edit-source
+       source-file
+       (lambda () (tibetan-document-prep--append-context-lines new-lines))))
     new-lines))
 
 (defconst tibetan-document-prep-wizard--class-modes
@@ -385,14 +384,39 @@ or `grammar'.  Returns the chosen symbol (`grammar' | `reading')."
 ;; HEADER WRITE HELPER  -------------------------------------------------------
 ;; ============================================================================
 
+(defun tibetan-document-prep-wizard--edit-source (source-file edit-fn)
+  "Apply EDIT-FN (a no-arg buffer-editing function) to SOURCE-FILE.
+
+When SOURCE-FILE already has a visiting buffer — e.g. the one
+`tibetan-document-prep-wizard--fire-async-claude' opens to hold the
+cached Claude suggestion — edit THAT buffer and save it, so the buffer
+stays in sync with disk.  Otherwise edit the file on disk via a temp
+buffer.
+
+This is the fix for the stale-buffer clobber:  header writes used to go
+straight to disk (write-region) while the async-Claude buffer stayed
+stale;  the later kickoff steps (find-file-noselect + save-buffer) then
+wrote that stale buffer back, dropping the headers.  Routing every
+source mutation through the visiting buffer keeps them consistent."
+  (let ((buf (get-file-buffer source-file)))
+    (if buf
+        (with-current-buffer buf
+          (funcall edit-fn)
+          (save-buffer))
+      (with-temp-buffer
+        (insert-file-contents source-file)
+        (funcall edit-fn)
+        (write-region (point-min) (point-max) source-file)))))
+
 (defun tibetan-document-prep-wizard--write-header (source-file key value)
   "Upsert `#+KEY: VALUE' into SOURCE-FILE.  Re-uses the Phase-4
 header writer so the wizard and the Claude-apply command share
-one implementation."
-  (with-temp-buffer
-    (insert-file-contents source-file)
-    (tibetan-document-prep--upsert-single-line-header key value)
-    (write-region (point-min) (point-max) source-file)))
+one implementation.  Edits through the file's visiting buffer when one
+exists (see `tibetan-document-prep-wizard--edit-source')."
+  (tibetan-document-prep-wizard--edit-source
+   source-file
+   (lambda ()
+     (tibetan-document-prep--upsert-single-line-header key value))))
 
 ;; ============================================================================
 ;; RESOURCES SCAFFOLD
