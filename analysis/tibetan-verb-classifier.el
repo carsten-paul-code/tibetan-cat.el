@@ -273,19 +273,6 @@
                      (indigenous_class . "tha_mi_dad_pa")) db)
     (puthash "འཕོས" (gethash "འཕོ" db) db)
 
-    ;; བཙོང་ - to sell (transitive)
-    (puthash "བཙོང" '((lemma . "བཙོང")
-                       (meaning . "to sell")
-                       (present_stem . "བཙོང")
-                       (past_stem . "བཙོངས")
-                       (future_stem . "བཙོང")
-                       (imperative_stem . "ཚོངས")
-                       (transitivity . "Transitive")
-                       (volitionality . "Volitional")
-                       (case_frame . "Erg-Abs")
-                       (indigenous_class . "tha_dad_pa")) db)
-    (puthash "བཙོངས" (gethash "བཙོང" db) db)
-    (puthash "ཚོང" (gethash "བཙོང" db) db)
 
     ;; ཉོ་ - to buy (transitive)
     (puthash "ཉོ" '((lemma . "ཉོ")
@@ -540,6 +527,7 @@
                        (indigenous_class . "tha_dad_pa")) db)
     (puthash "འཚོང" (gethash "བཙོང" db) db)
     (puthash "བཙོངས" (gethash "བཙོང" db) db)
+    (puthash "ཚོང" (gethash "བཙོང" db) db)
 
     ;; སྦྱིན་ - to give
     (puthash "སྦྱིན" '((lemma . "སྦྱིན")

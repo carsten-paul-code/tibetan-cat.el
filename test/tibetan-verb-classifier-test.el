@@ -15,6 +15,21 @@
     (should (string= "སྦྱིན" (alist-get 'lemma result)))
     (should (string-match-p "to give" (alist-get 'meaning result)))))
 
+(ert-deftest tibetan-verb-lookup-btsong-aliases-consistent ()
+  "All forms of `to sell' (བཙོང / ཚོང / བཙོངས / འཚོང) resolve to the
+SAME entry.  Regression for a contradictory duplicate: two puthash
+calls defined `བཙོང' with different lemmas/imperatives, and the
+`ཚོང' alias pointed at the dead (overwritten) entry — so `ཚོང' and
+`བཙོང' returned different alists."
+  (let ((btsong (tibetan-verb-lookup "བཙོང"))
+        (tshong (tibetan-verb-lookup "ཚོང")))
+    (should btsong)
+    (should tshong)
+    (should (string= (alist-get 'lemma btsong)
+                     (alist-get 'lemma tshong)))
+    (should (string= (alist-get 'imperative_stem btsong)
+                     (alist-get 'imperative_stem tshong)))))
+
 (ert-deftest tibetan-verb-lookup-with-punctuation ()
   "Test that verbs with trailing shad are still found."
   (let ((result (tibetan-verb-lookup "བྱིན།")))
