@@ -83,13 +83,10 @@ sentence boundaries)."
         (forward-line 1))
 
       ;; Find sentence start (look backward for heading)
-      (if (re-search-backward "^\\*\\* Sentence \\([0-9]+\\)" nil t)
-          (progn
-            (setq sentence-num (match-string 1))
-            (message "DEBUG: Found sentence %s" sentence-num)
-            (forward-line 1)
-            (setq start-pos (point)))
-        (message "DEBUG: No sentence heading found backward from point %d" (point)))
+      (when (re-search-backward "^\\*\\* Sentence \\([0-9]+\\)" nil t)
+        (setq sentence-num (match-string 1))
+        (forward-line 1)
+        (setq start-pos (point)))
 
       ;; Find sentence end (look forward for ‖SEN‖ or next sentence heading)
       (when start-pos
@@ -101,10 +98,8 @@ sentence boundaries)."
                       (setq end-pos (point))
                     (setq end-pos (match-end 0)))
                 ;; matched next sentence heading
-                (setq end-pos (match-beginning 0)))
-              (message "DEBUG: Sentence ends at %d" end-pos))
-          (setq end-pos (point-max))
-          (message "DEBUG: No end marker, using point-max")))
+                (setq end-pos (match-beginning 0))))
+          (setq end-pos (point-max))))
 
       ;; Extract all segments in this sentence
       (when (and start-pos end-pos)
@@ -115,10 +110,8 @@ sentence boundaries)."
                  ;; Clean up: remove ‖SEN‖ marker and segment tags
                  (seg-text (string-trim
                            (replace-regexp-in-string "‖SEN‖\\|〔SEG:[^〕]+〕\\|〔/SEG〕" "" seg-text-raw))))
-            (message "DEBUG: Found segment %s" seg-id)
             (push (cons seg-id seg-text) segments))))
 
-      (message "DEBUG: Total segments found: %d" (length segments))
       (when segments
         (list :number sentence-num
               :segments (nreverse segments)
