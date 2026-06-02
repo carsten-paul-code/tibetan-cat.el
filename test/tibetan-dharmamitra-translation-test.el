@@ -367,6 +367,56 @@ a file that doesn't exist)."
                "/nonexistent/path/seg-005.org")))
 
 ;; ============================================================================
+;; fire-for-segment — populated-section gating (the request-storm policy:
+;; "renew a populated DM section only on explicit request")
+;; ============================================================================
+
+(ert-deftest tibetan-dm-trans-fire-for-segment-skips-populated-tibetan ()
+  "fire-for-segment must NOT call the DM API when the Tibetan section
+is already populated and no FORCE is given.  Regression for the
+request storm — opening an already-translated segment re-fired DM
+every time because the Tibetan path fired unconditionally."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+               (lambda (&rest _) (cl-incf calls) "X")))
+      (tibetan-dm-trans-test--with-analysis-file
+          (replace-regexp-in-string
+           "\\[Awaiting DharmaMitra…\\]" "A real translation."
+           (tibetan-dm-trans-test--baseline-analysis))
+        (tibetan-dharmamitra-translation-fire-for-segment
+         "བདག་གིས་ལས་བྱས།" analysis-file)
+        (should (= calls 0))))))
+
+(ert-deftest tibetan-dm-trans-fire-for-segment-fires-empty-tibetan ()
+  "fire-for-segment DOES fire when the Tibetan section is still the
+`[Awaiting DharmaMitra…]' placeholder (fresh file)."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+               (lambda (&rest _) (cl-incf calls) "X")))
+      (tibetan-dm-trans-test--with-analysis-file
+          (tibetan-dm-trans-test--baseline-analysis)
+        (tibetan-dharmamitra-translation-fire-for-segment
+         "བདག་གིས་ལས་བྱས།" analysis-file)
+        (should (= calls 1))))))
+
+(ert-deftest tibetan-dm-trans-fire-for-segment-force-refires-populated ()
+  "With FORCE non-nil (explicit C-c u R), fire-for-segment re-fires
+even a populated Tibetan section."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+               (lambda (&rest _) (cl-incf calls) "X")))
+      (tibetan-dm-trans-test--with-analysis-file
+          (replace-regexp-in-string
+           "\\[Awaiting DharmaMitra…\\]" "A real translation."
+           (tibetan-dm-trans-test--baseline-analysis))
+        (tibetan-dharmamitra-translation-fire-for-segment
+         "བདག་གིས་ལས་བྱས།" analysis-file nil nil t)
+        (should (= calls 1))))))
+
+;; ============================================================================
 ;; PHASE A.2 — Sanskrit translation in parallel-mode docs
 ;; ============================================================================
 ;;
@@ -472,8 +522,10 @@ Sanskrit sibling on Segment 5; bind ANALYSIS-FILE to a temp seg-005.org."
        (delete-directory sdir t)
        (delete-directory adir t))))
 
-(ert-deftest tibetan-dm-trans-fire-for-segment-fires-tibetan-always ()
-  "fire-for-segment always fires Tibetan translation."
+(ert-deftest tibetan-dm-trans-fire-for-segment-fires-tibetan-when-needed ()
+  "fire-for-segment fires the Tibetan translation when the section
+needs it — the baseline carries the `[Awaiting DharmaMitra…]'
+placeholder, so it fires (and Sanskrit does not, lacking source/seg)."
   (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
   (let ((tib-calls 0) (skt-calls 0))
     (cl-letf (((symbol-function 'tibetan-dharmamitra-translation-fire-tibetan)

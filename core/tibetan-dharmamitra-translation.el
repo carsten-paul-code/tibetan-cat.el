@@ -427,31 +427,46 @@ Returns t on successful write, nil otherwise."
 
 ;;;###autoload
 (defun tibetan-dharmamitra-translation-fire-for-segment
-    (tibetan-text analysis-file &optional source-file seg-id)
+    (tibetan-text analysis-file &optional source-file seg-id force)
   "Fire DharmaMitra translation(s) for a segment.
 
-ALWAYS fires Tibetan translation when TIBETAN-TEXT is non-empty.
+Fires the Tibetan translation when TIBETAN-TEXT is non-empty AND
+either FORCE is non-nil OR the Tibetan DM section is empty / a
+placeholder (`tibetan-dharmamitra-translation-needs-request-p').  In
+other words a POPULATED Tibetan DM section is left alone unless FORCE
+is given — this is what stops the request storm on file open, where
+the segment already has a DM translation.  Pass FORCE non-nil from the
+explicit-refresh path (`C-c u R').
 
 Additionally fires Sanskrit translation when:
   - SOURCE-FILE is non-nil
   - SOURCE-FILE has `#+SOURCE_MODE: parallel-sanskrit'
   - The segment SEG-ID has a `**** Sanskrit' sibling on the source
   - The sibling's IAST text is not a placeholder marker
+  - FORCE is non-nil OR the Sanskrit DM section needs a request
 
-Sanskrit gating is delegated to
+Sanskrit parallel-mode gating is delegated to
 `tibetan-sanskrit-parallel-plist-for-segment-id', which returns
 nil for any of the above failures.
 
 This is the call site's main entry point — replaces the
 single-language `fire-tibetan' calls."
-  ;; Tibetan path — always fires when text is present.
+  ;; Tibetan path — fire only when forced or the section needs it, so a
+  ;; populated DM translation is not silently re-requested on open.
   (when (and tibetan-text
              (stringp tibetan-text)
-             (not (string-empty-p (string-trim tibetan-text))))
+             (not (string-empty-p (string-trim tibetan-text)))
+             (or force
+                 (tibetan-dharmamitra-translation-needs-request-p
+                  analysis-file "Tibetan")))
     (tibetan-dharmamitra-translation-fire-tibetan tibetan-text analysis-file))
-  ;; Sanskrit path — gated on parallel-mode + sibling-present.
+  ;; Sanskrit path — gated on parallel-mode + sibling-present, and on
+  ;; the Sanskrit section needing a request (unless forced).
   (when (and source-file seg-id
-             (fboundp 'tibetan-sanskrit-parallel-plist-for-segment-id))
+             (fboundp 'tibetan-sanskrit-parallel-plist-for-segment-id)
+             (or force
+                 (tibetan-dharmamitra-translation-needs-request-p
+                  analysis-file "Sanskrit")))
     (let ((skt-plist
            (condition-case nil
                (tibetan-sanskrit-parallel-plist-for-segment-id

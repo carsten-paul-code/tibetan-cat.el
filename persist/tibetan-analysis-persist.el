@@ -4374,10 +4374,13 @@ segment > sentence > paragraph > legacy, most-specific-wins."
           ;; analysis, they want fresh translations from every engine.
           ;; Phase A.2 (2026-04-30): uses umbrella `fire-for-segment'
           ;; that handles both Tibetan and Sanskrit (parallel-mode).
+          ;; FORCE = t:  this is the explicit-refresh path, so re-fire
+          ;; even a populated section (fire-for-segment otherwise skips
+          ;; populated sections — see the on-open auto-fire gating).
           (when (fboundp 'tibetan-dharmamitra-translation-fire-for-segment)
             (condition-case err
                 (tibetan-dharmamitra-translation-fire-for-segment
-                 tibetan-text filepath source-file seg-id)
+                 tibetan-text filepath source-file seg-id t)
               (error (message "DharmaMitra translation skipped: %s"
                               (error-message-string err)))))
           ;; Phase 5 of two-language-parallel-analysis (§5.17, 2026-04-30):
@@ -4790,8 +4793,14 @@ without touching the file.  Otherwise return a plist:
               (when (and fire-p
                          (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
                 (condition-case e3
+                    ;; FORCE only on an explicit force-all re-request
+                    ;; (RE-REQUEST-CLAUDE = t).  Under `:missing-only'
+                    ;; (force nil) fire-for-segment self-gates and skips
+                    ;; a populated DM section — honouring "renew only on
+                    ;; explicit request".
                     (tibetan-dharmamitra-translation-fire-for-segment
-                     tibetan-text filepath source-file seg-id)
+                     tibetan-text filepath source-file seg-id
+                     (eq re-request-claude t))
                   (error (message "DharmaMitra re-request failed for %s: %s"
                                   (file-name-nondirectory filepath)
                                   (error-message-string e3)))))
