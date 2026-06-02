@@ -1,6 +1,6 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-06-01T16:04:16
+#+DATE: 2026-06-02T07:19:22
 #+OPTIONS: toc:2 num:nil
 
 Source tree: ~/Users/cp/tibetan-cat.el~  ·  68 modules  ·  1212 forms
@@ -2480,15 +2480,31 @@ Returns:
   nil when the section is present and populated, OR ANALYSIS-FILE
       is missing (caller can't write anyway)
 
+Heading location (matters — write/read must agree):
+  - Tibetan side:  since §5.20 (2026-05-19) the writer puts the
+    translation in the NESTED level-2 `** DharmaMitra Translation'
+    inside `* Tibetan Analysis'.  This predicate therefore checks
+    that heading FIRST, and accepts the legacy top-level
+    `* DharmaMitra Translation (Tibetan)' for unmigrated files.
+    (Before this fix it checked ONLY the legacy top-level heading,
+    never matched the nested section the writer actually fills, and
+    so always returned t — re-firing DM on every file open.)
+  - Other languages (Sanskrit):  top-level
+    `* DharmaMitra Translation (SOURCE-LANG)'.
+
+A body that is empty OR a `[Awaiting…' / `[Requesting…' placeholder
+counts as still-needing, so a freshly-rendered file (which carries the
+`[Awaiting DharmaMitra…]' placeholder) is correctly filled.
+
 Used by the existing-file open path so re-running `C-c u A' on a
 file that already has a DM translation doesn't re-fire the API
-unnecessarily.  Reanalysis (`C-c u R') bypasses this and always
-refreshes.
+unnecessarily.  Explicit reanalysis (`C-c u R') passes FORCE to
+`tibetan-dharmamitra-translation-fire-for-segment' to refresh anyway.
 
 ** ~tibetan-dharmamitra-translation-needs-fire-on-open-p~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 311
+:LINE: 333
 :SIGNATURE: (tibetan-dharmamitra-translation-needs-fire-on-open-p analysis-file)
 :AUTOLOAD: t
 :END:
@@ -2514,7 +2530,7 @@ missing.  This predicate triggers when EITHER side needs work.
 ** ~tibetan-dharmamitra-translation-fire-tibetan~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 335
+:LINE: 357
 :SIGNATURE: (tibetan-dharmamitra-translation-fire-tibetan tibetan-text analysis-file)
 :AUTOLOAD: t
 :END:
@@ -2538,7 +2554,7 @@ Returns t on successful write, nil otherwise.
 ** ~tibetan-dharmamitra-translation-fire-sanskrit~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 365
+:LINE: 387
 :SIGNATURE: (tibetan-dharmamitra-translation-fire-sanskrit sanskrit-text analysis-file)
 :AUTOLOAD: t
 :END:
@@ -2568,22 +2584,29 @@ Returns t on successful write, nil otherwise.
 ** ~tibetan-dharmamitra-translation-fire-for-segment~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 407
-:SIGNATURE: (tibetan-dharmamitra-translation-fire-for-segment tibetan-text analysis-file &optional source-file seg-id)
+:LINE: 429
+:SIGNATURE: (tibetan-dharmamitra-translation-fire-for-segment tibetan-text analysis-file &optional source-file seg-id force)
 :AUTOLOAD: t
 :END:
 
 Fire DharmaMitra translation(s) for a segment.
 
-ALWAYS fires Tibetan translation when TIBETAN-TEXT is non-empty.
+Fires the Tibetan translation when TIBETAN-TEXT is non-empty AND
+either FORCE is non-nil OR the Tibetan DM section is empty / a
+placeholder (`tibetan-dharmamitra-translation-needs-request-p').  In
+other words a POPULATED Tibetan DM section is left alone unless FORCE
+is given — this is what stops the request storm on file open, where
+the segment already has a DM translation.  Pass FORCE non-nil from the
+explicit-refresh path (`C-c u R').
 
 Additionally fires Sanskrit translation when:
   - SOURCE-FILE is non-nil
   - SOURCE-FILE has `#+SOURCE_MODE: parallel-sanskrit'
   - The segment SEG-ID has a `**** Sanskrit' sibling on the source
   - The sibling's IAST text is not a placeholder marker
+  - FORCE is non-nil OR the Sanskrit DM section needs a request
 
-Sanskrit gating is delegated to
+Sanskrit parallel-mode gating is delegated to
 `tibetan-sanskrit-parallel-plist-for-segment-id', which returns
 nil for any of the above failures.
 
@@ -13086,7 +13109,7 @@ Segment-level implementation; see `tibetan-reanalyze-segment'.
 ** ~tibetan-open-paragraph-analysis~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 4413
+:LINE: 4416
 :SIGNATURE: (tibetan-open-paragraph-analysis)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -13104,7 +13127,7 @@ right-side window.
 ** ~tibetan-reanalyze-paragraph~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 4470
+:LINE: 4473
 :SIGNATURE: (tibetan-reanalyze-paragraph)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -13118,7 +13141,7 @@ the segment-level `tibetan-reanalyze-segment' contract.
 ** ~tibetan-analysis--read-section-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4519
+:LINE: 4522
 :SIGNATURE: (tibetan-analysis--read-section-body filepath section-name)
 :END:
 
@@ -13129,7 +13152,7 @@ Works for top-level (* …) sections.
 ** ~tibetan-analysis--seg-id-from-filename~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4538
+:LINE: 4541
 :SIGNATURE: (tibetan-analysis--seg-id-from-filename filepath)
 :END:
 
@@ -13138,7 +13161,7 @@ Return the numeric segment id encoded in FILEPATH's basename, or nil.
 ** ~tibetan-analysis--fire-parallel-claude-with-plist~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4548
+:LINE: 4551
 :SIGNATURE: (tibetan-analysis--fire-parallel-claude-with-plist tibetan-text sanskrit-plist source-file analysis-file)
 :END:
 
@@ -13160,7 +13183,7 @@ Returns t when the Sanskrit call was dispatched, nil otherwise.
 ** ~tibetan-analysis--fire-parallel-mode-claude-calls~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4610
+:LINE: 4613
 :SIGNATURE: (tibetan-analysis--fire-parallel-mode-claude-calls tibetan-text source-file analysis-file)
 :END:
 
@@ -13176,7 +13199,7 @@ Sanskrit sibling is a placeholder.
 ** ~tibetan-analysis-reanalyze-file~  /function (cl)/
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 4632
+:LINE: 4635
 :SIGNATURE: (tibetan-analysis-reanalyze-file filepath &key source-file re-request-claude dry-run)
 :END:
 
@@ -13207,7 +13230,7 @@ without touching the file.  Otherwise return a plist:
 ** ~tibetan-analysis--folder-analysis-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4812
+:LINE: 4821
 :SIGNATURE: (tibetan-analysis--folder-analysis-files folder)
 :END:
 
@@ -13216,7 +13239,7 @@ Return the list of seg-NNN*.org files under FOLDER, sorted by seg-id.
 ** ~tibetan-analysis-batch-reanalyze~  /function (cl)/  ⚡  ↗
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 4823
+:LINE: 4832
 :SIGNATURE: (tibetan-analysis-batch-reanalyze &key folder source-file re-request-claude dry-run)
 :INTERACTIVE: t
 :AUTOLOAD: t
