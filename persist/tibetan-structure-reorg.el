@@ -451,12 +451,9 @@ Returns plist with reorganization statistics."
   (interactive)
   (tibetan-reorganize-analysis-files t))
 
-;; ============================================================================
-;; KEYBINDINGS
-;; ============================================================================
-
-(global-set-key (kbd "C-c u O") 'tibetan-reorganize-analysis-files)
-(global-set-key (kbd "C-c u U") 'tibetan-preview-reorganization)
+;; Keybindings (C-c u O / C-c u U) live in config/tibetan-keybindings.el
+;; — modules must not `global-set-key' at load time (that is how the
+;; historic C-c u C clobber happened).
 
 (provide 'tibetan-structure-reorg)
 ;;; tibetan-structure-reorg.el ends here

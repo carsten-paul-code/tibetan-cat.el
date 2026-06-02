@@ -130,6 +130,20 @@
   ;; - Also available via Menu: Tibetan > Batch Analyze All Segments
 
 ;; ============================================================================
+;; ANALYSIS-FOLDER REORGANIZATION - C-c u O / C-c u U
+;; ============================================================================
+;; (Centralised here from persist/tibetan-structure-reorg.el — modules
+;; must not global-set-key at load time;  that is how the historic
+;; C-c u C clobber happened.)
+
+(global-set-key (kbd "C-c u O") 'tibetan-reorganize-analysis-files)
+  ;; Reorganize analysis files to match the source's current segment
+  ;; order (rename by content hash; archive orphans).
+
+(global-set-key (kbd "C-c u U") 'tibetan-preview-reorganization)
+  ;; Preview what `C-c u O' would do, without modifying anything.
+
+;; ============================================================================
 ;; TRANSLATION COMPARISON - C-c u c
 ;; ============================================================================
 
