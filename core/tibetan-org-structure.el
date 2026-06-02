@@ -896,8 +896,9 @@ Prompts for title and then for the Tibetan text to paste."
     (org-mode)
     (message "Paste your Tibetan text, then run M-x tibetan-prepare-document or C-c u P")))
 
-;; Keybinding for document preparation
-(global-set-key (kbd "C-c u P") 'tibetan-prepare-document)
+;; Keybinding for document preparation (C-c u P) lives in
+;; config/tibetan-keybindings.el — modules must not global-set-key at
+;; load time.
 
 (provide 'tibetan-org-structure)
 ;;; tibetan-org-structure.el ends here

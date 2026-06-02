@@ -46,13 +46,13 @@
   ;; - Context-aware grammatical analysis per segment
   ;; - Translation and notes sections
 
-;; ============================================================================
-;; WORKSPACE EDITING (active in workspace buffers)
-;; ============================================================================
-
-;; Note: These are typically bound via local keymaps within workspace mode
-;; (global-set-key (kbd "C-c C-c") 'tibetan-save-workspace)
-;; (global-set-key (kbd "C-c e p") 'tibetan-export-workspace-pdf)
+;; Workspace / org PDF export (centralised here from
+;; workspace/tibetan-sentence-workspace.el — modules must not
+;; global-set-key at load time).
+(global-set-key (kbd "C-c s p") 'tibetan-export-workspace-pdf)
+  ;; Export the current sentence workspace to PDF.
+(global-set-key (kbd "C-c e p") 'tibetan-export-any-org-to-pdf)
+  ;; Export ANY org buffer to PDF.
 
 ;; ============================================================================
 ;; VOCABULARY - C-c u v / C-c u +

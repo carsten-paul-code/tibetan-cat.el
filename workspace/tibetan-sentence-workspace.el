@@ -382,11 +382,12 @@ No title page, no TOC."
 ;; KEY BINDINGS
 ;; ============================================================================
 
-(global-set-key (kbd "C-c s w") 'tibetan-prepare-sentence)      ; sentence workspace
+;; Global keybindings (C-c s w / C-c s p / C-c e p) live in
+;; config/tibetan-keybindings.el — modules must not global-set-key at
+;; load time.  The org-mode-map binding below is a mode-local keymap
+;; edit (not global), kept here next to the command it serves.
 (with-eval-after-load 'org
   (define-key org-mode-map (kbd "C-c C-c") 'tibetan-save-workspace))
-(global-set-key (kbd "C-c s p") 'tibetan-export-workspace-pdf)  ; export workspace to PDF
-(global-set-key (kbd "C-c e p") 'tibetan-export-any-org-to-pdf) ; export ANY org to PDF
 
 (provide 'tibetan-sentence-workspace)
 ;;; tibetan-sentence-workspace.el ends here
