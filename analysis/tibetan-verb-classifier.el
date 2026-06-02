@@ -718,6 +718,30 @@
     (puthash "གཟུག" (gethash "འཛུགས" db) db)
     (puthash "ཚུགས" (gethash "འཛུགས" db) db)
 
+    ;; Normalize stem indexing:  guarantee that EVERY entry's real stems
+    ;; (present / past / future / imperative) are registered as lookup
+    ;; keys pointing at the entry, so Hill detection fires on whichever
+    ;; stem appears in the text — including the perfect (past) stem.
+    ;; The hand-written aliases above cover most, but some entries were
+    ;; missing a stem key (e.g. སྨྲོས, མཐོངས, ཐོབས, སློབས); this pass
+    ;; closes the gap consistently for current AND future entries.
+    ;; Skips placeholder `—' / empty stems (copulas have no imperative).
+    (let ((canon (make-hash-table :test 'equal)))
+      (maphash (lambda (_k v)
+                 (let ((lemma (alist-get 'lemma v)))
+                   (when lemma (puthash lemma v canon))))
+               db)
+      (maphash (lambda (_lemma v)
+                 (dolist (sk '(present_stem past_stem future_stem
+                                            imperative_stem))
+                   (let ((stem (alist-get sk v)))
+                     (when (and stem (stringp stem)
+                                (> (length stem) 0)
+                                (not (string= stem "—"))
+                                (not (gethash stem db)))
+                       (puthash stem v db)))))
+               canon))
+
     ;; Return the database
     db))
 
@@ -747,6 +771,24 @@ Returns verb entry alist if found, nil otherwise."
 (defun tibetan-is-verb-p (word)
   "Return non-nil if WORD is a recognized verb."
   (not (null (tibetan-verb-lookup word))))
+
+(defun tibetan-verb-matched-stem (word entry)
+  "Return which stem of ENTRY the surface WORD matches.
+One of the symbols `present', `past', `future', `imperative', or nil
+when WORD matches no stem field of ENTRY.  WORD is cleaned of trailing
+punctuation / tsheg first (same as `tibetan-verb-lookup').  Used to
+annotate the Verb Classification output, e.g. \"byas = perfect (past)
+stem of byed\"."
+  (when (and word entry (stringp word))
+    (let ((w (replace-regexp-in-string
+              "[་ \t]+$" ""
+              (replace-regexp-in-string "[།༎༔]+$" "" (string-trim word)))))
+      (cond
+       ((equal w (alist-get 'present_stem entry))    'present)
+       ((equal w (alist-get 'past_stem entry))       'past)
+       ((equal w (alist-get 'future_stem entry))     'future)
+       ((equal w (alist-get 'imperative_stem entry)) 'imperative)
+       (t nil)))))
 
 
 

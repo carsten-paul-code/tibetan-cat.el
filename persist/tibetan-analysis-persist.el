@@ -3968,6 +3968,24 @@ unused-arg warning without breaking the public API."
                         (when meaning
                           (insert (format " — %s" meaning)))
                         (insert "\n")
+                        ;; Note which stem actually appears in the text
+                        ;; when it's NOT the present/lemma form — so the
+                        ;; reader sees e.g. the perfect stem was attested.
+                        (let* ((surface (alist-get 'source-form verb))
+                               (matched
+                                (and surface
+                                     (fboundp 'tibetan-verb-matched-stem)
+                                     (tibetan-verb-matched-stem surface verb))))
+                          (when (and matched (not (eq matched 'present)))
+                            (insert
+                             (format "  ATTESTED: %s — %s stem\n"
+                                     (tibetan-analysis--format-word-with-wylie
+                                      surface)
+                                     (pcase matched
+                                       ('past "perfect (past)")
+                                       ('future "future")
+                                       ('imperative "imperative")
+                                       (_ (symbol-name matched)))))))
                         (insert (format "  STEMS: %s / %s / %s / %s\n"
                                         (tibetan-analysis--format-word-with-wylie
                                          present)

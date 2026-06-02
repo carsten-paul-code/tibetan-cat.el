@@ -89,6 +89,44 @@ Mirrors CLAUDE.md §7: trailing-tsheg-after-stripping pitfall."
     (should result)
     (should (string= "བྱོས" (alist-get 'imperative_stem result)))))
 
+(ert-deftest tibetan-verb-stem-normalization-indexes-all-stems ()
+  "Every entry's real stems resolve via lookup — including stems that
+were previously missing a hand-written alias.  Guards the normalization
+pass that auto-indexes present/past/future/imperative as keys."
+  ;; སྨྲོས is the imperative of སྨྲ; was missing a key before normalization.
+  (let ((r (tibetan-verb-lookup "སྨྲོས")))
+    (should r)
+    (should (string= "སྨྲ" (alist-get 'present_stem r))))
+  ;; ཐོབས (imperative of ཐོབ), མཐོངས (imperative of མཐོང): also resolve.
+  (should (tibetan-verb-lookup "ཐོབས"))
+  (should (tibetan-verb-lookup "མཐོངས"))
+  ;; Spot-check: every entry's non-placeholder stems are keyed.
+  (let ((missing 0) (seen (make-hash-table :test 'equal)))
+    (maphash
+     (lambda (_k v)
+       (let ((lemma (alist-get 'lemma v)))
+         (unless (gethash lemma seen)
+           (puthash lemma t seen)
+           (dolist (sk '(present_stem past_stem future_stem imperative_stem))
+             (let ((stem (alist-get sk v)))
+               (when (and stem (stringp stem) (> (length stem) 0)
+                          (not (string= stem "—"))
+                          (not (gethash stem tibetan-verb-database)))
+                 (cl-incf missing)))))))
+     tibetan-verb-database)
+    (should (= 0 missing))))
+
+(ert-deftest tibetan-verb-matched-stem-identifies-stem ()
+  "`tibetan-verb-matched-stem' reports which stem a surface form is."
+  (let ((byed (tibetan-verb-lookup "བྱེད")))
+    (should (eq 'present    (tibetan-verb-matched-stem "བྱེད" byed)))
+    (should (eq 'past       (tibetan-verb-matched-stem "བྱས" byed)))
+    (should (eq 'future     (tibetan-verb-matched-stem "བྱ" byed)))
+    (should (eq 'imperative (tibetan-verb-matched-stem "བྱོས" byed)))
+    ;; Trailing tsheg / shad tolerated.
+    (should (eq 'past       (tibetan-verb-matched-stem "བྱས།" byed)))
+    (should (null           (tibetan-verb-matched-stem "ཁྱིམ" byed)))))
+
 ;; ============================================================================
 ;; TRANSITIVITY TESTS
 ;; ============================================================================
