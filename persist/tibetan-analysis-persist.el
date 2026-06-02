@@ -259,13 +259,38 @@ only affected the next time they are regenerated."
   :group 'tibetan-cat)
 
 (defface tibetan-analysis-tibetan-face
-  '((t :inherit default))
-  "Face for Tibetan text in analysis buffers."
+  '((((class color) (background light)) :foreground "#1a237e")   ; deep indigo
+    (((class color) (background dark))  :foreground "#aeb6ff")
+    (t :inherit default))
+  "Face applied to Tibetan script across analysis buffers so the
+Tibetan words stand out from the Latin Wylie / glosses / English
+labels — faster to find while reading aloud in class.  Applied via
+font-lock with `append', so the more specific case-particle / converb
+/ verb / gloss faces (which `prepend') still win on their own tokens.
+Customise the colour to taste."
   :group 'tibetan-cat)
 
 (defface tibetan-analysis-roman-face
   '((t :inherit default))
   "Face for roman (non-Tibetan) text in analysis buffers."
+  :group 'tibetan-cat)
+
+(defface tibetan-analysis-verb-face
+  '((((class color) (background light)) :foreground "DodgerBlue3" :weight bold)
+    (((class color) (background dark))  :foreground "DodgerBlue1" :weight bold)
+    (t :inherit bold))
+  "Face for the verb in Sentence Structure clause headers
+\(`Clause N [...]: verb LEMMA').  A distinct blue makes each clause's
+predicate jump out from its arguments.  Customise to taste."
+  :group 'tibetan-cat)
+
+(defface tibetan-analysis-structure-role-face
+  '((((class color) (background light)) :foreground "DarkGreen" :weight bold)
+    (((class color) (background dark))  :foreground "PaleGreen2" :weight bold)
+    (t :inherit bold))
+  "Face for the SUBJECT / OBJECT / oblique role labels in the Sentence
+Structure section, so the argument skeleton is scannable at a glance.
+Customise to taste."
   :group 'tibetan-cat)
 
 (defface tibetan-analysis-case-particle-face
@@ -409,6 +434,40 @@ resolve; they are simply not rendered — parallel to the
 particle-map delimiter hiding in
 `tibetan-analysis--particle-map-font-lock-keywords'.")
 
+(defun tibetan-analysis--tibetan-script-matcher (limit)
+  "Font-lock matcher: move point over the next run of Tibetan script
+\(U+0F00–U+0FFF) up to LIMIT, setting match data.  Used instead of a
+string matcher because a `[ༀ-࿿]' char-range as a STRING in
+`font-lock-keywords' is silently dropped when other keywords are
+present;  the same range works in this runtime `re-search-forward'."
+  (re-search-forward "[ༀ-࿿]+" limit t))
+
+(defconst tibetan-analysis--tibetan-script-font-lock-keywords
+  ;; Colour every run of Tibetan script so the Tibetan words pop from
+  ;; the surrounding Latin Wylie / glosses / labels.  Override `t' +
+  ;; installed as the FIRST (base) keyword in
+  ;; `tibetan-analysis-setup-faces';  the more specific verb /
+  ;; case-particle / converb / gloss faces are added AFTER with
+  ;; `prepend', so they still win on their own tokens.
+  '((tibetan-analysis--tibetan-script-matcher
+     (0 'tibetan-analysis-tibetan-face t)))
+  "Font-lock keywords colouring Tibetan script across analysis buffers
+\(2026-06-02) — the core \"highlight the Tibetan words\" aid.")
+
+(defconst tibetan-analysis--structure-font-lock-keywords
+  ;; Role-based highlighting for the Sentence Structure section.
+  '(;; SUBJECT / OBJECT / oblique role labels (+ leading NP fallback).
+    ("^    \\(SUBJECT\\|DIRECT OBJECT\\|INDIRECT OBJECT\\|LOCATIVE\\|GOAL\\|SOURCE\\|INSTRUMENT\\|COMITATIVE\\|NP\\)[^:\n]*:"
+     (0 'tibetan-analysis-structure-role-face prepend))
+    ;; The verb in a clause header: `Clause N [...]: verb LEMMA'.
+    ;; Capture the lemma as a non-space run (NOT a `[ༀ-࿿]' char-range,
+    ;; which font-lock drops as a string matcher) up to the ` [wylie]'.
+    ("Clause [0-9]+ \\[[^]]*\\]: verb \\([^ \n]+\\)"
+     (1 'tibetan-analysis-verb-face prepend)))
+  "Font-lock keywords for the Sentence Structure section (2026-06-02):
+SUBJECT / OBJECT / oblique labels in green-bold, the clause verb in
+blue-bold, so the argument skeleton is scannable in class.")
+
 (defun tibetan-analysis-setup-faces ()
   "Setup faces for analysis buffers.
 Ensures Tibetan text remains readable at all heading levels and in
@@ -447,12 +506,22 @@ parser which doesn't fire for compound-embedded markers like
     ;; `nil' mode so only this buffer picks them up.  Re-run
     ;; `font-lock-flush' immediately so existing content gets the face
     ;; on first render.
+    ;; Role-based highlighting (2026-06-02).  The Tibetan-script base
+    ;; layer is added FIRST (override `t') so every later keyword that
+    ;; uses `prepend' (particle map, structure verb, gloss) layers its
+    ;; more-specific colour ON TOP of the base Tibetan colour on shared
+    ;; tokens.
+    (font-lock-add-keywords
+     nil tibetan-analysis--tibetan-script-font-lock-keywords 'append)
     (font-lock-add-keywords
      nil tibetan-analysis--particle-map-font-lock-keywords 'append)
     (font-lock-add-keywords
      nil tibetan-analysis--interlinear-gloss-font-lock-keywords 'append)
     (font-lock-add-keywords
      nil tibetan-analysis--term-anchor-font-lock-keywords 'append)
+    ;; Sentence Structure role labels (green-bold) + clause verbs (blue).
+    (font-lock-add-keywords
+     nil tibetan-analysis--structure-font-lock-keywords 'append)
     (when (fboundp 'font-lock-flush)
       (font-lock-flush))
 

@@ -1762,6 +1762,39 @@ into a converb `~gis~' wrap."
     (should (string-match-p "=gis=" map))
     (should-not (string-match-p "~gis~" map))))
 
+(ert-deftest tibetan-analysis-role-based-faces-defined ()
+  "Role-based highlighting (2026-06-02) defines the verb, role-label and
+Tibetan-script faces."
+  (should (facep 'tibetan-analysis-tibetan-face))
+  (should (facep 'tibetan-analysis-verb-face))
+  (should (facep 'tibetan-analysis-structure-role-face)))
+
+(ert-deftest tibetan-analysis-highlight-keywords-match-expected ()
+  "The role-based highlighting matchers target the right patterns: the
+Tibetan-script function matcher finds Tibetan (not Latin), and the
+Sentence-Structure regexes match a role label line and a clause verb."
+  (let ((case-fold-search nil))
+    ;; Tibetan-script matcher (a function, not a regex string) advances
+    ;; over a Tibetan run and stops on Latin.
+    (with-temp-buffer
+      (insert "བདག bdag")
+      (goto-char (point-min))
+      (should (tibetan-analysis--tibetan-script-matcher (point-max)))
+      ;; The match covered the Tibetan, not the Latin "bdag".
+      (should (string-match-p "[ༀ-࿿]"
+                              (buffer-substring (match-beginning 0)
+                                                (match-end 0))))
+      ;; No further Tibetan run after the match.
+      (should-not (tibetan-analysis--tibetan-script-matcher (point-max))))
+    ;; Structure keywords: role label + clause-verb.
+    (let* ((kws tibetan-analysis--structure-font-lock-keywords)
+           (label-re (car (nth 0 kws)))
+           (verb-re  (car (nth 1 kws))))
+      (should (string-match-p label-re "    SUBJECT (ERG): བདག"))
+      (should (string-match-p label-re "    DIRECT OBJECT (ABS): ཆོས"))
+      (should-not (string-match-p label-re "    NPs without colon "))
+      (should (string-match-p verb-re "Clause 1 [main]: verb བྱེད [byed]")))))
+
 (ert-deftest tibetan-analysis-particle-skeleton-no-spurious-zero-on-overt-ergative ()
   "The particle skeleton must NOT stamp `Ø' before a transitive verb when
 the immediately-preceding argument is already overtly case-marked (an
