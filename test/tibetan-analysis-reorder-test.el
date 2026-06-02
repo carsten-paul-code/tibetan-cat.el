@@ -92,9 +92,10 @@ to `*** Claude Grammar' nested UNDER `** Grammar' between the
 Particle Map and Particles in This Segment subsections, so the
 priority-ordered top-level list no longer carries it — the
 reader's flow inside Grammar is visual-map → Claude prose →
-per-particle Portfolio refs.  The priority order is now
-Wylie → Interlinear → Claude Translation → Grammar → Sentence
-Structure → Verb Classification."
+per-particle Portfolio refs.  Reading-optimized order (2026-06-02):
+Sentence Structure is elevated ABOVE Grammar, so the priority order is
+Wylie → Interlinear → Claude Translation → Sentence Structure →
+Grammar → Verb Classification."
   (let* ((content (concat
                    "** Word / Particle List\nwpl\n\n"
                    "** Verb Classification (Hill 2010)\nverbs\n\n"
@@ -109,8 +110,8 @@ Structure → Verb Classification."
          (expected-prefix '("** Wylie Transliteration"
                             "** Interlinear Gloss"
                             "** Claude Translation"
-                            "** Grammar"
                             "** Sentence Structure"
+                            "** Grammar"
                             "** Verb Classification (Hill 2010)")))
     (should (equal (cl-subseq headings 0 (length expected-prefix))
                    expected-prefix))
@@ -118,6 +119,26 @@ Structure → Verb Classification."
     (dolist (keep '("** Word / Particle List"
                     "** Detailed Dictionary"))
       (should (member keep headings)))))
+
+(ert-deftest tibetan-analysis-reorder-concept-notes-and-structure-positions ()
+  "Reading-optimized order (2026-06-02): Sentence Structure precedes
+Grammar, and Concept Notes is demoted to a reference block just above
+Detailed Dictionary (after Provided Translations)."
+  (let* ((content (concat
+                   "** Detailed Dictionary\ndd\n\n"
+                   "** Concept Notes\ncn\n\n"
+                   "** Grammar\ng\n\n"
+                   "** Sentence Structure\ns\n\n"
+                   "** Provided Translations\npt\n\n"
+                   "** Translation\nt\n\n"))
+         (reordered (tibetan-analysis--reorder-auto-content content))
+         (headings (tibetan-analysis-reorder-test--headings reordered))
+         (pos (lambda (h) (cl-position h headings :test #'string=))))
+    (should (< (funcall pos "** Sentence Structure") (funcall pos "** Grammar")))
+    (should (< (funcall pos "** Provided Translations")
+               (funcall pos "** Concept Notes")))
+    (should (< (funcall pos "** Concept Notes")
+               (funcall pos "** Detailed Dictionary")))))
 
 (ert-deftest tibetan-analysis-reorder-preserves-unlisted-section-order ()
   "Sections NOT in the priority list retain their original relative

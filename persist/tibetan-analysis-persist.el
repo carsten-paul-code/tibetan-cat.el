@@ -3098,23 +3098,24 @@ For each Bialek-detected particle in BIALEK-ANALYSIS:
     "** Claude Translation"
     "** Translation"
     "** DharmaMitra Translation"
-    ;; §5.24 (2026-05-22):  Concept Notes (Buddhist / Sanskrit
-    ;; technical glossary) — Claude-populated, placed between the
-    ;; AI translations and Grammar.  Reader-flow:  Translation →
-    ;; Concept Notes → Grammar.
-    "** Concept Notes"
-    "** Grammar"
+    ;; Reading-optimized order (2026-06-02):  Sentence Structure is
+    ;; elevated ABOVE Grammar — once the student has the translation,
+    ;; the sentence skeleton (subjects / objects / verbs) is the next
+    ;; thing they reach for, before drilling into per-particle grammar.
     "** Sentence Structure"
+    "** Grammar"
     "** Verb Classification (Hill 2010)"
-    ;; §5.21 Commit 5/7 (2026-05-20):  Provided Translations +
-    ;; Detailed Dictionary added with Detailed Dictionary as the
-    ;; LAST entry.  Class-use feedback:  the dictionary is reference
-    ;; material consulted on confusion, not flow reading;  moving
-    ;; it to the bottom turns the analysis file into a top-to-
-    ;; bottom reading flow (Wylie → Phonetics → Interlinear →
-    ;; Translations → Grammar → Sentence/Verb structure → Provided
-    ;; Translations → Detailed Dictionary, reference).
+    ;; §5.21 Commit 5/7 (2026-05-20):  Detailed Dictionary is the LAST
+    ;; entry — reference material consulted on confusion, not flow
+    ;; reading.  Class-use feedback (2026-06-02):  Concept Notes
+    ;; (Buddhist / Sanskrit encyclopedia glossary) is ALSO reference,
+    ;; not flow — moved DOWN from after the AI translations to just
+    ;; above Detailed Dictionary, so the top-to-bottom reading flow is
+    ;; Wylie → Phonetics → Interlinear → Translations → Sentence
+    ;; Structure → Grammar → Verb Class. → Provided Translations, then
+    ;; the two reference blocks (Concept Notes, Detailed Dictionary).
     "** Provided Translations"
+    "** Concept Notes"
     "** Detailed Dictionary")
   "Section headings (at org level-2) that should appear first in the
 `* Auto-Analysis' output, in this exact order.  Any level-2 section
