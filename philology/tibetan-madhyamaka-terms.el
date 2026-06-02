@@ -212,15 +212,37 @@ Populated from tibetan-madhyamaka-core-terms and tibetan-gelugpa-specific-usage.
 ;; VOCABULARY LOOKUP
 ;; ============================================================================
 
+(defun tibetan-madhyamaka--term-present-p (term text)
+  "Non-nil when TERM occurs in TEXT as a whole, tsheg/shad/space-
+delimited unit (not as a substring inside a larger syllable).
+
+TERM is matched literally (regexp-quoted), bounded on each side by
+string start/end or a Tibetan delimiter (tsheg ་, shad །༎༔, space,
+tab, newline).  This prevents e.g. the core term `ལམ' matching inside
+the unrelated syllable `ལམས'.
+
+Note:  it does NOT resolve compound-internal matches — `ལམ' is a
+genuine tsheg-delimited syllable inside `ལམ་རིམ', so it still matches
+there.  Distinguishing word- from syllable-boundaries needs real
+Tibetan word segmentation, out of scope here."
+  (let ((case-fold-search nil))
+    (string-match-p
+     (concat "\\(?:^\\|[་།༎༔ \t\n]\\)"
+             (regexp-quote term)
+             "\\(?:$\\|[་།༎༔ \t\n]\\)")
+     text)))
+
 (defun tibetan-extract-madhyamaka-vocabulary (tibetan-text)
   "Extract Madhyamaka technical terms from TIBETAN-TEXT.
-Returns list of (tibetan-term . english-explanation)."
+Returns list of (tibetan-term . english-explanation).  Terms match as
+whole tsheg/shad/space-delimited units (see
+`tibetan-madhyamaka--term-present-p')."
   (let ((found-terms '()))
     (dolist (term-pair tibetan-madhyamaka-core-terms)
-      (when (string-match-p (car term-pair) tibetan-text)
+      (when (tibetan-madhyamaka--term-present-p (car term-pair) tibetan-text)
         (push term-pair found-terms)))
     (dolist (term-pair tibetan-gelugpa-specific-usage)
-      (when (string-match-p (car term-pair) tibetan-text)
+      (when (tibetan-madhyamaka--term-present-p (car term-pair) tibetan-text)
         (push term-pair found-terms)))
     (nreverse found-terms)))
 

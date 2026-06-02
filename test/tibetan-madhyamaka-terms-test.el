@@ -210,6 +210,21 @@
   (let ((result (tibetan-extract-madhyamaka-vocabulary "སྟོང་པ་ཉིད་དེ")))
     (should (listp result))))
 
+(ert-deftest tibetan-extract-madhyamaka-vocabulary-whole-syllable-only ()
+  "A single-syllable term is matched only as a whole tsheg/shad/space-
+delimited unit, not as a substring inside a LARGER syllable.
+
+Regression: terms were matched with raw `string-match-p', so the core
+term `ལམ' (path) matched inside the unrelated syllable `ལམས'.  (Matching
+`ལམ' inside the compound `ལམ་རིམ' — where `ལམ' is a genuine
+tsheg-delimited syllable — is inherent Tibetan-segmentation ambiguity
+and is NOT addressed here.)"
+  (skip-unless (fboundp 'tibetan-extract-madhyamaka-vocabulary))
+  ;; `ལམ' as its own tsheg-delimited syllable → present.
+  (should (assoc "ལམ" (tibetan-extract-madhyamaka-vocabulary "ལམ་གྱི་སྒོམ")))
+  ;; `ལམ' only as a prefix inside the larger syllable `ལམས' → absent.
+  (should-not (assoc "ལམ" (tibetan-extract-madhyamaka-vocabulary "ལམས་པ"))))
+
 (ert-deftest tibetan-extract-madhyamaka-vocabulary-empty-text ()
   "Test extraction from empty or no-term text."
   (skip-unless (fboundp 'tibetan-extract-madhyamaka-vocabulary))
