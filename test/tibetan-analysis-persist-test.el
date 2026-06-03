@@ -2259,6 +2259,42 @@ reading) is left alone.  This is the integration-level test on
                       "ཚད་མེད་བཞི་པོ" "<term> four immeasurables" vocab)
                      "<term> four immeasurables"))))
 
+(ert-deftest tibetan-analysis-claude-vocab-proper-noun-p-detects-name ()
+  "When Claude's Vocabulary line classifies a token as a proper noun
+(the part-of-speech field, before the quoted gloss, contains
+`proper'), the helper returns the quoted name.
+
+Regression for Milarepa Segment 110 (`རྔོག'): Rangjung-Yeshe glosses
+the common noun \"mane\", but Claude — which sees clause context —
+classifies it `proper noun, \"rNgog\"' (Mar pa's disciple)."
+  (let ((vocab '(("rngog" . "rngog, proper noun, \"rNgog\", one of Mar pa's chief disciples"))))
+    (should (string= (tibetan-analysis--claude-vocab-proper-noun-p
+                      "རྔོག" vocab)
+                     "rNgog")))
+  ;; Non-proper-noun POS → nil (a comma inside the gloss must not trip it).
+  (let ((vocab '(("nga" . "nga, pronoun, \"I, me\", first person"))))
+    (should-not (tibetan-analysis--claude-vocab-proper-noun-p "ང" vocab)))
+  ;; Nil vocab / no match → nil.
+  (should-not (tibetan-analysis--claude-vocab-proper-noun-p "རྔོག" nil)))
+
+(ert-deftest tibetan-analysis-claude-vocab-override-rescues-untagged-proper-noun ()
+  "A dictionary common-noun gloss (no `<person>'/`<place>' tag) that
+masks a proper name is overridden with Claude's name when Claude
+classifies the token as a proper noun.
+
+Milarepa Segment 110: dict gloss \"mane\" for `རྔོག' → Claude's
+\"rNgog\".  A token Claude calls a common noun keeps the dict gloss."
+  (let ((vocab '(("rngog" . "rngog, proper noun, \"rNgog\", a disciple of Mar pa"))))
+    ;; Untagged common-noun dict gloss + Claude proper-noun → override.
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "རྔོག" "mane" vocab)
+                     "rNgog")))
+  ;; Claude says common noun → dict gloss kept (no spurious override).
+  (let ((vocab '(("khang" . "khang, noun, \"house\", dwelling"))))
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "ཁང" "house, building" vocab)
+                     "house, building"))))
+
 ;; ============================================================================
 ;; U4 — Claude Grammar nested under ** Grammar (2026-04-24)
 ;;

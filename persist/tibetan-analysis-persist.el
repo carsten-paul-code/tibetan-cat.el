@@ -198,28 +198,76 @@ field present."
               (when (string-match "\"\\([^\"]+\\)\"" line)
                 (match-string 1 line)))))))))
 
-(defun tibetan-analysis--apply-claude-vocab-override (word dict-gloss vocab-alist)
-  "Override a proper-noun-tagged DICT-GLOSS with Claude's reading.
-When DICT-GLOSS begins with `<person>' or `<place>' — the
-Steinert 84000Dict proper-noun tag markers — AND Claude
-Vocabulary has a gloss for WORD, prefer Claude.  Otherwise return
-DICT-GLOSS unchanged.
+(defun tibetan-analysis--claude-vocab-proper-noun-p (word vocab-alist)
+  "Return Claude's proper-noun gloss (the name) for WORD, or nil.
+VOCAB-ALIST is the parsed Claude Vocabulary alist — each element
+is (WYLIE-KEY . FULL-LINE) with the line shaped
 
-Rationale: the 84000 data includes buddha-names and place-names
-indexed under short Tibetan phrases that double as common words
-(`blo sbyangs' = \"trained mind\" but also the 547th buddha).
-When the whole DD for a token is proper-noun entries, no amount
-of dict-layer refinement recovers the lexical reading; Claude,
-which sees full-clause context, can and does.  The `<term>' tag
+    wylie-key, part-of-speech, \"gloss\", commentary
+
+When Claude's part-of-speech field (everything BEFORE the first
+double-quoted gloss) classifies the token as a proper noun /
+proper name — it contains the word `proper' — the helper returns
+the quoted gloss (the name).  Otherwise nil.
+
+Used to override a dictionary common-noun gloss that masks a
+proper name with no Steinert `<person>'/`<place>' tag (e.g. `rngog'
+glossed \"mane\" by Rangjung-Yeshe but named rNgog in context —
+Milarepa Segment 110).  Examining only the pre-quote prefix keeps
+a comma inside the gloss (`\"I, me\"') from being mistaken for the
+POS field."
+  (when (and vocab-alist (listp vocab-alist))
+    (let ((wylie (tibetan-analysis--token-wylie word)))
+      (when wylie
+        (let ((hit (cl-find-if
+                    (lambda (pair)
+                      (let ((key (car pair)))
+                        (or (string= key wylie)
+                            (string-prefix-p (concat wylie " ") key))))
+                    vocab-alist)))
+          (when hit
+            (let* ((line (cdr hit))
+                   (pre (if (string-match "\"" line)
+                            (substring line 0 (match-beginning 0))
+                          line)))
+              (when (string-match-p "\\bproper\\b" (downcase pre))
+                (when (string-match "\"\\([^\"]+\\)\"" line)
+                  (match-string 1 line))))))))))
+
+(defun tibetan-analysis--apply-claude-vocab-override (word dict-gloss vocab-alist)
+  "Override a proper-noun DICT-GLOSS with Claude's reading.
+
+Two override paths, both gated on Claude Vocabulary having an entry
+for WORD:
+
+1. DICT-GLOSS begins with `<person>' or `<place>' — the Steinert
+   84000Dict proper-noun tag markers — → prefer Claude's gloss.
+   The 84000 data indexes buddha-names and place-names under short
+   Tibetan phrases that double as common words (`blo sbyangs' =
+   \"trained mind\" but also the 547th buddha); Claude, which sees
+   full-clause context, recovers the lexical reading.
+
+2. DICT-GLOSS is an UNTAGGED common-noun reading but Claude
+   classifies WORD as a proper noun → prefer Claude's name.  This
+   catches homographs whose dictionary entry carries no tag — e.g.
+   `rngog' glossed \"mane\" by Rangjung-Yeshe but named rNgog
+   (Mar pa's disciple) in context (Milarepa Segment 110).
+
+Otherwise DICT-GLOSS is returned unchanged.  The `<term>' tag
 (84000's canonical-term marker) is left intact — it IS the right
 gloss when present."
-  (if (and dict-gloss
-           (stringp dict-gloss)
-           (or (string-prefix-p "<person>" (string-trim dict-gloss))
-               (string-prefix-p "<place>" (string-trim dict-gloss))))
+  (let ((trimmed (and (stringp dict-gloss) (string-trim dict-gloss))))
+    (cond
+     ;; Path 1: Steinert proper-noun tag.
+     ((and trimmed
+           (or (string-prefix-p "<person>" trimmed)
+               (string-prefix-p "<place>" trimmed)))
       (or (tibetan-analysis--claude-vocab-gloss-for-token word vocab-alist)
-          dict-gloss)
-    dict-gloss))
+          dict-gloss))
+     ;; Path 2: untagged common-noun gloss masking a Claude proper noun.
+     (t
+      (or (tibetan-analysis--claude-vocab-proper-noun-p word vocab-alist)
+          dict-gloss)))))
 
 (defvar tibetan-analysis--claude-vocabulary-for-render nil
   "Dynamic binding: parsed Claude-vocabulary alist for the in-flight render.
