@@ -75,7 +75,9 @@
     (puthash "འགྲོ" '((lemma . "འགྲོ")
                       (meaning . "to go")
                       (present_stem . "འགྲོ")
-                      (past_stem . "སོང")
+                      ;; Literary past is ཕྱིན ("went"); སོং is the
+                      ;; imperative / colloquial past (kept as alias).
+                      (past_stem . "ཕྱིན")
                       (future_stem . "འགྲོ")
                       (imperative_stem . "སོང")
                       (transitivity . "Intransitive")
@@ -83,6 +85,9 @@
                       (case_frame . "Abs")
                       (indigenous_class . "tha_mi_dad_pa")) db)
     (puthash "སོང" (gethash "འགྲོ" db) db)
+    ;; ཕྱིན is auto-indexed by the stem-normalization pass below, but
+    ;; index it explicitly too for clarity.
+    (puthash "ཕྱིན" (gethash "འགྲོ" db) db)
 
     ;; འོང་ - to come (intransitive)
     (puthash "འོང" '((lemma . "འོང")

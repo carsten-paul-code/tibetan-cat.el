@@ -116,6 +116,17 @@ pass that auto-indexes present/past/future/imperative as keys."
      tibetan-verb-database)
     (should (= 0 missing))))
 
+(ert-deftest tibetan-verb-phyin-is-past-of-gro ()
+  "ཕྱིན (literary past of འགྲོ, \"went\") is detected and tagged as the
+perfect/past stem.  Regression for Milarepa seg-039, where ཕྱིན went
+undetected → empty Sentence Structure / Verb Classification."
+  (let ((e (tibetan-verb-lookup "ཕྱིན")))
+    (should e)
+    (should (string= "འགྲོ" (alist-get 'lemma e)))
+    (should (eq 'past (tibetan-verb-matched-stem "ཕྱིན" e))))
+  ;; སོང (imperative) still resolves too.
+  (should (tibetan-verb-lookup "སོང")))
+
 (ert-deftest tibetan-verb-matched-stem-identifies-stem ()
   "`tibetan-verb-matched-stem' reports which stem a surface form is."
   (let ((byed (tibetan-verb-lookup "བྱེད")))
