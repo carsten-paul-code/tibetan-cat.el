@@ -2577,6 +2577,74 @@ run (Carsten's call, and §5.29 governs Claude/DM re-firing).  The
 verb-extractor not recognising some past stems in running text
 (e.g. བལྟམས) is a separate data-coverage matter, not part of this batch.
 
+### 5.32 seg-039 analysis-quality fixes (done, 2026-06-03)
+
+Live-review of a regenerated Milarepa segment
+(`རྔོག་གི་དྲུང་དུ་ཕྱིན་ནས།', "Segment 39") surfaced four GENERAL quality
+bugs.  Each test-first, one commit (plan
+`~/.claude/plans/synthetic-stargazing-anchor.md`).  Verified read-only
+on the real segment — see file-naming NOTE below.
+
+- **A. Wylie ra-mgo + nga stack** (`d24e1fa`,
+  `core/tibetan-wylie.el`).  `རྔ` was absent from the consonant-stacks
+  table → `རྔོག` (rNgog) rendered "raog", which cascaded to a junk
+  `term-raog` anchor, a wrong dictionary key, and bad Phonetics
+  ("rao").  Added `("རྔ" . "rng")` (2-char) + `("རྔྱ" . "rngy")`
+  (3-char).  `རྔོག` → "rngog"; Phonetics auto-corrects → "ngok".
+
+- **B. `ཕྱིན` = past of `འགྲོ`** (`2485344`,
+  `analysis/tibetan-verb-classifier.el`).  `འགྲོ` ("to go") had
+  `past_stem` "སོང", so the literary past `ཕྱིན` ("went") was
+  unindexed → `Verb Classification: [No Hill-DB verbs detected]` and
+  the §5.31-elevated `** Sentence Structure` was EMPTY.  Set
+  `past_stem` → "ཕྱིན" (kept `imperative_stem` "སོང" + its alias).  The
+  §5.31 stem-normalization pass auto-indexes ཕྱིན;  detection +
+  "ATTESTED: ཕྱིན — perfect (past) stem" + a populated clause all work.
+
+- **C. MWU verb-tail guard, BOTH loops** (`207d034` +
+  `e05bd4a`).  The greedy MWU matchers accepted a Rangjung-Yeshe
+  *phrasal* entry `དྲུང་དུ་ཕྱིན' that ENDS in a verb — gluing it into
+  one unit, swallowing `ཕྱིན', and surfacing the RY entry's Tibetan
+  EXAMPLE sentence (`bcom ldan 'das kyi drung du') as the gloss.  Two
+  loops needed fixing: `tibetan-find-multiword-units`
+  (`analysis/tibetan-enhanced-parser.el`, the clause/structure path)
+  AND `tibetan-extract-vocabulary` (`core/tibetan-vocabulary.el`, the
+  §5.9 Interlinear path).  New predicates
+  `tibetan-enhanced-parser--verb-tail-p` /
+  `tibetan-extract-vocab--tail-is-verb-p` (both reuse
+  `tibetan-verb-lookup`);  guard rejects a ≥3-syll (parser) / ≥2-syll
+  (interlinear) candidate whose tail is a Hill verb — UNLESS it is a
+  user-curated Resources / Custom MWU (e.g. `ཆུང་མ་བྱེད' "to take a
+  wife" stays a unit).  Interlinear now: `drung [beside] / du [TERM] /
+  phyin [pf. of 'gro; to go]`.
+
+- **D (deferred — dictionary-quality, not quick fixes).**  Two
+  residuals visible on this segment are inherent lookup limitations,
+  flagged not fixed: (1) `rngog [mane]` — rNgog is the proper name of
+  Mila's teacher (rNgog ston), but RY glosses the common noun "mane /
+  dewlap";  needs proper-noun awareness.  (2) `nas [ABL/CONV:nas]` —
+  a particle shows its grammatical label (correct — no lexical sense)
+  but the format is terse.  The general example-sentence-as-gloss
+  filter (skip a leading Tibetan example in
+  `tibetan-vocab--parse-entry`) is also still open;  C fixed the
+  verb-tail case, but a non-verb-tail compound with an example-only
+  `:primary` could still surface one.
+
+**NOTE — file-naming mess in the Milarepa analysis folder.**  The
+on-disk `seg-039.org` does NOT contain "Segment 39"
+(`རྔོག་གི་དྲུང་དུ་ཕྱིན`) — that text lives in `seg-110.org` (and a
+duplicate `seg-110-milarepa.org`).  The folder mixes bare `seg-NNN.org`
+with §5.23-suffixed `seg-NNN-milarepa.org' duplicates AND iCloud
+conflict copies (`seg-10492 2.org' etc.), so the seg-id ↔ segment
+mapping is scrambled.  Cleaning this (de-dup + canonical naming) should
+precede any corpus-wide re-regenerate so the fixes land on the right
+files.  Verification above was done on copies in /tmp via
+`tibetan-analysis-reanalyze-file … :re-request-claude nil` (preserve
+mode, zero network) — the live corpus was NOT mutated.
+
+Suite 2119 → **2125** / 2124 expected / 0 unexpected / 1 skipped.
+`make compile` clean.  REFERENCE.org regenerated (`56a68d9`).
+
 ## 6. Open work (prioritised)
 
 ### P0 — Verify Detailed Dictionary on a real segment ✓ DONE 2026-04-15
