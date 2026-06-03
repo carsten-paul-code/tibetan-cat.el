@@ -502,6 +502,130 @@ present;  the same range works in this runtime `re-search-forward'."
   "Font-lock keywords colouring Tibetan script across analysis buffers
 \(2026-06-02) — the core \"highlight the Tibetan words\" aid.")
 
+(defconst tibetan-analysis--shad-marker "──────── ། ────────"
+  "Marker line inserted at shad (།) boundaries in word-list sections.
+MA Reading `segments' often span several shad-delimited units; the
+marker shows where each unit ends so the reader can analyse shad-by-shad
+while reading the whole section.")
+
+(defun tibetan-analysis--shad-boundary-words (tibetan-text)
+  "Return Wylie boundary words for TIBETAN-TEXT — the last syllable
+before each INTERNAL shad (a shad with content after it).  A trailing
+shad ends the passage and is not a boundary.  Returns nil when there is
+no internal boundary or the Wylie converter is unavailable."
+  (when (and tibetan-text (stringp tibetan-text)
+             (fboundp 'tibetan-to-wylie-fixed))
+    (let ((units (split-string tibetan-text "[།༎༏༐༑༔]" t "[ \t\n]+"))
+          (result '()))
+      (when (> (length units) 1)
+        (dolist (u (butlast units))
+          (let* ((syls (split-string (string-trim u) "[ ་]+" t))
+                 (last-syl (car (last syls))))
+            (when last-syl
+              (let ((w (ignore-errors
+                         (downcase (string-trim
+                                    (tibetan-to-wylie-fixed last-syl))))))
+                (when (and w (not (string-empty-p w)))
+                  (push w result)))))))
+      (nreverse result))))
+
+(defun tibetan-analysis--strip-shad-marker-lines (body)
+  "Remove shad-marker lines from BODY (line-based; for the Vocabulary)."
+  (when body
+    (string-join
+     (cl-remove-if (lambda (l) (string= (string-trim l)
+                                        tibetan-analysis--shad-marker))
+                   (split-string body "\n"))
+     "\n")))
+
+(defun tibetan-analysis--mark-shads-in-vocab (body tibetan-text)
+  "Insert shad-boundary markers into a Claude Vocabulary BODY.
+Idempotent: existing markers are stripped first, then a marker is
+placed after each entry whose Wylie term ends in the corresponding
+boundary word from TIBETAN-TEXT (in order).  Boundaries with no
+matching entry are skipped rather than misplaced."
+  (let ((clean (tibetan-analysis--strip-shad-marker-lines body))
+        (boundaries (tibetan-analysis--shad-boundary-words tibetan-text)))
+    (if (null boundaries)
+        clean
+      (let ((out '()))
+        (dolist (line (split-string clean "\n"))
+          (push line out)
+          (when boundaries
+            (let* ((term (downcase (string-trim (car (split-string line ",")))))
+                   (last-word (car (last (split-string term "[ \t]+" t)))))
+              (when (and last-word (string= last-word (car boundaries)))
+                (push tibetan-analysis--shad-marker out)
+                (setq boundaries (cdr boundaries))))))
+        (string-join (nreverse out) "\n")))))
+
+(defun tibetan-analysis--mark-shads-in-interlinear (body tibetan-text)
+  "Splice shad-boundary markers into a flowing Interlinear BODY.
+Idempotent.  For each boundary word from TIBETAN-TEXT (in order), the
+marker is placed on its own line right after that token's `[gloss]'.
+Boundaries whose token is not found are skipped."
+  (let* ((clean (replace-regexp-in-string
+                 (concat "\n*[ \t]*" (regexp-quote tibetan-analysis--shad-marker)
+                         "[ \t]*\n*")
+                 " " (or body "")))
+         (boundaries (tibetan-analysis--shad-boundary-words tibetan-text)))
+    (if (null boundaries)
+        (string-trim clean)
+      (let ((pos 0) (result clean))
+        (dolist (w boundaries)
+          ;; Match the boundary token (link or bare form) + its gloss,
+          ;; then the separating space, from POS onward.
+          (let ((re (concat "\\(\\(?:\\[\\[term-[^]]*\\]\\[\\|\\_<\\)"
+                            (regexp-quote w)
+                            "\\(?:\\]\\]\\)?[ \t]*★?[ \t]*\\[[^]]*\\]\\)[ \t]+")))
+            (when (string-match re result pos)
+              (let ((insert-at (match-end 1)))
+                (setq result (concat (substring result 0 insert-at)
+                                     "\n" tibetan-analysis--shad-marker "\n"
+                                     (substring result (match-end 0))))
+                (setq pos (+ insert-at (length tibetan-analysis--shad-marker) 2))))))
+        (string-trim result)))))
+
+(defun tibetan-analysis--mark-l2-section (heading fn)
+  "In the current buffer, replace the body of `** HEADING' with the
+result of calling FN on the trimmed body.  No-op when HEADING is absent."
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward
+           (format "^\\*\\* %s[ \t]*$" (regexp-quote heading)) nil t)
+      (forward-line 1)
+      (let* ((start (point))
+             (end (save-excursion
+                    (if (re-search-forward "^\\*+ " nil t)
+                        (line-beginning-position)
+                      (point-max))))
+             (body (string-trim (buffer-substring-no-properties start end)))
+             (new (funcall fn body)))
+        (delete-region start end)
+        (goto-char start)
+        (insert new "\n\n")))))
+
+(defun tibetan-analysis--apply-shad-markers (filepath)
+  "Insert / refresh shad-boundary markers in the Interlinear Gloss and
+Claude Vocabulary sections of FILEPATH.
+
+Idempotent (markers are stripped and re-placed on every call) and a
+no-op when the segment has no INTERNAL shad boundary — so single-shad
+Milarepa segments are untouched while multi-shad MA Reading segments
+get a `──── ། ────' divider where each shad-unit ends.  Reads the
+Tibetan from the file's own `* Tibetan Text' section."
+  (when (and filepath (file-exists-p filepath))
+    (let ((text (tibetan-analysis--read-section-body filepath "Tibetan Text")))
+      (when (and text (tibetan-analysis--shad-boundary-words text))
+        (with-current-buffer (find-file-noselect filepath)
+          (tibetan-analysis--mark-l2-section
+           "Interlinear Gloss"
+           (lambda (b) (tibetan-analysis--mark-shads-in-interlinear b text)))
+          (tibetan-analysis--mark-l2-section
+           "Claude Vocabulary"
+           (lambda (b) (tibetan-analysis--mark-shads-in-vocab b text)))
+          (save-buffer))))))
+
 (defface tibetan-analysis-vocabulary-term-face
   '((((class color) (background light)) :foreground "#00695c" :weight bold)
     (((class color) (background dark))  :foreground "#80cbc4" :weight bold)
@@ -5010,6 +5134,12 @@ without touching the file.  Otherwise return a plist:
             (when has-any-section
               (tibetan-analysis--restore-claude-sections
                filepath existing-sections))
+            ;; Shad-boundary markers (2026-06-03): after the Interlinear is
+            ;; (re)generated and the Claude Vocabulary restored, splice a
+            ;; `──── ། ────' divider at each internal shad boundary so
+            ;; multi-shad MA Reading segments are readable shad-by-shad.
+            ;; Idempotent; no-op on single-shad segments.
+            (tibetan-analysis--apply-shad-markers filepath)
             ;; §5.22 follow-up (2026-05-21):  Claude / DM / parallel-mode
             ;; gates consult `tibetan-analysis--should-fire-claude-p',
             ;; which honours the `:missing-only' value of RE-REQUEST-

@@ -3093,5 +3093,95 @@ section) must NOT be highlighted as vocabulary terms."
     (goto-char (point-min))
     (should-not (tibetan-analysis--vocab-term-matcher (point-max)))))
 
+;; ============================================================================
+;; Shad-boundary markers in word lists (2026-06-03)
+;;
+;; MA Reading "segments" can span several shad (།)-delimited units.  A
+;; render-time marker in the Claude Vocabulary and Interlinear Gloss shows
+;; where each shad-unit ends, so the reader can analyse shad-by-shad while
+;; reading the whole section.  Placement is by the boundary word — the
+;; last syllable before each INTERNAL shad.
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-shad-boundary-words-internal-only ()
+  "Boundary words are the last syllable before each INTERNAL shad
+\(a shad with content after it); a trailing shad is not a boundary."
+  (skip-unless (fboundp 'tibetan-to-wylie-fixed))
+  ;; Two units, one internal boundary after `ཤུ' (= \"shu\").
+  (should (equal (tibetan-analysis--shad-boundary-words
+                  "གལ་ཆེན་ཉི་ཤུ། ཨོམ་སྭ་སྟི།")
+                 '("shu")))
+  ;; Single unit → no internal boundary.
+  (should (null (tibetan-analysis--shad-boundary-words "བདག་གིས།")))
+  (should (null (tibetan-analysis--shad-boundary-words nil))))
+
+(ert-deftest tibetan-analysis-mark-shads-in-vocab-inserts-and-idempotent ()
+  "A marker line is inserted after the vocabulary entry whose term ends
+in the boundary word; re-running does not duplicate it."
+  (skip-unless (fboundp 'tibetan-to-wylie-fixed))
+  (let* ((text "གལ་ཆེན་ཉི་ཤུ། ཨོམ་སྭ་སྟི།")
+         (body (concat "gal chen, adjective, \"important\"\n"
+                       "nyi shu, numeral, \"twenty\"\n"
+                       "om, particle, \"om\"\n"
+                       "swa sti, noun, \"svasti\""))
+         (m tibetan-analysis--shad-marker)
+         (out (tibetan-analysis--mark-shads-in-vocab body text)))
+    ;; Marker sits between the `nyi shu' line and the `om' line.
+    (should (string-match-p (concat "nyi shu[^\n]*\n" (regexp-quote m) "\nom,") out))
+    ;; Exactly one marker.
+    (should (= 1 (cl-count m (split-string out "\n") :test #'string=)))
+    ;; Idempotent.
+    (should (string= out (tibetan-analysis--mark-shads-in-vocab out text)))))
+
+(ert-deftest tibetan-analysis-mark-shads-in-interlinear-splices-and-idempotent ()
+  "The marker is spliced after the boundary token's gloss in the flowing
+Interlinear line; re-running does not duplicate it."
+  (skip-unless (fboundp 'tibetan-to-wylie-fixed))
+  (let* ((text "གལ་ཆེན་ཉི་ཤུ། ཨོམ་སྭ་སྟི།")
+         (body "[[term-gal-chen][gal chen]] [importance] nyi [two] shu [to peel] om [seed] swa [so] sti [live]")
+         (m tibetan-analysis--shad-marker)
+         (out (tibetan-analysis--mark-shads-in-interlinear body text)))
+    (should (string-match-p (concat "shu \\[to peel\\]\n" (regexp-quote m) "\nom ") out))
+    (should (= 1 (cl-count m (split-string out "\n") :test #'string=)))
+    (should (string= out (tibetan-analysis--mark-shads-in-interlinear out text)))))
+
+(ert-deftest tibetan-analysis-apply-shad-markers-marks-both-sections ()
+  "`--apply-shad-markers' inserts a marker into both the Interlinear
+Gloss and Claude Vocabulary of a multi-shad file, and is idempotent."
+  (skip-unless (fboundp 'tibetan-to-wylie-fixed))
+  (let ((f (make-temp-file "seg-shad" nil ".org"))
+        (m tibetan-analysis--shad-marker))
+    (unwind-protect
+        (progn
+          (with-temp-file f
+            (insert "#+TITLE: Segment 0\n\n"
+                    "* Tibetan Text\n"
+                    "གལ་ཆེན་ཉི་ཤུ། ཨོམ་སྭ་སྟི།\n\n"
+                    "* Tibetan Analysis\n"
+                    "** Interlinear Gloss\n"
+                    "[[term-gal-chen][gal chen]] [importance] nyi [two] shu [to peel] om [seed] swa [so] sti [live]\n\n"
+                    "** Claude Vocabulary\n"
+                    "gal chen, adjective, \"important\"\n"
+                    "nyi shu, numeral, \"twenty\"\n"
+                    "om, particle, \"om\"\n"
+                    "swa sti, noun, \"svasti\"\n\n"
+                    "** Translation\n"
+                    "The twenty great ones. Om svasti.\n"))
+          (tibetan-analysis--apply-shad-markers f)
+          (let ((s (with-temp-buffer (insert-file-contents f) (buffer-string))))
+            ;; Marker present in both sections.
+            (should (string-match-p (concat "shu \\[to peel\\]\n" (regexp-quote m)) s))
+            (should (string-match-p (concat "nyi shu[^\n]*\n" (regexp-quote m) "\nom,") s))
+            ;; Exactly two markers total (one per section).
+            (should (= 2 (cl-count m (split-string s "\n") :test #'string=)))
+            ;; Translation body untouched.
+            (should (string-match-p "The twenty great ones" s)))
+          ;; Idempotent: a second pass keeps exactly two markers.
+          (tibetan-analysis--apply-shad-markers f)
+          (let ((s (with-temp-buffer (insert-file-contents f) (buffer-string))))
+            (should (= 2 (cl-count m (split-string s "\n") :test #'string=)))))
+      (when (get-file-buffer f) (kill-buffer (get-file-buffer f)))
+      (delete-file f))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
