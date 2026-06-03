@@ -3050,5 +3050,48 @@ brackets)."
     (should (string-match-p "\\[Portfolio §9\\.9[^]]*\\]" out))
     (should-not (string-match-p "Bialek 2022" out))))
 
+;; ============================================================================
+;; Claude Vocabulary term highlighting (2026-06-03)
+;;
+;; The Claude Vocabulary entries lead with a Wylie term (`bla ma, noun,
+;; "teacher", …').  Wylie is Latin script, so the Tibetan-script font-lock
+;; colourizer never touched it and the terms were hard to pick out.  A
+;; section-bounded matcher highlights the leading term (text before the
+;; first comma) only inside `** Claude Vocabulary'.
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-vocab-term-matcher-finds-terms ()
+  "The matcher captures each Claude Vocabulary entry's leading term
+\(group 1) and not the bodies of other sections."
+  (with-temp-buffer
+    (insert "** Interlinear Gloss\n"
+            "[[term-x][bla ma]] [teacher]\n"
+            "** Claude Vocabulary\n"
+            "bla ma, noun, \"teacher\", honorific title\n"
+            "phru rlog, noun, \"farm work\", field labour\n"
+            "** Translation\n"
+            "He went to the field.\n")
+    (goto-char (point-min))
+    (let (terms)
+      (while (tibetan-analysis--vocab-term-matcher (point-max))
+        (push (match-string 1) terms))
+      (setq terms (nreverse terms))
+      (should (member "bla ma" terms))
+      (should (member "phru rlog" terms))
+      ;; The Translation body is not a vocabulary term.
+      (should-not (member "He went to the field" terms))
+      ;; Exactly the two vocabulary entries matched.
+      (should (= 2 (length terms))))))
+
+(ert-deftest tibetan-analysis-vocab-term-matcher-skips-other-sections ()
+  "Leading `term, …' lines in `*** Claude Particles' (a different
+section) must NOT be highlighted as vocabulary terms."
+  (with-temp-buffer
+    (insert "** Provided Translations\n"
+            "*** Claude Particles\n"
+            "mar pas, pas, 1.3.1, agent of transitive\n")
+    (goto-char (point-min))
+    (should-not (tibetan-analysis--vocab-term-matcher (point-max)))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

@@ -502,6 +502,58 @@ present;  the same range works in this runtime `re-search-forward'."
   "Font-lock keywords colouring Tibetan script across analysis buffers
 \(2026-06-02) — the core \"highlight the Tibetan words\" aid.")
 
+(defface tibetan-analysis-vocabulary-term-face
+  '((((class color) (background light)) :foreground "#00695c" :weight bold)
+    (((class color) (background dark))  :foreground "#80cbc4" :weight bold)
+    (t :weight bold))
+  "Face for the leading term of each `** Claude Vocabulary' entry.
+The entries lead with a Wylie headword (`bla ma, noun, \"teacher\", …');
+Wylie is Latin script so the Tibetan-script colourizer never touched it
+and the terms were hard to spot among the POS / gloss / commentary.
+Bold teal makes the headword scannable in class."
+  :group 'tibetan-cat)
+
+(defun tibetan-analysis--in-claude-vocab-section-p ()
+  "Return non-nil when point's line sits under a `** Claude Vocabulary'
+heading (and not under a later level-2 heading)."
+  (save-excursion
+    (goto-char (line-beginning-position))
+    (when (re-search-backward "^\\*\\* " nil t)
+      (looking-at-p "^\\*\\* Claude Vocabulary[ \t]*$"))))
+
+(defun tibetan-analysis--vocab-term-matcher (limit)
+  "Font-lock matcher: set group 1 to the leading term of the next
+`** Claude Vocabulary' entry line up to LIMIT.
+
+An entry is `TERM, part-of-speech, \"gloss\", commentary'; the term is
+the run of Wylie letters / spaces / apostrophes before the first comma.
+Only fires inside the `** Claude Vocabulary' section, so identically
+shaped lines in `*** Claude Particles' are left alone.  Returns nil
+when no further term is found before LIMIT."
+  (let (found)
+    (while (and (not found) (< (point) limit))
+      (cond
+       ((tibetan-analysis--in-claude-vocab-section-p)
+        (if (and (bolp)
+                 (looking-at "\\([a-zA-Z'’ ]+?\\),"))
+            (progn (setq found t)
+                   (goto-char (min limit (match-end 1))))
+          (forward-line 1)
+          (beginning-of-line)))
+       (t
+        ;; Outside the section: jump to the next Claude Vocabulary
+        ;; heading, or stop.
+        (if (re-search-forward "^\\*\\* Claude Vocabulary[ \t]*$" limit t)
+            (forward-line 1)
+          (goto-char limit)))))
+    found))
+
+(defconst tibetan-analysis--vocabulary-term-font-lock-keywords
+  '((tibetan-analysis--vocab-term-matcher
+     (1 'tibetan-analysis-vocabulary-term-face prepend)))
+  "Font-lock keywords bolding the leading term of each Claude
+Vocabulary entry (2026-06-03).")
+
 (defconst tibetan-analysis--structure-font-lock-keywords
   ;; Role-based highlighting for the Sentence Structure section.
   '(;; SUBJECT / OBJECT / oblique role labels (+ leading NP fallback).
@@ -570,6 +622,10 @@ parser which doesn't fire for compound-embedded markers like
     ;; Sentence Structure role labels (green-bold) + clause verbs (blue).
     (font-lock-add-keywords
      nil tibetan-analysis--structure-font-lock-keywords 'append)
+    ;; Claude Vocabulary leading terms (bold teal) so the Wylie
+    ;; headwords stand out from the POS / gloss / commentary.
+    (font-lock-add-keywords
+     nil tibetan-analysis--vocabulary-term-font-lock-keywords 'append)
     (when (fboundp 'font-lock-flush)
       (font-lock-flush))
 
