@@ -813,17 +813,55 @@ Returns filename like \\='seg-001.org\\='."
   (let ((num (tibetan-analysis--extract-segment-number seg-id)))
     (format "seg-%03d.org" num)))
 
+(defun tibetan-analysis--file-belongs-to-source-p (filepath source-file)
+  "Return non-nil when FILEPATH's `#+SOURCE:' line names SOURCE-FILE.
+Compares by basename, reading only the file head.  Safe when either
+argument is nil or FILEPATH is absent."
+  (when (and source-file filepath (file-exists-p filepath))
+    (let ((src-base (file-name-nondirectory source-file)))
+      (with-temp-buffer
+        (insert-file-contents filepath nil 0 2000)
+        (goto-char (point-min))
+        (and (re-search-forward "^#\\+SOURCE:.*$" nil t)
+             (string-match-p (regexp-quote src-base) (match-string 0)))))))
+
+(defun tibetan-analysis--resolve-filepath (folder num short-name source-file)
+  "Choose the analysis filepath for segment NUM in FOLDER.
+
+Without SHORT-NAME: the un-suffixed `seg-NNN.org'.
+
+With SHORT-NAME (derived from SOURCE-FILE): prefer an existing suffixed
+`seg-NNN-SHORT.org'; else an existing un-suffixed `seg-NNN.org' that
+belongs to the SAME source — a single-source folder not migrated to the
+§5.23 suffix (Milarepa keeps bare filenames); else a new suffixed path.
+
+The source-match guard keeps a multi-source folder safe: a bare file
+left by source A is NOT reused for source B (which would collide), so
+new B segments still get B's suffix."
+  (let ((bare (expand-file-name (format "seg-%03d.org" num) folder)))
+    (if (null short-name)
+        bare
+      (let ((suffixed (expand-file-name
+                       (format "seg-%03d-%s.org" num short-name) folder)))
+        (cond
+         ((file-exists-p suffixed) suffixed)
+         ((and (file-exists-p bare)
+               (tibetan-analysis--file-belongs-to-source-p bare source-file))
+          bare)
+         (t suffixed))))))
+
 (defun tibetan-analysis-get-filepath (seg-id &optional source-file)
   "Get full filepath for analysis of SEG-ID.
-If SOURCE-FILE is provided, includes short name suffix."
-  (let* ((folder (tibetan-analysis-get-folder))
-         (short-name (when source-file
-                       (tibetan-analysis-make-short-name source-file)))
-         (num (tibetan-analysis--extract-segment-number seg-id))
-         (filename (if short-name
-                       (format "seg-%03d-%s.org" num short-name)
-                     (format "seg-%03d.org" num))))
-    (expand-file-name filename folder)))
+If SOURCE-FILE is provided, includes a short-name suffix — unless an
+un-suffixed `seg-NNN.org' for the same source already exists (an
+un-migrated single-source folder), in which case the existing bare file
+is reused so operations don't create a `-SHORT' duplicate.  See
+`tibetan-analysis--resolve-filepath'."
+  (tibetan-analysis--resolve-filepath
+   (tibetan-analysis-get-folder)
+   (tibetan-analysis--extract-segment-number seg-id)
+   (when source-file (tibetan-analysis-make-short-name source-file))
+   source-file))
 
 (defun tibetan-analysis-paragraph-filename (par-id)
   "Generate analysis filename for paragraph PAR-ID.

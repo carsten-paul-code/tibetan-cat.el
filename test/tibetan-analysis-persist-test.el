@@ -3183,5 +3183,53 @@ Gloss and Claude Vocabulary of a multi-shad file, and is idempotent."
       (when (get-file-buffer f) (kill-buffer (get-file-buffer f)))
       (delete-file f))))
 
+;; ============================================================================
+;; get-filepath bare-file fallback (2026-06-03)
+;;
+;; §5.23 made create / auto-analyze always use the suffixed
+;; `seg-NNN-SHORT.org'.  For a single-source folder NOT migrated to the
+;; suffix (Milarepa keeps bare `seg-NNN.org'), that created a `-milarepa'
+;; DUPLICATE on every C-c u B and re-fired Claude/DM.  The resolver now
+;; prefers an existing bare file that belongs to the same source.
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-resolve-filepath-prefers-existing-bare-same-source ()
+  "When the suffixed file is absent but a bare `seg-NNN.org' exists and
+belongs to the SAME source, the bare path is returned (no duplicate)."
+  (let ((dir (make-temp-file "tcat-resolve" t)))
+    (unwind-protect
+        (let ((bare (expand-file-name "seg-012.org" dir)))
+          (with-temp-file bare
+            (insert "#+SOURCE: [[file:../Milarepa-prepared.org::*Segment 12]"
+                    "[Milarepa-prepared.org / Segment 12]]\n"))
+          ;; bare exists, same source → bare
+          (should (string= (tibetan-analysis--resolve-filepath
+                            dir 12 "milarepa" "/x/Milarepa-prepared.org")
+                           bare))
+          ;; bare belongs to a DIFFERENT source → use suffixed (no collision)
+          (should (string= (tibetan-analysis--resolve-filepath
+                            dir 12 "lam" "/x/lam-rim-thun-cig.org")
+                           (expand-file-name "seg-012-lam.org" dir))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-analysis-resolve-filepath-suffixed-wins-and-new-gets-suffix ()
+  "An existing suffixed file always wins; a brand-new file (neither
+exists) gets the suffix; no source-file → bare."
+  (let ((dir (make-temp-file "tcat-resolve2" t)))
+    (unwind-protect
+        (let ((suffixed (expand-file-name "seg-005-milarepa.org" dir)))
+          (with-temp-file suffixed (insert "x\n"))
+          (should (string= (tibetan-analysis--resolve-filepath
+                            dir 5 "milarepa" "/x/Milarepa-prepared.org")
+                           suffixed))
+          ;; neither exists → new suffixed
+          (should (string= (tibetan-analysis--resolve-filepath
+                            dir 9 "milarepa" "/x/Milarepa-prepared.org")
+                           (expand-file-name "seg-009-milarepa.org" dir)))
+          ;; no source-file → bare
+          (should (string= (tibetan-analysis--resolve-filepath dir 9 nil nil)
+                           (expand-file-name "seg-009.org" dir))))
+      (delete-directory dir t))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
