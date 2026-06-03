@@ -505,6 +505,47 @@ remain intact.  The particle-guard must not over-reject."
     (let ((vocab (tibetan-extract-vocabulary "སངས་རྒྱས")))
       (should (assoc "སངས་རྒྱས" vocab)))))
 
+(ert-deftest tibetan-extract-vocabulary-rejects-verb-tail-compound ()
+  "A dictionary phrasal compound whose LAST syllable is a Hill-DB
+verb is NOT glued — the verb stays a separate token so it reaches
+clause / Verb-Classification analysis.
+
+Regression for Milarepa Segment 39 (`རྔོག་གི་དྲུང་དུ་ཕྱིན་ནས'): the
+Rangjung-Yeshe phrasal entry `དྲུང་དུ་ཕྱིན' was being picked up as a
+3-syllable Interlinear MWU, swallowing the verb `ཕྱིན' (\"went\") and
+surfacing the RY entry's Tibetan EXAMPLE sentence (`bcom ldan 'das
+kyi drung du') as the token's gloss."
+  (skip-unless (fboundp 'tibetan-verb-lookup))
+  (let ((tibetan-current-resources-vocab nil)
+        (tibetan-current-custom-vocab nil)
+        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
+    ;; Seed the phrasal verb-tail compound AND the bare verb stem.
+    (puthash "དྲུང་དུ་ཕྱིན" "bcom ldan 'das kyi drung du"
+             tibetan-comprehensive-vocabulary)
+    (puthash "ཕྱིན" "went" tibetan-comprehensive-vocabulary)
+    (let* ((vocab (tibetan-extract-vocabulary "དྲུང་དུ་ཕྱིན"))
+           (keys (mapcar #'car vocab)))
+      ;; The verb-tail compound must NOT be glued.
+      (should-not (member "དྲུང་དུ་ཕྱིན" keys))
+      ;; The verb syllable must surface independently.
+      (should (member "ཕྱིན" keys)))))
+
+(ert-deftest tibetan-extract-vocabulary-keeps-curated-verb-tail-compound ()
+  "A USER-CURATED (Resources / Custom) MWU ending in a verb is kept
+intact — the verb-tail guard applies only to auto-sourced dictionary
+phrasal entries.  If Carsten defined `ཆུང་མ་བྱེད' (\"to take a wife\")
+as a unit, honour it even though it ends in the verb `བྱེད'."
+  (skip-unless (fboundp 'tibetan-verb-lookup))
+  (let* ((res (make-hash-table :test 'equal))
+         (tibetan-current-resources-vocab res)
+         (tibetan-current-custom-vocab nil)
+         (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
+    (puthash "ཆུང་མ་བྱེད" "to take a wife" res)
+    (puthash "ཆུང་མ་བྱེད" "to take a wife" tibetan-comprehensive-vocabulary)
+    (let* ((vocab (tibetan-extract-vocabulary "ཆུང་མ་བྱེད"))
+           (keys (mapcar #'car vocab)))
+      (should (member "ཆུང་མ་བྱེད" keys)))))
+
 ;; ============================================================================
 ;; Strict MWU existence — root-cause fix for Interlinear↔DD divergence
 ;; (2026-05-18, addresses Tibetisch IV seg-049 dangling-link report)

@@ -991,6 +991,28 @@ up `ལ་སྟོད' (\"Latö, western Tsang\") as a 2-syllable compound."
          (member (car parts)
                  tibetan-extract-vocab--particle-tails))))
 
+(declare-function tibetan-verb-lookup "tibetan-verb-classifier" (word))
+
+(defun tibetan-extract-vocab--tail-is-verb-p (joined)
+  "Return non-nil when JOINED (a `་'-joined compound of ≥2 syllables)
+ends in a syllable that `tibetan-verb-lookup' recognises as a finite
+Hill-DB verb.
+
+Used to stop the greedy Interlinear MWU loop from gluing an
+auto-sourced phrasal dictionary entry onto a following verb — e.g.
+the Rangjung-Yeshe entry `དྲུང་དུ་ཕྱིན' was absorbing the verb `ཕྱིན'
+(\"went\"), hiding it from clause / Verb-Classification analysis and
+surfacing the entry's Tibetan example sentence as the token's gloss
+(Milarepa Segment 39).
+
+Mirrors `tibetan-enhanced-parser--verb-tail-p' for the second MWU
+loop.  No-op (returns nil) when the verb classifier isn't loaded."
+  (when (and joined (stringp joined) (fboundp 'tibetan-verb-lookup))
+    (let* ((parts (split-string joined "་" t))
+           (tail (car (last parts))))
+      (and tail (>= (length parts) 2)
+           (tibetan-verb-lookup tail) t))))
+
 (defun tibetan-extract-vocabulary (tibetan-text)
   "Extract vocabulary from TIBETAN-TEXT with meanings.
 Returns list of (word . meaning) pairs.
@@ -1066,7 +1088,18 @@ populates the final `(word . meaning)' cell."
                          (unless (or (tibetan-extract-vocab--tail-is-particle-p
                                        compound-raw)
                                      (tibetan-extract-vocab--head-is-particle-p
-                                      compound-raw))
+                                      compound-raw)
+                                     ;; Verb-tail guard: reject an
+                                     ;; auto-sourced phrasal entry that
+                                     ;; ends in a finite verb, so the
+                                     ;; verb reaches clause analysis.
+                                     ;; User-curated MWUs are EXEMPT.
+                                     (and (tibetan-extract-vocab--tail-is-verb-p
+                                           compound-raw)
+                                          (not (tibetan-lookup-word-in-resources-vocab
+                                                compound-raw))
+                                          (not (tibetan-lookup-word-in-custom-vocab
+                                                compound-raw))))
                            (when (and (fboundp 'tibetan-vocab--mwu-exists-p)
                                       (tibetan-vocab--mwu-exists-p compound-raw))
                              (let ((meaning (or (tibetan-lookup-word compound-raw)
