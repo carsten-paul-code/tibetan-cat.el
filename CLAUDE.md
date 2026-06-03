@@ -270,8 +270,8 @@ the first failure — this is the full batch suite.  (Before 2026-06-01
 flag named a non-existent function that never executed; the spec suite
 also made a live dharmamitra.org request on every run.  Both fixed.)
 
-Current state (2026-06-03, post-§5.33 seg-039 fixes + item D):  **ERT
-2129 tests, 2128 expected, 0 unexpected, 1 intentional skip
+Current state (2026-06-03, post-§5.34 grounding + Resources fix):  **ERT
+2132 tests, 2131 expected, 0 unexpected, 1 intentional skip
 (compound-analysis-callable); BDD 244 / 244.**  Full `make compile` is
 clean (zero warnings).  Carsten runs `make test` after every change and
 expects it to stay green.
@@ -2714,6 +2714,57 @@ they carry no content to preserve.
 
 Suite 2125 → **2129** / 2128 expected / 0 unexpected / 1 skip.  Compile
 clean.  REFERENCE.org regenerated (`0341768`).
+
+### 5.34 phru rlog hallucination → grounding fix + Resources-load regression (done, 2026-06-03)
+
+Live review of a (mislabeled) "Segment 37" file: Claude's Vocabulary
+glossed `ཕྲུ་རློག' as "hand-mill turning" — a hallucination.  The
+dictionary is unambiguous: Resources curated "Feldarbeit // farm work",
+Steinert/Dan-Martin `sa zhing gsar pa rmos pa' (ploughing), Negi-Skt
+`= rmo rko' (agriculture).  Diagnosis uncovered THREE things:
+
+1. **File was mislabeled (already fixed by §5.33).**  The pasted file
+   titled "Segment 37" actually held source **Segment 97**'s text — a
+   pre-cleanup corrupted copy.  After §5.33 the content is correctly in
+   `seg-097.org'; `seg-037.org' is the real Segment 37.
+
+2. **Claude vocabulary prompt had NO dictionary grounding** (`4fbc7d3`).
+   `--format-segment-vocabulary' read the §5.10-RETIRED `** Word /
+   Particle List' section → nil for every current file → Claude guessed
+   meanings for rare words.  Fix: new
+   `tibetan-analysis--read-interlinear-glosses' extracts `wylie = gloss'
+   pairs from `** Interlinear Gloss' (the layered lookup incl. ★
+   Resources); `--format-segment-vocabulary' falls back to it and the
+   instruction now says base the Vocabulary on these attested glosses,
+   do NOT invent meanings for listed words.  Takes effect on the next
+   Claude re-fire.
+
+3. **Resources-load regression — corpus-wide silent wipe** (`747030a`).
+   While verifying (2), found that the §5.33 preserve-mode batch
+   regenerate had DROPPED every curated Resources gloss (0 files with
+   `[Resources (provided)]', down from 8).  Root cause:
+   `tibetan-find-resources-folder' resolves `Resources/' only via
+   `buffer-file-name'; in a headless `emacs -batch' run
+   `generate-content' executes in `*scratch*' (nil buffer-file-name) →
+   finder returns nil → Resources never load → Interlinear/DD fall
+   through to generic glosses.  Interactive `C-c u R' was unaffected
+   (runs from the analysis buffer).  Fix: the finder falls back to
+   `default-directory', and `reanalyze-file' binds `default-directory'
+   to the analysis file's folder around `generate-content'.  A fresh
+   preserve-mode batch then RESTORED Resources to **161 files** (★ +
+   `[Resources (provided)]') — more than ever, since the
+   buffer-file-name dependency had been quietly losing them in many
+   prior generations too.  `seg-097' `phru rlog' → "farm work"; bonus
+   `mar ★ [Mar pa]' (D2 proper-noun + Resources both live).
+
+LESSON: any code reachable from a headless batch must not depend on
+`buffer-file-name' for locating per-document assets — derive from the
+file path / `default-directory' instead.
+
+Corpus re-regenerated twice in preserve mode (282 seg + 85 sent, 0
+failed, content preserved).  Segments 140-142 still need a Claude fire.
+Suite 2129 → **2132** / 2131 expected / 0 unexpected / 1 skip.  Compile
+clean.  REFERENCE.org regenerated.
 
 ## 6. Open work (prioritised)
 
