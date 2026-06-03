@@ -265,6 +265,32 @@ syllables."
   (should-not
    (tibetan-enhanced-parser--negation-plus-hill-verb-p "མ་ཡིན་པ")))
 
+(ert-deftest tibetan-mwu-finder-verb-tail-predicate ()
+  "`tibetan-enhanced-parser--verb-tail-p' is non-nil iff the LAST
+syllable of a ≥2-syllable string is a Hill-DB verb — used to stop a
+3+ syllable MWU from absorbing a finite verb (e.g. `དྲུང་དུ་ཕྱིན')."
+  (skip-unless (fboundp 'tibetan-enhanced-parser--verb-tail-p))
+  (skip-unless (fboundp 'tibetan-verb-lookup))
+  ;; ཕྱིན (past of འགྲོ) is the tail → verb-tail.
+  (when (tibetan-verb-lookup "ཕྱིན")
+    (should (tibetan-enhanced-parser--verb-tail-p "དྲུང་དུ་ཕྱིན")))
+  ;; Non-verb tail (du is a particle) → not a verb-tail.
+  (should-not (tibetan-enhanced-parser--verb-tail-p "དྲུང་དུ"))
+  ;; Single syllable → never a verb-tail (no gluing to prevent).
+  (should-not (tibetan-enhanced-parser--verb-tail-p "ཕྱིན")))
+
+(ert-deftest tibetan-mwu-finder-does-not-absorb-trailing-verb ()
+  "The MWU finder must NOT glue a 3-syllable unit that ends in a finite
+verb — `དྲུང་དུ་ཕྱིན' must not appear as one unit, so `ཕྱིན' stays a
+separate word for clause / sentence-structure analysis."
+  (skip-unless (fboundp 'tibetan-find-multiword-units))
+  (skip-unless (and (fboundp 'tibetan-verb-lookup)
+                    (tibetan-verb-lookup "ཕྱིན")))
+  (let* ((mwus (tibetan-find-multiword-units '("དྲུང" "དུ" "ཕྱིན")))
+         (joined-units (mapcar (lambda (m) (nth 2 m)) mwus)))
+    ;; No single unit spans all three (verb absorbed).
+    (should-not (member "དྲུང་དུ་ཕྱིན" joined-units))))
+
 ;; ============================================================================
 ;; WORD UNIT ANALYSIS TESTS
 ;; ============================================================================

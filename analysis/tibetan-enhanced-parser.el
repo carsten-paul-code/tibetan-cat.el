@@ -151,6 +151,24 @@ no-op rather than raising."
            (tibetan-verb-lookup (nth 1 parts))
            t))))
 
+(defun tibetan-enhanced-parser--verb-tail-p (joined)
+  "Return non-nil if the LAST tsheg-syllable of JOINED is a Hill-DB verb.
+
+Used by the MWU finder to stop a multi-syllable (≥3) unit from absorbing
+a finite verb — e.g. `དྲུང་དུ་ཕྱིན' (a Rangjung-Yeshe phrasal entry)
+bundling the past verb `ཕྱིན' (\"went\").  The verb belongs to clause /
+sentence-structure analysis, not the noun phrase, so the candidate is
+rejected and the finder falls through to a shorter length, leaving the
+verb a separate word.  Defensive no-op when `tibetan-verb-lookup' is
+unavailable."
+  (when (and joined (stringp joined)
+             (fboundp 'tibetan-verb-lookup))
+    (let* ((parts (split-string joined "་" t))
+           (tail (car (last parts))))
+      (and tail (>= (length parts) 2)
+           (tibetan-verb-lookup tail)
+           t))))
+
 (defun tibetan-find-multiword-units (words)
   "Find multi-word compound/proper noun units in WORDS list.
 Uses longest-match-first strategy.
@@ -335,26 +353,40 @@ Returns list of (start-index . end-index . entry-data) tuples."
                              (setq effective-len 3
                                    effective-joined upgraded-joined
                                    effective-hit upgraded-hit))))
-                       (let ((data (cond
-                                   (resources-vocab
-                                    `((english . ,resources-vocab)
-                                      (category . "resources")))
-                                   (custom-vocab
-                                    `((english . ,custom-vocab)
-                                      (category . "custom")))
-                                   (compound compound)
-                                   (proper-noun proper-noun)
-                                   (comp-vocab
-                                    `((english . ,comp-vocab)
-                                      (category . "vocabulary")))
-                                   (effective-hit
-                                    `((english . ,effective-hit)
-                                      (category . "steinert"))))))
-                         (push (list i (+ i effective-len)
-                                     effective-joined data)
-                               matches))
-                       (setq found t)
-                       (setq i (+ i effective-len))))))
+                       ;; Verb-tail guard: don't let a 3+ syllable
+                       ;; phrasal MWU absorb a finite verb (e.g. the
+                       ;; Rangjung-Yeshe phrasal `དྲུང་དུ་ཕྱིན').  Skip →
+                       ;; the loop falls through to a shorter length,
+                       ;; leaving the verb separate for clause /
+                       ;; sentence-structure analysis.  User-curated
+                       ;; Resources / Custom MWUs are EXEMPT — if Carsten
+                       ;; defined `ཆུང་མ་བྱེད' ("to take a wife") as a
+                       ;; unit, honour it even though it ends in བྱེད.
+                       (unless (and (>= effective-len 3)
+                                    (not resources-vocab)
+                                    (not custom-vocab)
+                                    (tibetan-enhanced-parser--verb-tail-p
+                                     effective-joined))
+                         (let ((data (cond
+                                     (resources-vocab
+                                      `((english . ,resources-vocab)
+                                        (category . "resources")))
+                                     (custom-vocab
+                                      `((english . ,custom-vocab)
+                                        (category . "custom")))
+                                     (compound compound)
+                                     (proper-noun proper-noun)
+                                     (comp-vocab
+                                      `((english . ,comp-vocab)
+                                        (category . "vocabulary")))
+                                     (effective-hit
+                                      `((english . ,effective-hit)
+                                        (category . "steinert"))))))
+                           (push (list i (+ i effective-len)
+                                       effective-joined data)
+                                 matches))
+                         (setq found t)
+                         (setq i (+ i effective-len)))))))
         (unless found
           (setq i (1+ i)))))
     (nreverse matches)))
