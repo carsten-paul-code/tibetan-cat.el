@@ -748,5 +748,55 @@ prompt rightly differs (per-segment text); the system stays warm."
       ;; And user prompts ARE different (per-segment text varies).
       (should-not (equal (cdr p1) (cdr p2))))))
 
+;; ============================================================================
+;; Vocabulary grounding from the Interlinear Gloss (2026-06-03)
+;;
+;; The §5.10 retirement of `** Word / Particle List' silently broke the
+;; per-segment vocabulary grounding block: --format-segment-vocabulary
+;; read a section that no longer exists, so Claude received NO dictionary
+;; glosses and hallucinated meanings for rare words (Milarepa Segment 37:
+;; `phru rlog' = "Feldarbeit / farm work" in Resources, but Claude
+;; invented "hand-mill turning").  The grounding now falls back to the
+;; Interlinear Gloss.
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-read-interlinear-glosses-extracts-pairs ()
+  "The Interlinear-gloss reader extracts `wylie = gloss' pairs,
+including the ★-marked Resources-curated gloss."
+  (let ((f (make-temp-file "seg-interlin" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file f
+            (insert "#+TITLE: Segment 37 Analysis\n\n"
+                    "** Interlinear Gloss\n"
+                    "[[term-phru-rlog][phru rlog]] ★ [farm work, work in the fields] "
+                    "la [DAT] [[term-sogs-pa][sogs pa]] [etc]\n\n"
+                    "** Claude Vocabulary\n"))
+          (let ((body (tibetan-analysis--read-interlinear-glosses f)))
+            (should (stringp body))
+            (should (string-match-p "phru rlog" body))
+            (should (string-match-p "farm work, work in the fields" body))
+            ;; The hallucinated meaning must NOT appear — grounding is
+            ;; dictionary-only.
+            (should-not (string-match-p "hand-mill" body))))
+      (delete-file f))))
+
+(ert-deftest tibetan-analysis-format-segment-vocabulary-falls-back-to-interlinear ()
+  "When `** Word / Particle List' is absent (retired §5.10) but an
+`** Interlinear Gloss' is present, the vocabulary grounding block is
+built from the Interlinear so Claude still receives the dictionary
+glosses."
+  (let ((f (make-temp-file "seg-vocab" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file f
+            (insert "** Interlinear Gloss\n"
+                    "[[term-phru-rlog][phru rlog]] ★ [farm work, work in the fields]\n"))
+          (let ((block (tibetan-analysis--format-segment-vocabulary f)))
+            (should (stringp block))
+            (should (string-match-p "phru rlog" block))
+            (should (string-match-p "farm work" block))))
+      (delete-file f))))
+
 (provide 'tibetan-analysis-claude-prompt-test)
 ;;; tibetan-analysis-claude-prompt-test.el ends here

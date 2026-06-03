@@ -859,19 +859,71 @@ ANALYSIS-FILE is nil or does not exist."
                 body))))
       (error nil))))
 
+(defun tibetan-analysis--read-interlinear-glosses (analysis-file)
+  "Return content-word glosses from the `** Interlinear Gloss' section
+of ANALYSIS-FILE as a newline-joined `  - wylie = gloss' list, or nil.
+
+Parses each `[[term-SLUG][WYLIE]] [★] [GLOSS]' token, capturing the
+Wylie surface form and its first bracketed gloss (the tool's layered
+lookup result; Resources-curated entries are marked ★ in the source).
+
+This replaces the reader for the §5.10-retired `** Word / Particle
+List' section.  Without it the Claude vocabulary prompt received NO
+dictionary grounding, so Claude guessed meanings for rare words
+(Milarepa Segment 37: `phru rlog' = \"farm work\" in Resources, but
+Claude hallucinated \"hand-mill turning\").  Safe when ANALYSIS-FILE is
+nil or absent."
+  (when (and analysis-file (file-exists-p analysis-file))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents analysis-file)
+          (goto-char (point-min))
+          (when (re-search-forward "^\\*\\* Interlinear Gloss$" nil t)
+            (forward-line 1)
+            (let* ((start (point))
+                   (end (save-excursion
+                          (if (re-search-forward "^\\*+ [^ \t\n]" nil t)
+                              (line-beginning-position)
+                            (point-max))))
+                   (body (buffer-substring-no-properties start end))
+                   (pairs '())
+                   (pos 0))
+              (while (string-match
+                      (concat "\\[\\[term-[^]]*\\]\\[\\([^]]*\\)\\]\\]"
+                              "[ \t]*★?[ \t\n]*\\[\\([^]]*\\)\\]")
+                      body pos)
+                (let ((wylie (string-trim (match-string 1 body)))
+                      (gloss (replace-regexp-in-string
+                              "[ \t\n]+" " "
+                              (string-trim (match-string 2 body)))))
+                  (when (and (not (string-empty-p wylie))
+                             (not (string-empty-p gloss)))
+                    (push (format "  - %s = %s" wylie gloss) pairs)))
+                (setq pos (match-end 0)))
+              (when pairs
+                (mapconcat #'identity (nreverse pairs) "\n")))))
+      (error nil))))
+
 (defun tibetan-analysis--format-segment-vocabulary (analysis-file)
   "Return the per-segment vocabulary block for the Claude user prompt.
-Draws from the `** Word / Particle List' section of ANALYSIS-FILE (the
-tool's own per-segment matches, already enriched with Hill morphology
-and Resources entries).  Returns nil when the section is missing or
-empty so the prompt builder can skip it cleanly."
-  (let ((body (tibetan-analysis--read-word-particle-list analysis-file)))
+Draws from the `** Word / Particle List' section of ANALYSIS-FILE
+when present (legacy files), falling back to the `** Interlinear
+Gloss' section (current layout — §5.10 retired Word / Particle List).
+Either way the block carries the tool's own per-segment matches,
+already enriched with Hill morphology and Resources entries.  Returns
+nil when neither section yields content so the prompt builder can skip
+it cleanly."
+  (let ((body (or (tibetan-analysis--read-word-particle-list analysis-file)
+                  (tibetan-analysis--read-interlinear-glosses analysis-file))))
     (when body
       (concat "\n\nPer-segment vocabulary matches (from the analysis "
               "file — the tool's own layered lookup across Resources, "
-              "Hopkins, Bialek, and bundled glossaries).  Prefer these "
-              "glosses when they clearly fit; treat particle tags as "
-              "authoritative.\n\n" body))))
+              "Hopkins, Bialek, and bundled glossaries).  These are "
+              "dictionary-attested: base the Vocabulary section on them "
+              "and do NOT invent an unattested meaning for a content "
+              "word listed here.  Where context needs a different sense, "
+              "choose among the attested senses rather than coining a "
+              "new one; treat particle tags as authoritative.\n\n" body))))
 
 ;; ----------------------------------------------------------------------------
 ;; Translation Comparison (paragraph-only feature, separate command)
