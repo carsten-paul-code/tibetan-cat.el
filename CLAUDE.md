@@ -270,8 +270,8 @@ the first failure — this is the full batch suite.  (Before 2026-06-01
 flag named a non-existent function that never executed; the spec suite
 also made a live dharmamitra.org request on every run.  Both fixed.)
 
-Current state (2026-06-03, post-§5.35 vocab highlighting):  **ERT
-2134 tests, 2133 expected, 0 unexpected, 1 intentional skip
+Current state (2026-06-03, post-§5.36 shad markers):  **ERT
+2138 tests, 2137 expected, 0 unexpected, 1 intentional skip
 (compound-analysis-callable); BDD 244 / 244.**  Full `make compile` is
 clean (zero warnings).  Carsten runs `make test` after every change and
 expects it to stay green.
@@ -2786,6 +2786,51 @@ rewrite, so the corpus needs no regenerate).  Suite 2132 → **2134**.
 Matcher tested directly (font-lock-ensure in batch is unreliable —
 §5.31); verified live on seg-097 that the `bla ma' term carries the
 face.
+
+### 5.36 Shad-boundary markers in word lists (done, 2026-06-03)
+
+Class-use request (MA Reading): the section is read whole, but analysed
+shad-by-shad.  An MA Reading `segment' often spans several shad (།)-
+delimited units (34 of 88 files), and the Interlinear Gloss + Claude
+Vocabulary listed every word with no indication of where each shad-unit
+ended.  ("Later we should make sentence/verse/paragraph the main unit —
+but for now just a marker.")
+
+Render-time marker `──────── ། ────────' at each INTERNAL shad boundary
+(a shad with content after it), in the Interlinear Gloss AND Claude
+Vocabulary.  Placement is by the boundary word — the last syllable
+before the shad:
+- `tibetan-analysis--shad-boundary-words' — Wylie boundary words from the
+  file's Tibetan Text.
+- `--mark-shads-in-vocab' — marker after the entry whose term ends in the
+  boundary word.
+- `--mark-shads-in-interlinear' — marker spliced after that token's
+  `[gloss]' in the flowing line.
+- `--apply-shad-markers' (via `--mark-l2-section') rewrites both sections;
+  wired into `reanalyze-file' after regenerate + Claude restore.
+
+Idempotent (stripped + re-placed each pass), no-op on single-shad
+segments (Milarepa untouched), render-time only (no Claude re-fire).
+Approach was an AskUserQuestion pick: scope = Vocabulary + Interlinear,
+glyph = rule-with-shad.  Suite 2134 → 2138.
+
+**MA Reading application — markers-only, NOT a full regenerate.**  A
+full preserve-mode batch over MA Reading WIPED 48 files' baked-in
+`[Resources (provided)]' glosses, because the per-document Resources
+`wordlist' is now an EMPTY §5.27 scaffold (`work in progress/Resources/
+vocabulary.org' = template only) — regenerate re-derives Resources from
+the current (empty) wordlist, so the old glosses (from a wordlist that
+no longer exists) are not reproducible.  Recovery: restored the folder
+from the pre-regen backup, then ran `--apply-shad-markers' on each file
+directly (markers splice into the EXISTING Interlinear/Vocab text;  no
+regenerate, Resources untouched).  Result: 31 marker files + 48 ★
+Resources files, both intact.
+
+CAVEAT for a future session:  **regenerating MA Reading will lose those
+48 Resources glosses** until the wordlist is repopulated (or the glosses
+are moved to thesaurus zettels).  Unlike §5.34 (a buffer-file-name bug),
+this is missing source data, not a code bug — the §5.34 default-directory
+fix is working;  there is simply no wordlist to load.
 
 ## 6. Open work (prioritised)
 
