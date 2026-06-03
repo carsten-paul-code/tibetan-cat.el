@@ -86,6 +86,24 @@ Returns the full TEXT if no terminator is found at depth zero."
           (cl-incf i)))
       (substring text 0 end))))
 
+(defun tibetan-vocab--mostly-tibetan-p (text)
+  "Return non-nil when TEXT is a Tibetan-script EXAMPLE, not a gloss.
+True when TEXT contains at least one Tibetan-block character AND no
+Latin letter.  A genuine gloss is always written in English or
+German (Latin script); a sense that is pure Tibetan is a usage
+example baked into the dictionary entry and must not surface as the
+word's meaning."
+  (and text (stringp text)
+       (let ((tib 0) (lat 0))
+         (mapc (lambda (c)
+                 (cond
+                  ((and (>= c #x0F00) (<= c #x0FFF)) (cl-incf tib))
+                  ((or (and (>= c ?a) (<= c ?z))
+                       (and (>= c ?A) (<= c ?Z)))
+                   (cl-incf lat))))
+               (string-to-list text))
+         (and (> tib 0) (= lat 0)))))
+
 (defun tibetan-vocab--parse-entry (raw-entry)
   "Parse RAW-ENTRY string into structured format.
 Returns plist with :primary :detailed :sanskrit."
@@ -120,7 +138,24 @@ Returns plist with :primary :detailed :sanskrit."
           (setq primary (string-trim primary))
           ;; Remove "to " prefix for verbs if it makes it cleaner
           ;; (setq primary (replace-regexp-in-string "^to " "" primary))
-          ))
+          )
+        ;; Example-sentence-as-gloss guard (D1, 2026-06-03): when the
+        ;; first sense is a Tibetan usage example (no Latin gloss), skip
+        ;; it and fall back to the first `;'-separated sense that carries
+        ;; an actual Latin gloss.  If none exists, keep the example —
+        ;; there is nothing better to show.
+        (when (and primary (tibetan-vocab--mostly-tibetan-p primary))
+          (let ((latin-sense
+                 (cl-find-if
+                  (lambda (s) (string-match-p "[A-Za-z]" s))
+                  (split-string raw-entry ";" t))))
+            (when latin-sense
+              (setq primary
+                    (tibetan-vocab--first-sense-bracket-aware
+                     (string-trim
+                      (replace-regexp-in-string
+                       "^[0-9]+[.):]\\s-*" "" (string-trim latin-sense)))))
+              (when primary (setq primary (string-trim primary)))))))
 
       (list :primary (or primary detailed)
             :detailed detailed

@@ -168,5 +168,42 @@
     (let ((formatted (tibetan-vocab-format-list-short extracted)))
       (should (or (null formatted) (stringp formatted))))))
 
+;; ============================================================================
+;; Example-sentence-as-gloss filter (item D1, 2026-06-03)
+;; ============================================================================
+
+(ert-deftest tibetan-vocab-mostly-tibetan-p-detects-example ()
+  "A string that is all Tibetan script with no Latin letters is an
+example sentence, not a gloss."
+  (should (tibetan-vocab--mostly-tibetan-p "བཅོམ་ལྡན་འདས་ཀྱི་དྲུང་དུ"))
+  ;; A real gloss (has Latin) is NOT an example.
+  (should-not (tibetan-vocab--mostly-tibetan-p "presence, residence"))
+  ;; Mixed (Tibetan headword + Latin gloss) → has Latin → not an example.
+  (should-not (tibetan-vocab--mostly-tibetan-p "དྲུང་དུ to the presence of"))
+  (should-not (tibetan-vocab--mostly-tibetan-p nil)))
+
+(ert-deftest tibetan-vocab-parse-entry-skips-tibetan-example-primary ()
+  "When the first sense of an entry is a Tibetan EXAMPLE sentence
+(no Latin gloss), `parse-entry' skips it and uses the first sense
+that carries an actual Latin gloss as `:primary'.
+
+Regression for the Milarepa Segment 110 class of bug: a phrasal
+dictionary entry whose leading sense is a Tibetan usage example
+(`bcom ldan 'das kyi drung du') was surfacing as the token gloss
+instead of the English/German meaning."
+  ;; The recovered Latin sense is truncated at the first comma, exactly
+  ;; as the normal first-sense extraction does — so `:primary' is the
+  ;; head gloss "presence", not the whole "presence, residence".
+  (let ((entry (tibetan-vocab--parse-entry
+                "བཅོམ་ལྡན་འདས་ཀྱི་དྲུང་དུ; presence, residence")))
+    (should (string= (plist-get entry :primary) "presence")))
+  ;; An entry with a Latin first sense is unaffected.
+  (let ((entry (tibetan-vocab--parse-entry "mane; dewlap")))
+    (should (string= (plist-get entry :primary) "mane")))
+  ;; An entry with ONLY a Tibetan example (no Latin anywhere) is left
+  ;; as-is — there is nothing better to fall back to.
+  (let ((entry (tibetan-vocab--parse-entry "རྔོག་གི་དྲུང་དུ")))
+    (should (string= (plist-get entry :primary) "རྔོག་གི་དྲུང་དུ"))))
+
 (provide 'tibetan-vocabulary-detailed-test)
 ;;; tibetan-vocabulary-detailed-test.el ends here
