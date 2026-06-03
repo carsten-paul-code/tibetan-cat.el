@@ -270,8 +270,8 @@ the first failure — this is the full batch suite.  (Before 2026-06-01
 flag named a non-existent function that never executed; the spec suite
 also made a live dharmamitra.org request on every run.  Both fixed.)
 
-Current state (2026-06-03, post-§5.34 grounding + Resources fix):  **ERT
-2132 tests, 2131 expected, 0 unexpected, 1 intentional skip
+Current state (2026-06-03, post-§5.35 vocab highlighting):  **ERT
+2134 tests, 2133 expected, 0 unexpected, 1 intentional skip
 (compound-analysis-callable); BDD 244 / 244.**  Full `make compile` is
 clean (zero warnings).  Carsten runs `make test` after every change and
 expects it to stay green.
@@ -2765,6 +2765,27 @@ Corpus re-regenerated twice in preserve mode (282 seg + 85 sent, 0
 failed, content preserved).  Segments 140-142 still need a Claude fire.
 Suite 2129 → **2132** / 2131 expected / 0 unexpected / 1 skip.  Compile
 clean.  REFERENCE.org regenerated.
+
+### 5.35 Claude Vocabulary term highlighting (done, 2026-06-03)
+
+Class-use request: the headwords in `** Claude Vocabulary' were hard to
+recognise.  Each entry is `WYLIE-TERM, part-of-speech, "gloss",
+commentary' — and because the term is Wylie (Latin script) the §5.31
+Tibetan-script font-lock colourizer never touched it, so the headword
+blended into the POS / gloss / commentary.
+
+Fix: new face `tibetan-analysis-vocabulary-term-face' (bold teal) + a
+section-bounded font-lock matcher `tibetan-analysis--vocab-term-matcher'
+(gated by `tibetan-analysis--in-claude-vocab-section-p') that bolds the
+run before the first comma, ONLY inside `** Claude Vocabulary'.
+Identically shaped `term, …' lines in `*** Claude Particles' are left
+alone.  Registered in `tibetan-analysis-setup-faces'; applies on the
+next open/refresh of an analysis buffer (font-lock only — no file
+rewrite, so the corpus needs no regenerate).  Suite 2132 → **2134**.
+
+Matcher tested directly (font-lock-ensure in batch is unreliable —
+§5.31); verified live on seg-097 that the `bla ma' term carries the
+face.
 
 ## 6. Open work (prioritised)
 
