@@ -270,8 +270,8 @@ the first failure — this is the full batch suite.  (Before 2026-06-01
 flag named a non-existent function that never executed; the spec suite
 also made a live dharmamitra.org request on every run.  Both fixed.)
 
-Current state (2026-06-03, post-§5.36 shad markers):  **ERT
-2138 tests, 2137 expected, 0 unexpected, 1 intentional skip
+Current state (2026-06-03, post-§5.37 get-filepath bare-fallback):  **ERT
+2140 tests, 2139 expected, 0 unexpected, 1 intentional skip
 (compound-analysis-callable); BDD 244 / 244.**  Full `make compile` is
 clean (zero warnings).  Carsten runs `make test` after every change and
 expects it to stay green.
@@ -2831,6 +2831,54 @@ CAVEAT for a future session:  **regenerating MA Reading will lose those
 are moved to thesaurus zettels).  Unlike §5.34 (a buffer-file-name bug),
 this is missing source data, not a code bug — the §5.34 default-directory
 fix is working;  there is simply no wordlist to load.
+
+### 5.37 BUG: -milarepa duplicate files + filename↔label scramble (done, 2026-06-03)
+
+Class-prep review surfaced three symptoms on the Milarepa folder: (a) a
+lost `* Working Translation' "stopped here" marker, (b) Claude/DM
+sections looking empty "so requests fire at every segment change", and
+(c) `seg-112' showing "Segment 39" as its title.  Root-caused to ONE
+code bug plus a found-not-lost note:
+
+- **(a) NOT lost** — the "stopped here" marker is in the SOURCE
+  `Milarepa-prepared.org' after Segment 79's `**** Working Translation'
+  (the user reads it there, not in the analysis files).
+
+- **(b)+(c) the §5.23 suffix-vs-unmigrated-Milarepa bug.**
+  `tibetan-analysis-get-filepath' with a source-file ALWAYS returned the
+  suffixed `seg-NNN-milarepa.org'.  Milarepa was deliberately left
+  un-migrated (bare `seg-NNN.org'), so `C-c u B' / segment creation
+  computed the suffixed name, did NOT find it, CREATED it as a duplicate
+  of the bare file, and re-fired Claude + DM.  Result: 17 mislabeled
+  twins (seg-097..113-milarepa.org, titles "Segment 37/38/39") + the
+  spurious-request behaviour.  §5.23 had added a bare fallback to the
+  REANALYZE path only; create / get-filepath never got it.
+
+#### Fix (`2fe4715`)
+
+`get-filepath' → `tibetan-analysis--resolve-filepath': prefer an
+existing suffixed file, else an existing bare `seg-NNN.org' that belongs
+to the SAME source (`--file-belongs-to-source-p', a `#+SOURCE' basename
+check), else a new suffixed path.  The source-match guard keeps
+multi-source folders collision-safe (a bare file from source A is never
+reused for source B).  So Milarepa operations now target the bare
+canonical files — no duplicates, no spurious refires — while MA Reading
+stays fully suffixed.  +2 tests (2138 → 2140).
+
+#### Cleanup (data, not repo)
+
+- The user's `phru rlog … hallucination?' My-Notes line lived only in
+  `seg-097-milarepa.org' → copied into bare `seg-097.org' first.
+- 17 `-milarepa' duplicates moved to `analysis-quarantine-2026-06-03/'
+  (content-verified identical to their bare twins beforehand).
+- Final: 282 bare seg + 85 sent, 0 duplicates, 0 label mismatches
+  (filename == #+TITLE == #+SOURCE for all 282), 0 empty Claude/DM.
+
+NOTE: the duplicates were created by a real `C-c u B' run hitting the
+bug (mtimes clustered today), not iCloud.  With the fix, re-running
+auto-analyze on Milarepa no longer spawns twins.  If `-milarepa' files
+ever reappear they are iCloud re-syncing the quarantine from another
+device — delete them; the bare `seg-NNN.org' is canonical.
 
 ## 6. Open work (prioritised)
 
