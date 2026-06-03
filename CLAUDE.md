@@ -270,8 +270,8 @@ the first failure — this is the full batch suite.  (Before 2026-06-01
 flag named a non-existent function that never executed; the spec suite
 also made a live dharmamitra.org request on every run.  Both fixed.)
 
-Current state (2026-06-02, post-§5.31 grammar improvements):  **ERT
-2120 tests, 2119 expected, 0 unexpected, 1 intentional skip
+Current state (2026-06-03, post-§5.33 seg-039 fixes + item D):  **ERT
+2129 tests, 2128 expected, 0 unexpected, 1 intentional skip
 (compound-analysis-callable); BDD 244 / 244.**  Full `make compile` is
 clean (zero warnings).  Carsten runs `make test` after every change and
 expects it to stay green.
@@ -2644,6 +2644,76 @@ mode, zero network) — the live corpus was NOT mutated.
 
 Suite 2119 → **2125** / 2124 expected / 0 unexpected / 1 skipped.
 `make compile` clean.  REFERENCE.org regenerated (`56a68d9`).
+
+### 5.33 Milarepa folder cleanup + item D + corpus regenerate (done, 2026-06-03)
+
+Follow-up to §5.32.  Two user decisions (AskUserQuestion): clean up the
+analysis-folder file-naming FIRST, then tackle item D INCLUDING the
+proper-noun gloss.  Then re-regenerate the corpus so all fixes land.
+
+#### Folder cleanup — the seg-id↔segment scramble
+
+The Milarepa `analysis/` folder had grown to **728 files**.  Root cause:
+the §5.8.3 / §5.23 filename history left TWO numbering schemes coexisting
+— the original bare `seg-NNN.org` (created 2026-04-14, correctly mapped
+to the current 282-segment source) AND 123 `seg-NNN-milarepa.org`
+duplicates from a 2026-06-02 regen whose `#+SOURCE'/`#+TITLE' labels were
+written WRONG (e.g. `seg-110-milarepa.org' carried the rNgog text — real
+Segment 110 — but was labelled "Segment 39").  Plus ~330 junk files
+(`.org~' backups, `.bak*', garbage `seg-10491/10492.*', iCloud
+conflict copies `seg-N N.org').
+
+Audit method (all read-only): the source `Milarepa-prepared.org' has a
+clean 282 segments (1..282, no dups).  Verified the bare files match the
+CURRENT source by content (Segment 39 = `kho'i rtsar…', Segment 110 =
+`rngog… phyin nas') — bare filename-num == source segment for all of
+them.  Proved every one of the 123 `-milarepa' duplicates has a FULL
+bare counterpart at the same filename-number → dropping them loses zero
+content.
+
+Action: moved **332 files** to a sibling `analysis-quarantine-2026-06-03/`
+(with `MANIFEST.txt`; NOTHING deleted — fully reversible).  Folder now
+holds exactly 282 bare `seg-001..282.org` + 85 `sent-001..085.org` +
+legit `.tex/.pdf` exports + the pre-existing `archive/`.  Segments
+**140, 141, 142** have no Claude content anywhere (need a refire).
+
+#### Item D — both halves done (the §5.32 "D deferred" note is now closed)
+
+- **D2 proper-noun gloss** (`1e830cc`).  The Claude-vocab override
+  (`tibetan-analysis--apply-claude-vocab-override') only fired on Steinert
+  `<person>'/`<place>' tags.  New `tibetan-analysis--claude-vocab-proper-
+  noun-p' reads Claude's part-of-speech field (text before the quoted
+  gloss, so a comma in the gloss can't trip it); when it says "proper",
+  an UNTAGGED common-noun dict gloss is overridden with Claude's name.
+  `རྔོག' → "mane" (Rangjung-Yeshe) now renders `[rNgog]' because the
+  file's own Claude Vocabulary classifies it `proper noun, "rNgog"'.
+  Fires on the regen path (preserved Claude vocab is bound into
+  `--claude-vocabulary-for-render'); first-time generate is a no-op.
+- **D1 example-sentence filter** (`17eacee`).  New `tibetan-vocab--mostly-
+  tibetan-p' (Tibetan-block chars, zero Latin = a usage example, since
+  real glosses are English/German).  `tibetan-vocab--parse-entry' skips
+  such a first sense and falls back to the first `;'-separated sense with
+  a Latin gloss.  General defence behind §5.32-C for the example-sentence-
+  as-gloss class.
+
+#### Corpus regenerate (preserve mode, zero network)
+
+`tibetan-analysis-batch-reanalyze :re-request-claude nil` → **282/282
+ok, 0 failed, all `:claude-preserved t'**.  `tibetan-sentence-batch-
+reanalyze` → **85/85 ok**.  All §5.32 A/B/C + §5.33 D fixes are render-
+time (D2 uses the preserved Claude vocab), so preserve mode lands them
+without re-firing Claude.  Verified live on seg-110: `rngog gi drung du
+phyin nas' Wylie, `[[term-rngog][rngog]] [rNgog] gi [GEN] drung [beside]
+du [TERM] phyin [pf. of 'gro; to go] nas', ATTESTED past-stem ཕྱིན.
+Backup of the clean pre-regen folder at
+`/tmp/milarepa-analysis-backup-*.tar.gz'.
+
+STILL OPEN: segments 140, 141, 142 need a Claude/DM fire (e.g.
+`:re-request-claude :missing-only' or interactive `C-c u R' on each) —
+they carry no content to preserve.
+
+Suite 2125 → **2129** / 2128 expected / 0 unexpected / 1 skip.  Compile
+clean.  REFERENCE.org regenerated (`0341768`).
 
 ## 6. Open work (prioritised)
 
