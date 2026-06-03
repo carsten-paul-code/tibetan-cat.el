@@ -160,10 +160,39 @@ Interlinear + Detailed Dictionary output."
 ;; ============================================================================
 
 (ert-deftest tibetan-find-resources-folder-none ()
-  "Test when no Resources folder exists."
-  (with-temp-buffer
-    (setq buffer-file-name nil)
-    (should (null (tibetan-find-resources-folder)))))
+  "Test when no Resources folder exists.
+Binds `default-directory' to a Resources-free temp dir so the
+default-directory fallback (added 2026-06-03) has nothing to find."
+  (let ((clean (make-temp-file "tcat-nores" t)))
+    (unwind-protect
+        (with-temp-buffer
+          (setq buffer-file-name nil)
+          (let ((default-directory (file-name-as-directory clean)))
+            (should (null (tibetan-find-resources-folder)))))
+      (delete-directory clean t))))
+
+(ert-deftest tibetan-find-resources-folder-falls-back-to-default-directory ()
+  "When the buffer is not visiting a file (headless batch reanalysis),
+the Resources folder is resolved relative to `default-directory'.
+
+Regression for the 2026-06-03 corpus-wide Resources wipe: batch
+reanalyse ran `generate-content' in the ambient `*scratch*' buffer
+where `buffer-file-name' is nil, so the finder returned nil and the
+curated Resources glosses were silently dropped from every file."
+  (let* ((root (make-temp-file "tcat-resroot" t))
+         (analysis (expand-file-name "work/analysis" root))
+         (res (expand-file-name "Resources" root)))  ; ../../Resources from analysis
+    (unwind-protect
+        (progn
+          (make-directory analysis t)
+          (make-directory res t)
+          (with-temp-buffer
+            (setq buffer-file-name nil)
+            (let ((default-directory (file-name-as-directory analysis)))
+              (should (string= (file-name-as-directory
+                                (tibetan-find-resources-folder))
+                               (file-name-as-directory res))))))
+      (delete-directory root t))))
 
 (ert-deftest tibetan-find-resources-folder-exists ()
   "Test finding Resources folder when it exists."

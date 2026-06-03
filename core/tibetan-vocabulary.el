@@ -350,11 +350,18 @@ Returns absolute path or nil if not set."
             (expand-file-name path (file-name-directory buffer-file-name))))))))
 
 (defun tibetan-find-resources-folder ()
-  "Find Resources folder relative to current buffer.
-Looks in: ./Resources, ../Resources, ../../Resources
+  "Find Resources folder relative to the current context.
+Looks in: ./Resources, ../Resources, ../../Resources — relative to
+the current buffer's file, or to `default-directory' when the buffer
+is not visiting a file (e.g. headless batch reanalysis runs
+`generate-content' in `*scratch*', where `buffer-file-name' is nil;
+without this fallback the curated Resources glosses were silently
+dropped from every regenerated file — 2026-06-03 corpus wipe).
 Returns absolute path or nil."
-  (when buffer-file-name
-    (let ((dir (file-name-directory buffer-file-name)))
+  (let ((dir (or (and buffer-file-name
+                      (file-name-directory buffer-file-name))
+                 default-directory)))
+    (when dir
       (catch 'found
         (dolist (rel '("Resources" "../Resources" "../../Resources"))
           (let ((res-dir (expand-file-name rel dir)))

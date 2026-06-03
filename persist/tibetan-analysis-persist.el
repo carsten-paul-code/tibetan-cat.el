@@ -4905,7 +4905,19 @@ without touching the file.  Otherwise return a plist:
           ;; builder can override polysemous-token glosses where the
           ;; dictionary stack alone gives a wrong reading (e.g.
           ;; `<person>'-tagged proper-noun entries for `blo sbyangs').
-          (let* ((claude-particles-raw
+          (let* (;; Resources / Custom vocab are located relative to the
+                 ;; analysis file (`tibetan-find-resources-folder' walks
+                 ;; ./ ../ ../../).  In headless batch reanalysis
+                 ;; `generate-content' runs in the ambient `*scratch*'
+                 ;; buffer (no `buffer-file-name'), so without binding the
+                 ;; directory the finder found nothing and the curated
+                 ;; Resources glosses were silently wiped corpus-wide
+                 ;; (2026-06-03).  Bind `default-directory' to this file's
+                 ;; folder so the finder's default-directory fallback
+                 ;; resolves the document's Resources/ on every path.
+                 (default-directory (file-name-directory
+                                     (expand-file-name filepath)))
+                 (claude-particles-raw
                   (and existing-sections
                        (plist-get existing-sections :particles)))
                  (claude-vocabulary-raw
