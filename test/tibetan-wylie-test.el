@@ -105,7 +105,11 @@
 (ert-deftest tibetan-wylie-superscript-r ()
   "Test ra-mgo (superscript r)."
   (should (equal (tibetan-to-wylie "རྐ") "rka"))
-  (should (equal (tibetan-to-wylie "རྒ") "rga")))
+  (should (equal (tibetan-to-wylie "རྒ") "rga"))
+  ;; ra + nga stack (was missing → produced "ra"+vowel, dropping ng).
+  (should (equal (tibetan-to-wylie "རྔ") "rnga"))
+  ;; Full word: རྔོག (rNgog, disciple of Marpa) must be "rngog", not "raog".
+  (should (equal (tibetan-to-wylie-fixed "རྔོག") "rngog")))
 
 ;; ============================================================================
 ;; PUNCTUATION
