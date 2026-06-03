@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-06-02T10:11:16
+#+DATE: 2026-06-03T08:16:50
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  67 modules  ·  1215 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  67 modules  ·  1217 forms
 
 Regenerated automatically by:
 
@@ -18,7 +18,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#analysis/tibetan-clause-analysis.el][analysis/tibetan-clause-analysis.el]]  (15)
   - [[#analysis/tibetan-clause-segmenter.el][analysis/tibetan-clause-segmenter.el]]  (23)
   - [[#analysis/tibetan-enhanced-display.el][analysis/tibetan-enhanced-display.el]]  (16)
-  - [[#analysis/tibetan-enhanced-parser.el][analysis/tibetan-enhanced-parser.el]]  (15)
+  - [[#analysis/tibetan-enhanced-parser.el][analysis/tibetan-enhanced-parser.el]]  (16)
   - [[#analysis/tibetan-interlinear.el][analysis/tibetan-interlinear.el]]  (21)
   - [[#analysis/tibetan-mitra-translation.el][analysis/tibetan-mitra-translation.el]]  (24)
   - [[#analysis/tibetan-particles-bialek.el][analysis/tibetan-particles-bialek.el]]  (8)
@@ -38,7 +38,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#core/tibetan-thesaurus.el][core/tibetan-thesaurus.el]]  (34)
   - [[#core/tibetan-utils.el][core/tibetan-utils.el]]  (13)
   - [[#core/tibetan-vocabulary-detailed.el][core/tibetan-vocabulary-detailed.el]]  (38)
-  - [[#core/tibetan-vocabulary.el][core/tibetan-vocabulary.el]]  (47)
+  - [[#core/tibetan-vocabulary.el][core/tibetan-vocabulary.el]]  (48)
   - [[#core/tibetan-wylie.el][core/tibetan-wylie.el]]  (4)
   - [[#core/tibetan-zettel.el][core/tibetan-zettel.el]]  (51)
   - [[#data/tibetan-glossary-loader.el][data/tibetan-glossary-loader.el]]  (14)
@@ -985,10 +985,27 @@ Defensive: returns nil when Hill-DB lookup is unavailable
 (`tibetan-verb-lookup' not fbound) — the predicate becomes a
 no-op rather than raising.
 
-** ~tibetan-find-multiword-units~  /function/
+** ~tibetan-enhanced-parser--verb-tail-p~  /function/
 :PROPERTIES:
 :KIND: defun
 :LINE: 154
+:SIGNATURE: (tibetan-enhanced-parser--verb-tail-p joined)
+:END:
+
+Return non-nil if the LAST tsheg-syllable of JOINED is a Hill-DB verb.
+
+Used by the MWU finder to stop a multi-syllable (≥3) unit from absorbing
+a finite verb — e.g. `དྲུང་དུ་ཕྱིན' (a Rangjung-Yeshe phrasal entry)
+bundling the past verb `ཕྱིན' ("went").  The verb belongs to clause /
+sentence-structure analysis, not the noun phrase, so the candidate is
+rejected and the finder falls through to a shorter length, leaving the
+verb a separate word.  Defensive no-op when `tibetan-verb-lookup' is
+unavailable.
+
+** ~tibetan-find-multiword-units~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 172
 :SIGNATURE: (tibetan-find-multiword-units words)
 :END:
 
@@ -999,7 +1016,7 @@ Returns list of (start-index . end-index . entry-data) tuples.
 ** ~tibetan-analyze-word-unit~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 366
+:LINE: 398
 :SIGNATURE: (tibetan-analyze-word-unit word _prev-word _next-word)
 :END:
 
@@ -1010,7 +1027,7 @@ Returns alist with analysis data.
 ** ~tibetan-particle-function~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 405
+:LINE: 437
 :SIGNATURE: (tibetan-particle-function particle)
 :END:
 
@@ -1019,7 +1036,7 @@ Return function description for PARTICLE.
 ** ~tibetan-find-verb-nominalizer-units~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 423
+:LINE: 455
 :SIGNATURE: (tibetan-find-verb-nominalizer-units words)
 :END:
 
@@ -1030,7 +1047,7 @@ Returns list of (start-index end-index form data) tuples.
 ** ~tibetan-parse-enhanced~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 467
+:LINE: 499
 :SIGNATURE: (tibetan-parse-enhanced text)
 :END:
 
@@ -2012,7 +2029,7 @@ Initialize the verb database. Always rebuilds from scratch.
 ** ~tibetan-verb-lookup~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 755
+:LINE: 760
 :SIGNATURE: (tibetan-verb-lookup word)
 :END:
 
@@ -2022,7 +2039,7 @@ Returns verb entry alist if found, nil otherwise.
 ** ~tibetan-is-verb-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 771
+:LINE: 776
 :SIGNATURE: (tibetan-is-verb-p word)
 :END:
 
@@ -2031,7 +2048,7 @@ Return non-nil if WORD is a recognized verb.
 ** ~tibetan-verb-matched-stem~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 775
+:LINE: 780
 :SIGNATURE: (tibetan-verb-matched-stem word entry)
 :END:
 
@@ -6115,10 +6132,31 @@ the following word: e.g. after `བདག་ལ' has split into stem + LA,
 the next iteration starts at `ལ' and must not be allowed to pick
 up `ལ་སྟོད' ("Latö, western Tsang") as a 2-syllable compound.
 
+** ~tibetan-extract-vocab--tail-is-verb-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 996
+:SIGNATURE: (tibetan-extract-vocab--tail-is-verb-p joined)
+:END:
+
+Return non-nil when JOINED (a `་'-joined compound of ≥2 syllables)
+ends in a syllable that `tibetan-verb-lookup' recognises as a finite
+Hill-DB verb.
+
+Used to stop the greedy Interlinear MWU loop from gluing an
+auto-sourced phrasal dictionary entry onto a following verb — e.g.
+the Rangjung-Yeshe entry `དྲུང་དུ་ཕྱིན' was absorbing the verb `ཕྱིན'
+("went"), hiding it from clause / Verb-Classification analysis and
+surfacing the entry's Tibetan example sentence as the token's gloss
+(Milarepa Segment 39).
+
+Mirrors `tibetan-enhanced-parser--verb-tail-p' for the second MWU
+loop.  No-op (returns nil) when the verb classifier isn't loaded.
+
 ** ~tibetan-extract-vocabulary~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 994
+:LINE: 1016
 :SIGNATURE: (tibetan-extract-vocabulary tibetan-text)
 :END:
 
@@ -6153,7 +6191,7 @@ populates the final `(word . meaning)' cell.
 ** ~tibetan-vocabulary-initialize~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1093
+:LINE: 1126
 :SIGNATURE: (tibetan-vocabulary-initialize)
 :END:
 
@@ -6172,7 +6210,7 @@ kept for users who install the package without the bundled data dir.
 ** ~reload-all-glossaries~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1118
+:LINE: 1151
 :SIGNATURE: (reload-all-glossaries)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -6185,7 +6223,7 @@ resets the idempotence guard and re-emits every bundled source.
 ** ~tibetan-vocab-extract-short-meaning~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1146
+:LINE: 1179
 :SIGNATURE: (tibetan-vocab-extract-short-meaning full-meaning)
 :END:
 
@@ -6195,7 +6233,7 @@ Returns just the core translation without lengthy explanations.
 ** ~tibetan-vocab-has-extended-info-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1168
+:LINE: 1201
 :SIGNATURE: (tibetan-vocab-has-extended-info-p full-meaning)
 :END:
 
@@ -6204,7 +6242,7 @@ Check if FULL-MEANING has extended information worth showing.
 ** ~tibetan-vocab-format-entry~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1174
+:LINE: 1207
 :SIGNATURE: (tibetan-vocab-format-entry tibetan-word full-meaning &optional format-type)
 :END:
 
@@ -6221,7 +6259,7 @@ Returns formatted string.
 ** ~tibetan-vocab-format-list~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1216
+:LINE: 1249
 :SIGNATURE: (tibetan-vocab-format-list vocab-pairs &optional format-type)
 :END:
 
@@ -6233,7 +6271,7 @@ Returns formatted string.
 ** ~tibetan-vocab-format-detailed-list~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1228
+:LINE: 1261
 :SIGNATURE: (tibetan-vocab-format-detailed-list vocab-pairs &optional for-org)
 :END:
 
