@@ -554,7 +554,20 @@ analysis (C-c u A)."
                        (unless (or (and (fboundp 'tibetan-extract-vocab--tail-is-particle-p)
                                         (tibetan-extract-vocab--tail-is-particle-p compound))
                                    (and (fboundp 'tibetan-extract-vocab--head-is-particle-p)
-                                        (tibetan-extract-vocab--head-is-particle-p compound)))
+                                        (tibetan-extract-vocab--head-is-particle-p compound))
+                                   ;; Verb-tail guard (H1 parity with
+                                   ;; the Interlinear + parser loops):
+                                   ;; reject a >= 3-syllable phrasal
+                                   ;; ending in a Hill verb so all
+                                   ;; three surfaces agree on grouping.
+                                   ;; User-curated MWUs are EXEMPT.
+                                   (and (>= compound-len 3)
+                                        (fboundp 'tibetan-extract-vocab--tail-is-verb-p)
+                                        (tibetan-extract-vocab--tail-is-verb-p compound)
+                                        (not (and (fboundp 'tibetan-lookup-word-in-resources-vocab)
+                                                  (tibetan-lookup-word-in-resources-vocab compound)))
+                                        (not (and (fboundp 'tibetan-lookup-word-in-custom-vocab)
+                                                  (tibetan-lookup-word-in-custom-vocab compound)))))
                          ;; MWU DETECTION:  strict exact-key check via
                          ;; `tibetan-vocab--mwu-exists-p' (NOT
                          ;; `tibetan-vocab-lookup-detailed', which

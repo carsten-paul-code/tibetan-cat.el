@@ -1100,8 +1100,16 @@ populates the final `(word . meaning)' cell."
                                      ;; auto-sourced phrasal entry that
                                      ;; ends in a finite verb, so the
                                      ;; verb reaches clause analysis.
+                                     ;; ONLY at >= 3 syllables (H1,
+                                     ;; Fable-5 audit): 2-syllable
+                                     ;; lexicalized nouns whose tail is
+                                     ;; a verb homograph — ཡེ་ཤེས,
+                                     ;; རྣམ་ཤེས, ཉན་ཐོས — must stay
+                                     ;; units, in agreement with the DD
+                                     ;; + parser loops (both >= 3).
                                      ;; User-curated MWUs are EXEMPT.
-                                     (and (tibetan-extract-vocab--tail-is-verb-p
+                                     (and (>= compound-len 3)
+                                          (tibetan-extract-vocab--tail-is-verb-p
                                            compound-raw)
                                           (not (tibetan-lookup-word-in-resources-vocab
                                                 compound-raw))

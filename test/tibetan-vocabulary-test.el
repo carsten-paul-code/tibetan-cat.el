@@ -559,6 +559,24 @@ kyi drung du') as the token's gloss."
       ;; The verb syllable must surface independently.
       (should (member "ཕྱིན" keys)))))
 
+(ert-deftest tibetan-extract-vocabulary-keeps-two-syllable-verb-tail-noun ()
+  "H1 regression (Fable-5 audit): the verb-tail guard must fire only on
+3+-syllable phrasals.  2-syllable LEXICALIZED nouns whose tail is a
+verb homograph — ཡེ་ཤེས (jñāna, tail ཤེས \"to know\"), རྣམ་ཤེས,
+ཉན་ཐོས — are core dharma vocabulary and must stay single units, in
+agreement with the Detailed Dictionary and the parser MWU loop (both
+≥3), or the Interlinear de-syncs from DD (the seg-049 dangling-anchor
+class)."
+  (skip-unless (fboundp 'tibetan-verb-lookup))
+  (let ((tibetan-current-resources-vocab nil)
+        (tibetan-current-custom-vocab nil)
+        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
+    (puthash "ཡེ་ཤེས" "wisdom [jñāna]" tibetan-comprehensive-vocabulary)
+    (let* ((vocab (tibetan-extract-vocabulary "ཡེ་ཤེས་ལ"))
+           (keys (mapcar #'car vocab)))
+      (should (member "ཡེ་ཤེས" keys))
+      (should-not (member "ཤེས" keys)))))
+
 (ert-deftest tibetan-extract-vocabulary-keeps-curated-verb-tail-compound ()
   "A USER-CURATED (Resources / Custom) MWU ending in a verb is kept
 intact — the verb-tail guard applies only to auto-sourced dictionary

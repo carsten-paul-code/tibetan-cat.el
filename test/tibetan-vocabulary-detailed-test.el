@@ -205,5 +205,32 @@ instead of the English/German meaning."
   (let ((entry (tibetan-vocab--parse-entry "རྔོག་གི་དྲུང་དུ")))
     (should (string= (plist-get entry :primary) "རྔོག་གི་དྲུང་དུ"))))
 
+;; ============================================================================
+;; H1 (Fable-5 audit): DD verb-tail parity with the Interlinear loop
+;; ============================================================================
+
+(ert-deftest tibetan-vocab-extract-detailed-rejects-three-syllable-verb-tail ()
+  "The DD greedy loop rejects a 3-syllable phrasal whose tail is a
+Hill verb (`དྲུང་དུ་ཕྱིན'), matching the Interlinear + parser loops —
+otherwise the surfaces disagree on grouping and term anchors dangle."
+  (skip-unless (fboundp 'tibetan-verb-lookup))
+  (cl-letf (((symbol-function 'tibetan-vocab--mwu-exists-p)
+             (lambda (w) (member w '("དྲུང་དུ་ཕྱིན" "ཡེ་ཤེས"))))
+            ((symbol-function 'tibetan-vocab-lookup-detailed)
+             (lambda (w) (list :wylie w :primary "stub" :detailed "stub"
+                               :sanskrit nil :source "Stub")))
+            ((symbol-function 'tibetan-load-resources-vocab) #'ignore)
+            ((symbol-function 'tibetan-load-custom-vocab) #'ignore))
+    (let ((tibetan-current-resources-vocab nil)
+          (tibetan-current-custom-vocab nil))
+      ;; 3-syllable verb-tail phrasal: NOT one unit.
+      (let ((tib (mapcar (lambda (p) (plist-get p :tibetan))
+                         (tibetan-vocab-extract-detailed "དྲུང་དུ་ཕྱིན"))))
+        (should-not (member "དྲུང་དུ་ཕྱིན" tib)))
+      ;; 2-syllable lexicalized noun: stays one unit.
+      (let ((tib (mapcar (lambda (p) (plist-get p :tibetan))
+                         (tibetan-vocab-extract-detailed "ཡེ་ཤེས་ལ"))))
+        (should (member "ཡེ་ཤེས" tib))))))
+
 (provide 'tibetan-vocabulary-detailed-test)
 ;;; tibetan-vocabulary-detailed-test.el ends here
