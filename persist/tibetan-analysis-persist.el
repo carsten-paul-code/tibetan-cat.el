@@ -2327,27 +2327,6 @@ still be classified as a whole.  Returns the `type' field (index
                                   "་" "" word)))))
       (and hit (nth 2 hit)))))
 
-(defconst tibetan-analysis--role-order
-  '(agent subject patient recipient location goal source instrument comitative)
-  "Display order for clause arguments — subject → object → obliques.")
-
-(defconst tibetan-analysis--role-labels
-  '((agent      . "SUBJECT (ERG)")
-    (subject    . "SUBJECT (ABS)")
-    (patient    . "DIRECT OBJECT (ABS)")
-    (recipient  . "INDIRECT OBJECT (DAT)")
-    (location   . "LOCATIVE (LOC)")
-    (goal       . "GOAL (TERM)")
-    (source     . "SOURCE (ABL)")
-    (instrument . "INSTRUMENT (INST)")
-    (comitative . "COMITATIVE (COM)"))
-  "Map Round-2 semantic roles to class-facing SUBJECT/OBJECT labels.")
-
-(defun tibetan-analysis--role-label (role)
-  "Return the class-facing label for semantic ROLE (a symbol)."
-  (or (cdr (assq role tibetan-analysis--role-labels))
-      (and role (upcase (symbol-name role)))))
-
 (defun tibetan-analysis--strip-drawers (text)
   "Remove org property drawers from TEXT (source child texts carry
 the segment's :PROPERTIES: drawer)."

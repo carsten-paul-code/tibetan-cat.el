@@ -143,34 +143,6 @@ still promoted to main."
 ;; Part C — Argument structure
 ;; ============================================================================
 
-(ert-deftest tibetan-round2-args-transitive-erg-abs ()
-  "Transitive verb with case_frame Erg-Abs: ERG-NP → agent, bare NP → patient."
-  (skip-unless (fboundp 'tibetan-verb-lookup))
-  ;; Inject / ensure a verb entry for the test.
-  (let* ((words '("བདག་གིས" "ལས" "བྱས"))
-         (verbs (list (tibetan-round2-test--verb "བྱེད" 2)))
-         (analysis (tibetan-analyze-round2 words verbs nil))
-         (args (car (alist-get 'argument-structure analysis))))
-    (should args)
-    ;; at least one assigned role
-    (let ((roles (mapcar (lambda (a) (alist-get 'role a))
-                         (alist-get 'arguments args))))
-      ;; ERG-tagged NP should be 'agent under any reasonable frame.
-      (should (memq 'agent roles)))))
-
-(ert-deftest tibetan-round2-args-dative-recipient ()
-  "A DAT-marked NP under a verb with a Dat slot becomes 'recipient' or
-'goal' (both acceptable)."
-  (let* ((words '("ཁོང" "ལ" "སློབ"))
-         (verbs (list (tibetan-round2-test--verb "སློབ" 2)))
-         (analysis (tibetan-analyze-round2 words verbs nil))
-         (struct (car (alist-get 'argument-structure analysis)))
-         (roles (mapcar (lambda (a) (alist-get 'role a))
-                        (alist-get 'arguments struct))))
-    (should (or (memq 'recipient roles)
-                (memq 'goal roles)
-                (memq 'location roles)))))
-
 ;; ============================================================================
 ;; Smoke test — end-to-end on a Milarepa-style failing segment.
 ;; ============================================================================

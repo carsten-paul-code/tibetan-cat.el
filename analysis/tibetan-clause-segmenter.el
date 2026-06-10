@@ -650,17 +650,18 @@ MWU spans are treated as atomic heads.  Returns a list of NP alists
     (nreverse nps)))
 
 ;; ============================================================================
-;; Part C — Argument structure
+;; Part C — RETIRED (verb-first redesign, 2026-06-10)
 ;; ============================================================================
-
-(defconst tibetan-clause-seg--case-frame-role-map
-  '(("Erg-Abs" . ((ERG . agent) (nil . patient) (ABS . patient) (DAT . recipient) (LOC . location)))
-    ("Abs"     . ((nil . subject) (ABS . subject) (DAT . goal)   (LOC . location)))
-    ("Abs-Abs" . ((nil . subject) (ABS . subject)))
-    ("Abs-Dat" . ((nil . subject) (ABS . subject) (DAT . goal)))
-    ("Abs-Loc" . ((nil . subject) (ABS . subject) (LOC . location)))
-    ("Erg-Abs-Dat" . ((ERG . agent) (nil . patient) (ABS . patient) (DAT . recipient))))
-  "Map from `case_frame' label to an alist of (NP-case . role).")
+;;
+;; The flat case→role mapping (`tibetan-build-argument-structure',
+;; `tibetan-clause-seg--case-frame-role-map', `--role-for-case') was
+;; the seg-37 mislabeling source — every bare NP in an "Erg-Abs"
+;; clause mapped to `patient' with no slot saturation and no adjunct
+;; category.  Argument structure now lives in
+;; `analysis/tibetan-sentence-tree.el' (`tibetan-analyze-sentence'):
+;; verb-first, frame slots filled at most once, leftovers labelled
+;; adjuncts, converb clauses chained to the main verb.
+;; `--lookup-case-frame' is kept — the slot engine reuses it.
 
 (defun tibetan-clause-seg--lookup-case-frame (lemma)
   "Return the `case_frame' string for LEMMA via the verb classifier, or nil."
@@ -668,63 +669,20 @@ MWU spans are treated as atomic heads.  Returns a list of NP alists
     (let ((entry (ignore-errors (tibetan-verb-lookup lemma))))
       (and entry (alist-get 'case_frame entry)))))
 
-(defun tibetan-clause-seg--role-for-case (frame case-sym)
-  "Resolve CASE-SYM to a role given FRAME string."
-  (let ((map (cdr (assoc frame tibetan-clause-seg--case-frame-role-map))))
-    (or (cdr (assoc case-sym map))
-        ;; generic fallbacks
-        (pcase case-sym
-          ('ERG  'agent)
-          ('DAT  'recipient)
-          ('LOC  'location)
-          ('ABL  'source)
-          ('TERM 'goal)
-          ('INST 'instrument)
-          ('COM  'comitative)
-          ('GEN  nil) ;; possessors aren't clause arguments
-          ('nil  'subject)
-          (_ nil)))))
-
-(defun tibetan-build-argument-structure (clauses nps)
-  "Assign each NP in NPS to a role under its clause's main verb.
-
-CLAUSES is the output of `tibetan-clause-segment'.  NPS is the output
-of `tibetan-np-chunk'.  Returns a list of clause-structure alists (see
-commentary)."
-  (cl-loop for clause in clauses
-           for ci from 0
-           for v = (alist-get 'verb clause)
-           for lemma = (alist-get 'lemma v)
-           for frame = (tibetan-clause-seg--lookup-case-frame lemma)
-           for clause-nps = (cl-remove-if-not
-                             (lambda (np)
-                               (equal (alist-get 'clause-index np) ci))
-                             nps)
-           for args = (mapcar
-                       (lambda (np)
-                         (let* ((c (alist-get 'case np))
-                                (role (tibetan-clause-seg--role-for-case
-                                       frame c)))
-                           `((role . ,role) (np . ,np))))
-                       clause-nps)
-           collect `((clause     . ,clause)
-                     (verb       . ,v)
-                     (case-frame . ,frame)
-                     (arguments  . ,args))))
-
 ;; ============================================================================
 ;; Convenience wrapper
 ;; ============================================================================
 
 (defun tibetan-analyze-round2 (words verbs &optional mwu)
-  "Run Round-2 end-to-end.  Returns an alist:
-  ((clauses . ...) (nps . ...) (argument-structure . ...))."
+  "Run Round-2 Parts A+B (clauses + NPs).  Returns an alist:
+  ((clauses . ...) (nps . ...)).
+The former `argument-structure' key is RETIRED — use
+`tibetan-analyze-sentence' (tibetan-sentence-tree.el) for the
+verb-first slot-filled tree."
   (let* ((clauses (tibetan-clause-segment words verbs mwu))
-         (nps     (tibetan-np-chunk words clauses mwu))
-         (args    (tibetan-build-argument-structure clauses nps)))
+         (nps     (tibetan-np-chunk words clauses mwu)))
     `((clauses . ,clauses)
-      (nps     . ,nps)
-      (argument-structure . ,args))))
+      (nps     . ,nps))))
 
 (provide 'tibetan-clause-segmenter)
 ;;; tibetan-clause-segmenter.el ends here
