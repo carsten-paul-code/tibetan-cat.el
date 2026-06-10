@@ -199,6 +199,9 @@
 ;; whose Claude never completed.
 
 (global-set-key (kbd "C-c u F") 'tibetan-auto-request-claude-translations)
+;; §5.41 class view: fold/unfold the reference sections (Detailed
+;; Dictionary, Verb Classification) for scroll-free class reading.
+(global-set-key (kbd "C-c u f") 'tibetan-analysis-toggle-class-view)
   ;; - No prefix: scans the analysis/ folder of the current source file.
   ;; - C-u prefix: force re-fire even for segments that already have a
   ;;   non-placeholder Claude Translation.

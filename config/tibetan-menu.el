@@ -73,6 +73,7 @@
       :help "Open or create persistent analysis file for current segment"]
      ["Re-analyze Segment (C-c u R)" tibetan-reanalyze-segment
       :help "Regenerate analysis while preserving your notes"]
+     ["Toggle Class View — fold reference sections (C-c u f)" tibetan-analysis-toggle-class-view t]
      ["Batch Re-analyze Folder (C-c u r)" tibetan-analysis-batch-reanalyze
       :help "Re-run auto-analysis on every seg-NNN*.org, preserving notes, working translation, and Claude translation"]
      ["Batch Analyze All Segments (C-c u B)" tibetan-auto-analyze-document

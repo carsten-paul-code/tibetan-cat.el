@@ -3480,5 +3480,68 @@ verb; the HEAD segment shows the full tree with sentence context."
     (should (string-match-p "MAIN VERB" c))
     (should-not (string-match-p "Sentence [0-9]+ —" c))))
 
+(defconst tapt--class-fold-fixture
+  "#+TITLE: Segment 13 Analysis\n\n* Tibetan Text\nབདག\n\n* Tibetan Analysis\n** Claude Vocabulary\nbla ma, noun, \"teacher\"\n\n** Translation\nThe lama.\n\n** Verb Classification (Hill 2010)\nVERBCLASS BODY LINE\n\n** Detailed Dictionary\nDICT BODY LINE ONE\nDICT BODY LINE TWO\n\n* Footnotes\n")
+
+(ert-deftest tibetan-analysis-class-fold-hides-reference-sections ()
+  "§5.41: class folding hides the bodies of the reference sections
+\(Detailed Dictionary, Verb Classification) while their HEADING lines
+and the class sections (Vocabulary, Translation) stay visible."
+  (with-temp-buffer
+    (insert tapt--class-fold-fixture)
+    (org-mode)
+    (tibetan-analysis-class-fold)
+    ;; Reference bodies hidden.
+    (goto-char (point-min))
+    (search-forward "DICT BODY LINE ONE")
+    (should (invisible-p (1- (point))))
+    (goto-char (point-min))
+    (search-forward "VERBCLASS BODY LINE")
+    (should (invisible-p (1- (point))))
+    ;; Their headings still visible.
+    (goto-char (point-min))
+    (search-forward "** Detailed Dictionary")
+    (should-not (invisible-p (line-beginning-position)))
+    ;; Class sections fully visible.
+    (goto-char (point-min))
+    (search-forward "bla ma, noun")
+    (should-not (invisible-p (1- (point))))
+    (goto-char (point-min))
+    (search-forward "The lama.")
+    (should-not (invisible-p (1- (point))))
+    (should tibetan-analysis--class-view-active)))
+
+(ert-deftest tibetan-analysis-class-view-toggle-roundtrip ()
+  "Toggle: class view → full view → class view, flag tracking."
+  (with-temp-buffer
+    (insert tapt--class-fold-fixture)
+    (org-mode)
+    (tibetan-analysis-class-fold)
+    (tibetan-analysis-toggle-class-view)
+    (should-not tibetan-analysis--class-view-active)
+    (goto-char (point-min))
+    (search-forward "DICT BODY LINE ONE")
+    (should-not (invisible-p (1- (point))))
+    (tibetan-analysis-toggle-class-view)
+    (should tibetan-analysis--class-view-active)
+    (goto-char (point-min))
+    (search-forward "DICT BODY LINE ONE")
+    (should (invisible-p (1- (point))))))
+
+(ert-deftest tibetan-analysis-mode-hook-regex-covers-suffixed-and-sent ()
+  "The analysis-buffer detector must match suffixed MA files
+\(seg-013-kbgp.org) and sent files — the old regex missed both, so
+the §5.35 faces and the class fold never reached MA Reading."
+  (should (tibetan-analysis--analysis-buffer-name-p
+           "/x/analysis/seg-013-kbgp.org"))
+  (should (tibetan-analysis--analysis-buffer-name-p
+           "/x/analysis/seg-110.org"))
+  (should (tibetan-analysis--analysis-buffer-name-p
+           "/x/analysis/sent-004.org"))
+  (should-not (tibetan-analysis--analysis-buffer-name-p
+               "/x/analysis/combined.org"))
+  (should-not (tibetan-analysis--analysis-buffer-name-p
+               "/x/elsewhere/notes.org")))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

@@ -806,12 +806,75 @@ parser which doesn't fire for compound-embedded markers like
 
     (setq tibetan-analysis--faces-setup t)))
 
-;; Hook to apply faces when buffer is displayed
+;; ============================================================================
+;; Class view — fold reference sections on open (§5.41)
+;; ============================================================================
+;;
+;; In class the reference bulk dominates scrolling: in the worst MA
+;; Reading file the Detailed Dictionary alone is 67% of 2153 lines.
+;; The class view folds the reference sections to their heading lines
+;; on open; TAB unfolds any of them as usual; `C-c u f' toggles the
+;; whole view.  Display-only — file contents are never touched.
+
+(defcustom tibetan-analysis-class-folded-sections
+  '("Detailed Dictionary" "Verb Classification (Hill 2010)")
+  "Section headings folded by the class view.
+Matched as exact heading names at any org level.  Sentence Structure
+is deliberately NOT in the default — it is the §5.31 class feature."
+  :type '(repeat string)
+  :group 'tibetan-cat)
+
+(defcustom tibetan-analysis-class-view-on-open t
+  "When non-nil, analysis buffers open in the class view
+\(reference sections folded).  Toggle per buffer with
+`tibetan-analysis-toggle-class-view'."
+  :type 'boolean
+  :group 'tibetan-cat)
+
+(defvar-local tibetan-analysis--class-view-active nil
+  "Non-nil while the buffer is in the folded class view.")
+
+(defun tibetan-analysis-class-fold ()
+  "Fold the reference sections of the current analysis buffer.
+Each heading in `tibetan-analysis-class-folded-sections' collapses to
+its heading line (subtree hidden); everything else stays visible."
+  (interactive)
+  (save-excursion
+    (dolist (name tibetan-analysis-class-folded-sections)
+      (goto-char (point-min))
+      (while (re-search-forward
+              (format "^\\*+ %s[ \t]*$" (regexp-quote name)) nil t)
+        (outline-hide-subtree))))
+  (setq tibetan-analysis--class-view-active t))
+
+(defun tibetan-analysis-toggle-class-view ()
+  "Toggle between the folded class view and the fully expanded view."
+  (interactive)
+  (if tibetan-analysis--class-view-active
+      (progn
+        (if (fboundp 'org-fold-show-all) (org-fold-show-all)
+          (outline-show-all))
+        (setq tibetan-analysis--class-view-active nil)
+        (message "Class view OFF — everything visible"))
+    (tibetan-analysis-class-fold)
+    (message "Class view ON — reference sections folded (TAB opens one)")))
+
+(defun tibetan-analysis--analysis-buffer-name-p (filename)
+  "Non-nil when FILENAME is a per-segment or per-sentence analysis file.
+Covers the §5.23 suffixed names (`seg-013-kbgp.org') and `sent-*.org'
+— the old `seg-[0-9]+\\.org$'-only match left MA Reading files
+without the §5.31/§5.35 face setup."
+  (and filename
+       (string-match-p
+        "analysis/\\(?:seg\\|sent\\)-[0-9][^/]*\\.org$" filename)))
+
+;; Hook to apply faces + the class view when buffer is displayed
 (defun tibetan-analysis-mode-hook ()
   "Hook to run when entering an analysis buffer."
-  (when (and (buffer-file-name)
-             (string-match "analysis/seg-[0-9]+\\.org$" (buffer-file-name)))
-    (tibetan-analysis-setup-faces)))
+  (when (tibetan-analysis--analysis-buffer-name-p (buffer-file-name))
+    (tibetan-analysis-setup-faces)
+    (when tibetan-analysis-class-view-on-open
+      (tibetan-analysis-class-fold))))
 
 (add-hook 'org-mode-hook 'tibetan-analysis-mode-hook)
 
