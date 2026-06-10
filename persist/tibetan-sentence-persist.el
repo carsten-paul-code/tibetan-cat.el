@@ -910,8 +910,13 @@ Updates `#+SEGMENTS:' / `#+TIBETAN_HASH:' / `#+LAST_ANALYZED:'."
                filepath "Concept Notes")
               (tibetan-sentence--read-third-level-body
                filepath "Claude Context")))
+         ;; M6 (Fable-5 audit): aligned sentence files carry Claude
+         ;; Vocabulary at LEVEL 2 (segment shape) — read L2-first,
+         ;; legacy L3 fallback, mirroring the Concept Notes slot.
          (claude-vocabulary-body
-          (tibetan-sentence--read-third-level-body filepath "Claude Vocabulary"))
+          (or (tibetan-sentence--read-l2-body filepath "Claude Vocabulary")
+              (tibetan-sentence--read-third-level-body
+               filepath "Claude Vocabulary")))
          (claude-particles-body
           (tibetan-sentence--read-third-level-body filepath "Claude Particles"))
          ;; Parallel-Sanskrit top-level sections (Sanskrit Text /
@@ -985,8 +990,16 @@ Updates `#+SEGMENTS:' / `#+TIBETAN_HASH:' / `#+LAST_ANALYZED:'."
           (tibetan-sentence--set-l2-body-in-buffer
            buf "Concept Notes" concept-notes-body))
         (when claude-vocabulary-body
-          (tibetan-sentence--set-l3-body-in-buffer
-           buf "Claude Vocabulary" claude-vocabulary-body))
+          ;; M6: restore to the L2 slot when the new scaffold has one
+          ;; (aligned layout), else the legacy L3 slot.
+          (if (with-current-buffer buf
+                (save-excursion
+                  (goto-char (point-min))
+                  (re-search-forward "^\\*\\* Claude Vocabulary[ \t]*$" nil t)))
+              (tibetan-sentence--set-l2-body-in-buffer
+               buf "Claude Vocabulary" claude-vocabulary-body)
+            (tibetan-sentence--set-l3-body-in-buffer
+             buf "Claude Vocabulary" claude-vocabulary-body)))
         (when claude-particles-body
           (tibetan-sentence--set-l3-body-in-buffer
            buf "Claude Particles" claude-particles-body))

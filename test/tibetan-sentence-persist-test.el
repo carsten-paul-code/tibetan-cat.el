@@ -2022,5 +2022,38 @@ the §5.26 silent-loss class via the preserve path)."
             (should (string-match-p "After the emphasis line" r))))
       (when (file-exists-p tmp) (delete-file tmp)))))
 
+(ert-deftest tibetan-sentence-regenerate-roundtrips-l2-claude-vocabulary ()
+  "M6 (Fable-5 audit): the aligned sentence layout writes Claude
+Vocabulary at LEVEL 2 (`** Claude Vocabulary', segment shape), but the
+sentence preserve pass read it only via the L3 reader — a populated
+L2 body was wiped to the placeholder on the next regenerate.  The
+preserve pass must read L2-first (like Concept Notes) and restore to
+the L2 slot."
+  (skip-unless (fboundp 'tibetan-sentence--regenerate))
+  (let* ((dir (make-temp-file "ttest-sent-l2vocab-" t))
+         (path (expand-file-name "sent-002.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file path
+            (insert "#+TITLE: Sentence 2 Analysis\n"
+                    "#+SEGMENTS: 2\n\n"
+                    "* My Notes\n\n"
+                    "* Working Translation\n\n"
+                    "* Tibetan Text\nབདག\n\n"
+                    "* Tibetan Analysis\n\n"
+                    "** Claude Vocabulary\n"
+                    "bdag, pronoun, \"I\", PRESERVE-L2-VOCAB\n\n"
+                    "** Translation\nT body\n\n"
+                    "* Footnotes\n"))
+          (tibetan-sentence--regenerate path 2 '(2) "བདག")
+          (let ((b (get-file-buffer path)))
+            (when b (with-current-buffer b (set-buffer-modified-p nil))
+                  (kill-buffer b)))
+          (with-temp-buffer
+            (insert-file-contents path)
+            (let ((s (buffer-string)))
+              (should (string-match-p "PRESERVE-L2-VOCAB" s)))))
+      (delete-directory dir t))))
+
 (provide 'tibetan-sentence-persist-test)
 ;;; tibetan-sentence-persist-test.el ends here
