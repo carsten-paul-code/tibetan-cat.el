@@ -86,6 +86,24 @@ Returns the full TEXT if no terminator is found at depth zero."
           (cl-incf i)))
       (substring text 0 end))))
 
+(defun tibetan-vocab--split-senses-bracket-aware (text)
+  "Split TEXT into senses at `;' separators that sit at bracket-depth
+zero.  `[]' and `()' nest, so the `;' inside `[Skt; loan]' does NOT
+split (M5, Fable-5 audit).  Returns a list of trimmed senses."
+  (when (and text (stringp text))
+    (let ((senses '()) (depth 0) (start 0) (i 0) (len (length text)))
+      (while (< i len)
+        (let ((c (aref text i)))
+          (cond
+           ((or (= c ?\[) (= c ?\()) (cl-incf depth))
+           ((or (= c ?\]) (= c ?\))) (when (> depth 0) (cl-decf depth)))
+           ((and (= depth 0) (= c ?\;))
+            (push (string-trim (substring text start i)) senses)
+            (setq start (1+ i)))))
+        (cl-incf i))
+      (push (string-trim (substring text start)) senses)
+      (cl-remove-if #'string-empty-p (nreverse senses)))))
+
 (defun tibetan-vocab--mostly-tibetan-p (text)
   "Return non-nil when TEXT is a Tibetan-script EXAMPLE, not a gloss.
 True when TEXT contains at least one Tibetan-block character AND no
@@ -145,17 +163,27 @@ Returns plist with :primary :detailed :sanskrit."
         ;; an actual Latin gloss.  If none exists, keep the example —
         ;; there is nothing better to show.
         (when (and primary (tibetan-vocab--mostly-tibetan-p primary))
-          (let ((latin-sense
-                 (cl-find-if
-                  (lambda (s) (string-match-p "[A-Za-z]" s))
-                  (split-string raw-entry ";" t))))
-            (when latin-sense
-              (setq primary
-                    (tibetan-vocab--first-sense-bracket-aware
-                     (string-trim
-                      (replace-regexp-in-string
-                       "^[0-9]+[.):]\\s-*" "" (string-trim latin-sense)))))
-              (when primary (setq primary (string-trim primary)))))))
+          ;; M5 (Fable-5 audit): iterate the senses (split at depth-0
+          ;; `;' only, so `[Skt; loan]' stays whole) and take the
+          ;; first whose extracted first-sense is a PLAUSIBLE gloss —
+          ;; >= 2 consecutive Latin letters and length >= 3.  A
+          ;; Dan-Martin page ref (`a.ko.194kha' → first-sense "a")
+          ;; fails the filter and the real gloss further on wins.
+          (catch 'found
+            (dolist (sense (tibetan-vocab--split-senses-bracket-aware
+                            raw-entry))
+              (when (string-match-p "[A-Za-z]" sense)
+                (let ((cand (tibetan-vocab--first-sense-bracket-aware
+                             (string-trim
+                              (replace-regexp-in-string
+                               "^[0-9]+[.):]\\s-*" ""
+                               (string-trim sense))))))
+                  (when (and cand
+                             (setq cand (string-trim cand))
+                             (>= (length cand) 3)
+                             (string-match-p "[A-Za-z]\\{2,\\}" cand))
+                    (setq primary cand)
+                    (throw 'found t))))))))
 
       (list :primary (or primary detailed)
             :detailed detailed

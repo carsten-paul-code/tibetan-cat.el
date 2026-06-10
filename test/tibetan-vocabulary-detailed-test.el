@@ -232,5 +232,21 @@ otherwise the surfaces disagree on grouping and term anchors dangle."
                          (tibetan-vocab-extract-detailed "ཡེ་ཤེས་ལ"))))
         (should (member "ཡེ་ཤེས" tib))))))
 
+(ert-deftest tibetan-vocab-parse-entry-fallback-skips-junk-senses ()
+  "M5 (Fable-5 audit): the D1 Latin-sense fallback took the FIRST
+sense containing ANY Latin letter — a Dan-Martin page ref
+(`a.ko.194kha') produced :primary \"a\"; and the plain `;'-split was
+not bracket-aware (`[Skt; loan]' yielded \"[Skt\").  The fallback
+must skip low-quality senses and split senses at depth 0 only."
+  ;; Page-ref sense skipped → real gloss wins.
+  (let ((entry (tibetan-vocab--parse-entry
+                "ས་ཞིང་གསར་པ་རྨོས་པ; a.ko.194kha; ploughing new fields")))
+    (should (string= (plist-get entry :primary) "ploughing new fields")))
+  ;; Bracket-internal `;' does not split the sense.
+  (let ((entry (tibetan-vocab--parse-entry
+                "དཔེར་ན་སྟེ; [Skt; loan] example")))
+    (should (string-match-p "example" (plist-get entry :primary)))
+    (should-not (string= (plist-get entry :primary) "[Skt"))))
+
 (provide 'tibetan-vocabulary-detailed-test)
 ;;; tibetan-vocabulary-detailed-test.el ends here
