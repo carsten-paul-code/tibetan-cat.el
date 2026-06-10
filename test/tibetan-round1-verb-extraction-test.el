@@ -485,8 +485,10 @@ fallback hits).  The renderer uses this tag to filter
 vocab-fallback hits from clause segmentation while keeping
 the curated closed-set verbs that drive real clauses."
   (skip-unless (fboundp 'tibetan-verb-detect--minimal-entry))
-  ;; Closed-set path — `གསོལ' is in the curated minor-verb set.
-  (let ((entry (tibetan-verb-detect--lookup "གསོལ")))
+  ;; Closed-set path — `ཤོར' is in the curated minor-verb set and has
+  ;; no Hill entry.  (The original exemplar གསོལ was PROMOTED to a
+  ;; full Hill entry by the §5.39 corpus-coverage batch.)
+  (let ((entry (tibetan-verb-detect--lookup "ཤོར")))
     (should entry)
     (should (eq (alist-get 'source entry) 'closed-set)))
   ;; Vocab-fallback path — stub a non-curated word with a verbal
