@@ -5103,6 +5103,14 @@ RE-REQUEST-CLAUDE controls Claude / DM request dispatch:
 With DRY-RUN non-nil, return a plist describing what would happen
 without touching the file.  Otherwise return a plist:
   (:file F :seg-id ID :ok BOOL :error STR :claude-preserved BOOL)."
+  ;; H4 (Fable-5 audit): the preserve pass below reads from DISK while
+  ;; the regenerate writes through the visiting buffer.  If the user
+  ;; has UNSAVED edits in that buffer (typing mid-class, then C-c u R
+  ;; or a batch from elsewhere), they would be silently discarded —
+  ;; save them first so the preserve pass sees them.
+  (let ((open (get-file-buffer filepath)))
+    (when (and open (buffer-modified-p open))
+      (with-current-buffer open (save-buffer))))
   (let* ((seg-id (tibetan-analysis--seg-id-from-filename filepath))
          (tibetan-text (tibetan-analysis--read-section-body
                         filepath "Tibetan Text"))

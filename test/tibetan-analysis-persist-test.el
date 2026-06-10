@@ -3273,5 +3273,35 @@ Unknown top-level sections must survive a regenerate verbatim."
       (when (get-file-buffer f) (kill-buffer (get-file-buffer f)))
       (delete-file f))))
 
+(ert-deftest tibetan-analysis-reanalyze-saves-modified-visiting-buffer-first ()
+  "H4 (Fable-5 audit): reanalyze-file read preserved content from DISK
+while a modified visiting buffer existed, then erased + rewrote that
+buffer — silently discarding unsaved edits (typing into a seg buffer
+mid-class, then C-c u R, lost the typed text).  A modified visiting
+buffer must be saved before the preserve pass reads the file."
+  (let* ((dir (make-temp-file "tcat-unsaved" t))
+         (f (expand-file-name "seg-007.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file f
+            (insert "#+TITLE: Segment 7 Analysis\n\n"
+                    "* My Notes\n\n\n"
+                    "* Tibetan Text\nབདག\n\n"
+                    "* Tibetan Analysis\nold\n\n"
+                    "* Footnotes\n\n"))
+          ;; Simulate mid-class typing: edit via the visiting buffer,
+          ;; do NOT save.
+          (with-current-buffer (find-file-noselect f)
+            (goto-char (point-min))
+            (re-search-forward "^\\* My Notes$")
+            (insert "\ntyped mid-class, unsaved"))
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (lambda (&rest _) "** Wylie Transliteration\nbdag\n")))
+            (tibetan-analysis-reanalyze-file f :re-request-claude nil))
+          (let ((s (with-temp-buffer (insert-file-contents f) (buffer-string))))
+            (should (string-match-p "typed mid-class, unsaved" s))))
+      (when (get-file-buffer f) (kill-buffer (get-file-buffer f)))
+      (delete-directory dir t))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

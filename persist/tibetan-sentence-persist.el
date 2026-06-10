@@ -881,6 +881,12 @@ Updates `#+SEGMENTS:' / `#+TIBETAN_HASH:' / `#+LAST_ANALYZED:'."
   ;; ============================================================================
   ;; PRESERVE phase — read everything we need to keep BEFORE rebuilding.
   ;; ============================================================================
+  ;; H4 (Fable-5 audit): the PRESERVE phase below reads from DISK; a
+  ;; modified visiting buffer means unsaved user edits that would be
+  ;; silently discarded by the rebuild.  Flush them to disk first.
+  (let ((open (get-file-buffer filepath)))
+    (when (and open (buffer-modified-p open))
+      (with-current-buffer open (save-buffer))))
   (let* ((user-sections (tibetan-sentence--get-user-sections filepath))
          (trans  (tibetan-sentence--read-translation-bodies filepath))
          ;; Claude Translation:  try level-2 `** Translation' (new
@@ -929,7 +935,9 @@ Updates `#+SEGMENTS:' / `#+TIBETAN_HASH:' / `#+LAST_ANALYZED:'."
                     sent-num seg-nums tibetan-text wylie source-file)))
 
     ;; Close any open buffer on this file so the write doesn't fight a
-    ;; stale visit.
+    ;; stale visit.  H4 (Fable-5 audit): the buffer was flushed to disk
+    ;; at the TOP of this function (before the PRESERVE reads), so a
+    ;; clean kill here cannot lose user edits any more.
     (let ((open (get-file-buffer filepath)))
       (when open
         (with-current-buffer open (set-buffer-modified-p nil))
