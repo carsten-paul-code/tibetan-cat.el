@@ -4877,9 +4877,22 @@ segment > sentence > paragraph > legacy, most-specific-wins."
                          (tibetan-sanskrit-parallel-plist-for-segment-id
                           source-file seg-id)
                        (error nil))))
+               ;; M7 (Fable-5 audit): read existing Claude bodies so
+               ;; they can be restored after the rewrite — the
+               ;; explicit-refresh path used to wipe them to
+               ;; placeholders while the replacement was still an
+               ;; unconfirmed async request.
+               (existing-sections
+                (tibetan-analysis--read-claude-sections filepath))
                (auto-content (tibetan-analysis-generate-content
                               tibetan-text seg-id source-text)))
           (tibetan-analysis-regenerate-auto filepath tibetan-text auto-content)
+          (when (and existing-sections
+                     (cl-some (lambda (k) (plist-get existing-sections k))
+                              '(:translation :grammar :particles
+                                :concepts :vocabulary)))
+            (tibetan-analysis--restore-claude-sections
+             filepath existing-sections))
           ;; Refresh the buffer if it's open
           (let ((buf (get-file-buffer filepath)))
             (when buf
@@ -5224,12 +5237,17 @@ without touching the file.  Otherwise return a plist:
          ;; Carsten's Milarepa folder on 2026-05-24:  274 of 287
          ;; seg-NNN.org files lost their Claude content).
          ;;
-         ;; Now:  preserve UNLESS re-request-claude is the symbol
-         ;; `t' (force-refresh).  `nil' and `:missing-only' both
-         ;; preserve.
+         ;; Now (M7, Fable-5 audit 2026-06-04):  preserve ALWAYS —
+         ;; including under force-refresh `t'.  Wiping to a
+         ;; placeholder before the async replacement is confirmed was
+         ;; the §5.26 failure amplifier on the explicit path:
+         ;; rate-limits / failure stubs / quitting Emacs mid-queue
+         ;; left the slot empty.  The arriving response simply
+         ;; OVERWRITES the restored old content; until then the user
+         ;; keeps the previous translation instead of a placeholder.
+         ;; RE-REQUEST-CLAUDE now only governs FIRING (below).
          (existing-sections
-          (and (not (eq re-request-claude t))
-               (tibetan-analysis--read-claude-sections filepath)))
+          (tibetan-analysis--read-claude-sections filepath))
          (has-any-section
           (and existing-sections
                (or (plist-get existing-sections :translation)

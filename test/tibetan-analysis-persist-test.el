@@ -3438,5 +3438,38 @@ NPs must appear on the fallback `NP:' line."
     ;; …and the GEN possessor is STILL LISTED (fallback NP line).
     (should (string-match-p "རྔོག" structure))))
 
+(ert-deftest tibetan-analysis-force-refresh-keeps-old-claude-until-response ()
+  "M7 (Fable-5 audit): under re-request-claude = t the old code wiped
+Claude bodies to placeholders at regenerate time, BEFORE the async
+replacement was confirmed — rate-limits / failure stubs / quitting
+Emacs mid-queue then left the slot empty (the §5.26 failure
+amplifier, retained on the explicit-force path).  Existing content
+must be restored after the rewrite; the arriving response overwrites
+it."
+  (let* ((dir (make-temp-file "tcat-force" t))
+         (f (expand-file-name "seg-005.org" dir))
+         (fired nil))
+    (unwind-protect
+        (progn
+          (with-temp-file f
+            (insert "#+TITLE: Segment 5 Analysis\n\n"
+                    "* Tibetan Text\nབདག\n\n"
+                    "* Tibetan Analysis\n"
+                    "** Translation\nOLD-CLAUDE-TRANSLATION\n\n"
+                    "* Footnotes\n\n"))
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (lambda (&rest _)
+                       "** Wylie Transliteration\nbdag\n\n** Translation\n[Awaiting Claude…]\n"))
+                    ((symbol-function 'tibetan-analysis--request-claude-translation)
+                     (lambda (&rest _) (setq fired t)))
+                    ((symbol-function 'tibetan-dharmamitra-translation-fire-for-segment)
+                     (lambda (&rest _) nil)))
+            (tibetan-analysis-reanalyze-file f :re-request-claude t))
+          (should fired)
+          (let ((s (with-temp-buffer (insert-file-contents f) (buffer-string))))
+            (should (string-match-p "OLD-CLAUDE-TRANSLATION" s))))
+      (when (get-file-buffer f) (kill-buffer (get-file-buffer f)))
+      (delete-directory dir t))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
