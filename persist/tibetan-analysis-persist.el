@@ -1682,7 +1682,7 @@ by the rewrite pass)."
             (let* ((body-start (point))
                    (body-end (save-excursion
                                (if (re-search-forward
-                                    "^\\*\\{1,2\\}[^*\n]\\|^\\* " parent-end t)
+                                    "^\\*\\{1,2\\} " parent-end t)
                                    (line-beginning-position)
                                  parent-end)))
                    (body (string-trim
@@ -1726,7 +1726,7 @@ if desired (one-shot manual sweep)."
             (let* ((body-start (point))
                    (body-end (save-excursion
                                (if (re-search-forward
-                                    "^\\*\\{1,2\\}[^*\n]\\|^\\* " parent-end t)
+                                    "^\\*\\{1,2\\} " parent-end t)
                                    (line-beginning-position)
                                  parent-end)))
                    (body (string-trim
@@ -1775,7 +1775,7 @@ Pre-conditions:
               (let ((body-start (point))
                     (body-end (save-excursion
                                 (if (re-search-forward
-                                     "^\\*\\{1,2\\}[^*\n]\\|^\\* "
+                                     "^\\*\\{1,2\\} "
                                      parent-end t)
                                     (line-beginning-position)
                                   parent-end))))

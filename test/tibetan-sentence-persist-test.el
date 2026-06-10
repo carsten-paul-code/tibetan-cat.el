@@ -1991,5 +1991,36 @@ sources analysed without the new header are unchanged."
   (interactive)
   (ert-run-tests-interactively "^tibetan-sentence-"))
 
+(ert-deftest tibetan-sentence-read-bodies-keep-bold-lines ()
+  "C1 (Fable-5 audit): the sentence body readers must not truncate at a
+markdown-bold `**Clause 1:**' line (live trigger: MA Reading
+sent-001.org, whose Claude Grammar carries three such paragraphs —
+the §5.26 silent-loss class via the preserve path)."
+  (let ((tmp (make-temp-file "sent-bold-" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp
+            (insert "* Tibetan Analysis\n"
+                    "** Grammar\n"
+                    "*** Claude Grammar\n"
+                    "Intro line.\n\n"
+                    "**Clause 1 (subordinate):** the verb is X.\n\n"
+                    "**Clause 2:** the verb is Y.\n"
+                    "Tail line.\n"
+                    "** Provided Translations\n"
+                    "*** Roehrich\n"
+                    "*B reads* otherwise.\n"
+                    "After the emphasis line.\n"))
+          (let ((g (tibetan-sentence--read-third-level-body
+                    tmp "Claude Grammar")))
+            (should g)
+            (should (string-match-p "Clause 2" g))
+            (should (string-match-p "Tail line" g))
+            (should-not (string-match-p "Roehrich" g)))
+          (let ((r (tibetan-sentence--read-third-level-body tmp "Roehrich")))
+            (should r)
+            (should (string-match-p "After the emphasis line" r))))
+      (when (file-exists-p tmp) (delete-file tmp)))))
+
 (provide 'tibetan-sentence-persist-test)
 ;;; tibetan-sentence-persist-test.el ends here

@@ -1848,9 +1848,15 @@ list so levels stay consistent everywhere.")
 
 (defun tibetan-analysis--claude-stop-re (level)
   "Regexp matching the start of any heading at org LEVEL or shallower."
-  ;; `*\\{1,N\\}' plus a mandatory non-`*' follower so `**' doesn't
-  ;; match inside `***'.
-  (format "^\\*\\{1,%d\\}[^*\n]" level))
+  ;; Stars then a MANDATORY SPACE: real org headings are `*+ Title'.
+  ;; The space (a) keeps `**' from matching inside `***' (backtracking
+  ;; finds no space after either star run) and (b) — C1, Fable-5 audit
+  ;; 2026-06-04 — keeps markdown-bold `**Clause 1:**' / org-emphasis
+  ;; `*sic*' BODY lines from being mistaken for headings.  The previous
+  ;; `[^*\n]' follower matched those, truncating every preserve-side
+  ;; reader at the first such line; preserve-mode reanalyze then
+  ;; destroyed the section tail (§5.26 data-loss class).
+  (format "^\\*\\{1,%d\\} " level))
 
 (defun tibetan-analysis--claude-segment-layout-p (buffer)
   "Return non-nil if BUFFER uses the segment-level analysis layout.

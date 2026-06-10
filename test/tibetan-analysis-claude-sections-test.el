@@ -1475,5 +1475,51 @@ module isn't loaded — silent fall-through."
         (should-not (tibetan-analysis--collect-zettel-references "བདག"))
       (defun tibetan-thesaurus-lookup (_) nil))))
 
+;; ============================================================================
+;; C1 (Fable-5 audit, 2026-06-04): section-body bounds must not stop at
+;; markdown-bold / org-emphasis lines.  `^\*{1,N}[^*\n]' matched `**Bold:'
+;; and `*emphasis*', truncating every preserve-side reader at the first
+;; such body line — preserve-mode reanalyze then destroyed the tail
+;; (the §5.26 data-loss class; live trigger: MA Reading sent-001.org).
+;; ============================================================================
+
+(ert-deftest tibetan-claude-stop-re-ignores-bold-and-emphasis-lines ()
+  "The stop regexp matches real org headings (stars + space) only —
+never `**bold' or `*emphasis' body lines."
+  (let ((re (tibetan-analysis--claude-stop-re 2)))
+    ;; Real headings match.
+    (should (string-match-p re "* My Notes"))
+    (should (string-match-p re "** Translation"))
+    ;; A deeper heading must NOT match a level-2 stop.
+    (should-not (string-match-p re "*** Claude Grammar"))
+    ;; Markdown-bold / org-emphasis body lines must NOT match.
+    (should-not (string-match-p re "**Clause 1 (subordinate):** text"))
+    (should-not (string-match-p re "*correction* maybe"))))
+
+(ert-deftest tibetan-claude-sections-roundtrip-body-with-bold-lines ()
+  "A Claude Translation body containing `**bold' and `*emphasis' lines
+is read back IN FULL by --read-claude-sections (no truncation)."
+  (let ((f (make-temp-file "seg-bold" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file f
+            (insert "#+TITLE: Segment 1 Analysis\n\n"
+                    "* Tibetan Analysis\n"
+                    "** Translation\n"
+                    "First line of the translation.\n"
+                    "**Register note:** honorific throughout.\n"
+                    "*sic* in the manuscript.\n"
+                    "Last line after the bold.\n"
+                    "** Grammar\n"
+                    "grammar body\n"))
+          (let* ((p (tibetan-analysis--read-claude-sections f))
+                 (tr (plist-get p :translation)))
+            (should tr)
+            (should (string-match-p "Register note" tr))
+            (should (string-match-p "Last line after the bold" tr))
+            ;; And the next section was not swallowed.
+            (should-not (string-match-p "grammar body" tr))))
+      (delete-file f))))
+
 (provide 'tibetan-analysis-claude-sections-test)
 ;;; tibetan-analysis-claude-sections-test.el ends here

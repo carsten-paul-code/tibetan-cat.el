@@ -323,7 +323,7 @@ Skips placeholder text so we don't carry empty scaffolding around."
         (let* ((start (point))
                (end (save-excursion
                       (if (re-search-forward
-                           "^\\*\\*\\*\\|^\\*\\*[^*]\\|^\\* " nil t)
+                           "^\\*\\{1,3\\} " nil t)
                           (line-beginning-position)
                         (point-max))))
                (body (string-trim
@@ -600,7 +600,7 @@ sentence-only entries don't get clobbered)."
         ;; subtree:  next ^** OR ^* OR end-of-buffer.
         (let* ((pt-body-start (progn (forward-line 1) (point)))
                (pt-end (save-excursion
-                         (or (and (re-search-forward "^\\*\\{1,2\\}[^*\n]"
+                         (or (and (re-search-forward "^\\*\\{1,2\\} "
                                                      nil t)
                                   (line-beginning-position))
                              (point-max))))
@@ -786,7 +786,7 @@ a placeholder."
         (let* ((start (point))
                (end (save-excursion
                       (if (re-search-forward
-                           "^\\*\\{1,2\\}[^*\n]\\|^\\* " nil t)
+                           "^\\*\\{1,2\\} " nil t)
                           (line-beginning-position)
                         (point-max))))
                (body (string-trim
@@ -810,7 +810,7 @@ Heading must already exist in the buffer."
         (let ((start (point))
               (end (save-excursion
                      (if (re-search-forward
-                          "^\\*\\{1,3\\}[^*\n]\\|^\\* " nil t)
+                          "^\\*\\{1,3\\} " nil t)
                          (line-beginning-position)
                        (point-max)))))
           (delete-region start end)
@@ -828,7 +828,7 @@ Heading must already exist in the buffer."
         (let ((start (point))
               (end (save-excursion
                      (if (re-search-forward
-                          "^\\*\\{1,2\\}[^*\n]\\|^\\* " nil t)
+                          "^\\*\\{1,2\\} " nil t)
                          (line-beginning-position)
                        (point-max)))))
           (delete-region start end)
