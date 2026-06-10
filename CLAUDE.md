@@ -3037,6 +3037,29 @@ the sentence create/reanalyze sites all try the dispatcher first; a
 claim suppresses BOTH per-segment fires; multi-seg sentences retire
 the sent file's separate Claude call (one call feeds both file kinds).
 
+**Milarepa re-fire (2026-06-10, complete)**: 57 multi-seg sentences
+(17 + 40 resumed) + 28 single-seg segments + 18 per-segment fills for
+sub-translations Claude skipped in the longest responses — all queue
+jobs succeeded, 0 failed.  Final corpus: 0 placeholder translations
+(3 apparent ones are REAL translations opening with editorial
+brackets, e.g. "[He] spoke…"), 254 children with sentence-context
+labels, 0 missing-segment stubs, 162 ★ Resources intact.  seg-097's
+"hand-mill turning" hallucination is GONE (sentence context →
+"farm work, work in the fields").  Pre-fire backups: buddhist-studies
+git snapshot + `analysis-backup-pre-sentence-first/` (keep until
+class-verified).
+
+**Live-run lesson (fixed mid-operation)**: the response fan-out
+originally ran INSIDE gptel's curl process sentinel — landing N
+children + the auto-regen cascade there corrupted gptel's
+process-buffer parsing ("Search failed: <boundary>") and the batch
+emacs died mid-queue (exit 255; no content lost — M7 restore-first).
+Fix: the callback only schedules the fan-out via `run-at-time 0`.
+Corollary for drivers: drain loops must use `sit-for` (runs timers),
+not `sleep-for` — the deferred fan-out and the DM stagger live on the
+timer queue.  The resume driver keyed off the `(Sentence N —
+segments…)' label to fire only not-yet-landed sentences.
+
 Deferred: ±1 surrounding-sentence context; parallel-Sanskrit
 sentence-first; response-truncation mitigation (visible as missing
 stubs); the multi-child auto-regen cascade.
