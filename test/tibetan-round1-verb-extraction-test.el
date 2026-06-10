@@ -367,7 +367,7 @@ verdict are now consistent.
 Lock-down for the live-test bug spotted on 2026-04-30: the
 section disagreement (Verb Class said no verbs, Sentence
 Structure said `verb སྡོམ' / `verb རྣམས') is gone."
-  (skip-unless (fboundp 'tibetan-analysis--render-clause-structure))
+  (skip-unless (fboundp 'tibetan-analysis--render-sentence-tree))
   (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
   (skip-unless (fboundp 'tibetan-parse-enhanced))
   (let* ((seg "སྡོམ་ལ་། གཞི་དང་རྟགས་དང་ཕྱོགས་རྣམས་དང་༎")
@@ -375,15 +375,15 @@ Structure said `verb སྡོམ' / `verb རྣམས') is gone."
          (words (alist-get 'words parsed))
          (mwu (alist-get 'multiword-units parsed))
          (verbs (tibetan-extract-verbs-compound-aware seg words mwu))
-         (rendered (tibetan-analysis--render-clause-structure
+         (rendered (tibetan-analysis--render-sentence-tree
                     words verbs mwu)))
     ;; Either no clauses at all (empty / `[No clause structure detected]')
     ;; or — defensively — no clause lines mentioning sdom or rnams as
     ;; the verb.  The looser check tolerates future tokenisation
     ;; changes that might still find some clause but should never
     ;; head one with sdom/rnams.
-    (should-not (string-match-p "verb སྡོམ"  rendered))
-    (should-not (string-match-p "verb རྣམས"  rendered))))
+    (should-not (string-match-p "VERB: སྡོམ"  rendered))
+    (should-not (string-match-p "VERB: རྣམས"  rendered))))
 
 (ert-deftest tibetan-round1-uddana-verse-line-2-no-clause-structure ()
   "Seg-006 uddāna line 2: `ལྷག་པའི་བསམ་དང་གནས་པ་དང་༎'
@@ -391,7 +391,7 @@ Structure said `verb སྡོམ' / `verb རྣམས') is gone."
 seg-005 — no finite verb.  Sentence Structure should not
 fabricate clause heads from `ལྷག' / `བསམ' / `གནས' (any of
 which have polysemous Bialek verb glosses)."
-  (skip-unless (fboundp 'tibetan-analysis--render-clause-structure))
+  (skip-unless (fboundp 'tibetan-analysis--render-sentence-tree))
   (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
   (skip-unless (fboundp 'tibetan-parse-enhanced))
   (let* ((seg "ལྷག་པའི་བསམ་དང་གནས་པ་དང་༎")
@@ -399,11 +399,11 @@ which have polysemous Bialek verb glosses)."
          (words (alist-get 'words parsed))
          (mwu (alist-get 'multiword-units parsed))
          (verbs (tibetan-extract-verbs-compound-aware seg words mwu))
-         (rendered (tibetan-analysis--render-clause-structure
+         (rendered (tibetan-analysis--render-sentence-tree
                     words verbs mwu)))
-    (should-not (string-match-p "verb ལྷག"  rendered))
-    (should-not (string-match-p "verb བསམ"  rendered))
-    (should-not (string-match-p "verb གནས"  rendered))))
+    (should-not (string-match-p "VERB: ལྷག"  rendered))
+    (should-not (string-match-p "VERB: བསམ"  rendered))
+    (should-not (string-match-p "VERB: གནས"  rendered))))
 
 (ert-deftest tibetan-round1-uddana-verse-line-3-no-clause-structure ()
   "Seg-007 uddāna line 3: `སྐྱེ་དང་ཡོངས་སུ་འཛིན་དང་ས་༎'
@@ -422,7 +422,7 @@ genuine ambiguity that's beyond the scope of this commit.
 Treats as a known limitation: full uddāna-verse disambiguation
 \(skye-noun vs skye-verb in topic position) requires
 context-aware POS tagging not yet implemented."
-  (skip-unless (fboundp 'tibetan-analysis--render-clause-structure))
+  (skip-unless (fboundp 'tibetan-analysis--render-sentence-tree))
   (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
   (skip-unless (fboundp 'tibetan-parse-enhanced))
   (let* ((seg "སྐྱེ་དང་ཡོངས་སུ་འཛིན་དང་ས་༎")
@@ -430,14 +430,14 @@ context-aware POS tagging not yet implemented."
          (words (alist-get 'words parsed))
          (mwu (alist-get 'multiword-units parsed))
          (verbs (tibetan-extract-verbs-compound-aware seg words mwu))
-         (rendered (tibetan-analysis--render-clause-structure
+         (rendered (tibetan-analysis--render-sentence-tree
                     words verbs mwu)))
     ;; The bare topic-marker `ས' is a locative particle, never a verb.
     (should-not (string-match-p "verb ས "  rendered))
-    (should-not (string-match-p "verb ས$"  rendered))
+    (should-not (string-match-p "VERB: ས$"  rendered))
     ;; `ཡོངས' (yongs, `complete') is a quantifier / adjective, never
     ;; a verb head.
-    (should-not (string-match-p "verb ཡོངས" rendered))))
+    (should-not (string-match-p "VERB: ཡོངས" rendered))))
 
 (ert-deftest tibetan-round1-uddana-verse-line-4-with-copula-yin ()
   "Seg-008 uddāna line 4: `སྤྱོད་དང་རབ་གནས་ཐ་མ་ཡིན་༎'
@@ -459,7 +459,7 @@ as a Hill-DB verb at extraction time.
 
 Steinert-gated — `མ་ཡིན' / `རབ་གནས' Steinert lookups are
 needed to reproduce the bug pre-fix and the fix's effect."
-  (skip-unless (fboundp 'tibetan-analysis--render-clause-structure))
+  (skip-unless (fboundp 'tibetan-analysis--render-sentence-tree))
   (skip-unless (fboundp 'tibetan-extract-verbs-compound-aware))
   (skip-unless (fboundp 'tibetan-parse-enhanced))
   (skip-unless (and (fboundp 'tibetan-steinert-available-p)
@@ -469,11 +469,11 @@ needed to reproduce the bug pre-fix and the fix's effect."
          (words (alist-get 'words parsed))
          (mwu (alist-get 'multiword-units parsed))
          (verbs (tibetan-extract-verbs-compound-aware seg words mwu))
-         (rendered (tibetan-analysis--render-clause-structure
+         (rendered (tibetan-analysis--render-sentence-tree
                     words verbs mwu))
          (lemmas (mapcar (lambda (v) (alist-get 'lemma v)) verbs)))
     ;; Topic nouns must NOT be promoted to verb heads.
-    (should-not (string-match-p "verb སྤྱོད" rendered))
+    (should-not (string-match-p "VERB: སྤྱོད" rendered))
     ;; The copula must now be detected.
     (should (member "ཡིན" lemmas))))
 

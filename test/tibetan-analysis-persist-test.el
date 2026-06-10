@@ -1314,119 +1314,56 @@ deep-particle-strip path (strip past the bare nominaliser `པ')."
 ;; `tibetan-analyze-round2' via `tibetan-analysis--render-clause-structure'.
 ;; It is gated on `tibetan-analysis-show-clause-structure' (defaults to t).
 
-(ert-deftest tibetan-analysis-render-clause-structure-empty-inputs ()
+(ert-deftest tibetan-analysis-render-sentence-tree-empty-inputs ()
   "No words / no verbs → empty string.  Must NOT throw."
-  (should (string= "" (tibetan-analysis--render-clause-structure
-                       nil nil nil)))
-  (should (string= "" (tibetan-analysis--render-clause-structure
+  (should (string= "" (tibetan-analysis--render-sentence-tree nil nil nil)))
+  (should (string= "" (tibetan-analysis--render-sentence-tree
                        '("གཞིས") nil nil))))
 
-(ert-deftest tibetan-analysis-render-clause-structure-no-analysis ()
-  "If `tibetan-analyze-round2' produces no clauses, render a
-placeholder rather than an empty string, so the section is obviously
-present-but-idle in the output."
-  (cl-letf (((symbol-function 'tibetan-analyze-round2)
-             (lambda (_w _v &optional _m)
-               '((clauses . nil) (nps . nil)
-                 (argument-structure . nil)))))
-    (let ((out (tibetan-analysis--render-clause-structure
-                '("ཡུལ") '(((lemma . "ཡུལ"))) nil)))
-      (should (string-match-p "No clause structure" out)))))
+(ert-deftest tibetan-analysis-render-sentence-tree-no-analysis ()
+  "If the tree builder yields nothing, render a visible placeholder."
+  (cl-letf (((symbol-function 'tibetan-analyze-sentence)
+             (lambda (&rest _) nil)))
+    (should (string-match-p "No clause structure"
+                            (tibetan-analysis--render-sentence-tree
+                             '("ཡུལ") '(((lemma . "ཡུལ"))) nil)))))
 
-(ert-deftest tibetan-analysis-render-clause-structure-happy-path ()
-  "Single main-clause scenario: renders a `Clause 1 [main]: verb …' line
-and any NPs found inside the clause, each routed through the
-`SCRIPT [wylie]' formatter."
-  (let* ((verb-entry `((lemma . "སླེབ")
-                       (meaning . "to arrive, to reach")))
-         (np         `((start . 0) (end . 1)
-                       (head . "ཀོ་རོན་ས")
-                       (case . TERM)))
-         (clause     `((start . 0) (end . 2)
-                       (type . main)
-                       (converb-type . nil)
-                       (converb-particle . nil)
-                       (verb . ,verb-entry)))
-         (r2         `((clauses . (,clause))
-                       (nps . (,np))
-                       (argument-structure
-                        . (((clause . ,clause)
-                            (verb . ,verb-entry)
-                            (case-frame . "Abs-Term")
-                            (arguments
-                             . (((role . goal)
-                                 (np . ,np))))))))))
-    (cl-letf (((symbol-function 'tibetan-analyze-round2)
-               (lambda (_w _v &optional _m) r2))
-              ((symbol-function 'tibetan-to-wylie-fixed)
-               (lambda (w) (cond ((string= w "སླེབ") "sleb")
-                                 ((string= w "ཀོ་རོན་ས") "ko ron sa")
-                                 (t w)))))
-      (let ((out (tibetan-analysis--render-clause-structure
-                  '("ཀོ་རོན་ས" "སླེབ") (list verb-entry) nil)))
-        (should (string-match-p "Clause 1 \\[main\\]" out))
-        (should (string-match-p "verb སླེབ \\[sleb\\]" out))
-        ;; Role rendered as a class-facing label with the full NP.
-        (should (string-match-p "GOAL (TERM): ཀོ་རོན་ས \\[ko ron sa\\]" out))))))
+(ert-deftest tibetan-analysis-render-sentence-tree-happy-path ()
+  "End-to-end on the rngog sentence: MAIN VERB header with frame,
+elided subject line, TERM adjunct with its GEN possessor nested."
+  (skip-unless (and (fboundp 'tibetan-verb-lookup)
+                    (tibetan-verb-lookup "འགྲོ")))
+  (let ((out (tibetan-analysis--render-sentence-tree
+              '("རྔོག" "གི" "དྲུང" "དུ" "ཕྱིན" "ནས")
+              (list '((lemma . "འགྲོ") (source-pos . 4)
+                      (meaning . "to go")))
+              nil)))
+    (should (string-match-p "^MAIN VERB: འགྲོ" out))
+    (should (string-match-p "(Abs)" out))
+    (should (string-match-p "SUBJECT (ABS): — \\[elided\\]" out))
+    (should (string-match-p "ADJUNCT — TERM: དྲུང" out))
+    (should (string-match-p "POSSESSOR (GEN): རྔོག" out))
+    ;; C1 lesson: no line may start with `*'.
+    (should-not (string-match-p "^\\*" out))))
 
-(ert-deftest tibetan-analysis-render-clause-structure-labels-subject-object ()
-  "A transitive clause renders explicit SUBJECT / DIRECT OBJECT labels
-\(subject before object), each showing the full noun phrase — the
-class-facing structure view."
-  (let* ((verb-entry `((lemma . "བྱེད")
-                       (meaning . "to do, to make")
-                       (transitivity . "Transitive")
-                       (case_frame . "Erg-Abs")))
-         (subj `((start . 0) (end . 1) (head . "བདག") (case . ERG)))
-         (obj  `((start . 1) (end . 2) (head . "ཆོས") (case . nil)))
-         (clause `((start . 0) (end . 3)
-                   (type . main) (converb-type . nil) (converb-particle . nil)
-                   (verb . ,verb-entry)))
-         (r2 `((clauses . (,clause))
-               (nps . (,subj ,obj))
-               (argument-structure
-                . (((clause . ,clause)
-                    (verb . ,verb-entry)
-                    (case-frame . "Erg-Abs")
-                    (arguments . (((role . agent) (np . ,subj))
-                                  ((role . patient) (np . ,obj))))))))))
-    (cl-letf (((symbol-function 'tibetan-analyze-round2)
-               (lambda (_w _v &optional _m) r2))
-              ((symbol-function 'tibetan-to-wylie-fixed)
-               (lambda (w) (cond ((string= w "བྱེད") "byed")
-                                 ((string= w "བདག") "bdag")
-                                 ((string= w "ཆོས") "chos")
-                                 (t w)))))
-      (let* ((out (tibetan-analysis--render-clause-structure
-                   '("བདག" "ཆོས" "བྱེད") (list verb-entry) nil))
-             (subj-pos (string-match "SUBJECT (ERG): བདག" out))
-             (obj-pos  (string-match "DIRECT OBJECT (ABS): ཆོས" out)))
-        (should subj-pos)
-        (should obj-pos)
-        ;; Subject listed before object.
-        (should (< subj-pos obj-pos))))))
-
-(ert-deftest tibetan-analysis-render-clause-structure-dependent-shows-converb ()
-  "A dependent clause shows the converb particle that licenses it."
-  (let* ((verb-entry `((lemma . "འཐོན")))
-         (clause     `((start . 0) (end . 1)
-                       (type . dependent)
-                       (converb-type . coordinative)
-                       (converb-particle . "ཏེ")
-                       (verb . ,verb-entry)))
-         (r2         `((clauses . (,clause))
-                       (nps . nil)
-                       (argument-structure . nil))))
-    (cl-letf (((symbol-function 'tibetan-analyze-round2)
-               (lambda (_w _v &optional _m) r2))
-              ((symbol-function 'tibetan-to-wylie-fixed)
-               (lambda (w) (cond ((string= w "འཐོན") "'thon")
-                                 ((string= w "ཏེ") "te")
-                                 (t w)))))
-      (let ((out (tibetan-analysis--render-clause-structure
-                  '("འཐོན" "ཏེ") (list verb-entry) nil)))
-        (should (string-match-p "Clause 1 \\[dependent · ཏེ \\[te\\]" out))
-        (should (string-match-p "verb འཐོན" out))))))
+(ert-deftest tibetan-analysis-render-sentence-tree-causative-complement ()
+  "The bcug flagship renders the agent at the matrix level and the
+byed complement NESTED — and bla-ma appears on no OBJECT/CAUSEE line."
+  (skip-unless (and (fboundp 'tibetan-verb-lookup)
+                    (tibetan-verb-lookup "འཇུག")))
+  (let ((out (tibetan-analysis--render-sentence-tree
+              '("བླ་མ" "མར" "པས" "ལས་ཀ" "བྱེད" "དུ" "བཅུག")
+              (list '((lemma . "བྱེད") (source-pos . 4)
+                      (meaning . "to do"))
+                    '((lemma . "འཇུག") (source-pos . 6)
+                      (meaning . "to cause")))
+              nil)))
+    (should (string-match-p "^MAIN VERB: འཇུག" out))
+    (should (string-match-p "AGENT (ERG): བླ་མ་མར་པ" out))
+    (should (string-match-p "COMPLEMENT VERB: བྱེད" out))
+    ;; bla-ma never on an object/causee line.
+    (should-not (string-match-p
+                 "\\(OBJECT\\|CAUSEE\\)[^:\n]*: [^\n]*བླ་མ" out))))
 
 (ert-deftest tibetan-analysis-show-clause-structure-is-defcustom ()
   "The clause-structure section must be user-configurable (per P2)."
@@ -1786,14 +1723,17 @@ Sentence-Structure regexes match a role label line and a clause verb."
                                                 (match-end 0))))
       ;; No further Tibetan run after the match.
       (should-not (tibetan-analysis--tibetan-script-matcher (point-max))))
-    ;; Structure keywords: role label + clause-verb.
+    ;; Structure keywords: role label + verb-header lines (verb-first
+    ;; tree layout).
     (let* ((kws tibetan-analysis--structure-font-lock-keywords)
            (label-re (car (nth 0 kws)))
            (verb-re  (car (nth 1 kws))))
-      (should (string-match-p label-re "    SUBJECT (ERG): བདག"))
-      (should (string-match-p label-re "    DIRECT OBJECT (ABS): ཆོས"))
+      (should (string-match-p label-re "  AGENT (ERG): བདག"))
+      (should (string-match-p label-re "  ADJUNCT — ABL: འཁར"))
+      (should (string-match-p label-re "    POSSESSOR (GEN): རྔོག"))
       (should-not (string-match-p label-re "    NPs without colon "))
-      (should (string-match-p verb-re "Clause 1 [main]: verb བྱེད [byed]")))))
+      (should (string-match-p verb-re "MAIN VERB: བྱེད [byed]"))
+      (should (string-match-p verb-re "  COMPLEMENT VERB: བྱེད [byed]")))))
 
 (ert-deftest tibetan-analysis-particle-skeleton-no-spurious-zero-on-overt-ergative ()
   "The particle skeleton must NOT stamp `Ø' before a transitive verb when

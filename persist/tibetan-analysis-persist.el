@@ -33,6 +33,7 @@
 ;; falls back to Portfolio-only when the lookup returns nil.
 (require 'tibetan-bialek-textbook-refs nil t)
 (require 'tibetan-interlinear nil t)
+(require 'tibetan-sentence-tree nil t)
 ;; Round-2 (clauses + NPs + argument structure) — used by the
 ;; `** Clause Structure' section.  Soft-required so a missing module
 ;; does not break analysis-file generation; the renderer falls back
@@ -731,18 +732,16 @@ when no further term is found before LIMIT."
 Vocabulary entry (2026-06-03).")
 
 (defconst tibetan-analysis--structure-font-lock-keywords
-  ;; Role-based highlighting for the Sentence Structure section.
-  '(;; SUBJECT / OBJECT / oblique role labels (+ leading NP fallback).
-    ("^    \\(SUBJECT\\|DIRECT OBJECT\\|INDIRECT OBJECT\\|LOCATIVE\\|GOAL\\|SOURCE\\|INSTRUMENT\\|COMITATIVE\\|NP\\)[^:\n]*:"
+  ;; Verb-headed tree layout (verb-first redesign): role labels at
+  ;; variable indent, verb lines keyed on MAIN VERB / COMPLEMENT VERB
+  ;; / VERB headers.
+  '(("^[ \t]+\\(?:AGENT\\|SUBJECT\\|OBJECT\\|CAUSEE\\|INDIRECT OBJECT\\|PREDICATE\\|LOCATIVE\\|GOAL\\|SOURCE\\|POSSESSOR\\|ADJUNCT\\)[^:\n]*:"
      (0 'tibetan-analysis-structure-role-face prepend))
-    ;; The verb in a clause header: `Clause N [...]: verb LEMMA'.
-    ;; Capture the lemma as a non-space run (NOT a `[ༀ-࿿]' char-range,
-    ;; which font-lock drops as a string matcher) up to the ` [wylie]'.
-    ("Clause [0-9]+ \\[[^]]*\\]: verb \\([^ \n]+\\)"
+    ("^[ \t]*\\(?:MAIN VERB\\|COMPLEMENT VERB\\|VERB\\): \\([^ \n]+\\)"
      (1 'tibetan-analysis-verb-face prepend)))
-  "Font-lock keywords for the Sentence Structure section (2026-06-02):
-SUBJECT / OBJECT / oblique labels in green-bold, the clause verb in
-blue-bold, so the argument skeleton is scannable in class.")
+  "Font-lock keywords for the Sentence Structure section: role labels
+in green-bold, the head verbs in blue-bold, so the argument skeleton
+is scannable in class.")
 
 (defun tibetan-analysis-setup-faces ()
   "Setup faces for analysis buffers.
@@ -2349,127 +2348,107 @@ still be classified as a whole.  Returns the `type' field (index
   (or (cdr (assq role tibetan-analysis--role-labels))
       (and role (upcase (symbol-name role)))))
 
-(defun tibetan-analysis--render-clause-structure (words verbs multiword-units)
-  "Return a string rendering of Round-2 clause structure for insertion
-into the `** Clause Structure' section, or an empty string when no
-analysis is available.
+(defconst tibetan-analysis--tree-role-labels
+  '((agent      . "AGENT (ERG)")
+    (subject    . "SUBJECT (ABS)")
+    (patient    . "OBJECT (ABS)")
+    (causee     . "CAUSEE (ABS)")
+    (recipient  . "INDIRECT OBJECT (DAT)")
+    (predicate  . "PREDICATE (ABS)")
+    (location   . "LOCATIVE (LOC)")
+    (goal       . "GOAL (TERM)")
+    (source     . "SOURCE (ABL)")
+    (complement . "COMPLEMENT (TERM/LOC)"))
+  "Class-facing labels for the verb-headed tree's argument slots.")
 
-Uses `tibetan-analyze-round2' (clauses + NPs + argument structure).
-Compact per-clause layout:
+(defun tibetan-analysis--tree-np-string (np)
+  "Render NP's head as `SCRIPT [wylie]'."
+  (tibetan-analysis--format-word-with-wylie (alist-get 'head np)))
 
-  Clause N [main|dependent · PARTICLE]: verb LEMMA [wylie] — meaning
-    NPs: HEAD1 [wylie] (CASE), HEAD2 [wylie] (CASE), …
-    Roles: role1 → HEAD1, role2 → HEAD2, …   (only when resolvable)
+(defun tibetan-analysis--render-tree-node (tree indent header)
+  "Render TREE (a `tibetan-analyze-sentence' node) at INDENT spaces.
+HEADER is the verb line's label (\"MAIN VERB\", \"COMPLEMENT VERB\",
+\"VERB\").  Never emits a line starting with `*' (C1 lesson)."
+  (let* ((pad (make-string indent ?\s))
+         (verb (plist-get tree :verb))
+         (lemma (alist-get 'lemma verb))
+         (meaning (alist-get 'meaning verb))
+         (frame (plist-get tree :frame))
+         (out ""))
+    (setq out
+          (format "%s%s: %s%s%s\n" pad header
+                  (if lemma
+                      (tibetan-analysis--format-word-with-wylie lemma)
+                    "?")
+                  (if (and meaning (not (string-empty-p meaning)))
+                      (format " — %s" (car (split-string meaning "," t)))
+                    "")
+                  (if frame (format "  (%s)" frame) "")))
+    ;; Argument slots: filled, or — [elided] for required-but-absent
+    ;; (Tibetan pro-drop pedagogy).  Unfilled OPTIONAL slots stay
+    ;; silent.
+    (dolist (slot (plist-get tree :slots))
+      (let* ((role (plist-get slot :role))
+             (label (or (cdr (assq role tibetan-analysis--tree-role-labels))
+                        (upcase (symbol-name role))))
+             (np (plist-get slot :filler)))
+        (cond
+         (np
+          (setq out (concat out (format "%s  %s: %s\n" pad label
+                                        (tibetan-analysis--tree-np-string np))))
+          (dolist (poss (alist-get 'possessors np))
+            (setq out (concat out
+                              (format "%s    POSSESSOR (GEN): %s\n" pad
+                                      (tibetan-analysis--tree-np-string
+                                       poss))))))
+         ((plist-get slot :elided)
+          (setq out (concat out
+                            (format "%s  %s: — [elided]\n" pad label)))))))
+    ;; Adjuncts keep their case label.
+    (dolist (np (plist-get tree :adjuncts))
+      (setq out (concat out (format "%s  ADJUNCT — %s: %s\n" pad
+                                    (or (alist-get 'case np) "—")
+                                    (tibetan-analysis--tree-np-string np))))
+      (dolist (poss (alist-get 'possessors np))
+        (setq out (concat out (format "%s    POSSESSOR (GEN): %s\n" pad
+                                      (tibetan-analysis--tree-np-string
+                                       poss))))))
+    ;; Complement clauses (byed-du under bcug) nest under the matrix.
+    (dolist (c (plist-get tree :complements))
+      (setq out (concat out (tibetan-analysis--render-tree-node
+                             (plist-get c :node) (+ indent 2)
+                             "COMPLEMENT VERB"))))
+    ;; Converb chain to the main verb, with Bialek labels.
+    (dolist (c (plist-get tree :converbs))
+      (let ((label (plist-get c :label))
+            (part (plist-get c :particle)))
+        (setq out (concat out (format "%s  ⤷ converb%s%s:\n" pad
+                                      (if part (format " %s" part) "")
+                                      (if label (format " (%s)" label) ""))))
+        (setq out (concat out (tibetan-analysis--render-tree-node
+                               (plist-get c :node) (+ indent 4) "VERB")))))
+    out))
 
-Every Tibetan token is routed through
-`tibetan-analysis--format-word-with-wylie' so the output stays in
-lock-step with the rest of the generated file."
-  (if (not (and words verbs
-                (fboundp 'tibetan-analyze-round2)))
+(defun tibetan-analysis--render-sentence-tree (words verbs multiword-units)
+  "Return the verb-headed tree rendering for the `** Sentence
+Structure' section (verb-first redesign, replaces the flat per-clause
+blocks).  Empty string on empty inputs; a visible placeholder when no
+clause is detected.  Vocab-fallback verbs are filtered (the §5.16
+uddāna fix)."
+  (if (not (and words verbs (fboundp 'tibetan-analyze-sentence)))
       ""
-    ;; Uddāna-verse fix (2026-04-30): drop `vocab-fallback' minimal
-    ;; entries before clause segmentation.  These low-confidence
-    ;; hits — produced when Hill-DB has nothing and the dictionary
-    ;; gloss happens to start with `to X' — are how `སྡོམ' /
-    ;; `རྣམས' / similar non-verbs slipped in as clause heads while
-    ;; the user-visible Verb Classification block (which already
-    ;; filters minimal entries) correctly reported `[No Hill-DB
-    ;; verbs detected]'.  Curated closed-set minimal entries
-    ;; (`གསོལ', `མཛད', `བྱུང', …) are KEPT — they legitimately
-    ;; drive clauses.
     (let* ((reliable-verbs
             (cl-remove-if (lambda (v)
                             (eq (alist-get 'source v) 'vocab-fallback))
                           verbs))
-           (r2 (condition-case nil
-                   (tibetan-analyze-round2
-                    words reliable-verbs multiword-units)
-                 (error nil)))
-           (clauses (alist-get 'clauses r2))
-           (nps     (alist-get 'nps r2))
-           (args    (alist-get 'argument-structure r2)))
-      (if (not clauses)
+           (tree (and reliable-verbs
+                      (condition-case nil
+                          (tibetan-analyze-sentence
+                           words reliable-verbs multiword-units)
+                        (error nil)))))
+      (if (not tree)
           "[No clause structure detected]\n"
-        (with-temp-buffer
-          (let ((clause-idx 0))
-            (dolist (clause clauses)
-              (cl-incf clause-idx)
-              (let* ((ctype (alist-get 'type clause))
-                     (cv-type (alist-get 'converb-type clause))
-                     (cv-part (alist-get 'converb-particle clause))
-                     (verb    (alist-get 'verb clause))
-                     (lemma   (and verb (alist-get 'lemma verb)))
-                     (meaning (and verb (alist-get 'meaning verb)))
-                     (c-start (alist-get 'start clause))
-                     (c-end   (alist-get 'end clause))
-                     (clause-nps
-                      (cl-remove-if-not
-                       (lambda (np)
-                         (let ((s (alist-get 'start np))
-                               (e (alist-get 'end np)))
-                           (and s e c-start c-end
-                                (>= s c-start) (<= e c-end))))
-                       nps))
-                     (clause-args (cl-find-if
-                                   (lambda (a)
-                                     (eq (alist-get 'clause a) clause))
-                                   args)))
-                (insert (format "Clause %d [%s" clause-idx
-                                (if (eq ctype 'main) "main" "dependent")))
-                (when (and (not (eq ctype 'main))
-                           (or cv-type cv-part))
-                  (insert " · ")
-                  (when cv-part
-                    (insert (tibetan-analysis--format-word-with-wylie
-                             cv-part)))
-                  (when (and cv-type
-                             (not (and cv-part
-                                       (string-match-p
-                                        (regexp-quote (format "%s" cv-type))
-                                        ""))))
-                    (insert (format " (%s)" cv-type))))
-                (insert "]")
-                (when lemma
-                  (insert (format ": verb %s"
-                                  (tibetan-analysis--format-word-with-wylie
-                                   lemma)))
-                  (when (and meaning (not (string-empty-p meaning)))
-                    (insert (format " — %s"
-                                    (car (split-string meaning "," t))))))
-                (insert "\n")
-                ;; Argument structure — one labelled line per role, in
-                ;; SUBJECT → OBJECT → oblique order, each showing the
-                ;; full noun phrase (its glued head).  Any NP with no
-                ;; resolved role is still listed so the structure is
-                ;; complete.
-                (let* ((arg-list (and clause-args
-                                      (alist-get 'arguments clause-args)))
-                       ;; M4 (Fable-5 audit): only args with a RESOLVED
-                       ;; role count as covered — a role-nil arg (GEN
-                       ;; possessor, unmapped case) gets no role line,
-                       ;; so it must fall through to the `NP:' listing
-                       ;; below instead of vanishing entirely.
-                       (covered (delq nil
-                                      (mapcar (lambda (a)
-                                                (and (alist-get 'role a)
-                                                     (alist-get 'np a)))
-                                              arg-list))))
-                  (dolist (role-sym tibetan-analysis--role-order)
-                    (dolist (a arg-list)
-                      (when (eq (alist-get 'role a) role-sym)
-                        (insert
-                         (format "    %s: %s\n"
-                                 (tibetan-analysis--role-label role-sym)
-                                 (tibetan-analysis--format-word-with-wylie
-                                  (alist-get 'head (alist-get 'np a))))))))
-                  (dolist (np clause-nps)
-                    (unless (memq np covered)
-                      (insert
-                       (format "    NP: %s (%s)\n"
-                               (tibetan-analysis--format-word-with-wylie
-                                (alist-get 'head np))
-                               (or (alist-get 'case np) "—")))))))))
-          (buffer-string))))))
+        (tibetan-analysis--render-tree-node tree 0 "MAIN VERB")))))
 
 (defun tibetan-analysis--get-grammatical-role (word root-form verb-table)
   "Determine grammatical role description for WORD with ROOT-FORM.
@@ -4426,7 +4405,7 @@ unused-arg warning without breaking the public API."
             ;; at all (default t).
             (when tibetan-analysis-show-clause-structure
               (insert "** Sentence Structure\n")
-              (let ((rendered (tibetan-analysis--render-clause-structure
+              (let ((rendered (tibetan-analysis--render-sentence-tree
                                words verbs multiword-units)))
                 (if (and rendered (not (string-empty-p rendered)))
                     (insert rendered)
