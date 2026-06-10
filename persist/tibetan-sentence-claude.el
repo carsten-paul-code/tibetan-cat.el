@@ -297,6 +297,43 @@ cache-constant).  FOLDER locates the child seg files for grounding."
 (declare-function gptel-request "gptel")
 (defvar gptel-cache)
 
+(defcustom tibetan-dharmamitra-sentence-request-delay 6.5
+  "Seconds between scheduled sentence-level DharmaMitra fires.
+DharmaMitra rate-limits at ~10 requests/minute (§5.29 history); a
+batch firing 57 sentences must stagger.  Each scheduled fire adds
+this delay to a cumulative counter, reset by
+`tibetan-sentence-claude-clear-inflight'."
+  :type 'number
+  :group 'tibetan-cat)
+
+(defvar tibetan-sentence-claude--dm-schedule-count 0
+  "Cumulative counter for staggering sentence-level DM fires.")
+
+(declare-function tibetan-dharmamitra-translation-fire-tibetan-sentence
+                  "tibetan-dharmamitra-translation")
+
+(defun tibetan-sentence-claude--schedule-dm (sentence child-files
+                                             sent-file force)
+  "Schedule the sentence-level DM fire, staggered against the 10/min
+rate limit.  Timers run during the batch drain loop's
+`accept-process-output'."
+  (when (fboundp 'tibetan-dharmamitra-translation-fire-tibetan-sentence)
+    (let ((delay (* tibetan-sentence-claude--dm-schedule-count
+                    tibetan-dharmamitra-sentence-request-delay)))
+      (cl-incf tibetan-sentence-claude--dm-schedule-count)
+      (run-at-time
+       delay nil
+       (lambda ()
+         (condition-case err
+             (tibetan-dharmamitra-translation-fire-tibetan-sentence
+              (plist-get sentence :tibetan-text)
+              (plist-get sentence :sent-num)
+              (plist-get sentence :seg-nums)
+              child-files sent-file force)
+           (error (message "Sentence DM fire failed (Sentence %s): %s"
+                           (plist-get sentence :sent-num)
+                           (error-message-string err)))))))))
+
 (defvar tibetan-sentence-claude--inflight (make-hash-table :test #'equal)
   "In-flight sentence-level requests, keyed (TRUENAME . SENT-NUM).
 A batch over 12 children of one sentence fires the call ONCE; the
@@ -309,6 +346,7 @@ crash only suppresses until `tibetan-sentence-claude-clear-inflight'.")
   "Clear the sentence-level in-flight registry (crash recovery)."
   (interactive)
   (clrhash tibetan-sentence-claude--inflight)
+  (setq tibetan-sentence-claude--dm-schedule-count 0)
   (message "Sentence-level in-flight registry cleared"))
 
 (defun tibetan-sentence-claude--claim (source-file sent-num label)
@@ -494,6 +532,11 @@ per-segment Claude)."
                    sentence child-files
                    (and (file-exists-p sent-file) sent-file)
                    source-file folder force)
+                  ;; DM rides the same claim: one sentence-level DM
+                  ;; fire, staggered against the 10/min limit.
+                  (tibetan-sentence-claude--schedule-dm
+                   sentence child-files
+                   (and (file-exists-p sent-file) sent-file) force)
                   'fired)))))))))
 
 (provide 'tibetan-sentence-claude)

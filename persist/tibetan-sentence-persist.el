@@ -1406,11 +1406,22 @@ source buffer must visit a file"))
               (goto-char (point-min)))
             (display-buffer-in-side-window
              buf '((side . right) (window-width . 0.5))))
-          (condition-case err
-              (tibetan-sentence--request-claude
-               tib-text seg-nums newpath source-file)
-            (error (message "Sentence Claude skipped: %s"
-                            (error-message-string err))))
+          ;; §5.40: multi-segment sentences route through the
+          ;; sentence-level dispatcher (one call feeds the sent file
+          ;; AND every child); single-segment sentences keep the
+          ;; legacy sentence call.
+          (unless (and (> (length seg-nums) 1)
+                       (fboundp 'tibetan-analysis--fire-sentence-level)
+                       (condition-case nil
+                           (tibetan-analysis--fire-sentence-level
+                            tib-text newpath source-file
+                            (car seg-nums) nil)
+                         (error nil)))
+            (condition-case err
+                (tibetan-sentence--request-claude
+                 tib-text seg-nums newpath source-file)
+              (error (message "Sentence Claude skipped: %s"
+                              (error-message-string err)))))
           ;; Sentence-level wiring of two-language-parallel-analysis
           ;; (2026-04-30): in parallel mode, also fire Sanskrit +
           ;; Combined for the new sentence file.  No-op when the
@@ -1459,11 +1470,20 @@ called with a prefix argument."
             (with-current-buffer buf
               (revert-buffer t t))))
         (when current-prefix-arg
-          (condition-case err
-              (tibetan-sentence--request-claude
-               tib-text seg-nums filepath source-file)
-            (error (message "Sentence Claude skipped: %s"
-                            (error-message-string err))))
+          ;; §5.40: multi-seg → sentence-level dispatcher (FORCE —
+          ;; explicit refresh); single-seg → legacy sentence call.
+          (unless (and (> (length seg-nums) 1)
+                       (fboundp 'tibetan-analysis--fire-sentence-level)
+                       (condition-case nil
+                           (tibetan-analysis--fire-sentence-level
+                            tib-text filepath source-file
+                            (car seg-nums) t)
+                         (error nil)))
+            (condition-case err
+                (tibetan-sentence--request-claude
+                 tib-text seg-nums filepath source-file)
+              (error (message "Sentence Claude skipped: %s"
+                              (error-message-string err)))))
           ;; Sentence-level wiring of two-language-parallel-analysis
           ;; (2026-04-30): also fire Sanskrit + Combined when in
           ;; parallel mode AND the sentence aggregates real (non-

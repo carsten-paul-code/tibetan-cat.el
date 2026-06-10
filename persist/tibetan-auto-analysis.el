@@ -544,12 +544,28 @@ swallowed to `message' and do not abort the batch."
           (run-at-time
            this-delay nil
            (lambda ()
-             (condition-case err
-                 (tibetan-analysis--request-claude-translation text filepath)
-               (error
-                (message "Claude request failed for %s: %s"
-                         (file-name-nondirectory filepath)
-                         (error-message-string err))))
+             ;; §5.40: try the sentence-level path first — one call
+             ;; per sentence, dedup'd across this loop's children; the
+             ;; per-segment call below only fires when the sentence
+             ;; path declines (flat layout, single-seg, parallel).
+             (unless (and (fboundp 'tibetan-analysis--fire-sentence-level)
+                          (condition-case nil
+                              (tibetan-analysis--fire-sentence-level
+                               text filepath
+                               (and (fboundp 'tibetan-analysis--source-file-from-analysis)
+                                    (tibetan-analysis--source-file-from-analysis
+                                     filepath))
+                               (and (fboundp 'tibetan-analysis--seg-id-from-filename)
+                                    (tibetan-analysis--seg-id-from-filename
+                                     filepath))
+                               nil)
+                            (error nil)))
+               (condition-case err
+                   (tibetan-analysis--request-claude-translation text filepath)
+                 (error
+                  (message "Claude request failed for %s: %s"
+                           (file-name-nondirectory filepath)
+                           (error-message-string err)))))
              ;; Phase 5 of two-language-parallel-analysis (2026-04-30):
              ;; in parallel-Sanskrit mode, also fire Sanskrit +
              ;; (chained) Combined Claude calls.  Dispatcher gates

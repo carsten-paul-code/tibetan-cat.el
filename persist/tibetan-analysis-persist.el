@@ -5008,10 +5008,20 @@ segment > sentence > paragraph > legacy, most-specific-wins."
             (when buf
               (with-current-buffer buf
                 (revert-buffer t t))))
-          ;; Request Claude translation asynchronously (never break on failure)
-          (condition-case err
-              (tibetan-analysis--request-claude-translation tibetan-text filepath)
-            (error (message "Claude translation skipped: %s" (error-message-string err))))
+          ;; §5.40: explicit refresh — try the sentence-level path
+          ;; first (one call for the whole sentence, FORCE); fall back
+          ;; to the per-segment fires when not applicable.
+          (let ((sentence-owned
+                 (and (fboundp 'tibetan-analysis--fire-sentence-level)
+                      (condition-case nil
+                          (tibetan-analysis--fire-sentence-level
+                           tibetan-text filepath source-file seg-id t)
+                        (error nil)))))
+            (unless sentence-owned
+              ;; Request Claude translation asynchronously (never break on failure)
+              (condition-case err
+                  (tibetan-analysis--request-claude-translation tibetan-text filepath)
+                (error (message "Claude translation skipped: %s" (error-message-string err)))))
           ;; Phase A.1.5 of multi-translator-parallel-reading (2026-04-30):
           ;; on explicit reanalyse (`C-c u R'), refresh the DM
           ;; translation unconditionally — the user asked for a re-
@@ -5021,12 +5031,13 @@ segment > sentence > paragraph > legacy, most-specific-wins."
           ;; FORCE = t:  this is the explicit-refresh path, so re-fire
           ;; even a populated section (fire-for-segment otherwise skips
           ;; populated sections — see the on-open auto-fire gating).
-          (when (fboundp 'tibetan-dharmamitra-translation-fire-for-segment)
+          (when (and (not sentence-owned)
+                     (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
             (condition-case err
                 (tibetan-dharmamitra-translation-fire-for-segment
                  tibetan-text filepath source-file seg-id t)
               (error (message "DharmaMitra translation skipped: %s"
-                              (error-message-string err)))))
+                              (error-message-string err))))))
           ;; Phase 5 of two-language-parallel-analysis (§5.17, 2026-04-30):
           ;; on explicit reanalyse, also fire Sanskrit + (chained)
           ;; Combined Claude calls.  Bug fix 2026-05-02: this wire
@@ -5452,9 +5463,24 @@ without touching the file.  Otherwise return a plist:
             ;; CLAUDE.  When set, files already carrying populated
             ;; Claude content are skipped — saving API spend on bulk
             ;; layout-update reanalyses.
-            (let ((fire-p (tibetan-analysis--should-fire-claude-p
-                           re-request-claude filepath)))
-              (when fire-p
+            (let* ((fire-p (tibetan-analysis--should-fire-claude-p
+                            re-request-claude filepath))
+                   ;; §5.40: when the segment sits in a multi-segment
+                   ;; sentence, ONE sentence-level call (Claude + DM)
+                   ;; serves all children — the dispatcher claims the
+                   ;; sentence (dedup across the batch) and this
+                   ;; segment's per-segment fires are SKIPPED.  nil →
+                   ;; flat layout / single-seg / parallel-mode →
+                   ;; per-segment path unchanged.
+                   (sentence-owned
+                    (and fire-p
+                         (fboundp 'tibetan-analysis--fire-sentence-level)
+                         (condition-case nil
+                             (tibetan-analysis--fire-sentence-level
+                              tibetan-text filepath source-file seg-id
+                              (eq re-request-claude t))
+                           (error nil)))))
+              (when (and fire-p (not sentence-owned))
                 (condition-case e2
                     (tibetan-analysis--request-claude-translation
                      tibetan-text filepath)
@@ -5466,7 +5492,7 @@ without touching the file.  Otherwise return a plist:
               ;; also refresh DharmaMitra translations.  Same gate as Claude
               ;; — `:missing-only' skips DM when Claude is being skipped too,
               ;; matching the user's "skip if exists" intent for batch ops.
-              (when (and fire-p
+              (when (and fire-p (not sentence-owned)
                          (fboundp 'tibetan-dharmamitra-translation-fire-for-segment))
                 (condition-case e3
                     ;; FORCE only on an explicit force-all re-request

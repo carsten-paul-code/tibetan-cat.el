@@ -395,5 +395,38 @@ single-segment sentences → nil (caller falls back to per-segment)."
       (tibetan-sentence-claude-clear-inflight)
       (delete-directory dir t))))
 
+;; ----------------------------------------------------------------------------
+;; Phase 5 — fire-site wiring
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-sentence-claude-reanalyze-routes-to-dispatcher ()
+  "reanalyze-file with re-request: when the dispatcher CLAIMS the
+sentence, the per-segment Claude and DM fires are suppressed; when it
+DECLINES (nil), the per-segment path fires unchanged."
+  (let ((dir (make-temp-file "tstc-wire" t))
+        (per-seg-claude 0) (per-seg-dm 0) (dispatcher 'fired))
+    (unwind-protect
+        (let ((f (tstc--scaffold-seg dir 105)))
+          (cl-letf (((symbol-function 'tibetan-analysis--fire-sentence-level)
+                     (lambda (&rest _) dispatcher))
+                    ((symbol-function 'tibetan-analysis--request-claude-translation)
+                     (lambda (&rest _) (cl-incf per-seg-claude)))
+                    ((symbol-function 'tibetan-dharmamitra-translation-fire-for-segment)
+                     (lambda (&rest _) (cl-incf per-seg-dm)))
+                    ((symbol-function 'tibetan-analysis-generate-content)
+                     (lambda (&rest _) "** Wylie Transliteration\nx\n")))
+            ;; Dispatcher claims → no per-segment fires.
+            (tibetan-analysis-reanalyze-file f :re-request-claude t)
+            (should (= 0 per-seg-claude))
+            (should (= 0 per-seg-dm))
+            ;; Dispatcher declines → per-segment fires as before.
+            (setq dispatcher nil)
+            (tibetan-analysis-reanalyze-file f :re-request-claude t)
+            (should (= 1 per-seg-claude))
+            (should (= 1 per-seg-dm))))
+      (when (get-file-buffer (expand-file-name "seg-105.org" dir))
+        (kill-buffer (get-file-buffer (expand-file-name "seg-105.org" dir))))
+      (delete-directory dir t))))
+
 (provide 'tibetan-sentence-claude-test)
 ;;; tibetan-sentence-claude-test.el ends here
