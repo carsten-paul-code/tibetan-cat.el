@@ -515,14 +515,20 @@ marker shows where each unit ends so the reader can analyse shad-by-shad
 while reading the whole section.")
 
 (defun tibetan-analysis--shad-boundary-words (tibetan-text)
-  "Return Wylie boundary words for TIBETAN-TEXT — the last syllable
-before each INTERNAL shad (a shad with content after it).  A trailing
-shad ends the passage and is not a boundary.  Returns nil when there is
-no internal boundary or the Wylie converter is unavailable."
+  "Return shad boundaries for TIBETAN-TEXT as a list of
+\(WYLIE . OCCURRENCE) conses — the last syllable before each INTERNAL
+shad (a shad with content after it) plus how many times that syllable
+occurs in its unit, so the marker placers can land on the right
+repeat (M3, Fable-5 audit: `ngo so la so' must mark the SECOND so).
+༼…༽ abbreviation brackets are stripped before tokenizing (L6 — the
+bracket glyph used to convert to \"\" and silently drop the
+boundary).  A trailing shad ends the passage and is not a boundary.
+nil when no internal boundary or the Wylie converter is unavailable."
   (when (and tibetan-text (stringp tibetan-text)
              (fboundp 'tibetan-to-wylie-fixed))
-    (let ((units (split-string tibetan-text "[།༎༏༐༑༔]" t "[ \t\n]+"))
-          (result '()))
+    (let* ((clean (replace-regexp-in-string "[༼༽]" "" tibetan-text))
+           (units (split-string clean "[།༎༏༐༑༔]" t "[ \t\n]+"))
+           (result '()))
       (when (> (length units) 1)
         (dolist (u (butlast units))
           (let* ((syls (split-string (string-trim u) "[ ་]+" t))
@@ -532,7 +538,10 @@ no internal boundary or the Wylie converter is unavailable."
                          (downcase (string-trim
                                     (tibetan-to-wylie-fixed last-syl))))))
                 (when (and w (not (string-empty-p w)))
-                  (push w result)))))))
+                  ;; Occurrence ordinal: how many of the unit's
+                  ;; syllables equal the boundary syllable.
+                  (let ((occ (cl-count last-syl syls :test #'string=)))
+                    (push (cons w occ) result))))))))
       (nreverse result))))
 
 (defun tibetan-analysis--strip-shad-marker-lines (body)
@@ -546,30 +555,50 @@ no internal boundary or the Wylie converter is unavailable."
 
 (defun tibetan-analysis--mark-shads-in-vocab (body tibetan-text)
   "Insert shad-boundary markers into a Claude Vocabulary BODY.
-Idempotent: existing markers are stripped first, then a marker is
-placed after each entry whose Wylie term ends in the corresponding
-boundary word from TIBETAN-TEXT (in order).  Boundaries with no
-matching entry are skipped rather than misplaced."
+Idempotent: existing markers are stripped first.  Boundaries are
+matched INDEPENDENTLY, in order, from an advancing scan position —
+an unmatched boundary is skipped without blocking later ones (M3:
+head-first consumption used to drop ALL subsequent markers), and a
+boundary whose syllable also ends an earlier entry lands on its
+OCCURRENCE ordinal, not the first match."
   (let ((clean (tibetan-analysis--strip-shad-marker-lines body))
         (boundaries (tibetan-analysis--shad-boundary-words tibetan-text)))
     (if (null boundaries)
         clean
-      (let ((out '()))
-        (dolist (line (split-string clean "\n"))
-          (push line out)
-          (when boundaries
-            (let* ((term (downcase (string-trim (car (split-string line ",")))))
-                   (last-word (car (last (split-string term "[ \t]+" t)))))
-              (when (and last-word (string= last-word (car boundaries)))
-                (push tibetan-analysis--shad-marker out)
-                (setq boundaries (cdr boundaries))))))
-        (string-join (nreverse out) "\n")))))
+      (let* ((lines (split-string clean "\n"))
+             (n (length lines))
+             (after (make-hash-table :test 'eql)) ; line idx → t
+             (start 0))
+        (dolist (b boundaries)
+          (let ((word (car b)) (need (cdr b)) (seen 0) (i start))
+            (catch 'placed
+              (while (< i n)
+                (let* ((line (nth i lines))
+                       (term (downcase (string-trim
+                                        (car (split-string line ",")))))
+                       (last-word (car (last (split-string
+                                              term "[ \t]+" t)))))
+                  (when (and last-word (string= last-word word))
+                    (setq seen (1+ seen))
+                    (when (>= seen need)
+                      (puthash i t after)
+                      (setq start (1+ i))
+                      (throw 'placed t))))
+                (setq i (1+ i))))))
+        (let ((out '()) (k 0))
+          (dolist (line lines)
+            (push line out)
+            (when (gethash k after)
+              (push tibetan-analysis--shad-marker out))
+            (setq k (1+ k)))
+          (string-join (nreverse out) "\n"))))))
 
 (defun tibetan-analysis--mark-shads-in-interlinear (body tibetan-text)
   "Splice shad-boundary markers into a flowing Interlinear BODY.
-Idempotent.  For each boundary word from TIBETAN-TEXT (in order), the
-marker is placed on its own line right after that token's `[gloss]'.
-Boundaries whose token is not found are skipped."
+Idempotent.  For each (WYLIE . OCCURRENCE) boundary, the marker goes
+after that token's OCCURRENCE-th `[gloss]' from the current scan
+position (M3); boundaries whose token is not found are skipped
+without affecting later ones."
   (let* ((clean (replace-regexp-in-string
                  (concat "\n*[ \t]*" (regexp-quote tibetan-analysis--shad-marker)
                          "[ \t]*\n*")
@@ -578,18 +607,24 @@ Boundaries whose token is not found are skipped."
     (if (null boundaries)
         (string-trim clean)
       (let ((pos 0) (result clean))
-        (dolist (w boundaries)
-          ;; Match the boundary token (link or bare form) + its gloss,
-          ;; then the separating space, from POS onward.
-          (let ((re (concat "\\(\\(?:\\[\\[term-[^]]*\\]\\[\\|\\_<\\)"
-                            (regexp-quote w)
-                            "\\(?:\\]\\]\\)?[ \t]*★?[ \t]*\\[[^]]*\\]\\)[ \t]+")))
-            (when (string-match re result pos)
-              (let ((insert-at (match-end 1)))
-                (setq result (concat (substring result 0 insert-at)
-                                     "\n" tibetan-analysis--shad-marker "\n"
-                                     (substring result (match-end 0))))
-                (setq pos (+ insert-at (length tibetan-analysis--shad-marker) 2))))))
+        (dolist (b boundaries)
+          (let* ((w (car b)) (need (cdr b)) (seen 0)
+                 (re (concat "\\(\\(?:\\[\\[term-[^]]*\\]\\[\\|\\_<\\)"
+                             (regexp-quote w)
+                             "\\(?:\\]\\]\\)?[ \t]*★?[ \t]*\\[[^]]*\\]\\)[ \t]+"))
+                 (search pos))
+            (catch 'placed
+              (while (string-match re result search)
+                (setq seen (1+ seen))
+                (if (< seen need)
+                    (setq search (match-end 1))
+                  (let ((insert-at (match-end 1)))
+                    (setq result (concat (substring result 0 insert-at)
+                                         "\n" tibetan-analysis--shad-marker "\n"
+                                         (substring result (match-end 0))))
+                    (setq pos (+ insert-at
+                                 (length tibetan-analysis--shad-marker) 2))
+                    (throw 'placed t)))))))
         (string-trim result)))))
 
 (defun tibetan-analysis--mark-l2-section (heading fn)

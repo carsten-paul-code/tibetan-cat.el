@@ -3107,10 +3107,11 @@ section) must NOT be highlighted as vocabulary terms."
   "Boundary words are the last syllable before each INTERNAL shad
 \(a shad with content after it); a trailing shad is not a boundary."
   (skip-unless (fboundp 'tibetan-to-wylie-fixed))
-  ;; Two units, one internal boundary after `ཤུ' (= \"shu\").
+  ;; Two units, one internal boundary after `ཤུ' (= \"shu\"), which
+  ;; occurs once in its unit → occurrence ordinal 1.
   (should (equal (tibetan-analysis--shad-boundary-words
                   "གལ་ཆེན་ཉི་ཤུ། ཨོམ་སྭ་སྟི།")
-                 '("shu")))
+                 '(("shu" . 1))))
   ;; Single unit → no internal boundary.
   (should (null (tibetan-analysis--shad-boundary-words "བདག་གིས།")))
   (should (null (tibetan-analysis--shad-boundary-words nil))))
@@ -3374,6 +3375,48 @@ require an EXACT Claude key match — the prefix match re-glossed a bare
     (should (string= (tibetan-analysis--apply-claude-vocab-override
                       "རྔོག" "mane" vocab)
                      "rNgog"))))
+
+(ert-deftest tibetan-analysis-shad-boundary-occurrence-and-abbrev ()
+  "M3+L6 (Fable-5 audit): the boundary carries its OCCURRENCE ordinal
+(how many times the boundary syllable appears in its unit) so markers
+land on the right repeat; ༼…༽ abbreviation brackets are stripped
+before tokenizing instead of silently dropping the boundary."
+  (skip-unless (fboundp 'tibetan-to-wylie-fixed))
+  ;; སོ ends the unit AND appears earlier inside it → ordinal 2.
+  (should (equal (tibetan-analysis--shad-boundary-words
+                  "ངོ་སོ་ལ་སོ། ཕྱི་ནང་།")
+                 '(("so" . 2))))
+  ;; ༼…༽ at the unit end: brackets stripped, boundary survives.
+  (should (equal (tibetan-analysis--shad-boundary-words
+                  "བཀའ་༼གསུང་༽། དོན་མཐའ།")
+                 '(("gsung" . 1)))))
+
+(ert-deftest tibetan-analysis-mark-shads-vocab-skips-unmatched-and-places-by-occurrence ()
+  "M3: (a) an unmatched boundary is SKIPPED — later boundaries still
+place their markers (head-first consumption dropped them all);
+(b) when the boundary syllable also ends an earlier entry, the marker
+lands on the correct occurrence, not the first."
+  (skip-unless (fboundp 'tibetan-to-wylie-fixed))
+  (let ((m tibetan-analysis--shad-marker))
+    ;; (a) boundary 1 ('ongs) has no vocab entry; boundary 2 (song)
+    ;; must still get its marker.
+    (let* ((text "ཁོ་འོངས། དེ་སོང། མཐའ།")
+           (body (concat "kho, pronoun, \"he\"\n"
+                         "de, demonstrative, \"that\"\n"
+                         "song, verb, \"went\"\n"
+                         "mtha', noun, \"end\""))
+           (out (tibetan-analysis--mark-shads-in-vocab body text)))
+      (should (string-match-p (concat "song[^\n]*\n" (regexp-quote m)) out)))
+    ;; (b) ngo so / la / so — boundary is the SECOND so.
+    (let* ((text "ངོ་སོ་ལ་སོ། ཕྱི་ནང་།")
+           (body (concat "ngo so, noun, \"status\"\n"
+                         "la, particle, \"to\"\n"
+                         "so, noun, \"tooth\"\n"
+                         "phyi nang, noun, \"outer-inner\""))
+           (out (tibetan-analysis--mark-shads-in-vocab body text)))
+      (should (string-match-p (concat "^so, noun[^\n]*\n" (regexp-quote m)) out))
+      (should-not (string-match-p (concat "ngo so[^\n]*\n" (regexp-quote m)) out))
+      (should (= 1 (cl-count m (split-string out "\n") :test #'string=))))))
 
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
