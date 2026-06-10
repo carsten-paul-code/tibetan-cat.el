@@ -1370,6 +1370,53 @@ segments."
 ;; the same Tibetan-call cache prefix) and makes each call's
 ;; response schema small and unambiguous.
 
+(defun tibetan-analysis--claude-static-system-blocks (source-file)
+  "Return the per-DOCUMENT static system-prompt suffix for SOURCE-FILE.
+Concatenation of the source-metadata block, the Portfolio reference
+block, and the target-language directive — everything appended to the
+base system prompt that is CONSTANT across all segments/sentences of
+one document.  Shared by the segment builder and the sentence-first
+builder (§5.40) so the Anthropic prompt-cache constancy of BOTH is
+guaranteed by construction, not by parallel maintenance."
+  (let* ((meta (tibetan-analysis--read-source-metadata source-file))
+         (title (plist-get meta :title))
+         (work (plist-get meta :work))
+         (author (plist-get meta :author))
+         (ctx (plist-get meta :claude-context))
+         (meta-block
+          (let (parts)
+            (when work (push (format "Work: %s" work) parts))
+            (when (and author (not (and work (string= work author))))
+              (push (format "Author: %s" author) parts))
+            (when (and title (not work))
+              (push (format "Title: %s" title) parts))
+            (when ctx
+              (push "Context from source file:" parts)
+              (dolist (line ctx)
+                (push (format "  - %s" line) parts)))
+            (when parts
+              (concat "\n\nSource metadata for this passage:\n"
+                      (mapconcat #'identity (nreverse parts) "\n")))))
+         (portfolio-ref
+          (and (fboundp 'tibetan-interlinear-portfolio-reference-block)
+               (condition-case nil
+                   (tibetan-interlinear-portfolio-reference-block)
+                 (error ""))))
+         (portfolio-part
+          (and portfolio-ref (not (string-empty-p portfolio-ref))
+               (concat "\n\n" portfolio-ref)))
+         (target-lang-val (plist-get meta :target-lang))
+         (lang-part
+          (when (and target-lang-val (stringp target-lang-val)
+                     (equal (downcase target-lang-val) "de"))
+            (concat "\n\nTarget language for this document: GERMAN.\n"
+                    "The `## Translation' section MUST be written in "
+                    "German (not English), following the same guidelines "
+                    "otherwise — fluent, idiomatic, Buddhist terminology "
+                    "preserved, etc.  Vocabulary, Grammar, and Particles "
+                    "sections stay in English (metalanguage)."))))
+    (concat (or meta-block "") (or portfolio-part "") (or lang-part ""))))
+
 (defun tibetan-analysis--build-claude-prompts
     (tibetan-text source-file &optional analysis-file)
   "Build (SYSTEM . USER) Claude prompts for TIBETAN-TEXT.
@@ -1395,10 +1442,8 @@ directive (Phase 3 of sanskrit-parallel-workflow, 2026-04-27).
 Backward compatible with all existing callers that pass only the
 first three args."
   (let* ((meta   (tibetan-analysis--read-source-metadata source-file))
-         (title  (plist-get meta :title))
-         (work   (plist-get meta :work))
-         (author (plist-get meta :author))
-         (ctx    (plist-get meta :claude-context))
+         ;; title/work/author/ctx now live in
+         ;; `tibetan-analysis--claude-static-system-blocks' (§5.40).
          (vocab-rel (plist-get meta :vocab-file))
          (vocab-file (and vocab-rel source-file
                           (expand-file-name
@@ -1410,62 +1455,6 @@ first three args."
                     (when (fboundp 'tibetan-to-wylie-fixed)
                       (tibetan-to-wylie-fixed tibetan-text))
                   (error nil)))
-         (src-block
-          (let (parts)
-            (when work   (push (format "Work: %s" work) parts))
-            (when (and author (not (and work (string= work author))))
-              (push (format "Author: %s" author) parts))
-            (when (and title (not work)) (push (format "Title: %s" title) parts))
-            (when ctx
-              (push "Context from source file:" parts)
-              (dolist (line ctx)
-                (push (format "  - %s" line) parts)))
-            (when parts
-              (concat "\n\nSource metadata for this passage:\n"
-                      (mapconcat #'identity (nreverse parts) "\n")))))
-         ;; Pass 7 (2026-04-22): inject the user's actual Portfolio
-         ;; structure into the system prompt so Claude's `## Particles'
-         ;; output uses the Portfolio's own section numbering.  Without
-         ;; this, Claude guesses Bialek-textbook-canonical IDs (§1.5
-         ;; Terminative, §2.11 V+nas) that don't match Carsten's
-         ;; Portfolio (§1.6 Terminative, no V+nas at §2.11) — the
-         ;; resulting `portfolio-sub-id' values fail the lookup in
-         ;; `tibetan-interlinear-portfolio-function-snippet' and the
-         ;; Grammar section omits the Portfolio description text.
-         ;;
-         ;; The block lands in the SYSTEM prompt (rather than the user
-         ;; prompt) because it's invariant per Portfolio file — same
-         ;; across all segments — so Anthropic prompt caching serves
-         ;; it from cache at 10% of normal input cost on requests 2..N
-         ;; within the 5-min TTL.
-         (portfolio-ref
-          (and (fboundp 'tibetan-interlinear-portfolio-reference-block)
-               (condition-case nil
-                   (tibetan-interlinear-portfolio-reference-block)
-                 (error ""))))
-         (portfolio-block
-          (and portfolio-ref (not (string-empty-p portfolio-ref))
-               (concat "\n\n" portfolio-ref)))
-         ;; Pass 5c (2026-04-22): target-language directive.  When the
-         ;; document's `#+TIBETAN_TARGET_LANG:' header is `de', we
-         ;; override the static English default in the system prompt
-         ;; with an explicit German instruction for the `## Translation'
-         ;; section.  `en' / nil / missing → no directive (static
-         ;; English instruction stays authoritative).  The Vocabulary /
-         ;; Grammar / Particles sections remain in English regardless
-         ;; — only the Translation section language flips.
-         (target-lang-val (plist-get meta :target-lang))
-         (target-lang-block
-          (cond
-           ((and target-lang-val (stringp target-lang-val)
-                 (equal (downcase target-lang-val) "de"))
-            (concat "\n\nTarget language for this document: GERMAN.\n"
-                    "The `## Translation' section MUST be written in "
-                    "German (not English), following the same guidelines "
-                    "otherwise — fluent, idiomatic, Buddhist terminology "
-                    "preserved, etc.  Vocabulary, Grammar, and Particles "
-                    "sections stay in English (metalanguage)."))
-           (t nil)))
          ;; Phase 1 of two-language-parallel-analysis (2026-04-30):
          ;; The parallel-mode injection (which extended this Tibetan
          ;; prompt with `## Translation (Sanskrit)' / `(Combined)' /
@@ -1475,10 +1464,13 @@ first three args."
          ;; This Tibetan call's system prompt is therefore
          ;; byte-identical for parallel and non-parallel documents,
          ;; and they share the same Anthropic cache prefix.
+         ;; §5.40: the static blocks (metadata/Portfolio/target-lang)
+         ;; come from the shared helper so the segment AND
+         ;; sentence-first system prompts stay per-document constants
+         ;; by construction.
          (system (concat tibetan-analysis--claude-system-prompt
-                         (or src-block "")
-                         (or portfolio-block "")
-                         (or target-lang-block "")))
+                         (tibetan-analysis--claude-static-system-blocks
+                          source-file)))
          (glossary-block
           (when glossary
             (concat

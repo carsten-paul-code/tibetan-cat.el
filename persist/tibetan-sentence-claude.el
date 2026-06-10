@@ -146,5 +146,133 @@ preamble, Concept Notes = the sentence-level body."
          :grammar (plist-get parsed :grammar-preamble)
          :concepts (plist-get parsed :concepts))))
 
+;; ----------------------------------------------------------------------------
+;; Phase 2 — sentence-first prompts
+;; ----------------------------------------------------------------------------
+
+(declare-function tibetan-analysis--claude-static-system-blocks
+                  "tibetan-analysis-claude")
+(declare-function tibetan-analysis--read-interlinear-glosses
+                  "tibetan-analysis-claude")
+(declare-function tibetan-analysis--collect-zettel-references
+                  "tibetan-analysis-claude")
+(declare-function tibetan-analysis--format-zettel-references-block
+                  "tibetan-analysis-claude")
+(declare-function tibetan-sentence--collect-children-grounding
+                  "tibetan-sentence-persist")
+(declare-function tibetan-sentence--child-seg-filepath
+                  "tibetan-sentence-persist")
+
+(defconst tibetan-sentence-claude--system-addendum
+  "
+
+SENTENCE-FIRST MODE — this request covers a COMPLETE SENTENCE that
+spans several numbered segments (the shad-delimited units your user
+prompt lists under `### Segment N' headers).  Adjust the five
+sections as follows, keeping all other rules unchanged:
+
+- `## Translation': FIRST give the fluent translation of the WHOLE
+  sentence (no header before it).  THEN, for EVERY listed segment, a
+  `### Segment N' subsection containing the sub-translation of just
+  that segment, consistent with the whole-sentence rendering.
+- `## Vocabulary', `## Particles': organize ALL content under
+  `### Segment N' subsections — one per listed segment, in order,
+  covering every segment, using the EXACT numbers given.  No entries
+  outside a subsection.
+- `## Grammar': open with a 2-4 sentence cross-clause overview of the
+  whole sentence (clause chain, converbs, anaphora) BEFORE the first
+  subsection; then a `### Segment N' subsection per segment with the
+  usual labeled bullets scoped to that segment.
+- `## Concept Notes': sentence-level ONLY — no segment subsections.
+
+Every listed segment MUST receive its subsections; never merge two
+segments under one header."
+  "System-prompt addendum that turns the segment schema into the
+sentence-first schema.  Appended to the base segment system prompt;
+constant per document, so it forms a stable Anthropic cache prefix
+\(distinct from the segment-level prefix — the two coexist).")
+
+(defun tibetan-sentence-claude--collect-children-vocab (seg-nums folder)
+  "Per-child Interlinear grounding: `=== Segment N ===' labelled
+`wylie = gloss' blocks from each child seg file.  nil when nothing."
+  (when (and seg-nums folder
+             (fboundp 'tibetan-analysis--read-interlinear-glosses)
+             (fboundp 'tibetan-sentence--child-seg-filepath))
+    (let ((blocks '()))
+      (dolist (n seg-nums)
+        (let* ((path (tibetan-sentence--child-seg-filepath n folder))
+               (body (and path (tibetan-analysis--read-interlinear-glosses
+                                path))))
+          (when body
+            (push (format "=== Segment %d ===\n%s" n body) blocks))))
+      (when blocks
+        (concat "\n\nPer-segment vocabulary matches (the tool's own "
+                "layered dictionary lookup; dictionary-attested — base "
+                "the Vocabulary subsections on them and do NOT invent "
+                "meanings for listed words):\n"
+                (mapconcat #'identity (nreverse blocks) "\n"))))))
+
+(defun tibetan-sentence-claude--build-prompts (sentence source-file
+                                               &optional folder)
+  "Build (SYSTEM . USER) for a sentence-first call.
+SENTENCE is the walker plist from
+`tibetan-sentence--sentence-for-segment' (:sent-num :seg-nums
+:children :tibetan-text).  SOURCE-FILE supplies the per-document
+static system blocks (metadata/Portfolio/target-lang — shared helper,
+cache-constant).  FOLDER locates the child seg files for grounding."
+  (let* ((sent-num (plist-get sentence :sent-num))
+         (seg-nums (plist-get sentence :seg-nums))
+         (text (plist-get sentence :tibetan-text))
+         (system (concat
+                  (if (boundp 'tibetan-analysis--claude-system-prompt)
+                      tibetan-analysis--claude-system-prompt
+                    "")
+                  tibetan-sentence-claude--system-addendum
+                  (if (and source-file
+                           (fboundp
+                            'tibetan-analysis--claude-static-system-blocks))
+                      (tibetan-analysis--claude-static-system-blocks
+                       source-file)
+                    "")))
+         (wylie (condition-case nil
+                    (when (fboundp 'tibetan-to-wylie-fixed)
+                      (tibetan-to-wylie-fixed text))
+                  (error nil)))
+         (enumeration
+          (mapconcat (lambda (c)
+                       (format "### Segment %d\n%s"
+                               (plist-get c :seg-num)
+                               (string-trim (or (plist-get c :text) ""))))
+                     (plist-get sentence :children) "\n"))
+         (vocab-block (tibetan-sentence-claude--collect-children-vocab
+                       seg-nums folder))
+         ;; FOLDER must be explicit: the child-filepath helper falls
+         ;; back to buffer-file-name-derived lookup, which errors in
+         ;; headless batch (§5.34 class).  No folder → no grounding.
+         (grounding-block
+          (when (and folder
+                     (fboundp 'tibetan-sentence--collect-children-grounding))
+            (tibetan-sentence--collect-children-grounding
+             seg-nums folder)))
+         (zettel-block
+          (when (and (fboundp 'tibetan-analysis--collect-zettel-references)
+                     (fboundp 'tibetan-analysis--format-zettel-references-block))
+            (tibetan-analysis--format-zettel-references-block
+             (tibetan-analysis--collect-zettel-references text))))
+         (user (concat
+                (format "Classical Tibetan sentence (Sentence %s — segments %s):\n\n"
+                        (or sent-num "?")
+                        (mapconcat #'number-to-string seg-nums ", "))
+                text
+                (if wylie (format "\n\nWylie: %s" wylie) "")
+                "\n\nThe sentence spans these segments:\n"
+                enumeration
+                (or vocab-block "")
+                (or grounding-block "")
+                (or zettel-block "")
+                "\n\nProduce the five sections now, with `### Segment N' "
+                "subsections exactly as instructed.")))
+    (cons system user)))
+
 (provide 'tibetan-sentence-claude)
 ;;; tibetan-sentence-claude.el ends here

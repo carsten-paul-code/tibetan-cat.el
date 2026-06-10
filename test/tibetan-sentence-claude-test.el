@@ -169,5 +169,81 @@ existing body untouched (preserve semantics)."
     (should-not (string-match-p "^## Vocabulary$" md))
     (should-not (string-match-p "^## Grammar$" md))))
 
+;; ----------------------------------------------------------------------------
+;; Phase 2 — sentence-first prompts
+;; ----------------------------------------------------------------------------
+
+(defun tstc--make-sentence (&rest children)
+  "Walker-shaped plist for CHILDREN given as (SEG-NUM . TEXT) conses."
+  (list :sent-num 4
+        :seg-nums (mapcar #'car children)
+        :children (mapcar (lambda (c)
+                            (list :seg-num (car c) :text (cdr c)))
+                          children)
+        :tibetan-text (mapconcat #'cdr children " ")))
+
+(ert-deftest tibetan-sentence-claude-prompt-enumerates-each-child ()
+  "The user prompt carries the whole sentence AND a `### Segment N'
+enumeration of every child's Tibetan, in order."
+  (let* ((sent (tstc--make-sentence '(105 . "ཁོ་སོང་ནས།") '(106 . "ཆོས་བྱས།")))
+         (prompts (tibetan-sentence-claude--build-prompts sent nil nil))
+         (user (cdr prompts)))
+    (should (string-match-p "### Segment 105\n ?ཁོ་སོང་ནས" user))
+    (should (string-match-p "### Segment 106\n ?ཆོས་བྱས" user))
+    (should (< (string-match "### Segment 105" user)
+               (string-match "### Segment 106" user)))
+    ;; Whole text appears before the enumeration.
+    (should (string-match-p "ཁོ་སོང་ནས། ཆོས་བྱས།" user))))
+
+(ert-deftest tibetan-sentence-claude-prompt-system-constant-per-document ()
+  "The sentence-first system prompt is identical for two different
+sentences of the same document (Anthropic cache invariant), differs
+from the segment-level system prompt, and instructs the subsection
+format."
+  (let* ((s1 (car (tibetan-sentence-claude--build-prompts
+                   (tstc--make-sentence '(1 . "བདག")) nil nil)))
+         (s2 (car (tibetan-sentence-claude--build-prompts
+                   (tstc--make-sentence '(7 . "ཆོས") '(8 . "བྱས")) nil nil))))
+    (should (equal s1 s2))
+    (should (string-match-p "### Segment" s1))
+    (when (boundp 'tibetan-analysis--claude-system-prompt)
+      (should-not (equal s1 tibetan-analysis--claude-system-prompt)))))
+
+(ert-deftest tibetan-sentence-claude-prompt-child-grounding-labeled ()
+  "Per-child Interlinear grounding appears under a segment label."
+  (let* ((dir (make-temp-file "tstc-ground" t))
+         (child (expand-file-name "seg-105.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file child
+            (insert "** Interlinear Gloss\n"
+                    "[[term-kho][kho]] [he]\n\n** Translation\nx\n"))
+          (let* ((sent (tstc--make-sentence '(105 . "ཁོ།") '(106 . "བྱས།")))
+                 (user (cdr (tibetan-sentence-claude--build-prompts
+                             sent nil dir))))
+            (should (string-match-p "Segment 105" user))
+            (should (string-match-p "kho = he" user))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-analysis-static-system-blocks-compose-segment-prompt ()
+  "Golden regression for the refactor: the segment builder's system
+prompt equals base prompt + the shared static-blocks helper output —
+per-document constancy is guaranteed by construction for BOTH
+builders."
+  (skip-unless (fboundp 'tibetan-analysis--build-claude-prompts))
+  (let ((src (make-temp-file "tstc-src" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file src
+            (insert "#+TITLE: T\n#+TIBETAN_TARGET_LANG: de\n\n* Tibetan Text\n"))
+          (let ((sys (car (tibetan-analysis--build-claude-prompts "བདག" src))))
+            (should (equal sys
+                           (concat tibetan-analysis--claude-system-prompt
+                                   (tibetan-analysis--claude-static-system-blocks
+                                    src))))
+            ;; German directive present via the helper.
+            (should (string-match-p "GERMAN" sys))))
+      (delete-file src))))
+
 (provide 'tibetan-sentence-claude-test)
 ;;; tibetan-sentence-claude-test.el ends here
