@@ -2435,8 +2435,16 @@ lock-step with the rest of the generated file."
                 ;; complete.
                 (let* ((arg-list (and clause-args
                                       (alist-get 'arguments clause-args)))
-                       (covered (mapcar (lambda (a) (alist-get 'np a))
-                                        arg-list)))
+                       ;; M4 (Fable-5 audit): only args with a RESOLVED
+                       ;; role count as covered — a role-nil arg (GEN
+                       ;; possessor, unmapped case) gets no role line,
+                       ;; so it must fall through to the `NP:' listing
+                       ;; below instead of vanishing entirely.
+                       (covered (delq nil
+                                      (mapcar (lambda (a)
+                                                (and (alist-get 'role a)
+                                                     (alist-get 'np a)))
+                                              arg-list))))
                   (dolist (role-sym tibetan-analysis--role-order)
                     (dolist (a arg-list)
                       (when (eq (alist-get 'role a) role-sym)

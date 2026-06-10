@@ -3418,5 +3418,25 @@ lands on the correct occurrence, not the first."
       (should-not (string-match-p (concat "ngo so[^\n]*\n" (regexp-quote m)) out))
       (should (= 1 (cl-count m (split-string out "\n") :test #'string=))))))
 
+(ert-deftest tibetan-analysis-clause-structure-lists-role-nil-nps ()
+  "M4 (Fable-5 audit): a clause NP whose case maps to NO clause role
+(GEN — possessors aren't clause arguments) was marked `covered' by the
+role pass yet never printed, vanishing from the rendered Sentence
+Structure (probe: རྔོག [GEN] absent from seg-110's clause).  Role-nil
+NPs must appear on the fallback `NP:' line."
+  (skip-unless (fboundp 'tibetan-analyze-round2))
+  (let* ((content (tibetan-analysis-generate-content
+                   "རྔོག་གི་དྲུང་དུ་ཕྱིན་ནས།" 110 nil))
+         (structure
+          (when (string-match
+                 "\\*\\* Sentence Structure\n\\(\\(?:.\\|\n\\)*?\\)\n\\*\\* "
+                 content)
+            (match-string 1 content))))
+    (should structure)
+    ;; The TERM goal is role-labelled…
+    (should (string-match-p "དྲུང" structure))
+    ;; …and the GEN possessor is STILL LISTED (fallback NP line).
+    (should (string-match-p "རྔོག" structure))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
