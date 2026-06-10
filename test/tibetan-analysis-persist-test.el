@@ -3246,5 +3246,32 @@ unfinished entry (no comma) at buffer end."
     (should-not (with-timeout (5 (ert-fail "matcher did not terminate"))
                   (tibetan-analysis--vocab-term-matcher (point-max))))))
 
+(ert-deftest tibetan-analysis-regenerate-preserves-unknown-top-sections ()
+  "H2 (Fable-5 audit): regenerate-auto used a fixed whitelist and
+silently DELETED any other top-level section (live exposure: 45
+sent-*-lam files carrying legacy `* Translation' / `* Grammar Notes').
+Unknown top-level sections must survive a regenerate verbatim."
+  (let ((f (make-temp-file "seg-unknown" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file f
+            (insert "#+TITLE: Segment 1 Analysis\n\n"
+                    "* My Notes\nkeep me\n\n"
+                    "* Tibetan Text\nབདག\n\n"
+                    "* Tibetan Analysis\nold\n\n"
+                    "* Questions for Class\nWhy the ergative here?\n\n"
+                    "* Grammar Notes\nlegacy auto-layout body\n\n"
+                    "* Footnotes\n\n"))
+          (tibetan-analysis-regenerate-auto f "བདག" "** Wylie Transliteration\nbdag\n")
+          (let ((s (with-temp-buffer (insert-file-contents f) (buffer-string))))
+            (should (string-match-p "^\\* Questions for Class\nWhy the ergative here\\?" s))
+            (should (string-match-p "^\\* Grammar Notes\nlegacy auto-layout body" s))
+            (should (string-match-p "keep me" s))
+            ;; Known machinery still regenerated, no duplicates.
+            (should (= 1 (cl-count "* Questions for Class"
+                                   (split-string s "\n") :test #'string=)))))
+      (when (get-file-buffer f) (kill-buffer (get-file-buffer f)))
+      (delete-file f))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

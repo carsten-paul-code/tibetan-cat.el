@@ -1179,6 +1179,46 @@ silently destroying the upstream-Claude / DM artefacts."
                 (push (cons section-name content) sections)))))
         (nreverse sections)))))
 
+(defconst tibetan-analysis--known-top-sections
+  '("My Notes" "Working Translation" "Reference Translations"
+    "Translation Comparison" "Apparatus" "Footnotes"
+    "Sanskrit Text" "Sanskrit Analysis" "Combined Analysis"
+    "Tibetan Analysis" "Auto-Analysis" "Tibetan Text"
+    "DharmaMitra Translation (Tibetan)"
+    "DharmaMitra Translation (Sanskrit)"
+    "Sanskrit (DharmaMitra)")
+  "Top-level headings `regenerate-auto' knows how to re-emit.
+Any OTHER top-level section is unknown to the canonical layout and
+must be preserved verbatim — see
+`tibetan-analysis--get-unknown-top-sections' (H2, Fable-5 audit
+2026-06-04: the previous whitelist-only rewrite silently deleted
+e.g. the legacy `* Translation' / `* Grammar Notes' sections that
+45 live MA Reading sentence files still carry).")
+
+(defun tibetan-analysis--get-unknown-top-sections (filepath)
+  "Return the concatenated text of top-level sections in FILEPATH whose
+heading is NOT in `tibetan-analysis--known-top-sections'.  Sections are
+returned in file order, each ending with a blank line; nil when none."
+  (when (file-exists-p filepath)
+    (with-temp-buffer
+      (insert-file-contents filepath)
+      (goto-char (point-min))
+      (let ((chunks '()))
+        (while (re-search-forward "^\\* \\(.+?\\)[ \t]*$" nil t)
+          (let ((name (match-string 1))
+                (start (line-beginning-position)))
+            (unless (member name tibetan-analysis--known-top-sections)
+              (let ((end (save-excursion
+                           (forward-line 1)
+                           (if (re-search-forward "^\\* " nil t)
+                               (line-beginning-position)
+                             (point-max)))))
+                (push (buffer-substring-no-properties start end) chunks)))))
+        (when chunks
+          (mapconcat (lambda (c)
+                       (if (string-suffix-p "\n\n" c) c (concat c "\n")))
+                     (nreverse chunks) ""))))))
+
 ;; ============================================================================
 ;; Dangling [[term-X][...]] link stripper (export safety, 2026-05-18)
 ;; ============================================================================
@@ -1472,6 +1512,11 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
           (cdr (assoc "DharmaMitra Translation (Sanskrit)" user-sections)))
          (sanskrit-dharmamitra
           (cdr (assoc "Sanskrit (DharmaMitra)" user-sections)))
+         ;; H2 (Fable-5 audit): top-level sections the canonical
+         ;; layout does not know — preserved verbatim, re-emitted
+         ;; just before Footnotes, instead of silently deleted.
+         (unknown-sections
+          (tibetan-analysis--get-unknown-top-sections filepath))
          (hash (tibetan-analysis-compute-hash tibetan-text))
          (date (format-time-string "%Y-%m-%d"))
          ;; Capture the existing file header (everything before the
@@ -1594,6 +1639,11 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
       (when apparatus
         (insert apparatus)
         (unless (string-suffix-p "\n\n" apparatus)
+          (insert "\n")))
+      ;; H2: unknown top-level sections, verbatim, before Footnotes.
+      (when unknown-sections
+        (insert unknown-sections)
+        (unless (string-suffix-p "\n\n" unknown-sections)
           (insert "\n")))
       (insert (or footnotes "* Footnotes\n\n"))
       (unless (string-suffix-p "\n\n" (or footnotes ""))
