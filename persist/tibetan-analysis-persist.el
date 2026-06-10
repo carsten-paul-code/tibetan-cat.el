@@ -219,12 +219,12 @@ POS field."
   (when (and vocab-alist (listp vocab-alist))
     (let ((wylie (tibetan-analysis--token-wylie word)))
       (when wylie
-        (let ((hit (cl-find-if
-                    (lambda (pair)
-                      (let ((key (car pair)))
-                        (or (string= key wylie)
-                            (string-prefix-p (concat wylie " ") key))))
-                    vocab-alist)))
+        ;; M2 (Fable-5 audit): EXACT key match only.  The prefix
+        ;; match (wylie ⊂ MWU key) re-glossed a bare མར ("butter")
+        ;; from the `mar pas' proper-noun entry — a token that is the
+        ;; first word of an unrelated MWU key must not inherit the
+        ;; MWU's name.
+        (let ((hit (assoc wylie vocab-alist)))
           (when hit
             (let* ((line (cdr hit))
                    (pre (if (string-match "\"" line)
@@ -234,7 +234,7 @@ POS field."
                 (when (string-match "\"\\([^\"]+\\)\"" line)
                   (match-string 1 line))))))))))
 
-(defun tibetan-analysis--apply-claude-vocab-override (word dict-gloss vocab-alist)
+(defun tibetan-analysis--apply-claude-vocab-override (word dict-gloss vocab-alist &optional curated)
   "Override a proper-noun DICT-GLOSS with Claude's reading.
 
 Two override paths, both gated on Claude Vocabulary having an entry
@@ -265,6 +265,12 @@ gloss when present."
       (or (tibetan-analysis--claude-vocab-gloss-for-token word vocab-alist)
           dict-gloss))
      ;; Path 2: untagged common-noun gloss masking a Claude proper noun.
+     ;; M2 guards (Fable-5 audit): NEVER rewrite a hand-curated
+     ;; Resources/Custom gloss (§2.9) nor a `<term>'-tagged 84000
+     ;; canonical gloss — both are authoritative over Claude here.
+     ((or curated
+          (and trimmed (string-prefix-p "<term>" trimmed)))
+      dict-gloss)
      (t
       (or (tibetan-analysis--claude-vocab-proper-noun-p word vocab-alist)
           dict-gloss)))))
@@ -4293,7 +4299,8 @@ unused-arg warning without breaking the public API."
                                 (tibetan-analysis--apply-claude-vocab-override
                                  word-clean
                                  short-meaning
-                                 tibetan-analysis--claude-vocabulary-for-render))))
+                                 tibetan-analysis--claude-vocabulary-for-render
+                                 curated-source-p))))
                       ;; Mark Resources / Custom entries in the curated hash
                       ;; so the Interlinear renderer can prepend ★.  The
                       ;; `source' variable is set earlier in this let* from

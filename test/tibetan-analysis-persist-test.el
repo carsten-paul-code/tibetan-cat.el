@@ -3349,5 +3349,31 @@ chosen; the resolver falls through to the caller's own bare file."
                            suffixed)))
       (delete-directory dir t))))
 
+(ert-deftest tibetan-analysis-claude-vocab-override-respects-curated-and-term ()
+  "M2 (Fable-5 audit): the untagged proper-noun override (path 2) must
+NOT rewrite a hand-curated Resources/Custom gloss (§2.9: never
+rewritten) nor a `<term>'-tagged 84000 canonical gloss, and must
+require an EXACT Claude key match — the prefix match re-glossed a bare
+མར (\"butter\") from the `mar pas' MWU entry."
+  (let ((vocab '(("mar pas" . "mar pas, proper noun, \"Mar pa\", ergative")
+                 ("rngog" . "rngog, proper noun, \"rNgog\", a disciple"))))
+    ;; Curated gloss → kept even though Claude says proper noun.
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "རྔོག" "Butter // butter" vocab 'curated)
+                     "Butter // butter"))
+    ;; <term> tag → kept.
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "རྔོག" "<term> butter-lamp offering" vocab)
+                     "<term> butter-lamp offering"))
+    ;; PREFIX key (mar ⊂ mar pas) no longer fires path 2: bare མར
+    ;; keeps its dictionary gloss.
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "མར" "butter" vocab)
+                     "butter"))
+    ;; EXACT key still overrides an untagged common-noun gloss.
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "རྔོག" "mane" vocab)
+                     "rNgog"))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
