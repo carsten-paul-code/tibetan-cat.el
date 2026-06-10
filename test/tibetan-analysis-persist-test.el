@@ -3303,5 +3303,51 @@ buffer must be saved before the preserve pass reads the file."
       (when (get-file-buffer f) (kill-buffer (get-file-buffer f)))
       (delete-directory dir t))))
 
+(ert-deftest tibetan-analysis-file-belongs-to-source-exact-basename ()
+  "M1 (Fable-5 audit): the source check was a SUBSTRING match — source
+`rim.org' claimed a file whose #+SOURCE names `lam-rim.org' (basename
+suffix collision), re-opening the §5.23 cross-source overwrite class.
+The comparison must be an exact basename match."
+  (let ((dir (make-temp-file "tcat-src" t)))
+    (unwind-protect
+        (let ((bare (expand-file-name "seg-001.org" dir)))
+          (with-temp-file bare
+            (insert "#+SOURCE: [[file:../lam-rim.org::*Segment 1]"
+                    "[lam-rim.org / Segment 1]]\n"))
+          (should (tibetan-analysis--file-belongs-to-source-p
+                   bare "/x/lam-rim.org"))
+          ;; Substring relatives must NOT match.
+          (should-not (tibetan-analysis--file-belongs-to-source-p
+                       bare "/x/rim.org"))
+          (should-not (tibetan-analysis--file-belongs-to-source-p
+                       bare "/x/lam-rim-extra.org")))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-analysis-resolve-filepath-rejects-foreign-suffixed-file ()
+  "M1b: a suffixed file that POSITIVELY belongs to another source (its
+#+SOURCE names a different document — short-name collision, e.g.
+`gal-chen-nyi-shu' vs `gal.org' both shortening to `gal') must not be
+chosen; the resolver falls through to the caller's own bare file."
+  (let ((dir (make-temp-file "tcat-foreign" t)))
+    (unwind-protect
+        (let ((suffixed (expand-file-name "seg-004-gal.org" dir))
+              (bare (expand-file-name "seg-004.org" dir)))
+          ;; The suffixed file belongs to gal.org — NOT our source.
+          (with-temp-file suffixed
+            (insert "#+SOURCE: [[file:../gal.org::*Segment 4]"
+                    "[gal.org / Segment 4]]\n"))
+          ;; Our own bare file.
+          (with-temp-file bare
+            (insert "#+SOURCE: [[file:../gal-chen-nyi-shu.org::*Segment 4]"
+                    "[gal-chen-nyi-shu.org / Segment 4]]\n"))
+          (should (string= (tibetan-analysis--resolve-filepath
+                            dir 4 "gal" "/x/gal-chen-nyi-shu.org")
+                           bare))
+          ;; And gal.org itself still resolves to ITS suffixed file.
+          (should (string= (tibetan-analysis--resolve-filepath
+                            dir 4 "gal" "/x/gal.org")
+                           suffixed)))
+      (delete-directory dir t))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

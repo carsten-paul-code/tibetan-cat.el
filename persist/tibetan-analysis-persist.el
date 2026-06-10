@@ -819,17 +819,28 @@ Returns filename like \\='seg-001.org\\='."
   (let ((num (tibetan-analysis--extract-segment-number seg-id)))
     (format "seg-%03d.org" num)))
 
+(defun tibetan-analysis--file-source-basename (filepath)
+  "Return the basename of the document named by FILEPATH's `#+SOURCE:'
+org link (`[[file:PATH::…]…]'), or nil when the file has no parseable
+SOURCE line.  Reads only the file head."
+  (when (and filepath (file-exists-p filepath))
+    (with-temp-buffer
+      (insert-file-contents filepath nil 0 2000)
+      (goto-char (point-min))
+      (when (re-search-forward
+             "^#\\+SOURCE:.*?\\[\\[file:\\([^]:]+\\)" nil t)
+        (file-name-nondirectory (match-string 1))))))
+
 (defun tibetan-analysis--file-belongs-to-source-p (filepath source-file)
-  "Return non-nil when FILEPATH's `#+SOURCE:' line names SOURCE-FILE.
-Compares by basename, reading only the file head.  Safe when either
-argument is nil or FILEPATH is absent."
-  (when (and source-file filepath (file-exists-p filepath))
-    (let ((src-base (file-name-nondirectory source-file)))
-      (with-temp-buffer
-        (insert-file-contents filepath nil 0 2000)
-        (goto-char (point-min))
-        (and (re-search-forward "^#\\+SOURCE:.*$" nil t)
-             (string-match-p (regexp-quote src-base) (match-string 0)))))))
+  "Return non-nil when FILEPATH's `#+SOURCE:' link names SOURCE-FILE.
+EXACT basename comparison (M1, Fable-5 audit 2026-06-04 — the previous
+substring match let source `rim.org' claim a `lam-rim.org' file,
+re-opening the §5.23 cross-source overwrite class).  Safe when either
+argument is nil or FILEPATH is absent; nil when FILEPATH has no
+parseable SOURCE link."
+  (when source-file
+    (let ((doc (tibetan-analysis--file-source-basename filepath)))
+      (and doc (string= doc (file-name-nondirectory source-file))))))
 
 (defun tibetan-analysis--resolve-filepath (folder num short-name source-file)
   "Choose the analysis filepath for segment NUM in FOLDER.
@@ -847,10 +858,24 @@ new B segments still get B's suffix."
   (let ((bare (expand-file-name (format "seg-%03d.org" num) folder)))
     (if (null short-name)
         bare
-      (let ((suffixed (expand-file-name
-                       (format "seg-%03d-%s.org" num short-name) folder)))
+      (let* ((suffixed (expand-file-name
+                        (format "seg-%03d-%s.org" num short-name) folder))
+             ;; M1b (Fable-5 audit): a suffixed file that POSITIVELY
+             ;; belongs to ANOTHER source (short-name collision, e.g.
+             ;; `gal-chen-nyi-shu' and `gal.org' both shorten to
+             ;; `gal') must not be reused — that would write source
+             ;; A's analysis into source B's file.  A suffixed file
+             ;; with no parseable SOURCE link is treated as ours
+             ;; (legacy files; the tool always writes #+SOURCE).
+             (suffixed-foreign
+              (and (file-exists-p suffixed)
+                   (let ((doc (tibetan-analysis--file-source-basename
+                               suffixed)))
+                     (and doc source-file
+                          (not (string= doc (file-name-nondirectory
+                                             source-file))))))))
         (cond
-         ((file-exists-p suffixed) suffixed)
+         ((and (file-exists-p suffixed) (not suffixed-foreign)) suffixed)
          ((and (file-exists-p bare)
                (tibetan-analysis--file-belongs-to-source-p bare source-file))
           bare)
