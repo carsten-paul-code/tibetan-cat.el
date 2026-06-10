@@ -270,8 +270,8 @@ the first failure — this is the full batch suite.  (Before 2026-06-01
 flag named a non-existent function that never executed; the spec suite
 also made a live dharmamitra.org request on every run.  Both fixed.)
 
-Current state (2026-06-03, post-§5.37 get-filepath bare-fallback):  **ERT
-2140 tests, 2139 expected, 0 unexpected, 1 intentional skip
+Current state (2026-06-10, post-§5.38 Fable-5 audit fixes):  **ERT
+2159 tests, 2158 expected, 0 unexpected, 1 intentional skip
 (compound-analysis-callable); BDD 244 / 244.**  Full `make compile` is
 clean (zero warnings).  Carsten runs `make test` after every change and
 expects it to stay green.
@@ -2879,6 +2879,61 @@ bug (mtimes clustered today), not iCloud.  With the fix, re-running
 auto-analyze on Milarepa no longer spawns twins.  If `-milarepa' files
 ever reappear they are iCloud re-syncing the quarantine from another
 device — delete them; the bare `seg-NNN.org' is canonical.
+
+### 5.38 Fable-5 targeted audit + fix-all (done, 2026-06-10)
+
+First audit on a new model generation (Fable 5), scoped to the
+§5.31–§5.37 diff + a fresh-eyes persist/ data-safety pass.  Three
+parallel reviewers; every finding probe-verified before fixing; all
+fixes regression-test-first, one commit each.  Suite 2140 → **2159**.
+
+**CRITICAL C1** — section-body bounds `^\*{1,N}[^*\n]` also matched
+markdown-bold `**Clause 1:**` / org-emphasis `*sic*` body lines,
+truncating every preserve-side reader at the first such line →
+preserve-mode reanalyze destroyed the section tail (§5.26 class; LIVE
+trigger: MA Reading sent-001.org's Claude Grammar, 110 of 2159 chars
+read).  Fixed: all 8 bounds → stars-then-SPACE (`^\*{1,N} `); plus
+Claude bodies now sanitised against line-leading `*` at insert (the
+§5.28 DM sanitizer mirrored).
+
+**HIGH** — H1: the §5.32 verb-tail guard fired at ≥2 syllables in the
+Interlinear (ཡེ་ཤེས/རྣམ་ཤེས/ཉན་ཐོས split into junk) while parser
+guarded ≥3 and DD not at all → three surfaces disagreed (seg-049
+anchor class).  Now ≥3 in ALL THREE loops.  H2: regenerate-auto's
+whitelist deleted unknown top-level sections (45 live sent-*-lam files
+with legacy `* Translation`/`* Grammar Notes`) → preserve-by-default
+via `--get-unknown-top-sections`.  H3: §5.35 vocab-term font-lock
+matcher infinite-looped (Emacs freeze) on a final line without
+trailing newline → mandatory-progress guard.  H4: both regenerate
+paths discarded UNSAVED visiting-buffer edits → modified visit saved
+before the preserve reads.
+
+**MEDIUM** — M1: `--file-belongs-to-source-p` substring → exact
+basename via `--file-source-basename`; resolver rejects a
+positively-foreign suffixed file (short-name collisions).  M2:
+proper-noun override exempt for curated/`<term>` glosses + exact key
+only (bare མར no longer inherits "Mar pa").  M3+L6: shad markers —
+boundaries now `(wylie . occurrence)` conses, per-boundary independent
+matching, ༼…༽ stripped.  M4: role-nil NPs (GEN) listed again in
+Sentence Structure.  M5: D1 fallback skips junk senses (page refs)
+with a bracket-aware sense splitter.  M6: sentence regenerate
+round-trips L2 `** Claude Vocabulary`.  M7: force-refresh (`t` and
+C-c u R) restores existing Claude content until the async response
+lands — the §5.26 amplifier closed on the explicit path too.
+
+**LOW batch** — སོང labels as past (`past_stem_alt`); zettel-linked
+tokens included in Claude grounding; trailing-whitespace headings
+found by the preserve pass; vocab-term matcher tightened (entry shape
+required, L1 headings close the section).  Deferred deliberately: the
+zero-marker clause-initial case (linguistics display call — eyeball
+live per §5.31).
+
+**Corpus**: Milarepa re-rendered preserve-mode (282 seg + 85 sent, 0
+failed) — ye shes back to one unit, rngog GEN listed, Resources
+intact (162 ★ files).  MA Reading NOT regenerated (§5.36 caveat —
+the 48 ★ Resources files would lose their glosses; the C1/H2 fixes
+make a future regenerate safe for *structure*, but the missing
+wordlist data still stands).
 
 ## 6. Open work (prioritised)
 
