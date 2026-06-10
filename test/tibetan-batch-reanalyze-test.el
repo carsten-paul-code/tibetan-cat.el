@@ -33,7 +33,7 @@
 (defun tibetan-batch-test--stub-generate (body-tag)
   "Return a lambda usable as `tibetan-analysis-generate-content' stub.
 BODY-TAG is embedded so tests can assert regeneration happened."
-  (lambda (_tibetan-text &optional _seg-id _source-text)
+  (lambda (_tibetan-text &optional _seg-id _source-text _source-file)
     (format ":PROPERTIES:\n:GENERATED: t\n:END:\n\n** Word List\n- STUB %s\n\n** Provided Translations\n*** DharmaMitra\n[stub]\n\n*** CAT Gloss\n[stub]\n\n*** Claude\n[Requesting translation...]\n\n*** Reference Translations\n[none]\n"
             body-tag)))
 

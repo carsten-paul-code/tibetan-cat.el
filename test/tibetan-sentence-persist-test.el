@@ -2055,5 +2055,42 @@ the L2 slot."
               (should (string-match-p "PRESERVE-L2-VOCAB" s)))))
       (delete-directory dir t))))
 
+;; ----------------------------------------------------------------------------
+;; Phase 5 (verb-first redesign) — sentence-for-segment lookup
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-sentence-for-segment-finds-parent ()
+  "Inverse walker: given a SEGMENT number, find its enclosing Sentence
+in a §2.12 nested source (Sentence → Segment)."
+  (let ((src (make-temp-file "tcat-src" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file src
+            (insert "#+TITLE: T\n\n* Tibetan Text\n"
+                    "*** Sentence 2\n"
+                    "**** Segment 5\nཁོ་སོང་ནས།\n\n"
+                    "**** Working Translation\n\n"
+                    "**** Segment 6\nཆོས་བྱས།\n\n"
+                    "*** Sentence 3\n"
+                    "**** Segment 7\nབདག\n"))
+          (let ((info (tibetan-sentence--sentence-for-segment 6 src)))
+            (should info)
+            (should (= 2 (plist-get info :sent-num)))
+            (should (equal '(5 6) (plist-get info :seg-nums)))
+            (should (string-match-p "ཁོ་སོང་ནས"
+                                    (plist-get info :tibetan-text)))))
+      (delete-file src))))
+
+(ert-deftest tibetan-sentence-for-segment-nil-on-flat-layout ()
+  "A flat `** Section → *** Segment' source (no Sentence level) → nil."
+  (let ((src (make-temp-file "tcat-flat" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file src
+            (insert "* Tibetan Text\n** Section 1\n"
+                    "*** Segment 4\nབདག\n"))
+          (should-not (tibetan-sentence--sentence-for-segment 4 src)))
+      (delete-file src))))
+
 (provide 'tibetan-sentence-persist-test)
 ;;; tibetan-sentence-persist-test.el ends here

@@ -233,6 +233,27 @@ or nil when no sentence is in scope."
               :tibetan-text (string-trim joined)
               :seg-nums seg-nums)))))
 
+(defun tibetan-sentence--sentence-for-segment (seg-num source-file)
+  "Find the Sentence containing Segment SEG-NUM in SOURCE-FILE.
+Inverse of `tibetan-sentence--collect-from-source-buffer': walks UP
+from the segment heading to its enclosing `Sentence' heading (Phase 5
+of the verb-first redesign — the sentence is the analysis domain; the
+segment file shows its slice).  Returns the same plist shape as
+`tibetan-sentence--collect-current-sentence', or nil when the segment
+is absent or the layout is flat (no Sentence level — pre-§2.12
+sources fall back to segment-local analysis).  Takes SOURCE-FILE
+explicitly — never depends on `buffer-file-name' (§5.34 lesson)."
+  (when (and seg-num source-file (file-readable-p source-file))
+    (with-temp-buffer
+      (insert-file-contents source-file)
+      (let ((delay-mode-hooks t))
+        (org-mode))
+      (goto-char (point-min))
+      (when (re-search-forward
+             (format "^\\*+[ \t]+Segment[ \t]+%d\\b" seg-num) nil t)
+        (beginning-of-line)
+        (tibetan-sentence--collect-current-sentence)))))
+
 (defun tibetan-sentence--collect-from-source-buffer (sent-num)
   "Re-scan the current buffer for sentence SENT-NUM and return its data.
 Like `tibetan-sentence--collect-current-sentence' but driven by

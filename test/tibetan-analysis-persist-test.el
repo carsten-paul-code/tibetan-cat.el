@@ -3439,5 +3439,46 @@ pass; wrapped commentary lines are not highlighted as vocab terms."
         (push (match-string 1) terms))
       (should (equal (nreverse terms) '("bla ma"))))))
 
+;; ----------------------------------------------------------------------------
+;; Phase 5 (verb-first redesign) — sentence-first slice rendering
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-analysis-segment-slice-of-sentence-tree ()
+  "In a multi-segment sentence, the DEPENDENT segment's Sentence
+Structure shows its own converb subtree plus a chain note to the main
+verb; the HEAD segment shows the full tree with sentence context."
+  (skip-unless (and (fboundp 'tibetan-parse-enhanced)
+                    (fboundp 'tibetan-verb-lookup)
+                    (tibetan-verb-lookup "བྱེད")))
+  (let ((src (make-temp-file "tcat-slice" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file src
+            (insert "#+TITLE: T\n\n* Tibetan Text\n"
+                    "*** Sentence 4\n"
+                    "**** Segment 21\nཁོ་སོང་ནས།\n\n"
+                    "**** Working Translation\n\n"
+                    "**** Segment 22\nཆོས་བྱས།\n"))
+          ;; Dependent segment (21): its converb clause + chain note.
+          (let ((c (tibetan-analysis-generate-content
+                    "ཁོ་སོང་ནས།" 21 nil src)))
+            (should (string-match-p "Sentence 4" c))
+            (should (string-match-p "VERB: འགྲོ" c))
+            (should (string-match-p "chains to MAIN VERB" c)))
+          ;; Head segment (22): the full tree, rooted at བྱེད.
+          (let ((c (tibetan-analysis-generate-content
+                    "ཆོས་བྱས།" 22 nil src)))
+            (should (string-match-p "MAIN VERB: བྱེད" c))
+            (should (string-match-p "Sentence 4" c))))
+      (delete-file src))))
+
+(ert-deftest tibetan-analysis-segment-slice-falls-back-without-sentence ()
+  "No source / flat layout → segment-local tree, no sentence header."
+  (skip-unless (and (fboundp 'tibetan-parse-enhanced)
+                    (fboundp 'tibetan-verb-lookup)))
+  (let ((c (tibetan-analysis-generate-content "ཆོས་བྱས།" 9 nil nil)))
+    (should (string-match-p "MAIN VERB" c))
+    (should-not (string-match-p "Sentence [0-9]+ —" c))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

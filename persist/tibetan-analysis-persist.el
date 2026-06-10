@@ -2348,6 +2348,137 @@ still be classified as a whole.  Returns the `type' field (index
   (or (cdr (assq role tibetan-analysis--role-labels))
       (and role (upcase (symbol-name role)))))
 
+(defun tibetan-analysis--strip-drawers (text)
+  "Remove org property drawers from TEXT (source child texts carry
+the segment's :PROPERTIES: drawer)."
+  (when text
+    (string-trim
+     (replace-regexp-in-string
+      ":PROPERTIES:\\(?:.\\|\n\\)*?:END:\n?" "" text))))
+
+(defun tibetan-analysis--sentence-tree-for-segment (seg-id source-file)
+  "Build the FULL-SENTENCE verb-first tree for the sentence containing
+SEG-ID in SOURCE-FILE (Phase 5: the sentence is the analysis domain).
+
+Each child segment is parsed SEPARATELY and the token streams are
+concatenated with offset-shifted verb positions and MWU spans —
+parsing the joined text instead merges tokens across the shad at
+child boundaries (verified: `ནས། ཆོས' tokenized as one word).
+
+Returns (:tree TREE :ranges ((SEG-NUM START END)...) :sent-num N
+:seg-nums (..)) or nil when the segment isn't inside a multi-segment
+sentence, the layout is flat, or any substrate is unavailable —
+nil → the caller falls back to segment-local analysis."
+  (when (and seg-id source-file
+             (fboundp 'tibetan-sentence--sentence-for-segment)
+             (fboundp 'tibetan-analyze-sentence)
+             (fboundp 'tibetan-parse-enhanced)
+             (fboundp 'tibetan-extract-verbs-compound-aware))
+    (condition-case nil
+        (let ((info (tibetan-sentence--sentence-for-segment
+                     seg-id source-file)))
+          (when (and info (> (length (plist-get info :seg-nums)) 1))
+            (let ((children (plist-get info :children))
+                  (fwords '()) (fverbs '()) (fmwu '())
+                  (ranges '()) (off 0))
+              (dolist (c children)
+                (let* ((ctext (tibetan-analysis--strip-drawers
+                               (plist-get c :text)))
+                       (cp (tibetan-parse-enhanced ctext))
+                       (cwords (alist-get 'words cp))
+                       (cmwu (alist-get 'multiword-units cp))
+                       (cverbs (tibetan-extract-verbs-compound-aware
+                                ctext cwords cmwu))
+                       (len (length cwords)))
+                  (push (list (plist-get c :seg-num) off (+ off len))
+                        ranges)
+                  (setq fwords (append fwords cwords))
+                  ;; Shift verb positions into sentence coordinates.
+                  (dolist (v cverbs)
+                    (let ((v2 (copy-alist v)))
+                      (when (alist-get 'source-pos v2)
+                        (setf (alist-get 'source-pos v2)
+                              (+ off (alist-get 'source-pos v2))))
+                      (push v2 fverbs)))
+                  ;; Shift MWU spans ((start end form meta) ...).
+                  (dolist (m cmwu)
+                    (push (cons (+ off (nth 0 m))
+                                (cons (+ off (nth 1 m)) (cddr m)))
+                          fmwu))
+                  (setq off (+ off len))))
+              (setq ranges (nreverse ranges)
+                    fverbs (nreverse fverbs)
+                    fmwu (nreverse fmwu))
+              (let* ((reliable (cl-remove-if
+                                (lambda (v) (eq (alist-get 'source v)
+                                                'vocab-fallback))
+                                fverbs))
+                     (tree (and reliable
+                                (tibetan-analyze-sentence
+                                 fwords reliable fmwu))))
+                (when tree
+                  (list :tree tree :ranges ranges
+                        :sent-num (plist-get info :sent-num)
+                        :seg-nums (plist-get info :seg-nums)))))))
+      (error nil))))
+
+(defun tibetan-analysis--render-sentence-slice (slice seg-id)
+  "Render SEG-ID's slice of the sentence-level SLICE plist, or nil.
+The head segment (containing the main verb) gets the FULL tree under
+a sentence-context header; a dependent segment gets its own clause
+subtrees plus a chain note naming the main verb and its segment."
+  (let* ((tree (plist-get slice :tree))
+         (ranges (plist-get slice :ranges))
+         (range (cl-find-if (lambda (r) (= (car r) seg-id)) ranges))
+         (root-verb (plist-get tree :verb))
+         (root-pos (alist-get 'source-pos root-verb))
+         (header (format "(Sentence %d — segments %s)\n"
+                         (plist-get slice :sent-num)
+                         (mapconcat #'number-to-string
+                                    (plist-get slice :seg-nums) ", "))))
+    (when (and range root-pos)
+      (let ((start (nth 1 range)) (end (nth 2 range)))
+        (if (and (<= start root-pos) (< root-pos end))
+            ;; Head segment: full tree.
+            (concat header
+                    (tibetan-analysis--render-tree-node tree 0 "MAIN VERB"))
+          ;; Dependent segment: own clause subtrees + chain note.
+          (let* ((mine (cl-remove-if-not
+                        (lambda (c)
+                          (let ((vp (alist-get
+                                     'source-pos
+                                     (plist-get (plist-get c :node) :verb))))
+                            (and vp (<= start vp) (< vp end))))
+                        (append (plist-get tree :converbs)
+                                (plist-get tree :complements))))
+                 (main-seg (car (cl-find-if
+                                 (lambda (r) (and (<= (nth 1 r) root-pos)
+                                                  (< root-pos (nth 2 r))))
+                                 ranges))))
+            (when mine
+              (concat
+               header
+               (mapconcat
+                (lambda (c)
+                  (concat
+                   (if (plist-get c :label)
+                       (format "⤷ converb%s (%s):\n"
+                               (if (plist-get c :particle)
+                                   (format " %s" (plist-get c :particle))
+                                 "")
+                               (plist-get c :label))
+                     "COMPLEMENT clause:\n")
+                   (tibetan-analysis--render-tree-node
+                    (plist-get c :node) 2 "VERB")))
+                mine "")
+               (format "  ⤷ chains to MAIN VERB: %s%s\n"
+                       (if (alist-get 'lemma root-verb)
+                           (tibetan-analysis--format-word-with-wylie
+                            (alist-get 'lemma root-verb))
+                         "?")
+                       (if main-seg (format " (Segment %d)" main-seg)
+                         ""))))))))))
+
 (defconst tibetan-analysis--tree-role-labels
   '((agent      . "AGENT (ERG)")
     (subject    . "SUBJECT (ABS)")
@@ -2407,7 +2538,7 @@ HEADER is the verb line's label (\"MAIN VERB\", \"COMPLEMENT VERB\",
     ;; Adjuncts keep their case label.
     (dolist (np (plist-get tree :adjuncts))
       (setq out (concat out (format "%s  ADJUNCT — %s: %s\n" pad
-                                    (or (alist-get 'case np) "—")
+                                    (or (alist-get 'case np) "bare")
                                     (tibetan-analysis--tree-np-string np))))
       (dolist (poss (alist-get 'possessors np))
         (setq out (concat out (format "%s    POSSESSOR (GEN): %s\n" pad
@@ -4405,8 +4536,20 @@ unused-arg warning without breaking the public API."
             ;; at all (default t).
             (when tibetan-analysis-show-clause-structure
               (insert "** Sentence Structure\n")
-              (let ((rendered (tibetan-analysis--render-sentence-tree
-                               words verbs multiword-units)))
+              ;; Phase 5 (verb-first redesign): sentence-first — when
+              ;; the segment sits inside a multi-segment §2.12
+              ;; sentence, render its SLICE of the full-sentence tree;
+              ;; otherwise (single-segment sentence, flat layout, any
+              ;; lookup failure) the segment-local tree.
+              (let* ((slice (and seg-id resolved-src
+                                 (tibetan-analysis--sentence-tree-for-segment
+                                  seg-id resolved-src)))
+                     (sliced (and slice
+                                  (tibetan-analysis--render-sentence-slice
+                                   slice seg-id)))
+                     (rendered (or sliced
+                                   (tibetan-analysis--render-sentence-tree
+                                    words verbs multiword-units))))
                 (if (and rendered (not (string-empty-p rendered)))
                     (insert rendered)
                   (insert "[Round-2 sentence structure unavailable]\n")))
@@ -5311,7 +5454,8 @@ without touching the file.  Otherwise return a plist:
                             source-file seg-id)
                          (error nil))))
                  (auto-content (tibetan-analysis-generate-content
-                                tibetan-text seg-id source-text)))
+                                tibetan-text seg-id source-text
+                                source-file)))
             (tibetan-analysis-regenerate-auto filepath tibetan-text
                                               auto-content)
             (when has-any-section
