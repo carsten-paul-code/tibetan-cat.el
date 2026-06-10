@@ -245,5 +245,155 @@ builders."
             (should (string-match-p "GERMAN" sys))))
       (delete-file src))))
 
+;; ----------------------------------------------------------------------------
+;; Phase 3 — dispatcher, fan-out, dedup, stubs
+;; ----------------------------------------------------------------------------
+
+(defun tstc--scaffold-seg (dir n &optional populated)
+  "Write a segment-layout scaffold for segment N in DIR."
+  (let ((f (expand-file-name (format "seg-%03d.org" n) dir)))
+    (with-temp-file f
+      (insert (format "#+TITLE: Segment %d Analysis\n\n" n)
+              "* Tibetan Text\nབདག\n\n"
+              "* Tibetan Analysis\n"
+              "** Translation\n"
+              (if populated "POPULATED TRANSLATION\n" "[Awaiting Claude…]\n")
+              "\n** Claude Vocabulary\n"
+              (if populated "pop, noun, \"x\"\n" "[Awaiting Claude…]\n")
+              "\n** Grammar\n*** Claude Grammar\n\n"
+              "** Provided Translations\n*** Claude Particles\n\n"
+              "** Concept Notes\n[Awaiting Claude…]\n\n"
+              "* Footnotes\n"))
+    f))
+
+(ert-deftest tibetan-sentence-claude-handle-response-writes-all ()
+  "The fan-out lands each child's subsections in its own file and the
+sentence-level pieces in the sent file; Concept Notes are copied to
+children under the sentence label."
+  (let ((dir (make-temp-file "tstc-fan" t)))
+    (unwind-protect
+        (let* ((c105 (tstc--scaffold-seg dir 105))
+               (c106 (tstc--scaffold-seg dir 106))
+               (sent (expand-file-name "sent-004.org" dir)))
+          (with-temp-file sent
+            (insert "#+TITLE: Sentence 4 Analysis\n\n"
+                    "* Tibetan Text\nx\n\n* Tibetan Analysis\n"
+                    "** Claude Vocabulary\n\n** Translation\n[Awaiting Claude…]\n\n"
+                    "** Grammar\n*** Claude Grammar\n\n"
+                    "** Concept Notes\n[Awaiting Claude…]\n\n* Footnotes\n"))
+          (tibetan-sentence-claude--handle-response
+           tstc--full-response
+           (list :sent-num 4 :seg-nums '(105 106)
+                 :child-files (list c105 c106) :sent-file sent :force t))
+          (let ((s105 (with-temp-buffer (insert-file-contents c105)
+                                        (buffer-string)))
+                (s106 (with-temp-buffer (insert-file-contents c106)
+                                        (buffer-string)))
+                (ssent (with-temp-buffer (insert-file-contents sent)
+                                         (buffer-string))))
+            (should (string-match-p "Having gone" s105))
+            (should (string-match-p "rngog, proper noun" s105))
+            (should (string-match-p "requested the dharma" s106))
+            ;; Concept Notes labelled + copied to children.
+            (should (string-match-p "(Sentence 4 — segments 105–106)" s105))
+            (should (string-match-p "four pillars" s105))
+            ;; Sent file: whole translation + grammar preamble.
+            (should (string-match-p "went to rNgog's place and requested"
+                                    ssent))
+            (should (string-match-p "two-clause chain" ssent))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-claude-handle-response-missing-stub ()
+  "A child absent from the response gets a VISIBLE stub — never a
+silent blank — and the stub counts as still-needing a request."
+  (let ((dir (make-temp-file "tstc-miss" t)))
+    (unwind-protect
+        (let ((c105 (tstc--scaffold-seg dir 105))
+              (c107 (tstc--scaffold-seg dir 107)))
+          (tibetan-sentence-claude--handle-response
+           tstc--full-response
+           (list :sent-num 4 :seg-nums '(105 107)
+                 :child-files (list c105 c107) :sent-file nil :force t))
+          (let ((s107 (with-temp-buffer (insert-file-contents c107)
+                                        (buffer-string))))
+            (should (string-match-p "\\[Claude sentence response missing Segment 107"
+                                    s107)))
+          (should (tibetan-analysis--claude-needs-request-p c107)))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-claude-landing-gate ()
+  "Non-FORCE: a populated child keeps its content; the empty sibling
+is filled.  FORCE: both rewritten."
+  (let ((dir (make-temp-file "tstc-gate" t)))
+    (unwind-protect
+        (let ((c105 (tstc--scaffold-seg dir 105 'populated))
+              (c106 (tstc--scaffold-seg dir 106)))
+          (tibetan-sentence-claude--handle-response
+           tstc--full-response
+           (list :sent-num 4 :seg-nums '(105 106)
+                 :child-files (list c105 c106) :sent-file nil :force nil))
+          (should (string-match-p "POPULATED TRANSLATION"
+                                  (with-temp-buffer
+                                    (insert-file-contents c105)
+                                    (buffer-string))))
+          (should (string-match-p "requested the dharma"
+                                  (with-temp-buffer
+                                    (insert-file-contents c106)
+                                    (buffer-string))))
+          ;; FORCE pass overwrites the populated child too.
+          (tibetan-sentence-claude--handle-response
+           tstc--full-response
+           (list :sent-num 4 :seg-nums '(105 106)
+                 :child-files (list c105 c106) :sent-file nil :force t))
+          (should (string-match-p "Having gone"
+                                  (with-temp-buffer
+                                    (insert-file-contents c105)
+                                    (buffer-string)))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-claude-dispatch-dedup-and-fallbacks ()
+  "Two children of one sentence → ONE queue submit; flat layout /
+single-segment sentences → nil (caller falls back to per-segment)."
+  (let ((dir (make-temp-file "tstc-disp" t))
+        (submits 0))
+    (unwind-protect
+        (let* ((src (expand-file-name "doc.org" dir))
+               (c105 (tstc--scaffold-seg dir 105))
+               (c106 (tstc--scaffold-seg dir 106)))
+          (ignore c105 c106)
+          (with-temp-file src
+            (insert "#+TITLE: D\n\n* Tibetan Text\n"
+                    "*** Sentence 4\n"
+                    "**** Segment 105\nབདག\n\n"
+                    "**** Segment 106\nཆོས\n\n"
+                    "*** Sentence 5\n"
+                    "**** Segment 107\nབདག\n"))
+          (tibetan-sentence-claude-clear-inflight)
+          (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+                     (lambda (&rest _) (cl-incf submits))))
+            ;; Two children, same sentence → one submit.
+            (should (eq 'fired
+                        (tibetan-analysis--fire-sentence-level
+                         "བདག" (expand-file-name "seg-105.org" dir)
+                         src 105 t)))
+            (should (eq 'dedup-hit
+                        (tibetan-analysis--fire-sentence-level
+                         "ཆོས" (expand-file-name "seg-106.org" dir)
+                         src 106 t)))
+            (should (= 1 submits))
+            ;; Single-seg sentence → nil (fall back).
+            (should-not (tibetan-analysis--fire-sentence-level
+                         "བདག" (expand-file-name "seg-107.org" dir)
+                         src 107 t))
+            ;; Flat layout → nil.
+            (let ((flat (expand-file-name "flat.org" dir)))
+              (with-temp-file flat
+                (insert "* Tibetan Text\n** Section 1\n*** Segment 9\nབདག\n"))
+              (should-not (tibetan-analysis--fire-sentence-level
+                           "བདག" (expand-file-name "seg-009.org" dir)
+                           flat 9 t)))))
+      (tibetan-sentence-claude-clear-inflight)
+      (delete-directory dir t))))
+
 (provide 'tibetan-sentence-claude-test)
 ;;; tibetan-sentence-claude-test.el ends here

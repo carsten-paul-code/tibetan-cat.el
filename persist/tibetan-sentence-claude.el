@@ -274,5 +274,227 @@ cache-constant).  FOLDER locates the child seg files for grounding."
                 "subsections exactly as instructed.")))
     (cons system user)))
 
+;; ----------------------------------------------------------------------------
+;; Phase 3 — dispatcher, write fan-out, dedup registry
+;; ----------------------------------------------------------------------------
+
+(declare-function tibetan-analysis--insert-claude-sections
+                  "tibetan-analysis-claude")
+(declare-function tibetan-analysis--claude-needs-request-p
+                  "tibetan-analysis-claude")
+(declare-function tibetan-analysis--write-claude-failure-stub
+                  "tibetan-analysis-claude")
+(declare-function tibetan-analysis--ensure-gptel-ready
+                  "tibetan-analysis-claude")
+(declare-function tibetan-analysis--claude-status-rate-limited-p
+                  "tibetan-analysis-claude")
+(declare-function tibetan-sentence--sentence-for-segment
+                  "tibetan-sentence-persist")
+(declare-function tibetan-sentence--filepath "tibetan-sentence-persist")
+(declare-function tibetan-claude-queue-submit "tibetan-claude-queue")
+(declare-function tibetan-sanskrit-parallel--source-mode-parallel-p
+                  "tibetan-sanskrit-parallel")
+(declare-function gptel-request "gptel")
+(defvar gptel-cache)
+
+(defvar tibetan-sentence-claude--inflight (make-hash-table :test #'equal)
+  "In-flight sentence-level requests, keyed (TRUENAME . SENT-NUM).
+A batch over 12 children of one sentence fires the call ONCE; the
+later children see the claim and skip.  Entries are released in the
+queue job's done path (ok AND fail).  Content gates — not this
+registry — decide refiring on the next run, so a stale entry after a
+crash only suppresses until `tibetan-sentence-claude-clear-inflight'.")
+
+(defun tibetan-sentence-claude-clear-inflight ()
+  "Clear the sentence-level in-flight registry (crash recovery)."
+  (interactive)
+  (clrhash tibetan-sentence-claude--inflight)
+  (message "Sentence-level in-flight registry cleared"))
+
+(defun tibetan-sentence-claude--claim (source-file sent-num label)
+  "Claim (SOURCE-FILE . SENT-NUM); nil when already in flight."
+  (let ((key (cons (file-truename source-file) sent-num)))
+    (unless (gethash key tibetan-sentence-claude--inflight)
+      (puthash key (list :label label) tibetan-sentence-claude--inflight)
+      key)))
+
+(defun tibetan-sentence-claude--release (key)
+  "Release the in-flight claim KEY."
+  (when key (remhash key tibetan-sentence-claude--inflight)))
+
+(defun tibetan-sentence-claude--segment-label (sent-num seg-nums)
+  "The `(Sentence N — segments A–B)' label line."
+  (format "(Sentence %s — segments %s–%s)"
+          sent-num (apply #'min seg-nums) (apply #'max seg-nums)))
+
+(defun tibetan-sentence-claude--handle-response (response ctx)
+  "Land a sentence-first RESPONSE into the files named by CTX.
+CTX: (:sent-num N :seg-nums L :child-files L :sent-file F-or-nil
+:force BOOL).  Per child: synthesize a standard five-section response
+from its subsections and feed `tibetan-analysis--insert-claude-sections'
+\(landing-gated: non-FORCE skips children whose Translation/Vocabulary
+is already populated — M7 discipline).  Concept Notes are copied to
+every child under the sentence label.  Children missing from the
+response get a VISIBLE stub via the failure-stub writer — never a
+silent blank.  The sent file gets the whole-sentence pieces."
+  (let* ((sent-num (plist-get ctx :sent-num))
+         (seg-nums (plist-get ctx :seg-nums))
+         (child-files (plist-get ctx :child-files))
+         (sent-file (plist-get ctx :sent-file))
+         (force (plist-get ctx :force))
+         (parsed (tibetan-sentence-claude--parse-response response seg-nums))
+         (label (tibetan-sentence-claude--segment-label sent-num seg-nums))
+         (concepts (plist-get parsed :concepts))
+         (labelled-concepts
+          (when (and concepts (not (string-empty-p concepts)))
+            (concat label "\n" concepts))))
+    (cl-loop for n in seg-nums
+             for file in child-files
+             do
+             (let ((slot (cdr (assq n (plist-get parsed :per-segment)))))
+               (cond
+                ((null slot)
+                 ;; Missing from the response → visible stub (the
+                 ;; stub writer only fills empty/placeholder slots,
+                 ;; so populated content survives).
+                 (when (and file (file-exists-p file)
+                            (fboundp 'tibetan-analysis--write-claude-failure-stub))
+                   (tibetan-analysis--write-claude-failure-stub
+                    file
+                    (format "[Claude sentence response missing Segment %d — re-run C-c u R]"
+                            n))))
+                ((and file (file-exists-p file)
+                      (or force
+                          (tibetan-analysis--claude-needs-request-p file)))
+                 (tibetan-analysis--insert-claude-sections
+                  (tibetan-sentence-claude--synthesize-segment-markdown
+                   (append slot (list :concepts labelled-concepts)))
+                  file)))))
+    (when (and sent-file (file-exists-p sent-file))
+      (let ((md (tibetan-sentence-claude--synthesize-sentence-markdown
+                 parsed)))
+        (when (and md (not (string-empty-p md))
+                   (or force
+                       (tibetan-analysis--claude-needs-request-p sent-file)))
+          (tibetan-analysis--insert-claude-sections md sent-file))))))
+
+(defun tibetan-sentence-claude--request (sentence child-files sent-file
+                                         source-file folder force)
+  "Queue the sentence-first Claude request.  Mirrors
+`tibetan-analysis--request-claude-translation' (429 retry via the
+queue; on exhaustion a visible failure stub lands in every child that
+is still empty)."
+  (require 'tibetan-claude-queue)
+  (let* ((sent-num (plist-get sentence :sent-num))
+         (seg-nums (plist-get sentence :seg-nums))
+         (label (format "sent-%03d (segs %s)" (or sent-num 0)
+                        (mapconcat #'number-to-string seg-nums ",")))
+         (ctx (list :sent-num sent-num :seg-nums seg-nums
+                    :child-files child-files :sent-file sent-file
+                    :force force))
+         (claim-key (cons (file-truename source-file) sent-num)))
+    (tibetan-claude-queue-submit
+     (lambda (done)
+       (condition-case err
+           (progn
+             (unless (and (featurep 'gptel) (fboundp 'gptel-request))
+               (error "gptel not loaded"))
+             (when (fboundp 'tibetan-analysis--ensure-gptel-ready)
+               (tibetan-analysis--ensure-gptel-ready))
+             (let* ((prompts (tibetan-sentence-claude--build-prompts
+                              sentence source-file folder))
+                    (gptel-cache '(system)))
+               (gptel-request
+                (cdr prompts)
+                :system (car prompts)
+                :callback
+                (lambda (response info)
+                  (cond
+                   ((and response (stringp response)
+                         (not (string-empty-p response)))
+                    (condition-case e
+                        (tibetan-sentence-claude--handle-response
+                         response ctx)
+                      (error (message "Sentence-first insert failed (%s): %s"
+                                      label (error-message-string e))))
+                    (tibetan-sentence-claude--release claim-key)
+                    (funcall done '(:status ok)))
+                   ((and (fboundp 'tibetan-analysis--claude-status-rate-limited-p)
+                         (tibetan-analysis--claude-status-rate-limited-p info))
+                    (funcall done '(:status rate-limited)))
+                   (t
+                    (tibetan-sentence-claude--release claim-key)
+                    (funcall done
+                             (list :status 'error
+                                   :error (format "%s"
+                                                  (or (and (listp info)
+                                                           (plist-get info :status))
+                                                      "no response"))))))))))
+         (error
+          (tibetan-sentence-claude--release claim-key)
+          (funcall done (list :status 'error
+                              :error (error-message-string err))))))
+     :label label
+     :on-fail
+     (lambda (status)
+       (tibetan-sentence-claude--release claim-key)
+       (let ((msg (format "[Claude request failed: %s — re-run C-c u R later]"
+                          (or (plist-get status :error)
+                              (plist-get status :status) "unknown"))))
+         (dolist (f child-files)
+           (when (and f (file-exists-p f)
+                      (fboundp 'tibetan-analysis--write-claude-failure-stub))
+             (tibetan-analysis--write-claude-failure-stub f msg))))))))
+
+(defun tibetan-analysis--fire-sentence-level (tibetan-text analysis-file
+                                              source-file seg-id
+                                              &optional force)
+  "Fire ONE sentence-level Claude call for the sentence containing
+SEG-ID, when applicable.  Returns nil when the sentence path does NOT
+apply (flat layout, single-segment sentence, parallel-Sanskrit source,
+missing child files, fire-gate says no) — the caller then runs the
+existing per-segment fire UNCHANGED.  Returns `fired' or `dedup-hit'
+when the sentence path owns this segment (caller must NOT also fire
+per-segment Claude)."
+  (ignore tibetan-text)
+  (when (and analysis-file source-file seg-id
+             (fboundp 'tibetan-sentence--sentence-for-segment)
+             ;; Parallel-Sanskrit docs keep their three-call chain.
+             (not (and (fboundp 'tibetan-sanskrit-parallel--source-mode-parallel-p)
+                       (tibetan-sanskrit-parallel--source-mode-parallel-p
+                        source-file))))
+    (let ((sentence (condition-case nil
+                        (tibetan-sentence--sentence-for-segment
+                         seg-id source-file)
+                      (error nil))))
+      (when (and sentence (> (length (plist-get sentence :seg-nums)) 1))
+        (let* ((folder (file-name-directory (expand-file-name analysis-file)))
+               (seg-nums (plist-get sentence :seg-nums))
+               (child-files
+                (mapcar (lambda (n)
+                          (expand-file-name (format "seg-%03d.org" n) folder))
+                        seg-nums))
+               (sent-file (expand-file-name
+                           (format "sent-%03d.org"
+                                   (plist-get sentence :sent-num))
+                           folder)))
+          ;; All children must exist (auto-analyze creates files before
+          ;; firing) — otherwise fall back to the per-segment path.
+          (when (cl-every #'file-exists-p child-files)
+            ;; Fire gate: FORCE, or any child still needs Claude.
+            (when (or force
+                      (cl-some (lambda (f)
+                                 (tibetan-analysis--claude-needs-request-p f))
+                               child-files))
+              (let ((label (format "sent-%03d" (plist-get sentence :sent-num))))
+                (if (not (tibetan-sentence-claude--claim
+                          source-file (plist-get sentence :sent-num) label))
+                    'dedup-hit
+                  (tibetan-sentence-claude--request
+                   sentence child-files
+                   (and (file-exists-p sent-file) sent-file)
+                   source-file folder force)
+                  'fired)))))))))
+
 (provide 'tibetan-sentence-claude)
 ;;; tibetan-sentence-claude.el ends here

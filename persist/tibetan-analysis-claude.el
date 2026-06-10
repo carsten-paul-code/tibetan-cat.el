@@ -2979,6 +2979,9 @@ and known error markers so we don't re-persist dead content."
                                         (string-match-p "\\`\\[Requesting" b)
                                         (string-match-p "\\`\\[Claude unavailable" b)
                                         (string-match-p "\\`\\[Claude request failed" b)
+                                        ;; §5.40 sentence-first missing-
+                                        ;; segment stub — still-needing.
+                                        (string-match-p "\\`\\[Claude sentence response missing" b)
                                         (string-match-p "\\`\\[Translation not available" b))
                                   b))))
                when body return body))))
