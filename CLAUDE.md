@@ -270,8 +270,8 @@ the first failure — this is the full batch suite.  (Before 2026-06-01
 flag named a non-existent function that never executed; the spec suite
 also made a live dharmamitra.org request on every run.  Both fixed.)
 
-Current state (2026-06-10, post-§5.38 Fable-5 audit fixes):  **ERT
-2159 tests, 2158 expected, 0 unexpected, 1 intentional skip
+Current state (2026-06-10, post-§5.39 verb-first redesign):  **ERT
+2175 tests, 2174 expected, 0 unexpected, 1 intentional skip
 (compound-analysis-callable); BDD 244 / 244.**  Full `make compile` is
 clean (zero warnings).  Carsten runs `make test` after every change and
 expects it to stay green.
@@ -2934,6 +2934,56 @@ intact (162 ★ files).  MA Reading NOT regenerated (§5.36 caveat —
 the 48 ★ Resources files would lose their glosses; the C1/H2 fixes
 make a future regenerate safe for *structure*, but the missing
 wordlist data still stands).
+
+### 5.39 Verb-first (head-driven) sentence-structure redesign (done, 2026-06-10)
+
+Carsten: *"my mistake at the beginning was concentrate on segments, not
+on sentences resp. verbs.  The final verb have to be the main focus."*
+Approved plan (AskUserQuestion): sentence-first computation, verb-headed
+tree rendering, elided slots shown.  6 phases, 7 commits, all
+test-first.  Suite 2159 → **2175**.
+
+**Architecture** (new module `analysis/tibetan-sentence-tree.el` on top
+of the kept clause-segmenter Parts A+B):
+- `tibetan-frame--slot-specs`: the 8 Hill frames → ordered (ROLE CASES
+  REQUIRED) slots; `tibetan-frame-fill-slots`: saturation (each slot
+  once), agent = leftmost ERG, patient = bare NP nearest the verb,
+  leftovers → adjuncts, unfilled required slots → elided.  GEN NPs
+  attach as `:possessors`; dang-coordination merges.
+- `tibetan-analyze-sentence`: root = FINAL clause's verb; V+TERM
+  pattern (`byed du` before `bcug`) → nested :complements; other
+  dependents → :converbs with Bialek labels; matrix-ERG-claiming rule
+  fills the matrix agent from a complement's span.
+- Renderer `tibetan-analysis--render-sentence-tree` replaces the flat
+  `Clause N [main]` blocks: MAIN VERB root with frame, indented slots,
+  `— [elided]` lines, `ADJUNCT — CASE`, nested POSSESSOR, `⤷ converb`
+  chains.  Old Part C (`tibetan-build-argument-structure` + flat
+  case→role map — the seg-37 `bla ma` = DIRECT OBJECT source) RETIRED.
+- Sentence-first: `tibetan-sentence--sentence-for-segment` (inverse
+  walker) + `--sentence-tree-for-segment` (per-child parse with
+  offset-shifted concatenation — parsing joined text merges tokens
+  across the shad at child borders) + `--render-sentence-slice`: head
+  segment gets the full tree under a `(Sentence N — segments …)`
+  header; dependent segments get their clause subtrees + `⤷ chains to
+  MAIN VERB: X (Segment M)`.  Flat layouts / single-segment sentences
+  fall back to segment-local trees.
+- Prerequisite bug (Phase 2): standalone པས/བས after a NOUN is now
+  nominaliser+ERG (`མར་པས` = Mar pa ERG), not a causal converb; the
+  greedy compound-`Xར` TERM rule is gated off before པས/བས.  ནི is an
+  NP boundary (copular sentences).
+
+**Corpus**: Milarepa preserve-mode re-render (282 seg + 85 sent, 0
+failed, 162 ★ Resources intact); seg-097 renders the textbook causative
+tree (AGENT མར་པ, CAUSEE elided, COMPLEMENT VERB བྱེད); 60 segment
+files carry chain notes.  MA Reading excluded (§5.36 caveat).
+
+**KNOWN LIMITATION (the next lever)**: with only ~53 framed verbs in
+the Hill DB, long Milarepa sentences (e.g. Sentence 39 = 12 segments)
+detect few verbs → giant clause spans → noisy `ADJUNCT — bare` lists
+and wrong subjects from undetected verbs (ཕབ etc.).  Slot logic is
+sound (visible on short sentences); **verb-DB coverage expansion is
+the highest-value follow-up**, plus the deferred items: recursive
+complements, `འགྲོ` → "Abs-Term" upgrade, sentence-parse cache.
 
 ## 6. Open work (prioritised)
 
