@@ -102,6 +102,7 @@
 ;; Round-2 regression suite for clause segmentation / NP chunking /
 ;; argument structure
 (condition-case nil (require 'tibetan-round2-clause-segmenter-test) (error nil))
+(condition-case nil (require 'tibetan-sentence-tree-test) (error nil))
 
 ;; Batch reanalysis (preserves user notes + Claude translation)
 (condition-case nil (require 'tibetan-batch-reanalyze-test) (error nil))
