@@ -270,8 +270,8 @@ the first failure — this is the full batch suite.  (Before 2026-06-01
 flag named a non-existent function that never executed; the spec suite
 also made a live dharmamitra.org request on every run.  Both fixed.)
 
-Current state (2026-06-10, post-§5.39 verb-first redesign):  **ERT
-2175 tests, 2174 expected, 0 unexpected, 1 intentional skip
+Current state (2026-06-10, post-§5.40 sentence-level calls):  **ERT
+2197 tests, 2196 expected, 0 unexpected, 1 intentional skip
 (compound-analysis-callable); BDD 244 / 244.**  Full `make compile` is
 clean (zero warnings).  Carsten runs `make test` after every change and
 expects it to stay green.
@@ -2992,6 +2992,54 @@ further verbs can be added the same way (scan: pre-shad positions,
 `tibetan-verb-lookup` misses, frequency-ranked).  Still deferred:
 recursive complements, `འགྲོ` → "Abs-Term" upgrade, sentence-parse
 cache.
+
+### 5.40 Sentence-level Claude + DM calls, split per segment (done, 2026-06-10)
+
+Carsten: sending only the segment wastes context — send the COMPLETE
+SENTENCE to Claude/DM, split the response back per segment.  Approved:
+Claude SELF-SEGMENTS (`### Segment N` subsections — deterministic
+parse, no heuristics); DM gets the sentence and every child shows the
+whole translation under a `(Sentence N — segments A–B)` label;
+Milarepa re-fired afterwards.  6 phases, 6 commits.  Suite 2175 →
+**2197**.
+
+**New module `persist/tibetan-sentence-claude.el`**: splitter
+(`--parse-response` → :translation-whole/:grammar-preamble/:concepts +
+:per-segment + :missing), synthesizers feeding the unmodified
+`--insert-claude-sections` (heading migration / C1 sanitizer / zettel
+linking for free), sentence-first system addendum (whole-sentence
+Translation preamble + per-segment subsections in Vocab/Grammar/
+Particles, Grammar cross-clause preamble, sentence-level Concept
+Notes), prompt builder (per-child enumeration + per-child Interlinear
+grounding + children parser grounding + zettels; no ±2 block — the
+sentence IS the context), in-flight dedup registry
+(`clear-inflight` for crash recovery), dispatcher
+`tibetan-analysis--fire-sentence-level` (nil = fall back per-segment:
+flat layouts, single-seg sentences, parallel-Sanskrit, missing
+children).  Landing gates per M7 (non-FORCE skips populated children);
+missing subsections → visible `[Claude sentence response missing
+Segment N…]` stub that counts as needs-request.
+
+**Shared static system blocks**: `--claude-static-system-blocks`
+extracted from the segment builder — both system prompts are
+per-document constants by construction (two coexisting Anthropic
+cache prefixes).
+
+**DM**: `fire-tibetan-sentence` (one call, multi-write via the nested
+writer, per-file §5.29 gating, label inside the body); scheduled via
+`tibetan-dharmamitra-sentence-request-delay` (6.5s — 10/min limit);
+the sent file's DM body now ROUND-TRIPS through sentence regenerate
+(read-before/write-after — the §5.22 strip-list omission would
+otherwise eat it, §5.26 class; regression test failed pre-fix).
+
+**Wiring**: reanalyze-file, C-c u R, auto-analysis create loop, and
+the sentence create/reanalyze sites all try the dispatcher first; a
+claim suppresses BOTH per-segment fires; multi-seg sentences retire
+the sent file's separate Claude call (one call feeds both file kinds).
+
+Deferred: ±1 surrounding-sentence context; parallel-Sanskrit
+sentence-first; response-truncation mitigation (visible as missing
+stubs); the multi-child auto-regen cascade.
 
 ## 6. Open work (prioritised)
 
