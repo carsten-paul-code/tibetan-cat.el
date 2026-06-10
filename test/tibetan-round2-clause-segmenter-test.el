@@ -473,5 +473,37 @@ elements are ignored; valid verb alists are still processed."
                     nil)))
       (should (= (length clauses) 1)))))
 
+(ert-deftest tibetan-round2-np-pas-after-noun-is-ergative ()
+  "Phase 2 (verb-first redesign): standalone པས AFTER A NOUN is the
+nominaliser པ + ergative ས (`མར་པས' = Mar pa + ERG), not a causal
+converb.  The converb-first classification destroyed the ergative so
+the agent NP never existed for role assignment (the bla-ma mislabel's
+second root)."
+  (skip-unless (fboundp 'tibetan-np-chunk))
+  ;; bla ma mar pas chos byed : NP1 = bla-ma-mar-pa ERG, NP2 = chos.
+  (let* ((words '("བླ་མ" "མར" "པས" "ཆོས" "བྱེད"))
+         (verbs (list `((lemma . "བྱེད") (source-pos . 4))))
+         (clauses (tibetan-clause-segment words verbs))
+         (nps (tibetan-np-chunk words clauses)))
+    (let ((erg (cl-find-if (lambda (np) (eq (alist-get 'case np) 'ERG))
+                           nps)))
+      (should erg)
+      (should (string-match-p "བླ་མ" (alist-get 'head erg)))
+      (should (string-match-p "པ\\'" (alist-get 'head erg))))))
+
+(ert-deftest tibetan-round2-np-nas-after-noun-is-ablative ()
+  "Standalone ནས after a NOUN is the ablative case, not an ablative
+converb (which only follows verbs)."
+  (skip-unless (fboundp 'tibetan-np-chunk))
+  ;; khang pa nas 'gro : NP = khang-pa ABL.
+  (let* ((words '("ཁང་པ" "ནས" "འགྲོ"))
+         (verbs (list `((lemma . "འགྲོ") (source-pos . 2))))
+         (clauses (tibetan-clause-segment words verbs))
+         (nps (tibetan-np-chunk words clauses)))
+    (should (cl-find-if (lambda (np)
+                          (and (eq (alist-get 'case np) 'ABL)
+                               (string-match-p "ཁང" (alist-get 'head np))))
+                        nps))))
+
 (provide 'tibetan-round2-clause-segmenter-test)
 ;;; tibetan-round2-clause-segmenter-test.el ends here

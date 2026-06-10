@@ -579,8 +579,18 @@ MWU spans are treated as atomic heads.  Returns a list of NP alists
                          ;; its final piece is a 2-char `Xར' form, treat the
                          ;; ར as a terminative suffix.  Conservative: never
                          ;; fires on a standalone 2-char word like པར/མར.
+                         ;; Phase 2 gate (verb-first redesign): when
+                         ;; the NEXT word is standalone པས/བས, the
+                         ;; ergative reading wins (`མར་པས' = Mar pa +
+                         ;; ERG) — a terminative directly followed by
+                         ;; an ergative particle is impossible, so the
+                         ;; ར stays part of the name.
                          (when (and (null np-case)
                                     (> (length pieces) 1)
+                                    (not (and (< (1+ np-end) (1+ ce))
+                                              (member (string-trim
+                                                       (nth (1+ np-end) words))
+                                                      '("པས" "བས"))))
                                     (let ((lp (car (last pieces))))
                                       (and (= (length lp) 2)
                                            (string-suffix-p "ར" lp))))
@@ -606,6 +616,23 @@ MWU spans are treated as atomic heads.  Returns a list of NP alists
                                         (assoc nxt tibetan-clause-seg--case-particles))
                                (setq np-case (cdr (assoc nxt
                                                          tibetan-clause-seg--case-particles)))
+                               (setq np-end (1+ np-end)))))
+                         ;; Phase 2 of the verb-first redesign:
+                         ;; standalone པས/བས AFTER A NOUN HEAD is the
+                         ;; nominaliser པ/བ + ergative ས (`མར་པས' =
+                         ;; Mar pa + ERG) — NOT the causal converb,
+                         ;; which only follows verbs.  The converb-
+                         ;; first classification destroyed the
+                         ;; ergative, so the agent NP never existed
+                         ;; for role assignment.  Glue the nominaliser
+                         ;; onto the head and tag ERG.
+                         (when (and (null np-case)
+                                    (< (1+ np-end) (1+ ce)))
+                           (let ((nxt (string-trim (nth (1+ np-end) words))))
+                             (when (member nxt '("པས" "བས"))
+                               (setq head (concat head "་"
+                                                  (substring nxt 0 1)))
+                               (setq np-case 'ERG)
                                (setq np-end (1+ np-end)))))
                          (push `((start . ,np-start)
                                  (end   . ,np-end)
