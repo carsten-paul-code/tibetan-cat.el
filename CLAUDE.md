@@ -2977,13 +2977,21 @@ failed, 162 ★ Resources intact); seg-097 renders the textbook causative
 tree (AGENT མར་པ, CAUSEE elided, COMPLEMENT VERB བྱེད); 60 segment
 files carry chain notes.  MA Reading excluded (§5.36 caveat).
 
-**KNOWN LIMITATION (the next lever)**: with only ~53 framed verbs in
-the Hill DB, long Milarepa sentences (e.g. Sentence 39 = 12 segments)
-detect few verbs → giant clause spans → noisy `ADJUNCT — bare` lists
-and wrong subjects from undetected verbs (ཕབ etc.).  Slot logic is
-sound (visible on short sentences); **verb-DB coverage expansion is
-the highest-value follow-up**, plus the deferred items: recursive
-complements, `འགྲོ` → "Abs-Term" upgrade, sentence-parse cache.
+**Coverage batch (same day)**: scanned pre-shad verb positions across
+Milarepa + KBGP and added **21 framed Hill entries** (འབྱུང འབྱོན འབུལ
+ཟེར གནང གསོལ དགོས བགྱིད རྫོང བཤམ ལེན འབེབས ཁྱེར སྐུར ཡལ ཐིམ འཁྱམས
+འཕྲོག ཁྲོ ཕྱར ཆེ དགའ).  Re-rendered Milarepa (282+85) and the KBGP
+seg files (32, per-file — gal/lam/title untouched, 48 ★ intact).
+Effect: seg-110's slice collapsed from 17 junk adjuncts to the clean
+minimal tree; sent-021 now roots at འབྱུང with a chained འབྱོན clause.
+`tibetan-round1-minimal-entry-tags-source` repointed (གསོལ promoted
+to Hill; ཤོར is the closed-set exemplar now).
+
+Residual noise on very long sentences remains coverage-driven —
+further verbs can be added the same way (scan: pre-shad positions,
+`tibetan-verb-lookup` misses, frequency-ranked).  Still deferred:
+recursive complements, `འགྲོ` → "Abs-Term" upgrade, sentence-parse
+cache.
 
 ## 6. Open work (prioritised)
 
