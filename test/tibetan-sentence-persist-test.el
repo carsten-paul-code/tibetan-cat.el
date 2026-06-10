@@ -2092,5 +2092,38 @@ in a §2.12 nested source (Sentence → Segment)."
           (should-not (tibetan-sentence--sentence-for-segment 4 src)))
       (delete-file src))))
 
+(ert-deftest tibetan-sentence-regenerate-preserves-dm-section ()
+  "§5.40 Phase 4b: the sentence-level DM translation lands in the sent
+file's nested `** DharmaMitra Translation' — the regenerate must
+round-trip it (the §5.22 strip-list deliberately omits DM from the
+sentence scaffold, so without an explicit preserve step the body is
+silently eaten — §5.26 class)."
+  (skip-unless (fboundp 'tibetan-sentence--regenerate))
+  (let* ((dir (make-temp-file "ttest-sent-dm-" t))
+         (path (expand-file-name "sent-003.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file path
+            (insert "#+TITLE: Sentence 3 Analysis\n"
+                    "#+SEGMENTS: 3\n\n"
+                    "* My Notes\n\n"
+                    "* Working Translation\n\n"
+                    "* Tibetan Text\nབདག\n\n"
+                    "* Tibetan Analysis\n\n"
+                    "** Translation\nT\n\n"
+                    "** DharmaMitra Translation\n"
+                    "(Sentence 3 — segments 3–3)\n\n"
+                    "PRESERVE-DM-BODY\n\n"
+                    "* Footnotes\n"))
+          (tibetan-sentence--regenerate path 3 '(3) "བདག")
+          (let ((b (get-file-buffer path)))
+            (when b (with-current-buffer b (set-buffer-modified-p nil))
+                  (kill-buffer b)))
+          (let ((s (with-temp-buffer (insert-file-contents path)
+                                     (buffer-string))))
+            (should (string-match-p "PRESERVE-DM-BODY" s))
+            (should (string-match-p "(Sentence 3 — segments 3–3)" s))))
+      (delete-directory dir t))))
+
 (provide 'tibetan-sentence-persist-test)
 ;;; tibetan-sentence-persist-test.el ends here

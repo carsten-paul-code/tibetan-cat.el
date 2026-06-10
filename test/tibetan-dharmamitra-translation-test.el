@@ -619,5 +619,71 @@ only Tibetan fires."
           (delete-directory sdir t)
           (delete-directory adir t))))))
 
+;; ----------------------------------------------------------------------------
+;; §5.40 Phase 4a — sentence-level DM fire (one call, multi-write)
+;; ----------------------------------------------------------------------------
+
+(defun tdmt--scaffold (dir name &optional populated)
+  "Minimal segment-layout scaffold with a nested DM slot."
+  (let ((f (expand-file-name name dir)))
+    (with-temp-file f
+      (insert "#+TITLE: X\n\n* Tibetan Text\nབདག\n\n"
+              "* Tibetan Analysis\n** Translation\nt\n\n"
+              "** DharmaMitra Translation\n"
+              (if populated "ALREADY POPULATED\n" "[Awaiting DharmaMitra…]\n")
+              "\n* Footnotes\n"))
+    f))
+
+(ert-deftest tibetan-dm-sentence-fire-one-call-writes-all ()
+  "ONE API call; every child + the sent file carry the sentence label
+and the translation; populated children survive non-FORCE."
+  (let ((dir (make-temp-file "tdm-sent" t))
+        (calls 0))
+    (unwind-protect
+        (let ((c1 (tdmt--scaffold dir "seg-033.org"))
+              (c2 (tdmt--scaffold dir "seg-034.org" 'populated))
+              (sf (tdmt--scaffold dir "sent-012.org")))
+          (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+                     (lambda (&rest _) (cl-incf calls)
+                       "The guru spoke thus.")))
+            (tibetan-dharmamitra-translation-fire-tibetan-sentence
+             "བདག ཆོས" 12 '(33 34) (list c1 c2) sf nil))
+          (should (= 1 calls))
+          (let ((s1 (with-temp-buffer (insert-file-contents c1) (buffer-string)))
+                (s2 (with-temp-buffer (insert-file-contents c2) (buffer-string)))
+                (ss (with-temp-buffer (insert-file-contents sf) (buffer-string))))
+            (should (string-match-p "(Sentence 12 — segments 33–34)" s1))
+            (should (string-match-p "The guru spoke thus" s1))
+            ;; Populated child untouched without FORCE.
+            (should (string-match-p "ALREADY POPULATED" s2))
+            (should-not (string-match-p "guru spoke" s2))
+            ;; Sent file written too.
+            (should (string-match-p "The guru spoke thus" ss))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-dm-sentence-fire-force-and-empty-response ()
+  "FORCE overwrites a populated child; an empty API response writes
+NOTHING (preserve pattern)."
+  (let ((dir (make-temp-file "tdm-sent2" t)))
+    (unwind-protect
+        (let ((c (tdmt--scaffold dir "seg-040.org" 'populated)))
+          ;; FORCE overwrites.
+          (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+                     (lambda (&rest _) "Fresh.")))
+            (tibetan-dharmamitra-translation-fire-tibetan-sentence
+             "བདག" 9 '(40) (list c) nil t))
+          (should (string-match-p "Fresh"
+                                  (with-temp-buffer (insert-file-contents c)
+                                                    (buffer-string))))
+          ;; Empty response → nothing written (Fresh stays).
+          (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+                     (lambda (&rest _) nil)))
+            (tibetan-dharmamitra-translation-fire-tibetan-sentence
+             "བདག" 9 '(40) (list c) nil t))
+          (should (string-match-p "Fresh"
+                                  (with-temp-buffer (insert-file-contents c)
+                                                    (buffer-string)))))
+      (delete-directory dir t))))
+
 (provide 'tibetan-dharmamitra-translation-test)
 ;;; tibetan-dharmamitra-translation-test.el ends here

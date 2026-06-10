@@ -478,5 +478,50 @@ single-language `fire-tibetan' calls."
             (tibetan-dharmamitra-translation-fire-sanskrit
              iast analysis-file)))))))
 
+(defun tibetan-dharmamitra-translation-fire-tibetan-sentence
+    (sentence-text sent-num seg-nums child-files sent-file &optional force)
+  "Fire ONE DharmaMitra translation for a whole SENTENCE (§5.40).
+SENTENCE-TEXT is the concatenated sentence; SENT-NUM / SEG-NUMS
+identify it; CHILD-FILES are the child seg-NNN.org paths and
+SENT-FILE the sent-NNN.org path (nil to skip).  The full sentence
+translation is written into EVERY child's nested `** DharmaMitra
+Translation' slot AND the sent file, under a `(Sentence N — segments
+A–B)' label that travels INSIDE the body (so the §5.28 sanitizer and
+the §5.20 preserve machinery handle it untouched).
+
+Fire gate: FORCE, or ANY child still needs a DM request.  Landing
+gate per file: FORCE or that file needs it — a populated section is
+never overwritten by a non-FORCE fire (§5.29 policy).  An empty API
+response writes nothing (preserve pattern, like --fire-tibetan)."
+  (when (and sentence-text (stringp sentence-text)
+             (not (string-empty-p (string-trim sentence-text)))
+             child-files
+             (or force
+                 (cl-some (lambda (f)
+                            (tibetan-dharmamitra-translation-needs-request-p
+                             f "Tibetan"))
+                          child-files)))
+    (let ((translation
+           (condition-case err
+               (tibetan-dharmamitra-api-chat-translate sentence-text)
+             (error
+              (message "DharmaMitra sentence request failed (Sentence %s): %s"
+                       sent-num (error-message-string err))
+              nil))))
+      (when (and translation (stringp translation)
+                 (not (string-empty-p (string-trim translation))))
+        (let ((body (format "(Sentence %s — segments %s–%s)\n\n%s"
+                            sent-num
+                            (apply #'min seg-nums) (apply #'max seg-nums)
+                            (string-trim translation))))
+          (dolist (f (append child-files (and sent-file (list sent-file))))
+            (when (and f (file-exists-p f)
+                       (or force
+                           (tibetan-dharmamitra-translation-needs-request-p
+                            f "Tibetan")))
+              (tibetan-dharmamitra-translation--write-nested-tibetan-section
+               f body)))
+          t)))))
+
 (provide 'tibetan-dharmamitra-translation)
 ;;; tibetan-dharmamitra-translation.el ends here

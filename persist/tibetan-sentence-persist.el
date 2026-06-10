@@ -931,6 +931,15 @@ Updates `#+SEGMENTS:' / `#+TIBETAN_HASH:' / `#+LAST_ANALYZED:'."
                filepath "Concept Notes")
               (tibetan-sentence--read-third-level-body
                filepath "Claude Context")))
+         ;; §5.40 Phase 4b: the sentence-level DM translation lands in
+         ;; this file's nested `** DharmaMitra Translation' — read it
+         ;; BEFORE the rebuild (the §5.22 strip-list omits DM from the
+         ;; sentence scaffold, so without this round-trip the body
+         ;; would be silently eaten — §5.26 class).
+         (dm-nested-body
+          (and (fboundp 'tibetan-analysis--read-dharmamitra-tibetan-nested-body)
+               (tibetan-analysis--read-dharmamitra-tibetan-nested-body
+                filepath)))
          ;; M6 (Fable-5 audit): aligned sentence files carry Claude
          ;; Vocabulary at LEVEL 2 (segment shape) — read L2-first,
          ;; legacy L3 fallback, mirroring the Concept Notes slot.
@@ -1024,6 +1033,14 @@ Updates `#+SEGMENTS:' / `#+TIBETAN_HASH:' / `#+LAST_ANALYZED:'."
         (when claude-particles-body
           (tibetan-sentence--set-l3-body-in-buffer
            buf "Claude Particles" claude-particles-body))
+        ;; §5.40 Phase 4b: restore the DM body (writer inserts the
+        ;; nested heading when the fresh scaffold lacks it).
+        (when (and dm-nested-body
+                   (fboundp
+                    'tibetan-dharmamitra-translation--write-nested-tibetan-section))
+          (with-current-buffer buf (save-buffer))
+          (tibetan-dharmamitra-translation--write-nested-tibetan-section
+           filepath dm-nested-body))
         ;; Top-level user sections — captured verbatim from the old
         ;; file (heading line through next ^* heading), re-inserted
         ;; in place of the scaffold's empty placeholder.
