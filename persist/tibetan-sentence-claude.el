@@ -450,12 +450,22 @@ is still empty)."
                   (cond
                    ((and response (stringp response)
                          (not (string-empty-p response)))
-                    (condition-case e
-                        (tibetan-sentence-claude--handle-response
-                         response ctx)
-                      (error (message "Sentence-first insert failed (%s): %s"
-                                      label (error-message-string e))))
-                    (tibetan-sentence-claude--release claim-key)
+                    ;; CRITICAL: defer the fan-out OUT of the gptel
+                    ;; curl sentinel.  Landing N children (plus the
+                    ;; auto-regen cascade) inside the sentinel
+                    ;; corrupted gptel's process-buffer parsing
+                    ;; (\"Search failed: <boundary>\" → batch emacs
+                    ;; died mid-queue, first live re-fire 2026-06-10).
+                    (run-at-time
+                     0 nil
+                     (lambda ()
+                       (condition-case e
+                           (tibetan-sentence-claude--handle-response
+                            response ctx)
+                         (error (message
+                                 "Sentence-first insert failed (%s): %s"
+                                 label (error-message-string e))))
+                       (tibetan-sentence-claude--release claim-key)))
                     (funcall done '(:status ok)))
                    ((and (fboundp 'tibetan-analysis--claude-status-rate-limited-p)
                          (tibetan-analysis--claude-status-rate-limited-p info))
