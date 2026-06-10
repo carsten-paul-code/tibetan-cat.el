@@ -3471,5 +3471,33 @@ it."
       (when (get-file-buffer f) (kill-buffer (get-file-buffer f)))
       (delete-directory dir t))))
 
+(ert-deftest tibetan-analysis-audit-low-fixes-lockin ()
+  "L1/L4/L5 (Fable-5 audit) lock-ins: narrative སོང labels as past;
+a heading with trailing whitespace is still found by the preserve
+pass; wrapped commentary lines are not highlighted as vocab terms."
+  ;; L1: སོང → past (was imperative after the §5.32 ཕྱིན reindex).
+  (when (fboundp 'tibetan-verb-lookup)
+    (let ((e (tibetan-verb-lookup "སོང")))
+      (should (eq (tibetan-verb-matched-stem "སོང" e) 'past))
+      (should (eq (tibetan-verb-matched-stem "ཕྱིན" e) 'past))))
+  ;; L4: trailing-space heading still found.
+  (with-temp-buffer
+    (insert "* My Notes \nbody kept\n* Footnotes\n")
+    (should (tibetan-analysis-find-section-bounds
+             (current-buffer) "My Notes")))
+  ;; L5: wrapped line (no quoted gloss) not matched; L1 heading
+  ;; closes the section.
+  (with-temp-buffer
+    (insert "** Claude Vocabulary\n"
+            "bla ma, noun, \"teacher\", title\n"
+            "with the lama, in apposition\n"
+            "* Footnotes\n"
+            "see also, the commentary, \"x\"\n")
+    (goto-char (point-min))
+    (let (terms)
+      (while (tibetan-analysis--vocab-term-matcher (point-max))
+        (push (match-string 1) terms))
+      (should (equal (nreverse terms) '("bla ma"))))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

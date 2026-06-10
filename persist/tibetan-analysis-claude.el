@@ -888,9 +888,13 @@ nil or absent."
                    (body (buffer-substring-no-properties start end))
                    (pairs '())
                    (pos 0))
+              ;; L3 (Fable-5 audit): also capture zettel-linked
+              ;; tokens (`[[id:ZID][wylie]] ♦ [gloss]') — those carry
+              ;; the MOST curated glosses and were being omitted from
+              ;; the grounding block.
               (while (string-match
-                      (concat "\\[\\[term-[^]]*\\]\\[\\([^]]*\\)\\]\\]"
-                              "[ \t]*★?[ \t\n]*\\[\\([^]]*\\)\\]")
+                      (concat "\\[\\[\\(?:term-\\|id:\\)[^]]*\\]\\[\\([^]]*\\)\\]\\]"
+                              "[ \t]*[★♦]?[ \t\n]*\\[\\([^]]*\\)\\]")
                       body pos)
                 (let ((wylie (string-trim (match-string 1 body)))
                       (gloss (replace-regexp-in-string

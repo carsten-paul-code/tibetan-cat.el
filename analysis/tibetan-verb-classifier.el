@@ -78,6 +78,10 @@
                       ;; Literary past is ཕྱིན ("went"); སོং is the
                       ;; imperative / colloquial past (kept as alias).
                       (past_stem . "ཕྱིན")
+                      ;; L1 (Fable-5 audit): narrative སོང reads as
+                      ;; past, not imperative — matched-stem checks
+                      ;; this alt field before the imperative one.
+                      (past_stem_alt . "སོང")
                       (future_stem . "འགྲོ")
                       (imperative_stem . "སོང")
                       (transitivity . "Intransitive")
@@ -791,6 +795,13 @@ stem of byed\"."
       (cond
        ((equal w (alist-get 'present_stem entry))    'present)
        ((equal w (alist-get 'past_stem entry))       'past)
+       ;; L1 (Fable-5 audit): a secondary past stem (e.g. སོང, the
+       ;; colloquial/narrative past of འགྲོ, which doubles as the
+       ;; imperative) labels as PAST — in running narrative that is
+       ;; the overwhelmingly correct reading; checked BEFORE the
+       ;; imperative field so the ATTESTED line stops calling
+       ;; narrative སོང an "imperative stem".
+       ((equal w (alist-get 'past_stem_alt entry))   'past)
        ((equal w (alist-get 'future_stem entry))     'future)
        ((equal w (alist-get 'imperative_stem entry)) 'imperative)
        (t nil)))))

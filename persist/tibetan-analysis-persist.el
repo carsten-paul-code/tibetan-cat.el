@@ -683,7 +683,9 @@ Bold teal makes the headword scannable in class."
 heading (and not under a later level-2 heading)."
   (save-excursion
     (goto-char (line-beginning-position))
-    (when (re-search-backward "^\\*\\* " nil t)
+    ;; L5 (Fable-5 audit): search ANY heading backward — a top-level
+    ;; `* Footnotes' directly after the vocab section must close it.
+    (when (re-search-backward "^\\*+ " nil t)
       (looking-at-p "^\\*\\* Claude Vocabulary[ \t]*$"))))
 
 (defun tibetan-analysis--vocab-term-matcher (limit)
@@ -699,8 +701,11 @@ when no further term is found before LIMIT."
     (while (and (not found) (< (point) limit))
       (cond
        ((tibetan-analysis--in-claude-vocab-section-p)
+        ;; L5: require a full entry shape — term, …, "gloss" — so
+        ;; wrapped commentary lines (leading spaces, or no quoted
+        ;; gloss) are not over-highlighted.
         (if (and (bolp)
-                 (looking-at "\\([a-zA-Z'’ ]+?\\),"))
+                 (looking-at "\\([a-zA-Z'’][a-zA-Z'’ ]*?\\),[^\n]*\""))
             (progn (setq found t)
                    (goto-char (min limit (match-end 1))))
           ;; H3 (Fable-5 audit): guarantee progress.  On a final buffer
@@ -1172,7 +1177,11 @@ Returns (START . END) or nil if not found."
   (with-current-buffer buffer
     (save-excursion
       (goto-char (point-min))
-      (when (re-search-forward (format "^\\* %s$" (regexp-quote section-name)) nil t)
+      ;; L4 (Fable-5 audit): tolerate trailing whitespace on the
+      ;; heading line — `* My Notes ' (trailing space from a user
+      ;; edit) was invisible to the preserve pass and the whole
+      ;; section was deleted on regenerate.
+      (when (re-search-forward (format "^\\* %s[ \t]*$" (regexp-quote section-name)) nil t)
         (let ((start (line-beginning-position))
               (end (save-excursion
                      (if (re-search-forward "^\\* " nil t)
