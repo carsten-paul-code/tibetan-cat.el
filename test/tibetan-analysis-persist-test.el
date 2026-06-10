@@ -3231,5 +3231,20 @@ exists) gets the suffix; no source-file → bare."
                            (expand-file-name "seg-009.org" dir))))
       (delete-directory dir t))))
 
+(ert-deftest tibetan-analysis-vocab-term-matcher-terminates-on-final-line ()
+  "H3 (Fable-5 audit): the matcher's no-match branch must make progress
+on a FINAL buffer line with no trailing newline inside the vocab
+section.  `forward-line' stops at end-of-line there and
+`beginning-of-line' moved point BACK — zero net progress, infinite
+loop, and a font-lock-driven editor freeze.  Trigger: typing an
+unfinished entry (no comma) at buffer end."
+  (with-temp-buffer
+    ;; No trailing newline after the last (non-matching) line.
+    (insert "** Claude Vocabulary\nbla ma noun teacher")
+    (goto-char (point-min))
+    (forward-line 1)                      ; bol of the unfinished line
+    (should-not (with-timeout (5 (ert-fail "matcher did not terminate"))
+                  (tibetan-analysis--vocab-term-matcher (point-max))))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

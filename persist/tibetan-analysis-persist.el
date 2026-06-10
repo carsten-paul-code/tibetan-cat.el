@@ -662,8 +662,14 @@ when no further term is found before LIMIT."
                  (looking-at "\\([a-zA-Z'’ ]+?\\),"))
             (progn (setq found t)
                    (goto-char (min limit (match-end 1))))
-          (forward-line 1)
-          (beginning-of-line)))
+          ;; H3 (Fable-5 audit): guarantee progress.  On a final buffer
+          ;; line with no trailing newline, `forward-line' stops at
+          ;; end-of-line and a `beginning-of-line' would move point
+          ;; BACK — zero net progress, infinite loop, font-lock freeze.
+          (let ((before (point)))
+            (forward-line 1)
+            (when (<= (point) before)
+              (goto-char limit)))))
        (t
         ;; Outside the section: jump to the next Claude Vocabulary
         ;; heading, or stop.
