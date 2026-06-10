@@ -138,5 +138,113 @@ second NP's case."
     (should (string-match-p "འཁར་ལས" (alist-get 'head (car out))))
     (should (string-match-p "ཕྲུ་རློག" (alist-get 'head (car out))))))
 
+;; ----------------------------------------------------------------------------
+;; Phase 3 — verb-headed tree builder (acceptance battery)
+;; ----------------------------------------------------------------------------
+
+(defun tstree-slot-head (tree role)
+  "Head string of TREE's filled slot ROLE, or nil."
+  (let ((s (cl-find-if (lambda (x) (eq (plist-get x :role) role))
+                       (plist-get tree :slots))))
+    (and s (plist-get s :filler)
+         (alist-get 'head (plist-get s :filler)))))
+
+(defun tstree-all-fillers (tree)
+  "All filled NP heads anywhere in TREE (slots + subtrees)."
+  (append
+   (cl-loop for s in (plist-get tree :slots)
+            when (plist-get s :filler)
+            collect (cons (plist-get s :role)
+                          (alist-get 'head (plist-get s :filler))))
+   (cl-loop for c in (plist-get tree :complements)
+            append (tstree-all-fillers (plist-get c :node)))
+   (cl-loop for c in (plist-get tree :converbs)
+            append (tstree-all-fillers (plist-get c :node)))))
+
+(ert-deftest tibetan-sentence-tree-bcug-causative ()
+  "The seg-37/97 flagship: `bla ma mar pas ... byed du bcug'.
+Root = བཅུག (lemma འཇུག, Erg-Abs-Loc); the AGENT is bla-ma-mar-pa
+\(ERG, via Phase 2); byed-du is a nested COMPLEMENT; and — the
+negative assertion that pins the old bug dead — bla-ma is NOBODY's
+patient/causee."
+  (skip-unless (and (fboundp 'tibetan-verb-lookup)
+                    (tibetan-verb-lookup "འཇུག")))
+  (let* ((words '("བླ་མ" "མར" "པས" "འཁར" "ལས" "མང་པོ" "དང"
+                  "ཕྲུ་རློག" "ལ" "སོགས་པ" "བྱེད" "དུ" "བཅུག"))
+         (verbs (list `((lemma . "བྱེད") (source-pos . 10))
+                      `((lemma . "འཇུག") (source-pos . 12))))
+         (tree (tibetan-analyze-sentence words verbs)))
+    (should tree)
+    ;; Root verb is the FINAL one.
+    (should (equal "འཇུག" (alist-get 'lemma (plist-get tree :verb))))
+    (should (equal "Erg-Abs-Loc" (plist-get tree :frame)))
+    ;; Agent = bla-ma-mar-pa (ERG claimed across the complement span).
+    (should (equal "བླ་མ་མར་པ" (tstree-slot-head tree 'agent)))
+    ;; byed-du is a complement child.
+    (should (= 1 (length (plist-get tree :complements))))
+    (should (equal "བྱེད"
+                   (alist-get 'lemma
+                              (plist-get
+                               (plist-get (car (plist-get tree :complements))
+                                          :node)
+                               :verb))))
+    ;; bla-ma fills NO patient/causee slot anywhere in the tree.
+    (should-not (cl-find-if
+                 (lambda (pair)
+                   (and (memq (car pair) '(patient causee))
+                        (string-match-p "བླ་མ" (cdr pair))))
+                 (tstree-all-fillers tree)))))
+
+(ert-deftest tibetan-sentence-tree-phyin-elided-subject ()
+  "`rngog gi drung du phyin nas': frame Abs → subject ELIDED; the
+TERM NP is an adjunct carrying the GEN possessor རྔོག."
+  (skip-unless (and (fboundp 'tibetan-verb-lookup)
+                    (tibetan-verb-lookup "འགྲོ")))
+  (let* ((words '("རྔོག" "གི" "དྲུང" "དུ" "ཕྱིན" "ནས"))
+         (verbs (list `((lemma . "འགྲོ") (source-pos . 4))))
+         (tree (tibetan-analyze-sentence words verbs)))
+    (should (equal "Abs" (plist-get tree :frame)))
+    (let ((subj (cl-find-if (lambda (s) (eq (plist-get s :role) 'subject))
+                            (plist-get tree :slots))))
+      (should (plist-get subj :elided)))
+    (let ((adj (cl-find-if (lambda (np) (eq (alist-get 'case np) 'TERM))
+                           (plist-get tree :adjuncts))))
+      (should adj)
+      (should (string-match-p "དྲུང" (alist-get 'head adj)))
+      (should (equal "རྔོག"
+                     (alist-get 'head
+                                (car (alist-get 'possessors adj))))))))
+
+(ert-deftest tibetan-sentence-tree-converb-chain-order ()
+  "A dependent converb clause chains to the main verb with its label."
+  (skip-unless (and (fboundp 'tibetan-verb-lookup)
+                    (tibetan-verb-lookup "བྱེད")))
+  ;; kho song nas chos byas : song+nas dependent (ablative), byas main.
+  (let* ((words '("ཁོ" "སོང" "ནས" "ཆོས" "བྱས"))
+         (verbs (list `((lemma . "འགྲོ") (source-pos . 1))
+                      `((lemma . "བྱེད") (source-pos . 4))))
+         (tree (tibetan-analyze-sentence words verbs)))
+    (should (equal "བྱེད" (alist-get 'lemma (plist-get tree :verb))))
+    (should (= 1 (length (plist-get tree :converbs))))
+    (let ((cv (car (plist-get tree :converbs))))
+      (should (eq 'ablative (plist-get cv :label)))
+      (should (equal "འགྲོ"
+                     (alist-get 'lemma
+                                (plist-get (plist-get cv :node) :verb)))))))
+
+(ert-deftest tibetan-sentence-tree-copula-abs-abs ()
+  "`X Y yin': subject + predicate in textual order, no patients."
+  (skip-unless (and (fboundp 'tibetan-verb-lookup)
+                    (tibetan-verb-lookup "ཡིན")))
+  ;; ནི (topic) separates the two bare NPs — without a separator,
+  ;; juxtaposed bare nouns are indistinguishable from one compound.
+  (let* ((words '("འདི" "ནི" "ཆོས" "ཡིན"))
+         (verbs (list `((lemma . "ཡིན") (source-pos . 3))))
+         (tree (tibetan-analyze-sentence words verbs)))
+    (should (equal "Abs-Abs" (plist-get tree :frame)))
+    (should (equal "འདི" (tstree-slot-head tree 'subject)))
+    (should (equal "ཆོས" (tstree-slot-head tree 'predicate)))
+    (should-not (plist-get tree :adjuncts))))
+
 (provide 'tibetan-sentence-tree-test)
 ;;; tibetan-sentence-tree-test.el ends here

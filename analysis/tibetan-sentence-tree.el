@@ -206,5 +206,139 @@ Algorithm (saturation — each slot at most once, each NP at most once):
         (plist-put s :elided t)))
     (list :slots filled :adjuncts remaining)))
 
+;; ----------------------------------------------------------------------------
+;; Phase 3 — verb-headed tree builder
+;; ----------------------------------------------------------------------------
+
+(declare-function tibetan-clause-segment "tibetan-clause-segmenter")
+(declare-function tibetan-np-chunk "tibetan-clause-segmenter")
+(declare-function tibetan-clause-seg--lookup-case-frame
+                  "tibetan-clause-segmenter")
+
+(defconst tibetan-sentence-tree--term-particles '("དུ" "ཏུ" "སུ" "རུ" "ར")
+  "Standalone terminative particles that mark a V+TERM complement
+clause (`byed du' under `bcug').")
+
+(defun tibetan-sentence-tree--build-node (clause nps)
+  "Build a tree node for CLAUSE from its candidate NPS.
+Runs the NP post-passes (genitive attachment, dang-coordination),
+looks up the verb's Hill case frame, and fills the frame slots.
+Returns the node plist (without :complements/:converbs — the caller
+attaches those)."
+  (let* ((verb (alist-get 'verb clause))
+         (lemma (alist-get 'lemma verb))
+         (frame (and lemma
+                     (fboundp 'tibetan-clause-seg--lookup-case-frame)
+                     (tibetan-clause-seg--lookup-case-frame lemma)))
+         (vpos (or (alist-get 'source-pos verb)
+                   (alist-get 'end clause) 0))
+         (prepped (tibetan-frame--merge-coordinates
+                   (tibetan-frame--attach-genitives (or nps '()))))
+         (fill (tibetan-frame-fill-slots
+                (tibetan-frame-slots frame) prepped vpos)))
+    (list :verb verb :frame frame :clause clause
+          :slots (plist-get fill :slots)
+          :adjuncts (plist-get fill :adjuncts)
+          :complements nil :converbs nil)))
+
+(defun tibetan-sentence-tree--complement-p (clause words)
+  "Non-nil when CLAUSE's verb is immediately followed by a standalone
+terminative particle — the V+TERM complement pattern (byed du …)."
+  (let* ((verb (alist-get 'verb clause))
+         (vpos (alist-get 'source-pos verb)))
+    (and vpos
+         (< (1+ vpos) (length words))
+         (member (string-trim (nth (1+ vpos) words))
+                 tibetan-sentence-tree--term-particles))))
+
+(defun tibetan-analyze-sentence (words verbs &optional mwu)
+  "Verb-first analysis of WORDS/VERBS: return the head-driven tree.
+
+The FINAL clause's verb is the root.  Its Hill case frame is filled
+from the root clause's NPs (with the matrix-ERG-claiming rule: an
+unfilled agent slot may claim the leftmost ERG NP from a complement
+clause's span — V+du complements essentially never carry their own
+overt ergative agent).  Non-final clauses attach as :complements
+\(V+TERM pattern) or :converbs (with their Bialek label), each
+recursively slot-filled from its own remaining NPs.
+
+Tree node shape:
+  (:verb V :frame STR|nil :clause CLAUSE
+   :slots (...) :adjuncts (NP ...)
+   :complements ((:complement-case TERM :node NODE) ...)
+   :converbs    ((:label SYM :particle STR :node NODE) ...))
+
+Returns nil when the substrate is unavailable or no clause is found."
+  (when (and words verbs
+             (fboundp 'tibetan-clause-segment)
+             (fboundp 'tibetan-np-chunk))
+    (let* ((clauses (tibetan-clause-segment words verbs mwu))
+           (nps (tibetan-np-chunk words clauses mwu))
+           (n (length clauses)))
+      (when (> n 0)
+        (let ((pools (make-vector n nil)))
+          ;; Group NPs by clause-index.
+          (dolist (np nps)
+            (let ((ci (or (alist-get 'clause-index np) 0)))
+              (when (< ci n)
+                (aset pools ci (append (aref pools ci) (list np))))))
+          (let* ((main-idx (1- n))
+                 (main-clause (nth main-idx clauses))
+                 (comp-idxs '())
+                 (conv-idxs '()))
+            (dotimes (i main-idx)
+              (if (tibetan-sentence-tree--complement-p (nth i clauses) words)
+                  (push i comp-idxs)
+                (push i conv-idxs)))
+            (setq comp-idxs (nreverse comp-idxs)
+                  conv-idxs (nreverse conv-idxs))
+            ;; Matrix-ERG claim: when the root frame has an agent slot
+            ;; and the root pool carries no ERG NP, the leftmost ERG NP
+            ;; inside a COMPLEMENT clause's span fills the matrix agent.
+            (let* ((root-verb (alist-get 'verb main-clause))
+                   (root-frame (and (fboundp
+                                     'tibetan-clause-seg--lookup-case-frame)
+                                    (tibetan-clause-seg--lookup-case-frame
+                                     (alist-get 'lemma root-verb))))
+                   (wants-agent
+                    (assq 'agent (cdr (assoc root-frame
+                                             tibetan-frame--slot-specs))))
+                   (root-has-erg
+                    (cl-find-if (lambda (np)
+                                  (eq (alist-get 'case np) 'ERG))
+                                (aref pools main-idx))))
+              (when (and wants-agent (not root-has-erg))
+                (catch 'claimed
+                  (dolist (ci comp-idxs)
+                    (let ((erg (cl-find-if
+                                (lambda (np)
+                                  (eq (alist-get 'case np) 'ERG))
+                                (aref pools ci))))
+                      (when erg
+                        (aset pools ci (delq erg (aref pools ci)))
+                        (aset pools main-idx
+                              (cons erg (aref pools main-idx)))
+                        (throw 'claimed t)))))))
+            ;; Build root + children.
+            (let ((root (tibetan-sentence-tree--build-node
+                         main-clause (aref pools main-idx))))
+              (plist-put root :complements
+                         (mapcar
+                          (lambda (ci)
+                            (list :complement-case 'TERM
+                                  :node (tibetan-sentence-tree--build-node
+                                         (nth ci clauses) (aref pools ci))))
+                          comp-idxs))
+              (plist-put root :converbs
+                         (mapcar
+                          (lambda (ci)
+                            (let ((c (nth ci clauses)))
+                              (list :label (alist-get 'converb-type c)
+                                    :particle (alist-get 'converb-particle c)
+                                    :node (tibetan-sentence-tree--build-node
+                                           c (aref pools ci)))))
+                          conv-idxs))
+              root)))))))
+
 (provide 'tibetan-sentence-tree)
 ;;; tibetan-sentence-tree.el ends here

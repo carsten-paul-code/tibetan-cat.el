@@ -288,6 +288,11 @@ case particles match only as standalone — see
 `tibetan-clause-seg--multichar-suffix-p'."
   (let ((w (string-trim w)))
     (cond
+     ;; Topic particle ནི: an NP BOUNDARY (Phase 3 of the verb-first
+     ;; redesign) — without it, juxtaposed bare NPs in a copular
+     ;; sentence (`འདི་ནི་ཆོས་ཡིན') glue into one compound head and
+     ;; the Abs-Abs frame can never see its two arguments.
+     ((equal w "ནི") 'topic)
      ((member w tibetan-clause-seg--negators) 'negator)
      ((member w tibetan-clause-seg--determiners) 'determiner)
      ((member w tibetan-clause-seg--final-particles) 'final)
@@ -436,7 +441,7 @@ MWU spans are treated as atomic heads.  Returns a list of NP alists
                    (cond
                     ;; Skip verbs, converbs, finals, naked case particles,
                     ;; negators (handled by verb layer).
-                    ((or (memq cls '(final converb negator))
+                    ((or (memq cls '(final converb negator topic))
                          (member i verb-pos))
                      (cl-incf i))
                     ;; Standalone case particle with no preceding head
