@@ -270,8 +270,8 @@ the first failure — this is the full batch suite.  (Before 2026-06-01
 flag named a non-existent function that never executed; the spec suite
 also made a live dharmamitra.org request on every run.  Both fixed.)
 
-Current state (2026-06-10, post-§5.40 sentence-level calls):  **ERT
-2197 tests, 2196 expected, 0 unexpected, 1 intentional skip
+Current state (2026-06-10, post-§5.41 class view):  **ERT
+2200 tests, 2199 expected, 0 unexpected, 1 intentional skip
 (compound-analysis-callable); BDD 244 / 244.**  Full `make compile` is
 clean (zero warnings).  Carsten runs `make test` after every change and
 expects it to stay green.
@@ -3063,6 +3063,26 @@ segments…)' label to fire only not-yet-landed sentences.
 Deferred: ±1 surrounding-sentence context; parallel-Sanskrit
 sentence-first; response-truncation mitigation (visible as missing
 stubs); the multi-child auto-regen cascade.
+
+### 5.41 Class view — reference sections fold on open (done, 2026-06-10)
+
+Class-use feedback: too much scrolling, lost overview (esp. MA
+Readings — the worst file's Detailed Dictionary is 67% of 2153
+lines).  Display-only fix (no regenerate — §5.36 blocks slimming
+gal/lam structurally): analysis buffers now OPEN with the reference
+sections folded to their heading lines (`tibetan-analysis-class-
+folded-sections', default Detailed Dictionary + Verb Classification;
+Sentence Structure deliberately stays visible).  `C-c u f' toggles
+class view ↔ full view; TAB unfolds a single folded section; the
+on-open behaviour is the `tibetan-analysis-class-view-on-open'
+defcustom (default t).
+
+Bonus bug fixed: the mode hook matched only bare `seg-NNN.org', so
+suffixed MA files and sent files never got the §5.31/§5.35 faces.
+New `--analysis-buffer-name-p' covers seg/sent with suffixes.
+
+Deferred (per plan): `#+TIBETAN_SEGMENT_DETAIL: compressed' (blocked
+by the §5.36 wordlist gap); combined-handout polish.
 
 ## 6. Open work (prioritised)
 
