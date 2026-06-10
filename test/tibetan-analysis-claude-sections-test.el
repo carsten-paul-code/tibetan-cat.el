@@ -1521,5 +1521,27 @@ is read back IN FULL by --read-claude-sections (no truncation)."
             (should-not (string-match-p "grammar body" tr))))
       (delete-file f))))
 
+(ert-deftest tibetan-claude-body-writer-sanitizes-line-leading-stars ()
+  "C1b: Claude bodies are LLM text — a line-leading `*' run would
+become an org heading mid-file (restructuring the document and, before
+the C1a bound fix, truncating preserve readers).  The writer
+space-prefixes such lines, exactly like the §5.28 DharmaMitra
+sanitizer.  Markdown `### ' sub-headings must still convert to org
+headings (the md-h3-to-org path runs AFTER sanitization)."
+  (with-temp-buffer
+    (insert "* Tibetan Analysis\n** Translation\n[Awaiting Claude…]\n\n** Grammar\ng\n")
+    (tibetan-analysis--replace-claude-section-body
+     (current-buffer) "Translation"
+     "Line one.\n**Bold note:** stays body text.\n* would-be heading\n### Divergence\nnote body"
+     2)
+    (let ((s (buffer-string)))
+      ;; Star-leading lines neutralised (space-prefixed) — no new headings.
+      (should (string-match-p "^ \\*\\*Bold note:\\*\\*" s))
+      (should (string-match-p "^ \\* would-be heading" s))
+      ;; The md ### still becomes a real org heading at level+1.
+      (should (string-match-p "^\\*\\*\\* Divergence" s))
+      ;; Grammar section untouched.
+      (should (string-match-p "^\\*\\* Grammar\ng" s)))))
+
 (provide 'tibetan-analysis-claude-sections-test)
 ;;; tibetan-analysis-claude-sections-test.el ends here

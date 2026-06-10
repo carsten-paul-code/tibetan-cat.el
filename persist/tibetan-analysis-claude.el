@@ -2767,10 +2767,18 @@ file.  Non-divergence bodies (no `### ' lines) are unchanged."
                        (point-max))))
             (delete-region start end)
             (goto-char start)
+            ;; C1b (Fable-5 audit, 2026-06-04): Claude bodies are LLM
+            ;; text — neutralise line-leading `*' runs (space-prefix,
+            ;; mirroring the §5.28 DM sanitizer) BEFORE the md-h3
+            ;; transform, so genuine `### ' sub-headings still become
+            ;; org headings while a stray `* line' cannot restructure
+            ;; the file or truncate later preserve reads.
             (insert (format "%s\n\n"
                             (string-trim
                              (tibetan-analysis--claude-body-md-h3-to-org
-                              body level))))))))))
+                              (replace-regexp-in-string
+                               "^\\(\\*+\\)" " \\1" body)
+                              level))))))))))
 
 (defun tibetan-analysis--claude-effective-section-order (buffer)
   "Return the layout-appropriate Claude section-order for BUFFER.
