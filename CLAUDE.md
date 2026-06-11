@@ -3113,8 +3113,11 @@ NOTE for future resume drivers: every child Translation now contains
 `(Sentence` — the new-layout discriminator is `This segment:` inside
 the `** Translation` body.
 
-Milarepa re-fired with the new schema (57 multi-seg sentences, FORCE;
-single-seg files unaffected) — results recorded after the run.
+Milarepa re-fired with the new schema: 57/57 sentences succeeded,
+0 failed, ZERO stragglers (the sentinel fix held) — 254/254 children
+carry the new layout, 251 with a highlighted span (3 degraded
+gracefully to the plain whole on marker irregularities), 0 raw `⟦`
+anywhere, 162 ★ intact.
 
 ## 6. Open work (prioritised)
 
