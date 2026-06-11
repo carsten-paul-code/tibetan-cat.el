@@ -270,8 +270,8 @@ the first failure — this is the full batch suite.  (Before 2026-06-01
 flag named a non-existent function that never executed; the spec suite
 also made a live dharmamitra.org request on every run.  Both fixed.)
 
-Current state (2026-06-10, post-§5.41 class view):  **ERT
-2200 tests, 2199 expected, 0 unexpected, 1 intentional skip
+Current state (2026-06-11, post-§5.42 span highlighting):  **ERT
+2206 tests, 2205 expected, 0 unexpected, 1 intentional skip
 (compound-analysis-callable); BDD 244 / 244.**  Full `make compile` is
 clean (zero warnings).  Carsten runs `make test` after every change and
 expects it to stay green.
@@ -3083,6 +3083,38 @@ New `--analysis-buffer-name-p' covers seg/sent with suffixes.
 
 Deferred (per plan): `#+TIBETAN_SEGMENT_DETAIL: compressed' (blocked
 by the §5.36 wordlist gap); combined-handout polish.
+
+### 5.42 Whole-sentence Claude Translation + own-span highlight (done, 2026-06-11)
+
+Class feedback on §5.40: the whole-sentence DM section is "much more
+helpful" — same wanted for Claude, with the current segment
+highlighted.  Segment files' `** Translation` now lands as:
+
+    (Sentence 39 — segments 103–114)
+    The guru told him… ⟪went to rNgog's place⟫ …and requested it.
+
+    This segment: Having gone to rNgog's place,
+
+Mechanism: the sentence-first addendum instructs Claude to wrap each
+segment's span in the whole-sentence translation with `⟦N⟧…⟦/N⟧`
+(deterministic — Claude does the alignment).  Fan-out renders per
+child via `--render-marked-whole`: own pair → `⟪…⟫` (split per line —
+font-lock is single-line), all other tokens stripped; ANY marker
+irregularity degrades to the stripped plain whole (`⟦` can never
+land).  Sent file gets the stripped whole.  New
+`tibetan-analysis-segment-span-face` (background tint + bold) +
+3-group font-lock keywords hide the ⟪⟫ delimiters via the namespaced
+invisibility spec (Particle-Map pattern).  A `(Sentence …)`-opening
+Translation counts as POPULATED (placeholder filters are
+`[`-anchored; test-locked).  DM unchanged (free text — no reliable
+alignment; whole-sentence display kept).
+
+NOTE for future resume drivers: every child Translation now contains
+`(Sentence` — the new-layout discriminator is `This segment:` inside
+the `** Translation` body.
+
+Milarepa re-fired with the new schema (57 multi-seg sentences, FORCE;
+single-seg files unaffected) — results recorded after the run.
 
 ## 6. Open work (prioritised)
 
