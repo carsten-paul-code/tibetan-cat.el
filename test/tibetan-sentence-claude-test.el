@@ -20,7 +20,7 @@
 
 (defconst tstc--full-response
   "## Translation
-The lama went to rNgog's place and requested the dharma.
+⟦105⟧The lama went to rNgog's place⟦/105⟧ and ⟦106⟧requested the dharma⟦/106⟧.
 ### Segment 105
 Having gone to rNgog's place,
 ### Segment 106
@@ -82,8 +82,11 @@ keyed by number."
              tstc--full-response '(105 106)))
          (s105 (cdr (assq 105 (plist-get p :per-segment))))
          (s106 (cdr (assq 106 (plist-get p :per-segment)))))
-    (should (string-match-p "went to rNgog's place and requested"
+    ;; §5.42: the whole-sentence translation carries the raw span
+    ;; markers; consumers strip/render them.
+    (should (string-match-p "went to rNgog's place" 
                             (plist-get p :translation-whole)))
+    (should (string-match-p "⟦105⟧" (plist-get p :translation-whole)))
     (should (string-match-p "two-clause chain"
                             (plist-get p :grammar-preamble)))
     (should (string-match-p "four pillars" (plist-get p :concepts)))
@@ -426,6 +429,96 @@ DECLINES (nil), the per-segment path fires unchanged."
             (should (= 1 per-seg-dm))))
       (when (get-file-buffer (expand-file-name "seg-105.org" dir))
         (kill-buffer (get-file-buffer (expand-file-name "seg-105.org" dir))))
+      (delete-directory dir t))))
+
+;; ----------------------------------------------------------------------------
+;; §5.42 — own-segment span highlighting in the whole-sentence translation
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-sentence-claude-render-marked-whole-basic ()
+  "Own pair → ⟪…⟫; sibling markers stripped; no ⟦ tokens survive."
+  (let ((out (tibetan-sentence-claude--render-marked-whole
+              "⟦105⟧He went⟦/105⟧ and ⟦106⟧asked⟦/106⟧." 105)))
+    (should (equal "⟪He went⟫ and asked." out)))
+  ;; The other child sees ITS span highlighted.
+  (let ((out (tibetan-sentence-claude--render-marked-whole
+              "⟦105⟧He went⟦/105⟧ and ⟦106⟧asked⟦/106⟧." 106)))
+    (should (equal "He went and ⟪asked⟫." out))))
+
+(ert-deftest tibetan-sentence-claude-render-marked-whole-degrades ()
+  "Missing / duplicated / unbalanced own markers → ALL tokens stripped,
+plain whole returned (Pitfall B: a raw ⟦ must never land)."
+  ;; Own marker missing entirely.
+  (should (equal "He went and asked."
+                 (tibetan-sentence-claude--render-marked-whole
+                  "⟦106⟧He went⟦/106⟧ and asked." 105)))
+  ;; Duplicated own open-marker.
+  (should (equal "a b c"
+                 (tibetan-sentence-claude--render-marked-whole
+                  "⟦105⟧a ⟦105⟧b⟦/105⟧ c" 105)))
+  ;; Close before open.
+  (should (equal "x y"
+                 (tibetan-sentence-claude--render-marked-whole
+                  "⟦/105⟧x ⟦105⟧y" 105)))
+  ;; nil-safe.
+  (should-not (tibetan-sentence-claude--render-marked-whole nil 105)))
+
+(ert-deftest tibetan-sentence-claude-render-marked-whole-multiline ()
+  "A span crossing newlines splits into one ⟪…⟫ pair PER LINE
+\(Pitfall A: the single-line font-lock pattern must match each)."
+  (let ((out (tibetan-sentence-claude--render-marked-whole
+              "⟦105⟧first line\nsecond line⟦/105⟧ tail" 105)))
+    (should (equal "⟪first line⟫\n⟪second line⟫ tail" out))))
+
+(ert-deftest tibetan-sentence-claude-child-translation-layout ()
+  "End-to-end: the child's Translation = label + highlighted whole +
+blank line + `This segment:' sub-translation; NO ⟦ token lands in any
+file; the sent file's whole translation is marker-free."
+  (let ((dir (make-temp-file "tstc-span" t)))
+    (unwind-protect
+        (let* ((c105 (tstc--scaffold-seg dir 105))
+               (c106 (tstc--scaffold-seg dir 106))
+               (sent (expand-file-name "sent-004.org" dir)))
+          (with-temp-file sent
+            (insert "#+TITLE: Sentence 4 Analysis\n\n"
+                    "* Tibetan Text\nx\n\n* Tibetan Analysis\n"
+                    "** Translation\n[Awaiting Claude…]\n\n"
+                    "** Grammar\n*** Claude Grammar\n\n* Footnotes\n"))
+          (tibetan-sentence-claude--handle-response
+           tstc--full-response
+           (list :sent-num 4 :seg-nums '(105 106)
+                 :child-files (list c105 c106) :sent-file sent :force t))
+          (let ((s105 (with-temp-buffer (insert-file-contents c105)
+                                        (buffer-string)))
+                (ssent (with-temp-buffer (insert-file-contents sent)
+                                         (buffer-string))))
+            ;; Label + highlighted whole + own line.
+            (should (string-match-p "(Sentence 4 — segments 105–106)" s105))
+            (should (string-match-p "⟪The lama went to rNgog's place⟫"
+                                    s105))
+            (should (string-match-p "This segment: Having gone" s105))
+            ;; No raw markers anywhere.
+            (should-not (string-match-p "⟦" s105))
+            (should-not (string-match-p "⟦" ssent))
+            ;; Sent file: plain whole, no highlight glyphs either.
+            (should (string-match-p "The lama went to rNgog's place and"
+                                    ssent))
+            (should-not (string-match-p "⟪" ssent))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-claude-sentence-label-body-is-populated ()
+  "A Translation body opening with the `(Sentence …)' label counts as
+POPULATED for the needs-request gate."
+  (skip-unless (fboundp 'tibetan-analysis--claude-needs-request-p))
+  (let ((dir (make-temp-file "tstc-pop" t)))
+    (unwind-protect
+        (let ((f (expand-file-name "seg-009.org" dir)))
+          (with-temp-file f
+            (insert "* Tibetan Analysis\n** Translation\n"
+                    "(Sentence 2 — segments 8–9)\nWhole text here.\n\n"
+                    "This segment: part.\n\n"
+                    "** Claude Vocabulary\nx, noun, \"y\"\n"))
+          (should-not (tibetan-analysis--claude-needs-request-p f)))
       (delete-directory dir t))))
 
 (provide 'tibetan-sentence-claude-test)

@@ -69,6 +69,63 @@ empty), each subsection body is trimmed.  nil-safe."
                 :segments (nreverse segments)))))))
 
 ;; ----------------------------------------------------------------------------
+;; §5.42 — own-segment span markers in the whole-sentence translation
+;; ----------------------------------------------------------------------------
+
+(defconst tibetan-sentence-claude--span-token-re "⟦/?[0-9]+⟧"
+  "Any segment-span marker token (`⟦N⟧' or `⟦/N⟧') in the
+whole-sentence translation.")
+
+(defun tibetan-sentence-claude--strip-span-markers (s)
+  "Remove every span-marker token from S.  nil-safe.
+A raw `⟦' must NEVER land in a file — every consumer that does not
+convert markers strips them unconditionally."
+  (when s
+    (replace-regexp-in-string "⟦/?[0-9]+⟧" "" s)))
+
+(defun tibetan-sentence-claude--render-marked-whole (whole n)
+  "Render WHOLE (the marked whole-sentence translation) for child N.
+When WHOLE contains exactly one `⟦N⟧' before exactly one `⟦/N⟧', the
+own span becomes `⟪…⟫' (split into one pair PER LINE — the font-lock
+pattern is single-line) and all other marker tokens are stripped.
+Any irregularity (missing, duplicated, inverted markers) degrades to
+the fully stripped plain translation.  nil-safe."
+  (when whole
+    (let* ((open-tok (format "⟦%d⟧" n))
+           (close-tok (format "⟦/%d⟧" n))
+           (open-count 0) (close-count 0) (pos 0))
+      (while (string-match (regexp-quote open-tok) whole pos)
+        (cl-incf open-count) (setq pos (match-end 0)))
+      (setq pos 0)
+      (while (string-match (regexp-quote close-tok) whole pos)
+        (cl-incf close-count) (setq pos (match-end 0)))
+      (let ((open-at (string-match (regexp-quote open-tok) whole))
+            (close-at (string-match (regexp-quote close-tok) whole)))
+        (if (not (and (= open-count 1) (= close-count 1)
+                      open-at close-at (< open-at close-at)))
+            ;; Degrade: strip everything (Pitfall B).
+            (tibetan-sentence-claude--strip-span-markers whole)
+          (let* ((prefix (substring whole 0 open-at))
+                 (span (substring whole (+ open-at (length open-tok))
+                                  close-at))
+                 (suffix (substring whole (+ close-at (length close-tok))))
+                 ;; Pitfall A: one ⟪…⟫ pair per line.
+                 (highlighted
+                  (mapconcat (lambda (line)
+                               (if (string-empty-p (string-trim line))
+                                   line
+                                 (format "⟪%s⟫" line)))
+                             (split-string
+                              (tibetan-sentence-claude--strip-span-markers
+                               span)
+                              "\n")
+                             "\n")))
+            (concat (tibetan-sentence-claude--strip-span-markers prefix)
+                    highlighted
+                    (tibetan-sentence-claude--strip-span-markers
+                     suffix))))))))
+
+;; ----------------------------------------------------------------------------
 ;; Response parser
 ;; ----------------------------------------------------------------------------
 
@@ -142,7 +199,8 @@ existing body untouched (preserve semantics)."
 Translation = the whole-sentence rendering, Grammar = the cross-clause
 preamble, Concept Notes = the sentence-level body."
   (tibetan-sentence-claude--synthesize-segment-markdown
-   (list :translation (plist-get parsed :translation-whole)
+   (list :translation (tibetan-sentence-claude--strip-span-markers
+                       (plist-get parsed :translation-whole))
          :grammar (plist-get parsed :grammar-preamble)
          :concepts (plist-get parsed :concepts))))
 
@@ -172,9 +230,15 @@ prompt lists under `### Segment N' headers).  Adjust the five
 sections as follows, keeping all other rules unchanged:
 
 - `## Translation': FIRST give the fluent translation of the WHOLE
-  sentence (no header before it).  THEN, for EVERY listed segment, a
+  sentence (no header before it).  Inside that whole-sentence
+  translation, wrap the English span corresponding to EACH listed
+  segment in markers: `⟦N⟧' before it and `⟦/N⟧' after it, using the
+  exact segment numbers — every listed segment exactly once, no
+  nesting, no overlaps (English may reorder the segments; mark the
+  spans wherever they fall).  THEN, for EVERY listed segment, a
   `### Segment N' subsection containing the sub-translation of just
-  that segment, consistent with the whole-sentence rendering.
+  that segment, consistent with the whole-sentence rendering (NO
+  markers inside the subsections).
 - `## Vocabulary', `## Particles': organize ALL content under
   `### Segment N' subsections — one per listed segment, in order,
   covering every segment, using the EXACT numbers given.  No entries
@@ -404,10 +468,29 @@ silent blank.  The sent file gets the whole-sentence pieces."
                 ((and file (file-exists-p file)
                       (or force
                           (tibetan-analysis--claude-needs-request-p file)))
-                 (tibetan-analysis--insert-claude-sections
-                  (tibetan-sentence-claude--synthesize-segment-markdown
-                   (append slot (list :concepts labelled-concepts)))
-                  file)))))
+                 ;; §5.42: the child's Translation = sentence label +
+                 ;; the WHOLE-sentence translation with THIS segment's
+                 ;; span highlighted (⟪…⟫, markers from the schema) +
+                 ;; the standalone sub-translation.
+                 (let* ((sub (plist-get slot :translation))
+                        (whole (plist-get parsed :translation-whole))
+                        (rendered
+                         (and whole
+                              (tibetan-sentence-claude--render-marked-whole
+                               whole n)))
+                        (new-tr
+                         (cond
+                          ((and rendered sub)
+                           (concat label "\n" rendered
+                                   "\n\nThis segment: " sub))
+                          (rendered (concat label "\n" rendered))
+                          (t sub)))
+                        (slot2 (copy-sequence slot)))
+                   (setq slot2 (plist-put slot2 :translation new-tr))
+                   (tibetan-analysis--insert-claude-sections
+                    (tibetan-sentence-claude--synthesize-segment-markdown
+                     (append slot2 (list :concepts labelled-concepts)))
+                    file))))))
     (when (and sent-file (file-exists-p sent-file))
       (let ((md (tibetan-sentence-claude--synthesize-sentence-markdown
                  parsed)))
