@@ -3543,5 +3543,20 @@ the §5.35 faces and the class fold never reached MA Reading."
   (should-not (tibetan-analysis--analysis-buffer-name-p
                "/x/elsewhere/notes.org")))
 
+(ert-deftest tibetan-analysis-segment-span-keywords-shape ()
+  "§5.42: the ⟪…⟫ own-segment span keyword has the three-group shape
+\(delimiters invisible + faced, content faced) and matches a sample
+line; the face exists."
+  (should (facep 'tibetan-analysis-segment-span-face))
+  (let* ((kw (car tibetan-analysis--segment-span-font-lock-keywords))
+         (re (car kw)))
+    (should (string-match re "He told him ⟪went to the place⟫ and left."))
+    (should (equal "⟪" (match-string 1 "He told him ⟪went to the place⟫ and left.")))
+    (should (equal "went to the place"
+                   (match-string 2 "He told him ⟪went to the place⟫ and left.")))
+    (should (equal "⟫" (match-string 3 "He told him ⟪went to the place⟫ and left.")))
+    ;; Single-line: must NOT match across newlines.
+    (should-not (string-match re "⟪first\nsecond⟫"))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

@@ -731,6 +731,32 @@ when no further term is found before LIMIT."
   "Font-lock keywords bolding the leading term of each Claude
 Vocabulary entry (2026-06-03).")
 
+(defface tibetan-analysis-segment-span-face
+  '((((class color) (background light))
+     :background "#fff3c4" :weight bold)
+    (((class color) (background dark))
+     :background "#4a3f1f" :weight bold)
+    (t :weight bold))
+  "Face for the CURRENT segment's span inside the whole-sentence
+translation (§5.42).  The ⟪…⟫ delimiters themselves are hidden via
+the namespaced invisibility spec — students see only the highlight."
+  :group 'tibetan-cat)
+
+(defconst tibetan-analysis--segment-span-font-lock-keywords
+  ;; Same three-group pattern as the Particle Map =/~ markers:
+  ;; delimiters faced + invisible, content faced.  Single-line by
+  ;; design — the §5.42 fan-out splits newline-crossing spans into
+  ;; one ⟪…⟫ pair per line.
+  '(("\\(⟪\\)\\([^⟫\n]+\\)\\(⟫\\)"
+     (1 '(face tibetan-analysis-segment-span-face
+          invisible tibetan-analysis-segment-span-marker)
+        prepend)
+     (2 'tibetan-analysis-segment-span-face prepend)
+     (3 '(face tibetan-analysis-segment-span-face
+          invisible tibetan-analysis-segment-span-marker)
+        prepend)))
+  "Font-lock keywords highlighting the own-segment span (§5.42).")
+
 (defconst tibetan-analysis--structure-font-lock-keywords
   ;; Verb-headed tree layout (verb-first redesign): role labels at
   ;; variable indent, verb lines keyed on MAIN VERB / COMPLEMENT VERB
@@ -773,6 +799,7 @@ parser which doesn't fire for compound-embedded markers like
     ;; markers become invisible — org's own invisibility regions
     ;; (drawers, folded headings, other link targets) are unaffected.
     (add-to-invisibility-spec 'tibetan-analysis-particle-marker)
+    (add-to-invisibility-spec 'tibetan-analysis-segment-span-marker)
     (add-to-invisibility-spec 'tibetan-analysis-term-anchor)
 
     ;; Install buffer-local font-lock rules for the Particle Map markers,
@@ -801,6 +828,9 @@ parser which doesn't fire for compound-embedded markers like
     ;; headwords stand out from the POS / gloss / commentary.
     (font-lock-add-keywords
      nil tibetan-analysis--vocabulary-term-font-lock-keywords 'append)
+    ;; §5.42: own-segment span inside the whole-sentence translation.
+    (font-lock-add-keywords
+     nil tibetan-analysis--segment-span-font-lock-keywords 'append)
     (when (fboundp 'font-lock-flush)
       (font-lock-flush))
 
