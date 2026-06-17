@@ -110,12 +110,25 @@ land in the same `analysis/' directory."
   "Return basename `sent-NNN.org' for SENT-NUM (an integer)."
   (format "sent-%03d.org" sent-num))
 
-(defun tibetan-sentence--filepath (sent-num &optional folder)
-  "Return absolute path of `sent-NNN.org' for SENT-NUM.
-FOLDER defaults to `tibetan-sentence--get-folder'."
+(defun tibetan-sentence--filepath (sent-num &optional folder source-file)
+  "Return absolute path of the `sent-NNN.org' analysis file for SENT-NUM.
+FOLDER defaults to `tibetan-sentence--get-folder'.
+
+With SOURCE-FILE, returns the per-source suffixed path
+`sent-NNN-SHORT.org' (resolving an existing suffixed/bare file via the
+shared §5.23/§5.37 resolver), so sentence files don't collide in a
+shared multi-source analysis folder.  Without it, the legacy bare
+`sent-NNN.org' (single-source / backward compatible)."
   (let ((folder (or folder (tibetan-sentence--get-folder))))
     (when folder
-      (expand-file-name (tibetan-sentence--filename sent-num) folder))))
+      (if (and source-file
+               (fboundp 'tibetan-analysis--resolve-filepath)
+               (fboundp 'tibetan-analysis-make-short-name))
+          (tibetan-analysis--resolve-filepath
+           folder sent-num
+           (tibetan-analysis-make-short-name source-file)
+           source-file "sent")
+        (expand-file-name (tibetan-sentence--filename sent-num) folder)))))
 
 (defun tibetan-sentence--sent-id-from-filename (filepath)
   "Extract numeric sentence id from FILEPATH's basename, or nil."
@@ -778,7 +791,7 @@ their rationale."
 
 (defun tibetan-sentence--create-file (sent-num seg-nums tibetan-text source-file)
   "Create a new `sent-NNN.org' file for SENT-NUM, return its path."
-  (let* ((filepath (tibetan-sentence--filepath sent-num))
+  (let* ((filepath (tibetan-sentence--filepath sent-num nil source-file))
          (wylie (condition-case nil
                     (when (fboundp 'tibetan-to-wylie-fixed)
                       (tibetan-to-wylie-fixed tibetan-text))
@@ -1374,7 +1387,7 @@ changed)."
            (seg-nums (plist-get data :seg-nums))
            (tib-text (plist-get data :tibetan-text))
            (source-file (buffer-file-name))
-           (filepath (tibetan-sentence--filepath sent-num))
+           (filepath (tibetan-sentence--filepath sent-num nil source-file))
            (exists (and filepath (file-exists-p filepath))))
       (unless filepath
         (error "Could not determine sentence analysis filepath; \
@@ -1456,7 +1469,7 @@ called with a prefix argument."
            (seg-nums (plist-get data :seg-nums))
            (tib-text (plist-get data :tibetan-text))
            (source-file (buffer-file-name))
-           (filepath (tibetan-sentence--filepath sent-num)))
+           (filepath (tibetan-sentence--filepath sent-num nil source-file)))
       (unless (file-exists-p filepath)
         (user-error
          "No sentence analysis file exists yet — use C-c u S first"))
@@ -1786,7 +1799,7 @@ Reports created / skipped counts on completion."
         (let* ((sent-num (plist-get s :sent-num))
                (seg-nums (plist-get s :seg-nums))
                (tibetan  (plist-get s :tibetan))
-               (filepath (tibetan-sentence--filepath sent-num)))
+               (filepath (tibetan-sentence--filepath sent-num nil source-file)))
           (cond
            ((file-exists-p filepath)
             (setq skipped (1+ skipped)))

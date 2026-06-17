@@ -3119,6 +3119,59 @@ carry the new layout, 251 with a highlighted span (3 degraded
 gracefully to the plain whole on marker irregularities), 0 raw `⟦`
 anywhere, 162 ★ intact.
 
+### 5.43 BUG: sentence analysis files weren't §5.23-suffixed (done, 2026-06-17)
+
+Surfaced while preparing a NEW MA-Reading source (`Khu-dbon-rnam-thar`,
+a rNam-thar excerpt, re-segmented verse-aware into 111 sentences / 790
+segments) into the SHARED `analysis/' folder it co-inhabits with
+`gal-chen' / `lam-rim' / `kbgp' / `title-colophon'.
+
+**Root cause.** §5.23/§5.37 gave the SEGMENT path a per-source filename
+suffix (`seg-NNN-SHORT.org') + a resolver that prefers an existing
+suffixed/bare-same-source file, so multi-source folders don't collide.
+The SENTENCE path never got it:  `tibetan-sentence--filepath' built a
+bare `sent-NNN.org' unconditionally, so `tibetan-sentence-create-all'
+(and 3 sibling callers) wrote `sent-NNN.org' — which would overwrite
+another source's same-numbered sentence in the shared folder (the exact
+§5.23 silent-overwrite class, just for sentences).  Lam-rim's
+`sent-NNN-lam.org' files only exist because the §5.23 migration helper
+renamed them AFTER the fact.
+
+**Fix.** Generalized `tibetan-analysis--resolve-filepath' with an
+optional PREFIX (default `"seg"'; existing seg callers unchanged), and
+routed `tibetan-sentence--filepath' (now `(sent-num &optional folder
+source-file)') through it with PREFIX `"sent"' when a SOURCE-FILE is
+given — else the legacy bare path (backward compatible).  Threaded
+source-file through all 4 sentence call sites (create-file, create-all,
+open-analysis, reanalyze) — each already had it in scope.
+
+**Tests.** +2 (`resolve-filepath-honors-prefix',
+`sentence-filepath-suffixes-with-source'), both confirmed RED first
+(`wrong-number-of-arguments').  11 existing sentence-persist tests
+encoded the old bare contract and were updated to the suffixed
+expectation (3 had a one-arg `--filepath' stub widened; 8 had path
+lookups recomputed via the source-aware `--filepath').  Suite
+2206 → **2208 ERT** (0 unexpected, 1 skip); BDD 244/244; compile clean.
+
+**Live use.** Generated 790 `seg-NNN-khu.org' + 111 `sent-NNN-khu.org'
+(suffixed, zero collision with the other four sources; structural only —
+Claude/DM placeholders await the user's API).
+
+**KNOWN FOLLOW-UP (not yet fixed) — §5.40 dispatcher has the SAME bare-
+path bug.**  `tibetan-analysis--fire-sentence-level'
+(`tibetan-sentence-claude.el' ~605-611) builds child `seg-%03d.org' and
+`sent-%03d.org' by hand, so in a SUFFIXED folder the
+`(cl-every #'file-exists-p child-files)' gate fails → the sentence path
+returns nil and the caller falls back to PER-SEGMENT Claude (no
+whole-sentence fan-out, no §5.42 span highlight).  Works on Milarepa
+(bare, single-source); broken for MA-Reading (suffixed).  Fix = route
+child-files through `tibetan-analysis--resolve-filepath' + sent-file
+through `tibetan-sentence--filepath' (both now suffix-aware).  Until
+then, fill MA-Reading sentence files via the per-sentence
+`tibetan-sentence--request-claude' (writes the whole-sentence Claude
+translation straight to the suffixed `sent-NNN-SHORT.org' — class
+artifact intact; only the seg-level fan-out is missing).
+
 ## 6. Open work (prioritised)
 
 ### P0 — Verify Detailed Dictionary on a real segment ✓ DONE 2026-04-15

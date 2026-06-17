@@ -3172,6 +3172,29 @@ exists) gets the suffix; no source-file → bare."
                            (expand-file-name "seg-009.org" dir))))
       (delete-directory dir t))))
 
+(ert-deftest tibetan-analysis-resolve-filepath-honors-prefix ()
+  "The resolver builds the path with an optional PREFIX (default `seg'),
+so sentence files can share the §5.23/§5.37 suffix + resolve logic
+instead of writing colliding un-suffixed `sent-NNN.org' in a shared
+multi-source folder."
+  (let ((dir (make-temp-file "tcat-resolve-prefix" t)))
+    (unwind-protect
+        (progn
+          ;; new sent file → suffixed, using the `sent-' prefix
+          (should (string= (tibetan-analysis--resolve-filepath
+                            dir 7 "lam" "/x/lam-rim-thun-cig.org" "sent")
+                           (expand-file-name "sent-007-lam.org" dir)))
+          ;; an existing suffixed sent file wins
+          (let ((suffixed (expand-file-name "sent-003-khu.org" dir)))
+            (with-temp-file suffixed (insert "x\n"))
+            (should (string= (tibetan-analysis--resolve-filepath
+                              dir 3 "khu" "/x/Khu-dbon-rnam-thar.org" "sent")
+                             suffixed)))
+          ;; default prefix unchanged → seg behaviour intact
+          (should (string= (tibetan-analysis--resolve-filepath dir 9 nil nil)
+                           (expand-file-name "seg-009.org" dir))))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-analysis-vocab-term-matcher-terminates-on-final-line ()
   "H3 (Fable-5 audit): the matcher's no-match branch must make progress
 on a FINAL buffer line with no trailing newline inside the vocab

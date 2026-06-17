@@ -573,7 +573,8 @@ Cleans up the temp file and any analysis/ siblings on exit."
                  (plist-get data :tibetan-text)
                  (buffer-file-name))))
      (should (file-exists-p path))
-     (should (string= "sent-001.org" (file-name-nondirectory path)))
+     ;; §5.23 parity: per-source suffix (fixture source is `src.org').
+     (should (string= "sent-001-src.org" (file-name-nondirectory path)))
      (with-temp-buffer
        (insert-file-contents path)
        (goto-char (point-min))
@@ -593,7 +594,7 @@ Cleans up the temp file and any analysis/ siblings on exit."
                  (plist-get data :seg-nums)
                  (plist-get data :tibetan-text)
                  (buffer-file-name))))
-     (should (string-match-p "/analysis/sent-002\\.org\\'" path)))))
+     (should (string-match-p "/analysis/sent-002-src\\.org\\'" path)))))
 
 ;; ============================================================================
 ;; SECTION-BODY READING TESTS
@@ -1163,13 +1164,13 @@ We stub the gptel side effects and side-window display."
      tibetan-sentence-test--section-wrap-buffer
      (re-search-forward "^\\*\\*\\*\\* Segment 1" nil t)
      (tibetan-sentence-open-analysis)
-     (let ((path (tibetan-sentence--filepath 1)))
+     (let ((path (tibetan-sentence--filepath 1 nil (buffer-file-name))))
        (should (file-exists-p path))
        (with-temp-buffer
          (insert-file-contents path)
          (should (re-search-forward "^#\\+SEGMENTS: 1, 2$" nil t))))
      ;; Cleanup the buffer that open-analysis spawned.
-     (let ((buf (get-file-buffer (tibetan-sentence--filepath 1))))
+     (let ((buf (get-file-buffer (tibetan-sentence--filepath 1 nil (buffer-file-name)))))
        (when buf
          (with-current-buffer buf (set-buffer-modified-p nil))
          (kill-buffer buf))))))
@@ -1385,16 +1386,16 @@ afterwards (buffer killed, directory recursively deleted)."
         (should (= 2 (plist-get result :created)))
         (should (= 0 (plist-get result :skipped)))
         (should (= 0 (plist-get result :failed)))
-        (should (file-exists-p (expand-file-name "sent-001.org"
-                                                 folder)))
-        (should (file-exists-p (expand-file-name "sent-002.org"
-                                                 folder)))))))
+        (should (file-exists-p
+                 (tibetan-sentence--filepath 1 folder source-file)))
+        (should (file-exists-p
+                 (tibetan-sentence--filepath 2 folder source-file)))))))
 
 (ert-deftest tibetan-sentence-create-all-skips-existing ()
   "Pre-existing sent-NNN.org is not clobbered; counts as skipped."
   (tibetan-sentence-test--with-source-and-analysis
       source-buf source-file folder
-    (let ((existing (expand-file-name "sent-001.org" folder)))
+    (let ((existing (tibetan-sentence--filepath 1 folder source-file)))
       (with-temp-file existing
         (insert "HAND-EDITED MARKER\n"))
       (with-current-buffer source-buf
@@ -1426,12 +1427,12 @@ afterwards (buffer killed, directory recursively deleted)."
       (tibetan-sentence-create-all))
     ;; sent-001 should cover Segment 1; sent-002 should cover 2 + 3.
     (let ((s1 (with-temp-buffer
-                (insert-file-contents (expand-file-name "sent-001.org"
-                                                        folder))
+                (insert-file-contents
+                 (tibetan-sentence--filepath 1 folder source-file))
                 (buffer-string)))
           (s2 (with-temp-buffer
-                (insert-file-contents (expand-file-name "sent-002.org"
-                                                        folder))
+                (insert-file-contents
+                 (tibetan-sentence--filepath 2 folder source-file))
                 (buffer-string))))
       ;; `#+SEGMENTS:' header is the sentence-layout marker.
       (should (string-match-p "#\\+SEGMENTS:[[:space:]]*1\\b" s1))
@@ -1481,8 +1482,8 @@ fixture doesn't need to reach into gptel.  Asserts:
   3. Pre-existing files are NOT passed to the fire helper."
   (tibetan-sentence-test--with-source-and-analysis
       source-buf source-file folder
-    ;; Pre-create sent-001.org to force a skip; sent-002 will be new.
-    (with-temp-file (expand-file-name "sent-001.org" folder)
+    ;; Pre-create sent-001 to force a skip; sent-002 will be new.
+    (with-temp-file (tibetan-sentence--filepath 1 folder source-file)
       (insert "pre-existing sent-001\n"))
     (let ((fire-calls '()))
       (cl-letf (((symbol-function 'tibetan-sentence--fire-claude-on-new-files)
@@ -1544,7 +1545,7 @@ heading (`^\\*+ ')."
             (tibetan-sentence-create-all)
             (let ((s (with-temp-buffer
                        (insert-file-contents
-                        (expand-file-name "sent-001.org" folder))
+                        (tibetan-sentence--filepath 1 folder source-file))
                        (buffer-string))))
               (should (string-match-p "TIBETAN-SEG-1" s))
               (should (string-match-p "TIBETAN-SEG-2" s))
@@ -1681,7 +1682,7 @@ real output (which varies with vocab DB state)."
                ((symbol-function 'tibetan-analysis--filter-to-tibetan-lines)
                 (lambda (text) text))
                ((symbol-function 'tibetan-sentence--filepath)
-                (lambda (n)
+                (lambda (n &optional _folder _source)
                   (expand-file-name
                    (format "sent-%03d.org" n) analysis-folder))))
             (tibetan-sentence--create-file 1 '(1) "བདུད།" source-file))
@@ -1920,7 +1921,7 @@ are stripped out of the embedded segment-renderer body."
                ((symbol-function 'tibetan-analysis--filter-to-tibetan-lines)
                 (lambda (text) text))
                ((symbol-function 'tibetan-sentence--filepath)
-                (lambda (n)
+                (lambda (n &optional _folder _source)
                   (expand-file-name
                    (format "sent-%03d.org" n) analysis-folder))))
             (tibetan-sentence--create-file 1 '(1) "བདུད།" source-file))
@@ -1966,7 +1967,7 @@ sources analysed without the new header are unchanged."
                ((symbol-function 'tibetan-analysis--filter-to-tibetan-lines)
                 (lambda (text) text))
                ((symbol-function 'tibetan-sentence--filepath)
-                (lambda (n)
+                (lambda (n &optional _folder _source)
                   (expand-file-name
                    (format "sent-%03d.org" n) analysis-folder))))
             (tibetan-sentence--create-file 1 '(1) "བདུད།" source-file))
@@ -2123,6 +2124,28 @@ silently eaten — §5.26 class)."
                                      (buffer-string))))
             (should (string-match-p "PRESERVE-DM-BODY" s))
             (should (string-match-p "(Sentence 3 — segments 3–3)" s))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-filepath-suffixes-with-source ()
+  "`tibetan-sentence--filepath' returns a per-source suffixed path when a
+SOURCE-FILE is given, so sentence files don't collide in a shared
+multi-source analysis folder (§5.23 parity for the sentence path).
+Without a SOURCE-FILE it stays the legacy bare `sent-NNN.org'."
+  (let ((dir (make-temp-file "tcat-sentfp" t)))
+    (unwind-protect
+        (progn
+          (should (string= (tibetan-sentence--filepath
+                            5 dir "/x/Khu-dbon-rnam-thar.org")
+                           (expand-file-name "sent-005-khu.org" dir)))
+          ;; an existing suffixed file is reused, not duplicated
+          (let ((suffixed (expand-file-name "sent-002-khu.org" dir)))
+            (with-temp-file suffixed (insert "x\n"))
+            (should (string= (tibetan-sentence--filepath
+                              2 dir "/x/Khu-dbon-rnam-thar.org")
+                             suffixed)))
+          ;; no source-file → bare (backward compatible)
+          (should (string= (tibetan-sentence--filepath 5 dir)
+                           (expand-file-name "sent-005.org" dir))))
       (delete-directory dir t))))
 
 (provide 'tibetan-sentence-persist-test)

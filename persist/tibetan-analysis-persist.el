@@ -980,24 +980,31 @@ parseable SOURCE link."
     (let ((doc (tibetan-analysis--file-source-basename filepath)))
       (and doc (string= doc (file-name-nondirectory source-file))))))
 
-(defun tibetan-analysis--resolve-filepath (folder num short-name source-file)
-  "Choose the analysis filepath for segment NUM in FOLDER.
+(defun tibetan-analysis--resolve-filepath (folder num short-name source-file
+                                                  &optional prefix)
+  "Choose the analysis filepath for unit NUM in FOLDER.
 
-Without SHORT-NAME: the un-suffixed `seg-NNN.org'.
+PREFIX is the filename stem, default \"seg\".  Sentence files pass
+\"sent\" so both file kinds share this §5.23/§5.37 suffix + resolve
+logic (the sentence path used to write colliding un-suffixed
+`sent-NNN.org' in shared multi-source folders).
+
+Without SHORT-NAME: the un-suffixed `PREFIX-NNN.org'.
 
 With SHORT-NAME (derived from SOURCE-FILE): prefer an existing suffixed
-`seg-NNN-SHORT.org'; else an existing un-suffixed `seg-NNN.org' that
+`PREFIX-NNN-SHORT.org'; else an existing un-suffixed `PREFIX-NNN.org' that
 belongs to the SAME source — a single-source folder not migrated to the
 §5.23 suffix (Milarepa keeps bare filenames); else a new suffixed path.
 
 The source-match guard keeps a multi-source folder safe: a bare file
 left by source A is NOT reused for source B (which would collide), so
-new B segments still get B's suffix."
-  (let ((bare (expand-file-name (format "seg-%03d.org" num) folder)))
+new B units still get B's suffix."
+  (let* ((prefix (or prefix "seg"))
+         (bare (expand-file-name (format "%s-%03d.org" prefix num) folder)))
     (if (null short-name)
         bare
       (let* ((suffixed (expand-file-name
-                        (format "seg-%03d-%s.org" num short-name) folder))
+                        (format "%s-%03d-%s.org" prefix num short-name) folder))
              ;; M1b (Fable-5 audit): a suffixed file that POSITIVELY
              ;; belongs to ANOTHER source (short-name collision, e.g.
              ;; `gal-chen-nyi-shu' and `gal.org' both shorten to
