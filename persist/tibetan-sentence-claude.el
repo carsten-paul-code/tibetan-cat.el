@@ -601,14 +601,30 @@ per-segment Claude)."
       (when (and sentence (> (length (plist-get sentence :seg-nums)) 1))
         (let* ((folder (file-name-directory (expand-file-name analysis-file)))
                (seg-nums (plist-get sentence :seg-nums))
+               ;; §5.44: resolve child seg / sent paths through the
+               ;; §5.23/§5.37 suffix-aware resolvers (bare for an
+               ;; un-migrated single-source folder, `-SHORT' for a
+               ;; multi-source one).  The previous hardcoded bare
+               ;; `seg-%03d.org' / `sent-%03d.org' didn't exist in a
+               ;; suffixed folder, so the `cl-every #'file-exists-p'
+               ;; gate below failed and the sentence path silently fell
+               ;; back to per-segment Claude (no fan-out, no §5.42 span).
+               (short (and (fboundp 'tibetan-analysis-make-short-name)
+                           (tibetan-analysis-make-short-name source-file)))
                (child-files
                 (mapcar (lambda (n)
-                          (expand-file-name (format "seg-%03d.org" n) folder))
+                          (if (fboundp 'tibetan-analysis--resolve-filepath)
+                              (tibetan-analysis--resolve-filepath
+                               folder n short source-file)
+                            (expand-file-name (format "seg-%03d.org" n) folder)))
                         seg-nums))
-               (sent-file (expand-file-name
-                           (format "sent-%03d.org"
-                                   (plist-get sentence :sent-num))
-                           folder)))
+               (sent-file (if (fboundp 'tibetan-sentence--filepath)
+                              (tibetan-sentence--filepath
+                               (plist-get sentence :sent-num) folder source-file)
+                            (expand-file-name
+                             (format "sent-%03d.org"
+                                     (plist-get sentence :sent-num))
+                             folder))))
           ;; All children must exist (auto-analyze creates files before
           ;; firing) — otherwise fall back to the per-segment path.
           (when (cl-every #'file-exists-p child-files)

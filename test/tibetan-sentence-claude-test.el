@@ -360,10 +360,18 @@ single-segment sentences → nil (caller falls back to per-segment)."
   (let ((dir (make-temp-file "tstc-disp" t))
         (submits 0))
     (unwind-protect
-        (let* ((src (expand-file-name "doc.org" dir))
-               (c105 (tstc--scaffold-seg dir 105))
-               (c106 (tstc--scaffold-seg dir 106)))
-          (ignore c105 c106)
+        (let* ((src (expand-file-name "doc.org" dir)))
+          ;; §5.44: children carry a #+SOURCE link to doc.org so the
+          ;; suffix-aware resolver reuses these bare names (single-source
+          ;; folder).  A bare file with no parseable #+SOURCE is treated
+          ;; as not-ours, so the resolver would otherwise look for a
+          ;; `-doc' suffix and the file-exists gate would fail.
+          (dolist (n '(105 106))
+            (with-temp-file (expand-file-name (format "seg-%03d.org" n) dir)
+              (insert (format
+                       "#+SOURCE: [[file:doc.org::*Segment %d][doc / Segment %d]]\n"
+                       n n)
+                      "* Tibetan Text\nx\n")))
           (with-temp-file src
             (insert "#+TITLE: D\n\n* Tibetan Text\n"
                     "*** Sentence 4\n"
@@ -520,6 +528,44 @@ POPULATED for the needs-request gate."
                     "** Claude Vocabulary\nx, noun, \"y\"\n"))
           (should-not (tibetan-analysis--claude-needs-request-p f)))
       (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-claude-fire-resolves-suffixed-children ()
+  "§5.44: `tibetan-analysis--fire-sentence-level' must resolve its child
+seg / sent files through the §5.23/§5.37 suffix resolver, so the
+sentence path FIRES in a suffixed multi-source folder instead of
+falling back to per-segment.  With bare `seg-NNN.org' paths (the old
+hardcode) the file-exists gate fails in such a folder and the dispatcher
+returns nil."
+  (let* ((root (make-temp-file "tstc-suffix" t))
+         (src (expand-file-name "source.org" root))
+         (folder (file-name-as-directory (expand-file-name "analysis" root))))
+    (unwind-protect
+        (progn
+          (make-directory folder t)
+          (with-temp-file src
+            (insert "#+TITLE: T\n\n* Tibetan Text\n"
+                    "*** Sentence 1\n**** Segment 1\nབདག\n\n"
+                    "**** Segment 2\nཅིག\n"))
+          ;; SUFFIXED children only (source short-name = "source");
+          ;; the bare `seg-001.org' / `seg-002.org' deliberately absent.
+          (with-temp-file (expand-file-name "seg-001-source.org" folder)
+            (insert "x\n"))
+          (with-temp-file (expand-file-name "seg-002-source.org" folder)
+            (insert "x\n"))
+          (let ((requested nil) (dm nil))
+            (cl-letf (((symbol-function 'tibetan-sentence-claude--claim)
+                       (lambda (&rest _) t))
+                      ((symbol-function 'tibetan-sentence-claude--request)
+                       (lambda (&rest _) (setq requested t)))
+                      ((symbol-function 'tibetan-sentence-claude--schedule-dm)
+                       (lambda (&rest _) (setq dm t))))
+              (let ((r (tibetan-analysis--fire-sentence-level
+                        "" (expand-file-name "seg-001-source.org" folder)
+                        src 1 t)))
+                (should (eq r 'fired))
+                (should requested)
+                (should dm)))))
+      (delete-directory root t))))
 
 (provide 'tibetan-sentence-claude-test)
 ;;; tibetan-sentence-claude-test.el ends here

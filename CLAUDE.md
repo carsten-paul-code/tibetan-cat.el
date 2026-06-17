@@ -3157,8 +3157,8 @@ lookups recomputed via the source-aware `--filepath').  Suite
 (suffixed, zero collision with the other four sources; structural only —
 Claude/DM placeholders await the user's API).
 
-**KNOWN FOLLOW-UP (not yet fixed) — §5.40 dispatcher has the SAME bare-
-path bug.**  `tibetan-analysis--fire-sentence-level'
+**FOLLOW-UP — §5.40 dispatcher had the SAME bare-path bug (FIXED §5.44).**
+`tibetan-analysis--fire-sentence-level'
 (`tibetan-sentence-claude.el' ~605-611) builds child `seg-%03d.org' and
 `sent-%03d.org' by hand, so in a SUFFIXED folder the
 `(cl-every #'file-exists-p child-files)' gate fails → the sentence path
@@ -3171,6 +3171,38 @@ then, fill MA-Reading sentence files via the per-sentence
 `tibetan-sentence--request-claude' (writes the whole-sentence Claude
 translation straight to the suffixed `sent-NNN-SHORT.org' — class
 artifact intact; only the seg-level fan-out is missing).
+
+### 5.44 §5.40 dispatcher: suffix-aware child/sent paths (done, 2026-06-17)
+
+The §5.43 follow-up.  `tibetan-analysis--fire-sentence-level'
+(`tibetan-sentence-claude.el') built its child seg / sent paths by hand
+with bare `seg-%03d.org' / `sent-%03d.org'.  In a §5.23-suffixed
+multi-source folder those don't exist, so `(cl-every #'file-exists-p
+child-files)' failed and the dispatcher returned nil — the caller then
+ran PER-SEGMENT Claude (no whole-sentence fan-out, no §5.42 own-span
+highlight).  Worked on Milarepa (bare, single-source) only.
+
+**Fix.** Route child seg files through the now-prefix-generalized
+`tibetan-analysis--resolve-filepath' (short-name from source-file) and
+the sent file through the suffix-aware `tibetan-sentence--filepath'
+(both §5.43).  Single-source bare folders are unaffected — the resolver
+prefers an existing bare-same-source file, so Milarepa keeps bare names.
+
+**Tests.** +1 (`tibetan-sentence-claude-fire-resolves-suffixed-children'
+in `tibetan-sentence-claude-test.el'):  a 2-segment sentence with
+SUFFIXED-only children must reach `'fired' (claim/request/schedule-dm
+stubbed).  Confirmed RED first (returns nil — bare children absent).
+`dispatch-dedup-and-fallbacks' updated: its scaffolded children now
+carry a `#+SOURCE' link so the resolver reuses the bare names (a bare
+file with no parseable `#+SOURCE' is treated as not-ours by the M1b
+guard).  Suite 2208 → **2209 ERT** (0 unexpected, 1 skip); BDD 244/244;
+compile clean.
+
+**Net.** Multi-source reading folders (MA-Reading) now get the full
+§5.40/§5.42 sentence-level fire — Claude fanned out to each
+`seg-NNN-SHORT.org' + the sent file with the highlighted own-span, and
+one staggered DM per sentence.  See `…/MA Readings Tibetan/Resources/
+khu-fire-claude.el' for the per-source scoped driver.
 
 ## 6. Open work (prioritised)
 
