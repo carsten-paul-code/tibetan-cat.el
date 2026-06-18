@@ -96,6 +96,15 @@
   (should (equal (tibetan-to-wylie "གླ") "gla"))
   (should (equal (tibetan-to-wylie "བླ") "bla")))
 
+(ert-deftest tibetan-wylie-subscript-ha ()
+  "Test ha-btags (subjoined ha, U+0FB7) — e.g. ལྷ lha.  Regression:
+the subjoined-ha was missing from the converter, so ལྷོ rendered as
+`lao' (ha dropped, spurious implicit-a) instead of `lho' — seen live
+on Milarepa seg-167 ལྷོ་ཕུ་ (`lho phu')."
+  (should (equal (tibetan-to-wylie "ལྷ") "lha"))
+  (should (equal (tibetan-to-wylie "ལྷོ") "lho"))
+  (should (equal (tibetan-to-wylie "ལྷག") "lhag")))
+
 (ert-deftest tibetan-wylie-superscript-s ()
   "Test sa-mgo (superscript s)."
   (should (equal (tibetan-to-wylie "སྐ") "ska"))

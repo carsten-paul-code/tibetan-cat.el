@@ -3204,6 +3204,28 @@ compile clean.
 one staggered DM per sentence.  See `…/MA Readings Tibetan/Resources/
 khu-fire-claude.el' for the per-source scoped driver.
 
+### 5.45 Wylie: subjoined-ha (ལྷ lha) was dropped (done, 2026-06-18)
+
+Live on Milarepa seg-167 (`ལྷོ་ཕུ་` rendered `lao phu` instead of `lho
+phu`).  The Wylie converter (`tibetan-to-wylie-fixed' /
+`core/tibetan-wylie.el') had no entry for subjoined ha (U+0FB7):  the
+`subjoined' fallback map held only ya/ra/la/wa, and `ལྷ' was not in the
+`consonant-stacks' table.  So `ལ' matched as a bare root, got a spurious
+implicit-`a', and the ha was dropped → `ལྷོ' = "lao", `ལྷ' = "la", `ལྷག'
+= "lag".
+
+Fix:  added the ha-btags as STACKS (the proven mechanism — ya-btags
+`ཀྱ' and la-btags `གླ' already live there;  the subjoined-map route
+mis-places the implicit-`a', giving "laho").  `("ལྷ" . "lh")' plus the
+Sanskrit aspirates `གྷ ཛྷ ཌྷ དྷ བྷ' (mantras/loanwords).  `ལྷོ' → "lho",
+`ལྷ' → "lha", `དྷ' → "dha".  §5.32-A class (a missing consonant stack,
+like `རྔ'→"raog").
+
+Test:  `tibetan-wylie-subscript-ha' (`test/tibetan-wylie-test.el'),
+confirmed RED first (`"la"' ≠ `"lha"').  Suite 2209 → **2210** (0
+unexpected, 1 skip).  Existing analysis files keep the old "lao" until
+regenerated;  any re-fire / reanalyze picks up the fix.
+
 ## 6. Open work (prioritised)
 
 ### P0 — Verify Detailed Dictionary on a real segment ✓ DONE 2026-04-15

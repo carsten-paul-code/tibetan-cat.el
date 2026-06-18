@@ -124,7 +124,13 @@ Recognizes Tibetan syllable structure: [prefix] ROOT [subscript]
         ("རྒ" . "rg") ("རྐ" . "rk") ("རྟ" . "rt") ("རྡ" . "rd")
         ("རྣ" . "rn") ("རྦ" . "rb") ("རྨ" . "rm") ("རྩ" . "rts")
         ("རྫ" . "rdz") ("རྗ" . "rj") ("རྙ" . "rny") ("རླ" . "rl")
-        ("ལྟ" . "lt") ("ལྡ" . "ld") ("ལྗ" . "lj") ("ལྕ" . "lc")
+        ("ལྟ" . "lt") ("ལྡ" . "ld") ("ལྗ" . "lj") ("ལྕ" . "lc") ("ལྷ" . "lh")
+        ;; ha-btags (subjoined ha, U+0FB7).  ལྷ lha is very common ("deity",
+        ;; place names like ལྷོ "south");  the others are Sanskrit aspirates
+        ;; in mantras/loanwords.  Handled as stacks (not via the subjoined
+        ;; map) so the implicit-`a' lands correctly:  ལྷོ → "lho", not the
+        ;; old "lao" (ha dropped) or "laho" (stray a).  Live: Milarepa seg-167.
+        ("གྷ" . "gh") ("ཛྷ" . "dzh") ("ཌྷ" . "Dh") ("དྷ" . "dh") ("བྷ" . "bh")
         ("དྲ" . "dr") ("དྭ" . "dw") ("ཕྲ" . "phr") ("ཁྲ" . "khr")
         ("གྲ" . "gr") ("ཀྲ" . "kr") ("ཏྲ" . "tr") ("ཐྲ" . "thr") ("བྲ" . "br")
         ("རྔྱ" . "rngy") ("རྒྱ" . "rgy") ("རྐྱ" . "rky") ("རྨྱ" . "rmy")
