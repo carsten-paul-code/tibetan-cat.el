@@ -8,6 +8,22 @@
 
 (require 'easymenu)
 
+;; OCR correction functions (autoloaded from translation-tools)
+(autoload 'tibetan-ocr-double-check "tibetan-ocr-correction"
+  "Start an OCR double-check session with scan PDF." t)
+(autoload 'tibetan-ocr-auto-correct "tibetan-ocr-correction"
+  "Apply automatic OCR corrections to the current buffer." t)
+(autoload 'tibetan-ocr-next-page "tibetan-ocr-correction"
+  "Go to next page in the scan PDF." t)
+(autoload 'tibetan-ocr-prev-page "tibetan-ocr-correction"
+  "Go to previous page in the scan PDF." t)
+(autoload 'tibetan-ocr-goto-page "tibetan-ocr-correction"
+  "Go to a specific page in the scan PDF." t)
+(autoload 'tibetan-ocr-finalize-corrections "tibetan-ocr-correction"
+  "Compute diff and append correction log to file." t)
+(autoload 'tibetan-ocr-quit "tibetan-ocr-correction"
+  "Quit OCR correction mode." t)
+
 ;; ============================================================================
 ;; MAIN TIBETAN MENU
 ;; ============================================================================
@@ -242,6 +258,24 @@
       :help "Toggle enhanced display for Tibetan documents"
       :style toggle
       :selected (bound-and-true-p tibetan-doc-display-mode)])
+    "---"
+    ("OCR Correction"
+     ["Double-Check with Scan (C-c o c)" tibetan-ocr-double-check
+      :help "Open OCR file alongside scan PDF for side-by-side correction"]
+     ["Auto-Correct Buffer (C-c o a)" tibetan-ocr-auto-correct
+      :help "Apply known OCR error fixes to current buffer"]
+     "---"
+     ["Next Scan Page (C-c o n)" tibetan-ocr-next-page
+      :help "Go to next page in the scan PDF"]
+     ["Previous Scan Page (C-c o p)" tibetan-ocr-prev-page
+      :help "Go to previous page in the scan PDF"]
+     ["Go to Scan Page... (C-c o g)" tibetan-ocr-goto-page
+      :help "Jump to specific page in the scan PDF"]
+     "---"
+     ["Finalize Corrections (C-c o f)" tibetan-ocr-finalize-corrections
+      :help "Compute diff and append correction log to file"]
+     ["Quit Correction Mode (C-c o q)" tibetan-ocr-quit
+      :help "End OCR correction session"])
     "---"
     ["Reload All Glossaries" reload-all-glossaries
      :help "Reload Hopkins, Bialek, and other glossaries"]))
