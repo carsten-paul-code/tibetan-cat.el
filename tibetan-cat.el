@@ -187,6 +187,7 @@
 (require 'tibetan-analysis-combine)    ; Combined per-document analysis (C-c u C)
 (require 'tibetan-sentence-persist)
 (require 'tibetan-sentence-claude nil t)   ; §5.40 sentence-level Claude/DM calls    ; Persistent sentence analysis (C-c s A / C-c s R / C-c s r)
+(require 'tibetan-portfolio nil t)         ; Portfolio mode: freeze-draft helper (companion to #+TIBETAN_DEFER_MT)
 (require 'tibetan-compound-analysis)   ; Persistent compound analysis (C-c v A / C-c v R)
 (require 'tibetan-clause-analysis)     ; Clause analysis (converbs, main verbs)
 (require 'tibetan-auto-analysis)       ; Auto-analyze document (C-c u B)
