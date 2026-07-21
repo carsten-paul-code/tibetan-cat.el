@@ -149,6 +149,39 @@ genre directly."
     (let ((meta (tibetan-analysis--read-source-metadata source-file)))
       (should-not (plist-get meta :text-type)))))
 
+;; ----------------------------------------------------------------------------
+;; Portfolio mode (2026-07-21):  `#+TIBETAN_DEFER_MT: t' — per-source
+;; machine-translation deferral.  The Portfolio assignment (Tibetisch IV,
+;; SoSe 2026) permits AI tools ONLY for revising a self-made translation;
+;; sources carrying this header must not fire Claude/DharmaMitra requests
+;; until the header is removed.  The reader surfaces `:defer-mt' t/nil.
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-metadata-reads-defer-mt-header ()
+  "`#+TIBETAN_DEFER_MT: t' is surfaced as `:defer-mt' t on the metadata
+plist.  Any other value (nil / no / empty) and an absent header give
+nil — deferral is strictly opt-in per source."
+  ;; Case 1:  t → :defer-mt t.
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_DEFER_MT: t\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (eq (plist-get meta :defer-mt) t))))
+  ;; Case 2:  case-insensitive T.
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_DEFER_MT: T\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should (eq (plist-get meta :defer-mt) t))))
+  ;; Case 3:  explicit nil value → nil.
+  (tibetan-test--with-source
+      "#+TITLE: T\n#+TIBETAN_DEFER_MT: nil\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should-not (plist-get meta :defer-mt))))
+  ;; Case 4:  absent header → nil.
+  (tibetan-test--with-source
+      "#+TITLE: T\n"
+    (let ((meta (tibetan-analysis--read-source-metadata source-file)))
+      (should-not (plist-get meta :defer-mt)))))
+
 (ert-deftest tibetan-analysis-metadata-sentence-compressed-key-retired ()
   "§5.22 final (2026-05-21):  the `:sentence-compressed' plist key
 on `tibetan-analysis--read-source-metadata' is retired.

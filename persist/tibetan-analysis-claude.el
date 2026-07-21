@@ -354,6 +354,18 @@ Keys:
                    default) or sentence-focus (reading classes).
                    Persistent per-document;  command prefix-args
                    override ad-hoc.  §5.27 Phase 1 (2026-05-26).
+  :defer-mt        t when `#+TIBETAN_DEFER_MT: t' is present —
+                   per-source machine-translation deferral
+                   (Portfolio mode, 2026-07-21).  While t, no
+                   Claude or DharmaMitra translation request may
+                   fire for this source's segments/sentences;
+                   the deterministic analysis sections still
+                   generate.  Strictly opt-in: only the literal
+                   value `t' (any case) activates it.  Rationale:
+                   the Tibetisch IV Portfolio assignment permits
+                   AI tools only for revising a self-made
+                   translation — the header enforces that until
+                   the user removes it (a git-visible event).
   :sentence-detail value of `#+TIBETAN_SENTENCE_DETAIL:
                    compressed|detailed' — only meaningful when
                    `:class-mode' is `reading'.  `compressed' =
@@ -380,7 +392,7 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
   (let (title work author sources ctx vocab corpus target-lang source-mode
               dm-sanskrit-source dm-tibetan-source
               text-type class-mode sentence-detail
-              author-header)
+              author-header defer-mt)
     (when (and source-file (file-exists-p source-file))
       (condition-case nil
           (with-temp-buffer
@@ -445,6 +457,16 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
               (let ((val (string-trim (match-string 1))))
                 (unless (string-empty-p val)
                   (setq author-header val))))
+            ;; Portfolio mode (2026-07-21):  per-source MT deferral.
+            ;; Strictly opt-in — only the literal value `t' (any case)
+            ;; defers;  everything else (nil / no / empty / absent)
+            ;; leaves machine translation active.
+            (goto-char (point-min))
+            (when (re-search-forward
+                   "^#\\+TIBETAN_DEFER_MT:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (when (string-equal (downcase val) "t")
+                  (setq defer-mt t))))
             (goto-char (point-min))
             (while (re-search-forward
                     "^#\\+TIBETAN_CLAUDE_CONTEXT:[ \t]*\\(.*\\)$" nil t)
@@ -491,7 +513,8 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
           :dm-tibetan-source dm-tibetan-source
           :text-type text-type
           :class-mode class-mode
-          :sentence-detail sentence-detail)))
+          :sentence-detail sentence-detail
+          :defer-mt defer-mt)))
 
 
 ;;;###autoload
