@@ -588,6 +588,19 @@ existing per-segment fire UNCHANGED.  Returns `fired' or `dedup-hit'
 when the sentence path owns this segment (caller must NOT also fire
 per-segment Claude)."
   (ignore tibetan-text)
+  ;; Portfolio mode: a deferring source owns the segment WITHOUT firing —
+  ;; return the non-nil symbol `deferred' so the caller does not fall
+  ;; back to per-segment Claude (which is guarded too, but the early
+  ;; return avoids pointless sentence-walking + claim bookkeeping).
+  (if (and (fboundp 'tibetan-analysis--defer-mt-p)
+           (tibetan-analysis--defer-mt-p (or source-file analysis-file)))
+      'deferred
+    (tibetan-analysis--fire-sentence-level-1
+     analysis-file source-file seg-id force)))
+
+(defun tibetan-analysis--fire-sentence-level-1 (analysis-file source-file
+                                                seg-id force)
+  "Unguarded body of `tibetan-analysis--fire-sentence-level'."
   (when (and analysis-file source-file seg-id
              (fboundp 'tibetan-sentence--sentence-for-segment)
              ;; Parallel-Sanskrit docs keep their three-call chain.

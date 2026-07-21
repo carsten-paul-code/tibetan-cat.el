@@ -450,7 +450,13 @@ Sanskrit parallel-mode gating is delegated to
 nil for any of the above failures.
 
 This is the call site's main entry point — replaces the
-single-language `fire-tibetan' calls."
+single-language `fire-tibetan' calls.
+
+Portfolio mode: when the source (given or derived from ANALYSIS-FILE)
+carries `#+TIBETAN_DEFER_MT: t', neither language fires.  Soft-guarded
+via fboundp — this core module must load without persist/."
+  (unless (and (fboundp 'tibetan-analysis--defer-mt-p)
+               (tibetan-analysis--defer-mt-p (or source-file analysis-file)))
   ;; Tibetan path — fire only when forced or the section needs it, so a
   ;; populated DM translation is not silently re-requested on open.
   (when (and tibetan-text
@@ -476,7 +482,7 @@ single-language `fire-tibetan' calls."
         (let ((iast (plist-get skt-plist :iast)))
           (when (and iast (stringp iast))
             (tibetan-dharmamitra-translation-fire-sanskrit
-             iast analysis-file)))))))
+             iast analysis-file))))))))
 
 (defun tibetan-dharmamitra-translation-fire-tibetan-sentence
     (sentence-text sent-num seg-nums child-files sent-file &optional force)
@@ -492,7 +498,14 @@ the §5.20 preserve machinery handle it untouched).
 Fire gate: FORCE, or ANY child still needs a DM request.  Landing
 gate per file: FORCE or that file needs it — a populated section is
 never overwritten by a non-FORCE fire (§5.29 policy).  An empty API
-response writes nothing (preserve pattern, like --fire-tibetan)."
+response writes nothing (preserve pattern, like --fire-tibetan).
+
+Portfolio mode: when the children's source defers MT
+\(`#+TIBETAN_DEFER_MT: t', resolved via the first child's or the sent
+file's `#+SOURCE:' link), nothing fires.  Soft-guarded via fboundp."
+  (unless (and (fboundp 'tibetan-analysis--defer-mt-p)
+               (tibetan-analysis--defer-mt-p
+                (or (car child-files) sent-file)))
   (when (and sentence-text (stringp sentence-text)
              (not (string-empty-p (string-trim sentence-text)))
              child-files
@@ -521,7 +534,7 @@ response writes nothing (preserve pattern, like --fire-tibetan)."
                             f "Tibetan")))
               (tibetan-dharmamitra-translation--write-nested-tibetan-section
                f body)))
-          t)))))
+          t))))))
 
 (provide 'tibetan-dharmamitra-translation)
 ;;; tibetan-dharmamitra-translation.el ends here

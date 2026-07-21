@@ -1299,7 +1299,21 @@ stays identical to the segment-level flow.
 Routed through `tibetan-claude-queue' so concurrent sentence-level
 requests share the same throttle / retry budget as segment-level
 requests, and a placeholder is written into the *** Claude
-Translation section if retries are exhausted."
+Translation section if retries are exhausted.
+
+Portfolio mode: when the source defers MT (`#+TIBETAN_DEFER_MT: t'),
+no request is queued — returns nil after a `message'."
+  (if (and (fboundp 'tibetan-analysis--defer-mt-p)
+           (tibetan-analysis--defer-mt-p (or source-file analysis-file)))
+      (prog1 nil
+        (message "tibetan: MT deferred (#+TIBETAN_DEFER_MT) — %s"
+                 (and analysis-file (file-name-nondirectory analysis-file))))
+    (tibetan-sentence--request-claude-1
+     tibetan-text seg-nums analysis-file source-file folder)))
+
+(defun tibetan-sentence--request-claude-1
+    (tibetan-text seg-nums analysis-file &optional source-file folder)
+  "Unguarded body of `tibetan-sentence--request-claude'."
   (require 'tibetan-claude-queue)
   (let ((label (and analysis-file
                     (file-name-nondirectory analysis-file))))

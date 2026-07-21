@@ -104,6 +104,8 @@
 (condition-case nil (require 'tibetan-round2-clause-segmenter-test) (error nil))
 (condition-case nil (require 'tibetan-sentence-tree-test) (error nil))
 (condition-case nil (require 'tibetan-sentence-claude-test) (error nil))
+;; Portfolio-mode MT deferral (#+TIBETAN_DEFER_MT)
+(condition-case nil (require 'tibetan-defer-mt-test) (error nil))
 
 ;; Batch reanalysis (preserves user notes + Claude translation)
 (condition-case nil (require 'tibetan-batch-reanalyze-test) (error nil))

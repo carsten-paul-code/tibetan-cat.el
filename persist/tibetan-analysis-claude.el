@@ -517,6 +517,25 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
           :defer-mt defer-mt)))
 
 
+(defun tibetan-analysis--defer-mt-p (file)
+  "Return non-nil when FILE's document defers machine translation.
+
+Portfolio mode (2026-07-21): a source carrying `#+TIBETAN_DEFER_MT: t'
+must not fire Claude or DharmaMitra requests — the Tibetisch IV
+Portfolio assignment permits AI tools only for revising a self-made
+translation.  FILE may be the source document itself or an analysis
+file (seg-/sent-NNN.org) whose `#+SOURCE:' link resolves to it.
+Never signals; returns nil for nil / unresolvable input."
+  (when (and file (stringp file))
+    (condition-case nil
+        (or (plist-get (tibetan-analysis--read-source-metadata file)
+                       :defer-mt)
+            (let ((src (tibetan-analysis--source-file-from-analysis file)))
+              (and src
+                   (plist-get (tibetan-analysis--read-source-metadata src)
+                              :defer-mt))))
+      (error nil))))
+
 ;;;###autoload
 (defun tibetan-analysis-set-source-target-lang (source-file lang)
   "Set `#+TIBETAN_TARGET_LANG:' to LANG on SOURCE-FILE.
@@ -1663,8 +1682,22 @@ visible placeholder is written into the *** Claude Translation
 section so the segment is easy to find and re-run later via C-c u R.
 
 Requires gptel and a configured Anthropic API key.  Never signals —
-failures are reported via `message' and the placeholder."
-  (require 'tibetan-claude-queue)
+failures are reported via `message' and the placeholder.
+
+Portfolio mode: when the source (given or derived from ANALYSIS-FILE)
+carries `#+TIBETAN_DEFER_MT: t', no request is queued — returns nil
+after a `message'."
+  (if (tibetan-analysis--defer-mt-p (or source-file analysis-file))
+      (prog1 nil
+        (message "tibetan: MT deferred (#+TIBETAN_DEFER_MT) — %s"
+                 (and analysis-file (file-name-nondirectory analysis-file))))
+    (require 'tibetan-claude-queue)
+    (tibetan-analysis--request-claude-translation-1
+     tibetan-text analysis-file source-file)))
+
+(defun tibetan-analysis--request-claude-translation-1
+    (tibetan-text analysis-file &optional source-file)
+  "Unguarded body of `tibetan-analysis--request-claude-translation'."
   (let ((label (and analysis-file
                     (file-name-nondirectory analysis-file))))
     (tibetan-claude-queue-submit
