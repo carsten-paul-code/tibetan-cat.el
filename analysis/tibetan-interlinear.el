@@ -419,8 +419,21 @@ Returns something like:
              (cond
               ((and zettel-id (stringp zettel-id))
                (format "[[id:%s][%s]]" zettel-id wylie-stem))
+              ;; F1 (2026-07-22): the Detailed Dictionary section is
+              ;; retired, so the internal `<<term-xxx>>' anchors no
+              ;; longer exist.  A dictionary-worthy token (the caller
+              ;; still signals this via TERM-ANCHOR) now links OUT to
+              ;; the Steinert web dictionary — one-click lookup
+              ;; replaces the inline multi-source dump.  Fallback to
+              ;; the legacy internal link only if the steinert module
+              ;; is not loaded (then the §5.18 dangling-link strip
+              ;; degrades it to plain text on save/export).
               ((and term-anchor (stringp term-anchor))
-               (format "[[%s][%s]]" term-anchor wylie-stem))
+               (let ((web-url (and (fboundp 'tibetan-steinert-url)
+                                   (tibetan-steinert-url wylie-stem))))
+                 (if web-url
+                     (format "[[%s][%s]]" web-url wylie-stem)
+                   (format "[[%s][%s]]" term-anchor wylie-stem))))
               (t wylie-stem))))
         (push (if (and short-meaning (not (string-empty-p short-meaning)))
                   (format "%s %s[%s]" linked-stem

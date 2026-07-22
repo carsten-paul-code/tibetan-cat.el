@@ -238,26 +238,27 @@ lexical (no split)."
 ;; ============================================================================
 
 (ert-deftest tibetan-interlinear-format-entry-lexical ()
-  "Lexical word with internal term-anchor link and gloss.
-Pass 5a (2026-04-22) swapped the external Steinert URL for an
-internal `[[term-xxx][wylie]]' org link targeting the `<<term-xxx>>'
-radio anchor emitted by the Detailed Dictionary section below.  The
-link must wrap ONLY the Wylie; the English gloss sits outside the
-link as readable plain text."
+  "Lexical word links to the STEINERT WEB dictionary (F1, 2026-07-22).
+History: the original interlinear carried external Steinert URLs;
+Pass 5a (2026-04-22) swapped them for internal `[[term-xxx][wylie]]'
+links targeting the Detailed Dictionary's `<<term-xxx>>' anchors.
+F1 removes the Detailed Dictionary from the layout entirely, so the
+link now goes back OUT — to the Steinert web dictionary — keeping
+one-click dictionary access without the inline DD dump.  The link
+must wrap ONLY the Wylie; the gloss sits outside as plain text."
   (let ((result (tibetan-interlinear--format-gloss-entry
                  "'khor ba"
                  "term-khor-ba"
                  "cyclic existence"
                  nil nil)))
-    ;; Internal link wraps the wylie alone.
-    (should (string-match-p "\\[\\[term-khor-ba\\]\\['khor ba\\]\\]"
-                            result))
+    ;; External Steinert link wraps the wylie alone.
+    (should (string-match-p
+             "\\[\\[https://dictionary\\.christian-steinert\\.de/#[^]]+\\]\\['khor ba\\]\\]"
+             result))
+    ;; No internal term-anchor link remains.
+    (should-not (string-match-p "\\[\\[term-khor-ba\\]" result))
     ;; Gloss sits outside the link (space then bracketed gloss).
-    (should (string-match-p "\\]\\] \\[cyclic existence\\]" result))
-    ;; And specifically NOT the old nested form `wylie[gloss]` inside
-    ;; the link body.
-    (should-not (string-match-p "'khor ba\\[cyclic existence\\]\\]\\]"
-                                result))))
+    (should (string-match-p "\\]\\] \\[cyclic existence\\]" result))))
 
 (ert-deftest tibetan-interlinear-format-entry-nil-anchor-plain-wylie ()
   "With TERM-ANCHOR=nil, the stem is rendered as plain Wylie (no link).
@@ -626,7 +627,12 @@ don't know about the new parameter are not affected."
                          "bdag" "term-bdag" "I, self" nil nil)))
     (should (equal result-with result-without))
     (should-not (string-match-p "♦" result-with))
-    (should (string-match-p "\\[\\[term-bdag\\]\\[bdag\\]\\]" result-with))))
+    ;; F1 (2026-07-22): dictionary-worthy tokens link OUT to the
+    ;; Steinert web dictionary (the internal term-anchors left with
+    ;; the Detailed Dictionary section).
+    (should (string-match-p
+             "\\[\\[https://dictionary\\.christian-steinert\\.de/#[^]]+\\]\\[bdag\\]\\]"
+             result-with))))
 
 (ert-deftest tibetan-interlinear-format-entry-zettel-no-gloss ()
   "A zettel hit with no gloss still emits link + ♦ (showing that
