@@ -459,8 +459,9 @@ the corresponding heading has real content, not placeholder text)."
     ;; ** Sentence Structure is NO LONGER stripped (2026-06-02):  the
     ;; full per-clause subject/object structure is the headline class
     ;; tool for sentences and replaces the old `** Main Clause' summary.
-    "** Verb Classification (Hill 2010)"
-    "** Detailed Dictionary")
+    ;; "** Detailed Dictionary" removed from the list (F1 2026-07-22):
+    ;; the section is retired from the generator, nothing to strip.
+    "** Verb Classification (Hill 2010)")
   "Level-2 headings dropped from the segment-renderer output before
 it is embedded in a sentence file's `* Tibetan Analysis' block.
 

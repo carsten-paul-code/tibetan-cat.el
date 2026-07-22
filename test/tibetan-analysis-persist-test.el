@@ -579,6 +579,24 @@ for Tibetan input (phonetics converter actually fires)."
       (should (not (string-empty-p body)))
       (should-not (string-match-p "\\[Phonetics not available\\]" body)))))
 
+(ert-deftest tibetan-analysis-generate-content-no-detailed-dictionary ()
+  "F1 (2026-07-22): the `** Detailed Dictionary' section is retired
+from the analysis layout — the Interlinear's tokens link to the
+Steinert WEB dictionary instead (F1 1/2, commit 907a662).  The
+generator must not emit the section, and the priority order must
+not reference it."
+  (skip-unless (fboundp 'tibetan-analysis-generate-content))
+  (let ((content (tibetan-analysis-generate-content "བདག་གིས་ལས་བྱས།")))
+    (should content)
+    (should-not (string-match-p "^\\*\\* Detailed Dictionary" content))
+    ;; The radio anchors lived only in the DD — gone with it.
+    (should-not (string-match-p "^<<term-" content)))
+  (should-not (member "** Detailed Dictionary"
+                      tibetan-analysis--priority-section-order))
+  ;; Class-view folding no longer lists the retired section.
+  (should-not (member "Detailed Dictionary"
+                      tibetan-analysis-class-folded-sections)))
+
 (ert-deftest tibetan-analysis-generate-content-empty ()
   "Test content generation with empty input."
   ;; Should not error on empty input
@@ -628,7 +646,7 @@ file only]' fallback template."
     (should (string-match-p "^\\*\\* Grammar" out))
     (should (string-match-p "^\\*\\* Sentence Structure" out))
     (should (string-match-p "^\\*\\* Verb Classification" out))
-    (should (string-match-p "^\\*\\* Detailed Dictionary" out))
+    ;; F1 (2026-07-22): Detailed Dictionary retired from the layout.
     (should (string-match-p "^\\*\\* Provided Translations" out))))
 
 ;; ============================================================================
@@ -2777,48 +2795,20 @@ breakdown."
 ;; No body changes — improvement deferred per AskUserQuestion.
 ;; ----------------------------------------------------------------------------
 
-(ert-deftest tibetan-analysis-detailed-dictionary-is-last-section ()
-  "`** Detailed Dictionary' is the LAST level-2 heading emitted
-inside the `* Tibetan Analysis' subtree.  Renders AFTER
-`** Provided Translations' so the reader reaches the dictionary
-only on confusion — flow sections (Wylie → Phonetics →
-Interlinear → Translations → Grammar → Sentence Structure →
-Verb Classification → Provided Translations) appear first."
-  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
-             (lambda (_word) nil)))
-    (let ((out (condition-case nil
-                   (tibetan-analysis-generate-content
-                    "བདག་གིས་ལས་བྱས།")
-                 (error nil))))
-      (when out
-        (should (string-match-p "^\\*\\* Detailed Dictionary$" out))
-        (should (string-match-p "^\\*\\* Provided Translations$" out))
-        ;; Provided Translations comes BEFORE Detailed Dictionary.
-        (let ((dd-pos (string-match
-                       "^\\*\\* Detailed Dictionary$" out))
-              (pt-pos (string-match
-                       "^\\*\\* Provided Translations$" out)))
-          (should (and dd-pos pt-pos))
-          (should (< pt-pos dd-pos)))
-        ;; Detailed Dictionary is the LAST level-2 heading — no
-        ;; other `** ' heading appears after it.
-        (let ((dd-end (and (string-match
-                            "^\\*\\* Detailed Dictionary$" out)
-                           (match-end 0))))
-          (when dd-end
-            (should-not (string-match-p "^\\*\\* [A-Z]"
-                                        (substring out dd-end)))))))))
+;; RETIRED (F1, 2026-07-22):
+;;   tibetan-analysis-detailed-dictionary-is-last-section
+;;   tibetan-analysis-priority-order-puts-detailed-dictionary-last
+;; The `** Detailed Dictionary' section left the layout (Interlinear
+;; tokens link to the Steinert web dictionary, commit 907a662).  The
+;; replacement invariant lives in
+;; `tibetan-analysis-generate-content-no-detailed-dictionary'.
 
-(ert-deftest tibetan-analysis-priority-order-puts-detailed-dictionary-last ()
-  "`tibetan-analysis--priority-section-order' lists `** Detailed
-Dictionary' as the LAST entry.  Sections not in the priority
-list fall to the end in generation order — so making Detailed
-Dictionary the explicit last entry locks the position even if
-emission order changes."
+(ert-deftest tibetan-analysis-priority-order-ends-with-concept-notes ()
+  "With the Detailed Dictionary retired (F1), `** Concept Notes' is
+the final reference block of the priority order."
   (let ((order tibetan-analysis--priority-section-order))
-    (should (member "** Detailed Dictionary" order))
-    (should (string= "** Detailed Dictionary"
-                     (car (last order))))))
+    (should-not (member "** Detailed Dictionary" order))
+    (should (string= "** Concept Notes" (car (last order))))))
 
 ;; ----------------------------------------------------------------------------
 ;; §5.21 Commit 6/7 (2026-05-20):  `** Provided Translations' becomes
@@ -2945,13 +2935,14 @@ body preservation."
               (should (string-match-p "Lopez 2019" post))
               (should (string-match-p "Milarepa replied" post))
               (should (string-match-p "Mila answered" post))
-              ;; Layout still correct:  PT before DD.
-              (let ((pt-pos (string-match
-                             "^\\*\\* Provided Translations$" post))
-                    (dd-pos (string-match
-                             "^\\*\\* Detailed Dictionary$" post)))
-                (should (and pt-pos dd-pos))
-                (should (< pt-pos dd-pos)))))
+              ;; Layout: PT present; the legacy `** Detailed
+              ;; Dictionary' section of the OLD file is gone after
+              ;; regenerate (F1 2026-07-22 — the generator no longer
+              ;; emits it, and regenerate-auto rebuilds the subtree).
+              (should (string-match-p
+                       "^\\*\\* Provided Translations$" post))
+              (should-not (string-match-p
+                           "^\\*\\* Detailed Dictionary$" post))))
         (delete-file tmp)))))
 
 (ert-deftest tibetan-analysis-particle-bullet-bialek-ref-falls-back ()
@@ -3507,24 +3498,25 @@ verb; the HEAD segment shows the full tree with sentence context."
   "#+TITLE: Segment 13 Analysis\n\n* Tibetan Text\nབདག\n\n* Tibetan Analysis\n** Claude Vocabulary\nbla ma, noun, \"teacher\"\n\n** Translation\nThe lama.\n\n** Verb Classification (Hill 2010)\nVERBCLASS BODY LINE\n\n** Detailed Dictionary\nDICT BODY LINE ONE\nDICT BODY LINE TWO\n\n* Footnotes\n")
 
 (ert-deftest tibetan-analysis-class-fold-hides-reference-sections ()
-  "§5.41: class folding hides the bodies of the reference sections
-\(Detailed Dictionary, Verb Classification) while their HEADING lines
-and the class sections (Vocabulary, Translation) stay visible."
+  "§5.41 + F1 (2026-07-22): class folding hides the bodies of the
+sections named in `tibetan-analysis-class-folded-sections' — now only
+Verb Classification.  A leftover `** Detailed Dictionary' section in
+an OLD file is no longer managed and stays fully visible."
   (with-temp-buffer
     (insert tapt--class-fold-fixture)
     (org-mode)
     (tibetan-analysis-class-fold)
-    ;; Reference bodies hidden.
-    (goto-char (point-min))
-    (search-forward "DICT BODY LINE ONE")
-    (should (invisible-p (1- (point))))
+    ;; Verb Classification body hidden, heading visible.
     (goto-char (point-min))
     (search-forward "VERBCLASS BODY LINE")
     (should (invisible-p (1- (point))))
-    ;; Their headings still visible.
     (goto-char (point-min))
-    (search-forward "** Detailed Dictionary")
+    (search-forward "** Verb Classification (Hill 2010)")
     (should-not (invisible-p (line-beginning-position)))
+    ;; F1: a legacy Detailed Dictionary body is NOT folded anymore.
+    (goto-char (point-min))
+    (search-forward "DICT BODY LINE ONE")
+    (should-not (invisible-p (1- (point))))
     ;; Class sections fully visible.
     (goto-char (point-min))
     (search-forward "bla ma, noun")
@@ -3535,7 +3527,9 @@ and the class sections (Vocabulary, Translation) stay visible."
     (should tibetan-analysis--class-view-active)))
 
 (ert-deftest tibetan-analysis-class-view-toggle-roundtrip ()
-  "Toggle: class view → full view → class view, flag tracking."
+  "Toggle: class view → full view → class view, flag tracking.
+F1: tracks the Verb Classification body (Detailed Dictionary left
+the managed fold list)."
   (with-temp-buffer
     (insert tapt--class-fold-fixture)
     (org-mode)
@@ -3543,12 +3537,12 @@ and the class sections (Vocabulary, Translation) stay visible."
     (tibetan-analysis-toggle-class-view)
     (should-not tibetan-analysis--class-view-active)
     (goto-char (point-min))
-    (search-forward "DICT BODY LINE ONE")
+    (search-forward "VERBCLASS BODY LINE")
     (should-not (invisible-p (1- (point))))
     (tibetan-analysis-toggle-class-view)
     (should tibetan-analysis--class-view-active)
     (goto-char (point-min))
-    (search-forward "DICT BODY LINE ONE")
+    (search-forward "VERBCLASS BODY LINE")
     (should (invisible-p (1- (point))))))
 
 (ert-deftest tibetan-analysis-mode-hook-regex-covers-suffixed-and-sent ()

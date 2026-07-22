@@ -301,65 +301,6 @@ thesaurus integration must not crash the multisource pipeline."
 ;; RENDERING — Detailed Dictionary head line with zettel back-link + ★
 ;; ============================================================================
 
-(ert-deftest tibetan-thesaurus-detailed-dictionary-renders-zettel-link ()
-  "When a Thesaurus entry is present for a word, the Detailed
-Dictionary head line includes a `[[id:XYZ][Thesaurus ↗]]' back-
-link to the zettel.  Students click to jump to the thesaurus
-entry in their zettelkasten and edit it; the consistency of the
-term then propagates to every other analysis on next reanalysis."
-  (require 'tibetan-analysis-persist)
-  (tibetan-thesaurus-test--with-tmp-dir tmp
-    (tibetan-thesaurus-test--write-zettel
-     (expand-file-name "sems.org" tmp)
-     :id "20250821T100000" :title "citta" :wylie "sems"
-     :english "mind, consciousness" :german "Geist")
-    (let ((tibetan-thesaurus-directory tmp))
-      (tibetan-thesaurus-reload)
-      (cl-letf (((symbol-function 'tibetan-lookup-word) (lambda (_w) nil))
-                ((symbol-function 'tibetan-lookup-word-in-steinert)
-                 (lambda (_w) nil))
-                ((symbol-function 'tibetan-lookup-word-in-rangjung-yeshe)
-                 (lambda (_w) nil))
-                ((symbol-function 'tibetan-lookup-word-in-dharmamitra)
-                 (lambda (_w) nil)))
-        (let ((out (condition-case nil
-                       (tibetan-analysis-generate-content "སེམས་")
-                     (error nil))))
-          (when out
-            ;; Head-line zettel link with the right id.
-            (should (string-match-p
-                     "id:20250821T100000\\]\\[Thesaurus" out))
-            ;; ★ marker is present on the head line for Thesaurus
-            ;; entries (same visual treatment as Resources).
-            (should (string-match-p "◆ .*sems.*★" out))))))))
-
-(ert-deftest tibetan-thesaurus-detailed-dictionary-shows-thesaurus-source ()
-  "The Thesaurus entry appears in the Detailed Dictionary body as
-`[Thesaurus (Kramer)]' with the bilingual gloss indented beneath."
-  (require 'tibetan-analysis-persist)
-  (tibetan-thesaurus-test--with-tmp-dir tmp
-    (tibetan-thesaurus-test--write-zettel
-     (expand-file-name "bdag.org" tmp)
-     :wylie "bdag" :english "self, I" :german "Selbst, Ich")
-    (let ((tibetan-thesaurus-directory tmp))
-      (tibetan-thesaurus-reload)
-      (cl-letf (((symbol-function 'tibetan-lookup-word) (lambda (_w) nil))
-                ((symbol-function 'tibetan-lookup-word-in-steinert)
-                 (lambda (_w) nil))
-                ((symbol-function 'tibetan-lookup-word-in-rangjung-yeshe)
-                 (lambda (_w) nil))
-                ((symbol-function 'tibetan-lookup-word-in-dharmamitra)
-                 (lambda (_w) nil)))
-        (let ((out (condition-case nil
-                       (tibetan-analysis-generate-content "བདག་")
-                     (error nil))))
-          (when out
-            (should (string-match-p "\\[Thesaurus (Kramer)\\]" out))
-            ;; Bilingual gloss preserved on either the primary or
-            ;; detailed line after `[Thesaurus ...]'.
-            (should (string-match-p "Selbst" out))
-            (should (string-match-p "self" out))))))))
-
 ;; ============================================================================
 ;; INITIALIZE FROM KRAMER — one-shot copy command
 ;; ============================================================================

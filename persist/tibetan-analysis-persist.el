@@ -847,7 +847,9 @@ parser which doesn't fire for compound-embedded markers like
 ;; whole view.  Display-only — file contents are never touched.
 
 (defcustom tibetan-analysis-class-folded-sections
-  '("Detailed Dictionary" "Verb Classification (Hill 2010)")
+  ;; F1 (2026-07-22): "Detailed Dictionary" dropped from the default —
+  ;; the section is retired from the layout entirely.
+  '("Verb Classification (Hill 2010)")
   "Section headings folded by the class view.
 Matched as exact heading names at any org level.  Sentence Structure
 is deliberately NOT in the default — it is the §5.31 class feature."
@@ -3797,8 +3799,9 @@ For each Bialek-detected particle in BIALEK-ANALYSIS:
     ;; Structure → Grammar → Verb Class. → Provided Translations, then
     ;; the two reference blocks (Concept Notes, Detailed Dictionary).
     "** Provided Translations"
-    "** Concept Notes"
-    "** Detailed Dictionary")
+    ;; F1 (2026-07-22): "** Detailed Dictionary" retired — Interlinear
+    ;; tokens link to the Steinert web dictionary instead.
+    "** Concept Notes")
   "Section headings (at org level-2) that should appear first in the
 `* Auto-Analysis' output, in this exact order.  Any level-2 section
 NOT listed here is kept and emitted afterwards in the order it was
@@ -4765,13 +4768,11 @@ unused-arg warning without breaking the public API."
             ;; `<<term-mthu>>' so the Interlinear's jump link
             ;; resolves to the real stem entry.
             ;; ============================================================
-            (let ((bialek-for-dd
-                   (condition-case nil
-                       (when (fboundp 'tibetan-analyze-grammar-bialek)
-                         (tibetan-analyze-grammar-bialek tibetan-text))
-                     (error nil))))
-              (tibetan-analysis--render-detailed-dictionary
-               tibetan-text vocab-pairs bialek-for-dd))
+            ;; F1 (2026-07-22): the `** Detailed Dictionary' section is
+            ;; RETIRED from the layout — the Interlinear's tokens link
+            ;; to the Steinert web dictionary instead (commit 907a662).
+            ;; The renderer (`--render-detailed-dictionary') is removed
+            ;; in the follow-up dead-code commit.
 
             ;; Reorder level-2 sections into the workshop-agreed
             ;; priority: Wylie → Particle Map → Interlinear Gloss →

@@ -462,19 +462,20 @@ present.  Now asserted ABSENT (compressed default)."
 (ert-deftest tibetan-sentence-keeps-full-sentence-structure ()
   "Sentence files now RETAIN the full `** Sentence Structure' section
 \(the per-clause subject/object breakdown) — it is no longer stripped.
-Detailed Dictionary etc. stay stripped (reference, not the compressed
-class view)."
+Reference sections stay stripped (F1 2026-07-22: the Detailed
+Dictionary is no longer generated at all)."
   (skip-unless (fboundp 'tibetan-sentence--strip-segment-claude-sections))
   (let* ((content (concat
                    "** Translation\nt\n\n"
                    "** Sentence Structure\n"
                    "Clause 1 [main]: verb བྱེད\n"
                    "    SUBJECT (ERG): བདག\n\n"
-                   "** Detailed Dictionary\ndd\n\n"))
+                   "** Verb Classification (Hill 2010)\nvc\n\n"))
          (stripped (tibetan-sentence--strip-segment-claude-sections content)))
     (should (string-match-p "\\*\\* Sentence Structure" stripped))
     (should (string-match-p "SUBJECT (ERG): བདག" stripped))
-    (should-not (string-match-p "\\*\\* Detailed Dictionary" stripped))))
+    (should-not (string-match-p
+                 "\\*\\* Verb Classification" stripped))))
 
 (ert-deftest tibetan-sentence-auto-analysis-has-structure-not-main-clause ()
   "The sentence auto-analysis now carries the full `** Sentence
@@ -1605,10 +1606,11 @@ heading (`^\\*+ ')."
 (ert-deftest tibetan-sentence-segment-claude-sections-strip-list ()
   "§5.22 final (2026-05-21):  sentence files are ALWAYS rendered in
 the compressed in-class layout.  The accessor returns a fixed
-6-entry strip list — no longer flag-conditional.
+5-entry strip list — no longer flag-conditional.
 
 Drops:  Wylie, Phonetics, Interlinear, DharmaMitra Translation,
-Verb Classification (Hill 2010), Detailed Dictionary.
+Verb Classification (Hill 2010).  (Detailed Dictionary left the
+strip list with F1 2026-07-22 — the generator no longer emits it.)
 
 Keeps (implicitly, by NOT being in the strip list):
   · ** Claude Vocabulary
@@ -1626,13 +1628,15 @@ reading default;  per-segment seg-NNN.org files keep the full
   (should (fboundp 'tibetan-sentence--segment-claude-sections))
   (let ((strip (tibetan-sentence--segment-claude-sections)))
     (should (listp strip))
-    (should (= 6 (length strip)))
+    (should (= 5 (length strip)))
     (should (member "** Wylie Transliteration" strip))
     (should (member "** Phonetics" strip))
     (should (member "** Interlinear Gloss" strip))
     (should (member "** DharmaMitra Translation" strip))
     (should (member "** Verb Classification (Hill 2010)" strip))
-    (should (member "** Detailed Dictionary" strip))
+    ;; F1 (2026-07-22): Detailed Dictionary retired from the generator,
+    ;; hence no longer a strip-list member.
+    (should-not (member "** Detailed Dictionary" strip))
     ;; Sentence Structure is NO LONGER stripped (2026-06-02) — the
     ;; full per-clause subject/object structure stays in sentence files.
     (should-not (member "** Sentence Structure" strip))
@@ -1678,7 +1682,7 @@ real output (which varies with vocab DB state)."
                    "** Sentence Structure\n[clauses]\n\n"
                    "** Verb Classification (Hill 2010)\n[verbs]\n\n"
                    "** Provided Translations\n\n\n"
-                   "** Detailed Dictionary\n[deep]\n")))
+                   )))
                ((symbol-function 'tibetan-analysis--filter-to-tibetan-lines)
                 (lambda (text) text))
                ((symbol-function 'tibetan-sentence--filepath)
@@ -1728,14 +1732,10 @@ no per-source header switch needed.  Per fboundp check guards
 against accidental re-introduction."
   (should-not (fboundp 'tibetan-sentence-toggle-source-compressed)))
 
-(ert-deftest tibetan-sentence-strip-always-drops-detailed-dictionary ()
-  "§5.22 final (2026-05-21):  `** Detailed Dictionary' is in the
-sentence-stripper's filter list unconditionally — sentence files
-never carry DD.  Per-segment seg-NNN.org files keep DD as their
-prep-time dictionary reference;  this is a sentence-renderer
-behaviour only."
-  (should (member "** Detailed Dictionary"
-                  (tibetan-sentence--segment-claude-sections))))
+;; RETIRED (F1, 2026-07-22): tibetan-sentence-strip-always-drops-
+;; detailed-dictionary — the Detailed Dictionary section is retired
+;; from the generator; the strip-list no longer references it (see
+;; tibetan-sentence-segment-claude-sections-strip-list).
 
 (ert-deftest tibetan-sentence-strip-compresses-segment-output ()
   "§5.22 final (2026-05-21):  `tibetan-sentence--strip-segment-
@@ -1753,8 +1753,7 @@ No mode flag — sentence files are always class-format."
           "** Grammar\n*** Particles\n=ERG=\n\n"
           "** Sentence Structure\n[clauses]\n\n"
           "** Verb Classification (Hill 2010)\n[verbs]\n\n"
-          "** Provided Translations\n\n\n"
-          "** Detailed Dictionary\n[deep]\n")))
+          "** Provided Translations\n\n\n")))
     (let ((out (tibetan-sentence--strip-segment-claude-sections content)))
       ;; Kept: 4 sections.
       (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
@@ -1763,7 +1762,8 @@ No mode flag — sentence files are always class-format."
       (should (string-match-p "^\\*\\* Provided Translations$" out))
       ;; Sentence Structure is now KEPT (2026-06-02).
       (should (string-match-p "^\\*\\* Sentence Structure$" out))
-      ;; Dropped: 6 reference sections.
+      ;; Dropped: 5 reference sections (Detailed Dictionary is no
+      ;; longer generated at all — F1 2026-07-22).
       (should-not (string-match-p "^\\*\\* Wylie Transliteration$" out))
       (should-not (string-match-p "^\\*\\* Phonetics$" out))
       (should-not (string-match-p "^\\*\\* Interlinear Gloss$" out))
@@ -1804,25 +1804,26 @@ still suppresses the strip-list."
 4 L2 sections in the in-class compressed layout)."
   (let ((tibetan-sentence--detail-for-render "compressed"))
     (let ((strip (tibetan-sentence--segment-claude-sections)))
-      (should (= 6 (length strip)))
+      (should (= 5 (length strip)))
       (should (member "** Wylie Transliteration" strip))
-      (should (member "** Detailed Dictionary" strip)))))
+      ;; F1: Detailed Dictionary retired.
+      (should-not (member "** Detailed Dictionary" strip)))))
 
 (ert-deftest tibetan-sentence-detail-for-render-nil-keeps-strip-list ()
   "§5.27 Phase 5:  unbound / nil dynamic var = backwards-compatible
 §5.22 final behaviour — full 7-entry strip-list (compressed
 in-class layout is the default when no header is set)."
   (let ((tibetan-sentence--detail-for-render nil))
-    (should (= 6 (length (tibetan-sentence--segment-claude-sections))))))
+    (should (= 5 (length (tibetan-sentence--segment-claude-sections))))))
 
 (ert-deftest tibetan-sentence-detail-for-render-garbage-keeps-strip-list ()
   "§5.27 Phase 5:  defensive — any string other than \"detailed\"
 \(case-insensitive) falls through to the compressed strip-list.
 Protects against typos in the per-document header."
   (let ((tibetan-sentence--detail-for-render "verbose"))
-    (should (= 6 (length (tibetan-sentence--segment-claude-sections)))))
+    (should (= 5 (length (tibetan-sentence--segment-claude-sections)))))
   (let ((tibetan-sentence--detail-for-render "full"))
-    (should (= 6 (length (tibetan-sentence--segment-claude-sections))))))
+    (should (= 5 (length (tibetan-sentence--segment-claude-sections))))))
 
 (ert-deftest tibetan-sentence-strip-segment-claude-sections-honours-detailed ()
   "§5.27 Phase 5:  end-to-end through the strip helper — when the
@@ -1840,11 +1841,10 @@ the output."
           "** Grammar\n*** Particles\n=ERG=\n\n"
           "** Sentence Structure\n[clauses]\n\n"
           "** Verb Classification (Hill 2010)\n[verbs]\n\n"
-          "** Provided Translations\n\n\n"
-          "** Detailed Dictionary\n[deep]\n")))
+          "** Provided Translations\n\n\n")))
     (let* ((tibetan-sentence--detail-for-render "detailed")
            (out (tibetan-sentence--strip-segment-claude-sections content)))
-      ;; All 11 L2 sections still present (no stripping).
+      ;; All 10 L2 sections still present (no stripping).
       (should (string-match-p "^\\*\\* Wylie Transliteration$" out))
       (should (string-match-p "^\\*\\* Phonetics$" out))
       (should (string-match-p "^\\*\\* Interlinear Gloss$" out))
@@ -1856,7 +1856,7 @@ the output."
       (should (string-match-p
                "^\\*\\* Verb Classification (Hill 2010)$" out))
       (should (string-match-p "^\\*\\* Provided Translations$" out))
-      (should (string-match-p "^\\*\\* Detailed Dictionary$" out)))))
+)))
 
 (ert-deftest tibetan-sentence-sentence-detail-from-source-reads-header ()
   "§5.27 Phase 5:  `--sentence-detail-from-source' reads the
@@ -1917,7 +1917,7 @@ are stripped out of the embedded segment-renderer body."
                    "** Sentence Structure\n[clauses]\n\n"
                    "** Verb Classification (Hill 2010)\n[verbs]\n\n"
                    "** Provided Translations\n\n\n"
-                   "** Detailed Dictionary\n[deep]\n")))
+                   )))
                ((symbol-function 'tibetan-analysis--filter-to-tibetan-lines)
                 (lambda (text) text))
                ((symbol-function 'tibetan-sentence--filepath)
@@ -1941,7 +1941,7 @@ are stripped out of the embedded segment-renderer body."
             (should (string-match-p
                      "^\\*\\* Verb Classification (Hill 2010)$" out))
             (should (string-match-p "^\\*\\* Provided Translations$" out))
-            (should (string-match-p "^\\*\\* Detailed Dictionary$" out))))
+      ))
       (delete-directory dir t))))
 
 (ert-deftest tibetan-sentence-create-file-no-header-stays-compressed ()
@@ -1963,7 +1963,7 @@ sources analysed without the new header are unchanged."
                    "** Wylie Transliteration\nfoo\n\n"
                    "** Claude Vocabulary\nfoo = thing\n\n"
                    "** Translation\nThe thing.\n\n"
-                   "** Detailed Dictionary\n[deep]\n")))
+                   )))
                ((symbol-function 'tibetan-analysis--filter-to-tibetan-lines)
                 (lambda (text) text))
                ((symbol-function 'tibetan-sentence--filepath)
