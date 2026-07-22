@@ -111,6 +111,31 @@ BINDINGS is a plist: :resources ENTRY-STR :custom ENTRY-STR
       (should (< (cl-position (car sources) sources :test #'string=)
                  (cl-position "Rangjung Yeshe" sources :test #'string=))))))
 
+(ert-deftest tibetan-vocab-multisource-hopkins-is-first-auto-choice ()
+  "F2 (2026-07-22, user decision): Hopkins 2015 is the EXPLICIT
+first-choice automatic dictionary for the gloss — with genuinely
+different glosses from Hopkins, Ives-Waldo, and Rangjung-Yeshe in
+the pool, the Hopkins entry ranks first, so the Interlinear /
+Word-list best-gloss selection (which takes the ranked head) shows
+Hopkins.  Curated sources (Thesaurus/Resources/Custom) still
+outrank it — locked by multisource-resources-comes-first."
+  (tibetan-mst--with-stubs
+      (:resources nil
+       :steinert (list (list :source "08-IvesWaldo"
+                             :gloss "region; territory; realm of the senses"
+                             :sanskrit nil)
+                       (list :source "01-Hopkins2015"
+                             :gloss "object; place"
+                             :sanskrit nil)
+                       (list :source "02-RangjungYeshe"
+                             :gloss "homeland, village, sphere of activity"
+                             :sanskrit nil))
+       :rangjung nil :bundled nil :dharmamitra nil)
+    (let ((entries (tibetan-vocab-multisource-entries "ཡུལ")))
+      (should (> (length entries) 1))
+      (should (equal "Steinert/01-Hopkins2015"
+                     (plist-get (car entries) :source))))))
+
 (ert-deftest tibetan-vocab-multisource-dedupes-near-duplicates ()
   "Two sources with near-identical glosses only produce one entry."
   (tibetan-mst--with-stubs
