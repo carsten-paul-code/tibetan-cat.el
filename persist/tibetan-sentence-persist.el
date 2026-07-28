@@ -1434,12 +1434,12 @@ source buffer must visit a file"))
               (goto-char (point-min)))
             (display-buffer-in-side-window
              buf '((side . right) (window-width . 0.5))))
-          ;; §5.40: multi-segment sentences route through the
-          ;; sentence-level dispatcher (one call feeds the sent file
-          ;; AND every child); single-segment sentences keep the
-          ;; legacy sentence call.
-          (unless (and (> (length seg-nums) 1)
-                       (fboundp 'tibetan-analysis--fire-sentence-level)
+          ;; §5.40/B-1.3: every sentence routes through the sentence-
+          ;; level dispatcher first (one call feeds the sent file AND
+          ;; every child — since B-1.2 including singletons).  The
+          ;; legacy per-sentence call remains only as the
+          ;; dispatcher-nil fallback (flat layout, missing children).
+          (unless (and (fboundp 'tibetan-analysis--fire-sentence-level)
                        (condition-case nil
                            (tibetan-analysis--fire-sentence-level
                             tib-text newpath source-file
@@ -1498,10 +1498,10 @@ called with a prefix argument."
             (with-current-buffer buf
               (revert-buffer t t))))
         (when current-prefix-arg
-          ;; §5.40: multi-seg → sentence-level dispatcher (FORCE —
-          ;; explicit refresh); single-seg → legacy sentence call.
-          (unless (and (> (length seg-nums) 1)
-                       (fboundp 'tibetan-analysis--fire-sentence-level)
+          ;; §5.40/B-1.3: dispatcher first (FORCE — explicit refresh);
+          ;; the legacy per-sentence call is the dispatcher-nil
+          ;; fallback only (flat layout, missing children).
+          (unless (and (fboundp 'tibetan-analysis--fire-sentence-level)
                        (condition-case nil
                            (tibetan-analysis--fire-sentence-level
                             tib-text filepath source-file

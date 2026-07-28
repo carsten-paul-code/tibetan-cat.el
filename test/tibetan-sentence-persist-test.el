@@ -2148,6 +2148,49 @@ Without a SOURCE-FILE it stays the legacy bare `sent-NNN.org'."
                            (expand-file-name "sent-005.org" dir))))
       (delete-directory dir t))))
 
+(ert-deftest tibetan-sentence-single-seg-routes-through-dispatcher ()
+  "The open-analysis create path and the reanalyze refresh path route
+single-segment sentences through the §5.40 dispatcher (B-1.3).  The
+`>1' conjuncts short-circuited BEFORE the dispatcher, so singletons
+always took the legacy per-sentence call."
+  (let ((dispatcher-calls '())
+        (legacy-calls 0))
+    (cl-letf* (((symbol-function 'display-buffer-in-side-window)
+                (lambda (&rest _) nil))
+               ((symbol-function 'tibetan-analysis--fire-sentence-level)
+                (lambda (_text _file _src seg-id force)
+                  (push (cons seg-id force) dispatcher-calls)
+                  'fired))
+               ((symbol-function 'tibetan-sentence--request-claude)
+                (lambda (&rest _) (cl-incf legacy-calls))))
+      (tibetan-sentence-test--with-source-buffer
+          (concat "#+TITLE: T\n\n* Tibetan Text\n** Section 1\n"
+                  "*** Sentence 1\n**** Segment 1\nབདག\n\n"
+                  "**** Working Translation\n\n")
+        (re-search-forward "^\\*\\*\\*\\* Segment 1" nil t)
+        ;; Create path (C-c s A on a fresh singleton sentence).
+        (tibetan-sentence-open-analysis)
+        (should (= 1 (length dispatcher-calls)))
+        (should (equal '(1 . nil) (car dispatcher-calls)))
+        (should (= 0 legacy-calls))
+        ;; Reanalyze path with prefix arg → dispatcher with FORCE.
+        (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
+                  ((symbol-function 'tibetan-sentence--regenerate)
+                   (lambda (&rest _) nil)))
+          (let ((current-prefix-arg '(4)))
+            (goto-char (point-min))
+            (re-search-forward "^\\*\\*\\*\\* Segment 1" nil t)
+            (tibetan-sentence-reanalyze)))
+        (should (= 2 (length dispatcher-calls)))
+        (should (equal '(1 . t) (car dispatcher-calls)))
+        (should (= 0 legacy-calls))
+        ;; Cleanup the buffer the create path spawned.
+        (let ((buf (get-file-buffer
+                    (tibetan-sentence--filepath 1 nil (buffer-file-name)))))
+          (when buf
+            (with-current-buffer buf (set-buffer-modified-p nil))
+            (kill-buffer buf)))))))
+
 (ert-deftest tibetan-sentence-folder-files-skip-conflict-copies ()
   "`--folder-sentence-files' excludes iCloud conflict copies (Phase 0.1)."
   (let ((tmp-dir (make-temp-file "sent-strict-" t)))
