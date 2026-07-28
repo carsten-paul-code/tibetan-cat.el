@@ -370,5 +370,16 @@ class the single-char ས/ལ/ར/ན guards already prevent."
                   (and type (string-match-p "ABLATIVE" type))))
               result))))
 
+(ert-deftest tibetan-tokenize-shad-is-hard-boundary ()
+  "Phase 2b (C5.1): deleting shads used to GLUE the flanking
+syllables ('khulgnyis) — a shad must act as a tsheg boundary."
+  (let ((tokens (tibetan-tokenize-into-words "མི་འཁྲུལ།གཉིས་སུ་གནས།")))
+    (should tokens)
+    (dolist (tok tokens)
+      (let ((word (if (consp tok) (car tok) tok)))
+        (when (stringp word)
+          (should-not (and (string-match-p "འཁྲུལ" word)
+                           (string-match-p "གཉིས" word))))))))
+
 (provide 'tibetan-particles-bialek-test)
 ;;; tibetan-particles-bialek-test.el ends here

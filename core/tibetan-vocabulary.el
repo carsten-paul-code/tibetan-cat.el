@@ -1065,6 +1065,11 @@ populates the final `(word . meaning)' cell."
     (tibetan-load-custom-vocab)
     ;; First normalize: replace spaces with tsheg for consistent splitting
     (setq tibetan-text (replace-regexp-in-string " " "་" tibetan-text))
+    ;; Phase 2b (2026-07-28): a shad run is a HARD boundary — convert
+    ;; to tsheg so clauses run together without a space (…འཁྲུལ།གཉིས…)
+    ;; can never fuse into one token, and no token carries a shad.
+    (setq tibetan-text (replace-regexp-in-string
+                        "[།༎༏༐༑༔]+" "་" tibetan-text))
     (let* ((words (split-string tibetan-text "་" t))
            (num-words (length words))
            (vocab '())

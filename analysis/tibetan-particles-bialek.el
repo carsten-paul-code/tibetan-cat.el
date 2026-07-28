@@ -91,7 +91,7 @@ caller's standalone path handles it."
   "Analyze case particles using Bialek's terminology.
 Returns list of (particle word case function translation-guide bialek-ref)."
   (let ((analysis '())
-        (words (split-string (replace-regexp-in-string "[།༎༏༐༑༔]" "" tibetan-text) "་" t)))
+        (words (split-string (replace-regexp-in-string "[།༎༏༐༑༔]+" "་" tibetan-text) "་" t)))
 
     (dolist (word words)
       (cond
@@ -370,7 +370,7 @@ Returns list of (particle word case function translation-guide bialek-ref)."
                                                       type))))
                              analysis)))
       (let* ((pieces (split-string
-                      (replace-regexp-in-string "[།༎༏༐༑༔]" "" tibetan-text)
+                      (replace-regexp-in-string "[།༎༏༐༑༔]+" "་" tibetan-text)
                       "་" t))
              (last-piece (car (last pieces)))
              (pending '()))
@@ -427,7 +427,7 @@ Converbial constructions are dependent clauses that express:
 
 Returns list of (particle word type function translation-guide bialek-ref)."
   (let ((analysis '())
-        (words (split-string (replace-regexp-in-string "[།༎༏༐༑༔]" "" tibetan-text) "་" t)))
+        (words (split-string (replace-regexp-in-string "[།༎༏༐༑༔]+" "་" tibetan-text) "་" t)))
 
     (dolist (word words)
       (cond
@@ -619,7 +619,7 @@ Uses greedy matching (longest match first) via the vocabulary system.
 
 This is used to prevent the grammar analysis from incorrectly parsing
 particles inside compound words (e.g., ལ in རྣལ་འབྱོར is NOT dative)."
-  (let* ((cleaned (replace-regexp-in-string "[།༎༏༐༑༔]" "" tibetan-text))
+  (let* ((cleaned (replace-regexp-in-string "[།༎༏༐༑༔]+" "་" tibetan-text))
          (syllables (split-string cleaned "་" t))
          (num-syllables (length syllables))
          (tokens '())

@@ -157,9 +157,14 @@ Replaces spaces with tsheg, removes extra whitespace."
 
 (defun tibetan-split-into-syllables (text)
   "Split Tibetan TEXT into syllables.
-Returns list of syllables."
+Returns list of syllables.  Phase 2b (2026-07-28): a shad run is a
+HARD boundary like a tsheg — sources sometimes run clauses together
+without a space after the shad (…འཁྲུལ།གཉིས…), and a tsheg-only
+split fused the flanking syllables into garbage tokens."
   (when text
-    (let ((normalized (tibetan-normalize-text text)))
+    (let ((normalized (tibetan-normalize-text
+                       (replace-regexp-in-string
+                        "[།༎༏༐༑༔]+" "་" text))))
       (split-string normalized "་" t))))
 
 (defun tibetan-clean-text (text)

@@ -1192,5 +1192,30 @@ hits were cached, so every miss re-queried on each call."
           (should-not (gethash "lcags pho" tibetan-current-resources-vocab)))
       (delete-directory tmp-root t))))
 
+;; ============================================================================
+;; Phase 2b (C5.1, 2026-07-28): a shad is a HARD token boundary
+;; ============================================================================
+;; seg-137-khu observation: where the source runs clauses together
+;; without a space after the shad (…མི་འཁྲུལ།གཉིས་སུ…), the tsheg-only
+;; splitters produced fused garbage tokens ('khulgnyis, dgosch…) and
+;; the Round-2 parser hallucinated verbs from them.
+
+(ert-deftest tibetan-extract-vocabulary-shad-is-hard-boundary ()
+  "No extracted key may span a shad, and no key carries one."
+  (let ((vocab (tibetan-extract-vocabulary "མི་འཁྲུལ།གཉིས་སུ་གནས།")))
+    (should vocab)
+    (let ((keys (mapcar #'car vocab)))
+      (dolist (k keys)
+        (should-not (string-match-p "[།༎]" k))
+        (should-not (and (string-match-p "འཁྲུལ" k)
+                         (string-match-p "གཉིས" k)))))))
+
+(ert-deftest tibetan-split-into-syllables-shad-boundary ()
+  "The syllable splitter treats a shad like a tsheg boundary."
+  (should (equal '("འཁྲུལ" "གཉིས")
+                 (tibetan-split-into-syllables "འཁྲུལ།གཉིས")))
+  (should (equal '("ལས" "བྱས" "ཆོས")
+                 (tibetan-split-into-syllables "ལས་བྱས། ཆོས"))))
+
 (provide 'tibetan-vocabulary-test)
 ;;; tibetan-vocabulary-test.el ends here
