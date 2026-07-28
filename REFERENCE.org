@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T16:35:47
+#+DATE: 2026-07-28T16:39:01
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1304 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1311 forms
 
 Regenerated automatically by:
 
@@ -62,7 +62,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (131)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (28)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (12)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (19)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
@@ -15064,10 +15064,21 @@ Trimmed string, or nil when the subsegment or heading is absent /
 the body is empty.  Placeholders are returned verbatim — use
 `tibetan-cascade--subsegment-rendering-needs-request-p' for gating.
 
-** ~tibetan-cascade--write-subsegment-section~  /function/
+** ~tibetan-cascade--write-subsegment-section-in-buffer~  /function/
 :PROPERTIES:
 :KIND: defun
 :LINE: 329
+:SIGNATURE: (tibetan-cascade--write-subsegment-section-in-buffer seg-num heading body)
+:END:
+
+Buffer-local core of `tibetan-cascade--write-subsegment-section'.
+Replaces the body of `*** HEADING' inside the `** Segment SEG-NUM'
+subtree of the CURRENT buffer.  Returns t when replaced.
+
+** ~tibetan-cascade--write-subsegment-section~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 354
 :SIGNATURE: (tibetan-cascade--write-subsegment-section file seg-num heading body)
 :END:
 
@@ -15077,10 +15088,72 @@ heading is absent.  BODY is inserted verbatim — the C3 landing path
 sanitizes Claude-derived text (line-leading `*', §5.28 class) BEFORE
 calling this primitive.
 
+** ~tibetan-cascade--read-l1-body~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 381
+:SIGNATURE: (tibetan-cascade--read-l1-body file heading)
+:END:
+
+Trimmed body of `* HEADING' in FILE (bounded at the next L1
+heading, so the user's own sub-structure inside survives), or nil
+when absent / empty.
+
+** ~tibetan-cascade--read-l3-body~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 402
+:SIGNATURE: (tibetan-cascade--read-l3-body file heading)
+:END:
+
+Trimmed body of the (unique) `*** HEADING' in FILE, or nil.
+Used for the sentence-level `*** Claude Grammar' — subsegments never
+carry that heading, so a file-wide search is unambiguous.
+
+** ~tibetan-cascade--collect-unknown-l1-sections~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 425
+:SIGNATURE: (tibetan-cascade--collect-unknown-l1-sections file)
+:END:
+
+List of verbatim L1 subtrees in FILE whose headings the scaffold
+does not own (`tibetan-cascade--known-l1-sections').
+
+** ~tibetan-cascade--set-body-in-buffer~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 447
+:SIGNATURE: (tibetan-cascade--set-body-in-buffer level heading body)
+:END:
+
+Replace the body of the first LEVEL-star HEADING in the current
+buffer (skipping a :PROPERTIES: drawer; bounded at the next heading
+of level ≤ LEVEL, so a subtree body keeps its children).  Returns t
+when replaced.
+
+** ~tibetan-cascade--regenerate~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 470
+:SIGNATURE: (tibetan-cascade--regenerate filepath sent-num segs source-file)
+:END:
+
+Regenerate FILEPATH's deterministic sections; preserve everything
+user-valuable.  PRESERVE → REBUILD (via `tibetan-cascade--scaffold')
+→ RESTORE, the §5.18 sentence pattern.  Preserved: the three user
+slots, populated sentence-level bodies (Translation / DharmaMitra
+Translation / Claude Vocabulary / Concept Notes / Provided
+Translations subtree / *** Claude Grammar), populated subsegment
+`*** Rendering' bodies for segments still present in SEGS, and every
+UNKNOWN top-level section verbatim (§5.38-H2).  Placeholders
+regenerate freshly.  Idempotent modulo the LAST_ANALYZED stamp.
+Returns FILEPATH.
+
 ** ~tibetan-cascade--subsegment-rendering-needs-request-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 362
+:LINE: 526
 :SIGNATURE: (tibetan-cascade--subsegment-rendering-needs-request-p file seg-num)
 :END:
 
@@ -15101,6 +15174,15 @@ Placeholder body of a subsegment's `*** Rendering' section.
 Counts as needs-request: a subsegment whose Rendering still carries
 this (or any `[…'-anchored placeholder) re-fires at SENTENCE level —
 there is no per-segment fallback in cascade mode.
+
+** ~tibetan-cascade--known-l1-sections~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 374
+:DEFAULT: '
+:END:
+
+/(no docstring)/
 
 
 * persist/tibetan-claude-queue.el

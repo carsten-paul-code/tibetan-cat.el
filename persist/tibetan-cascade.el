@@ -326,6 +326,31 @@ the body is empty.  Placeholders are returned verbatim — use
                     (unless (string-empty-p body) body)))))))
       (error nil))))
 
+(defun tibetan-cascade--write-subsegment-section-in-buffer
+    (seg-num heading body)
+  "Buffer-local core of `tibetan-cascade--write-subsegment-section'.
+Replaces the body of `*** HEADING' inside the `** Segment SEG-NUM'
+subtree of the CURRENT buffer.  Returns t when replaced."
+  (let ((bounds (tibetan-cascade--subsegment-bounds seg-num))
+        (done nil))
+    (when bounds
+      (save-restriction
+        (narrow-to-region (car bounds) (cdr bounds))
+        (goto-char (point-min))
+        (when (re-search-forward
+               (format "^\\*\\*\\* %s$" (regexp-quote heading))
+               nil t)
+          (forward-line 1)
+          (let ((start (point))
+                (end (if (re-search-forward "^\\*\\{1,3\\} " nil t)
+                         (line-beginning-position)
+                       (point-max))))
+            (delete-region start end)
+            (goto-char start)
+            (insert (string-trim-right body) "\n\n")
+            (setq done t)))))
+    done))
+
 (defun tibetan-cascade--write-subsegment-section (file seg-num heading body)
   "Replace the body of `*** HEADING' in FILE's `** Segment SEG-NUM'.
 Returns t on success; nil (file untouched) when the subsegment or
@@ -336,28 +361,167 @@ calling this primitive."
     (condition-case nil
         (with-temp-buffer
           (insert-file-contents file)
-          (let ((bounds (tibetan-cascade--subsegment-bounds seg-num))
-                (done nil))
-            (when bounds
-              (save-restriction
-                (narrow-to-region (car bounds) (cdr bounds))
-                (goto-char (point-min))
-                (when (re-search-forward
-                       (format "^\\*\\*\\* %s$" (regexp-quote heading))
-                       nil t)
-                  (forward-line 1)
-                  (let ((start (point))
-                        (end (if (re-search-forward "^\\*\\{1,3\\} " nil t)
-                                 (line-beginning-position)
-                               (point-max))))
-                    (delete-region start end)
-                    (goto-char start)
-                    (insert (string-trim-right body) "\n\n")
-                    (setq done t)))))
-            (when done
-              (write-region (point-min) (point-max) file nil 'silent)
-              t)))
+          (when (tibetan-cascade--write-subsegment-section-in-buffer
+                 seg-num heading body)
+            (write-region (point-min) (point-max) file nil 'silent)
+            t))
       (error nil))))
+
+;; ============================================================================
+;; C2.3 — regenerate with preservation (the §5.26 discipline)
+;; ============================================================================
+
+(defconst tibetan-cascade--known-l1-sections
+  '("My Notes" "Working Translation" "Tibetan Text" "Tibetan Analysis"
+    "Subsegments" "Footnotes")
+  "The L1 headings the cascade scaffold owns.  Anything else found in
+an existing file is preserved verbatim across regenerate
+\(§5.38-H2: preserve-by-default, never a whitelist wipe).")
+
+(defun tibetan-cascade--read-l1-body (file heading)
+  "Trimmed body of `* HEADING' in FILE (bounded at the next L1
+heading, so the user's own sub-structure inside survives), or nil
+when absent / empty."
+  (when (and file (stringp file) (file-exists-p file))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents file)
+          (goto-char (point-min))
+          (when (re-search-forward
+                 (format "^\\* %s$" (regexp-quote heading)) nil t)
+            (forward-line 1)
+            (let* ((start (point))
+                   (end (if (re-search-forward "^\\* " nil t)
+                            (line-beginning-position)
+                          (point-max)))
+                   (body (string-trim
+                          (buffer-substring-no-properties start end))))
+              (unless (string-empty-p body) body))))
+      (error nil))))
+
+(defun tibetan-cascade--read-l3-body (file heading)
+  "Trimmed body of the (unique) `*** HEADING' in FILE, or nil.
+Used for the sentence-level `*** Claude Grammar' — subsegments never
+carry that heading, so a file-wide search is unambiguous."
+  (when (and file (stringp file) (file-exists-p file))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents file)
+          (goto-char (point-min))
+          (when (re-search-forward
+                 (format "^\\*\\*\\* %s$" (regexp-quote heading)) nil t)
+            (forward-line 1)
+            (let* ((start (point))
+                   (end (if (re-search-forward "^\\*\\{1,3\\} " nil t)
+                            (line-beginning-position)
+                          (point-max)))
+                   (body (string-trim
+                          (buffer-substring-no-properties start end))))
+              (unless (or (string-empty-p body)
+                          (string-match-p "\\`\\[Awaiting" body))
+                body))))
+      (error nil))))
+
+(defun tibetan-cascade--collect-unknown-l1-sections (file)
+  "List of verbatim L1 subtrees in FILE whose headings the scaffold
+does not own (`tibetan-cascade--known-l1-sections')."
+  (when (and file (stringp file) (file-exists-p file))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents file)
+          (goto-char (point-min))
+          (let ((subtrees '()))
+            (while (re-search-forward "^\\* \\(.+\\)$" nil t)
+              (let ((heading (string-trim (match-string 1)))
+                    (start (line-beginning-position)))
+                (unless (member heading tibetan-cascade--known-l1-sections)
+                  (let ((end (save-excursion
+                               (if (re-search-forward "^\\* " nil t)
+                                   (line-beginning-position)
+                                 (point-max)))))
+                    (push (buffer-substring-no-properties start end)
+                          subtrees)))))
+            (nreverse subtrees)))
+      (error nil))))
+
+(defun tibetan-cascade--set-body-in-buffer (level heading body)
+  "Replace the body of the first LEVEL-star HEADING in the current
+buffer (skipping a :PROPERTIES: drawer; bounded at the next heading
+of level ≤ LEVEL, so a subtree body keeps its children).  Returns t
+when replaced."
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward
+           (format "^\\*\\{%d\\} %s$" level (regexp-quote heading)) nil t)
+      (forward-line 1)
+      (when (looking-at "^:PROPERTIES:$")
+        (when (re-search-forward "^:END:$" nil t)
+          (forward-line 1)))
+      (let ((start (point))
+            (end (if (re-search-forward
+                      (format "^\\*\\{1,%d\\} " level) nil t)
+                     (line-beginning-position)
+                   (point-max))))
+        (delete-region start end)
+        (goto-char start)
+        (insert (string-trim-right body) "\n\n")
+        t))))
+
+(defun tibetan-cascade--regenerate (filepath sent-num segs source-file)
+  "Regenerate FILEPATH's deterministic sections; preserve everything
+user-valuable.  PRESERVE → REBUILD (via `tibetan-cascade--scaffold')
+→ RESTORE, the §5.18 sentence pattern.  Preserved: the three user
+slots, populated sentence-level bodies (Translation / DharmaMitra
+Translation / Claude Vocabulary / Concept Notes / Provided
+Translations subtree / *** Claude Grammar), populated subsegment
+`*** Rendering' bodies for segments still present in SEGS, and every
+UNKNOWN top-level section verbatim (§5.38-H2).  Placeholders
+regenerate freshly.  Idempotent modulo the LAST_ANALYZED stamp.
+Returns FILEPATH."
+  (let* ((keep-l1
+          (cl-remove-if-not
+           #'cdr
+           (mapcar (lambda (h)
+                     (cons h (tibetan-cascade--read-l1-body filepath h)))
+                   '("My Notes" "Working Translation" "Footnotes"))))
+         (keep-l2
+          (when (fboundp 'tibetan-sentence--read-l2-body)
+            (cl-remove-if-not
+             #'cdr
+             (mapcar (lambda (h)
+                       (cons h (tibetan-sentence--read-l2-body filepath h)))
+                     '("Translation" "DharmaMitra Translation"
+                       "Claude Vocabulary" "Concept Notes"
+                       "Provided Translations")))))
+         (claude-grammar (tibetan-cascade--read-l3-body
+                          filepath "Claude Grammar"))
+         (renderings
+          (cl-loop for n in (tibetan-cascade--subsegment-numbers filepath)
+                   when (and (assq n segs)
+                             (not (tibetan-cascade--subsegment-rendering-needs-request-p
+                                   filepath n)))
+                   collect (cons n (tibetan-cascade--read-subsegment-section
+                                    filepath n "Rendering"))))
+         (unknown (tibetan-cascade--collect-unknown-l1-sections filepath)))
+    (with-temp-buffer
+      (insert (tibetan-cascade--scaffold sent-num segs source-file))
+      (dolist (kv keep-l1)
+        (tibetan-cascade--set-body-in-buffer 1 (car kv) (cdr kv)))
+      (dolist (kv keep-l2)
+        (tibetan-cascade--set-body-in-buffer 2 (car kv) (cdr kv)))
+      (when claude-grammar
+        (tibetan-cascade--set-body-in-buffer 3 "Claude Grammar"
+                                             claude-grammar))
+      (dolist (r renderings)
+        (when (cdr r)
+          (tibetan-cascade--write-subsegment-section-in-buffer
+           (car r) "Rendering" (cdr r))))
+      (dolist (u unknown)
+        (goto-char (point-max))
+        (unless (bolp) (insert "\n"))
+        (insert (string-trim-right u) "\n\n"))
+      (write-region (point-min) (point-max) filepath nil 'silent))
+    filepath))
 
 (defun tibetan-cascade--subsegment-rendering-needs-request-p (file seg-num)
   "Non-nil when SEG-NUM's `*** Rendering' still needs the sentence fire.

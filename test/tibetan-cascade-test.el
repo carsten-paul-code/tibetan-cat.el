@@ -332,5 +332,95 @@ predicate flips."
       (should-not (tibetan-cascade--write-subsegment-section
                    cascade-file 107 "Rendering" "x")))))
 
+;; ============================================================================
+;; C2.3 — regenerate with preservation (the §5.26 discipline)
+;; ============================================================================
+
+(defun tibetan-cascade-test--set-l1-body (file heading body)
+  "Test helper: crudely replace the body of `* HEADING' in FILE."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (goto-char (point-min))
+    (re-search-forward (format "^\\* %s$" (regexp-quote heading)))
+    (forward-line 1)
+    (let ((start (point))
+          (end (if (re-search-forward "^\\* " nil t)
+                   (line-beginning-position)
+                 (point-max))))
+      (delete-region start end)
+      (goto-char start)
+      (insert body "\n\n"))
+    (write-region (point-min) (point-max) file nil 'silent)))
+
+(ert-deftest tibetan-cascade-regenerate-preserves-everything ()
+  "Regenerate rebuilds the deterministic sections but preserves: user
+slots, populated sentence-level Claude/DM bodies, populated
+subsegment Renderings, and UNKNOWN top-level sections (§5.38-H2).
+Placeholders regenerate freshly."
+  (tibetan-cascade-test--with-cascade-file
+    ;; Populate user + Claude + DM + rendering content.
+    (tibetan-cascade-test--set-l1-body cascade-file "My Notes"
+                                       "USER NOTE stays.")
+    (with-temp-buffer
+      (insert-file-contents cascade-file)
+      ;; Sentence-level Translation body (placeholder → real).
+      (goto-char (point-min))
+      (re-search-forward "^\\*\\* Translation$")
+      (forward-line 1)
+      (let ((start (point))
+            (end (if (re-search-forward "^\\*\\{1,2\\} " nil t)
+                     (line-beginning-position)
+                   (point-max))))
+        (delete-region start end)
+        (goto-char start)
+        (insert "The lama went and asked for dharma.\n\n"))
+      ;; An UNKNOWN top-level section the regenerator must not eat.
+      (goto-char (point-max))
+      (insert "* Sanskrit (DharmaMitra)\nUNKNOWN SECTION body.\n\n")
+      (write-region (point-min) (point-max) cascade-file nil 'silent))
+    (tibetan-cascade--write-subsegment-section
+     cascade-file 105 "Rendering" "⟪He went⟫ and asked.")
+    ;; Regenerate with the same segs.
+    (tibetan-cascade--regenerate
+     cascade-file 4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+     (expand-file-name "doc.org" dir))
+    (let ((s (with-temp-buffer
+               (insert-file-contents cascade-file)
+               (buffer-string))))
+      ;; Preserved.
+      (should (string-match-p "USER NOTE stays\\." s))
+      (should (string-match-p "The lama went and asked for dharma\\." s))
+      (should (string-match-p (regexp-quote "⟪He went⟫ and asked.") s))
+      (should (string-match-p "^\\* Sanskrit (DharmaMitra)$" s))
+      (should (string-match-p "UNKNOWN SECTION body\\." s))
+      ;; Still a well-formed cascade file (marker + both subsegments).
+      (should (string-match-p "^#\\+TIBETAN_LAYOUT: cascade$" s))
+      (should (string-match-p "^\\*\\* Segment 105$" s))
+      (should (string-match-p "^\\*\\* Segment 106$" s))
+      ;; The UNPOPULATED sibling rendering is a fresh placeholder.
+      (should (tibetan-cascade--subsegment-rendering-needs-request-p
+               cascade-file 106))
+      (should-not (tibetan-cascade--subsegment-rendering-needs-request-p
+                   cascade-file 105)))))
+
+(ert-deftest tibetan-cascade-regenerate-is-idempotent ()
+  "A second regenerate with identical inputs is byte-identical
+modulo the LAST_ANALYZED stamp."
+  (tibetan-cascade-test--with-cascade-file
+    (tibetan-cascade--write-subsegment-section
+     cascade-file 105 "Rendering" "⟪He went⟫ and asked.")
+    (let ((src (expand-file-name "doc.org" dir))
+          (segs '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།")))
+          (strip (lambda ()
+                   (replace-regexp-in-string
+                    "^#\\+LAST_ANALYZED: .*$" ""
+                    (with-temp-buffer
+                      (insert-file-contents cascade-file)
+                      (buffer-string))))))
+      (tibetan-cascade--regenerate cascade-file 4 segs src)
+      (let ((first (funcall strip)))
+        (tibetan-cascade--regenerate cascade-file 4 segs src)
+        (should (equal first (funcall strip)))))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here
