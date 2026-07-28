@@ -26,6 +26,7 @@
 (require 'tibetan-analysis-claude)
 (require 'tibetan-sentence-persist)
 (require 'tibetan-sentence-claude)
+(require 'tibetan-cascade)
 
 ;; ============================================================================
 ;; Canned sentence-first responses (five-section schema, ⟦N⟧ span markers)
@@ -234,6 +235,60 @@ that silent no-op cost a debugging round)."
            (progn (delete-directory sentence-first-spec--dir t) t))
     :example "Khu-dbon state: filled children + placeholder sent files"
     :tags (:sentence-first :backfill :landing-gate))
+
+  (spec "Cascade document: one file, spans landed, no seg files"
+    :given (setq sentence-first-spec--dir
+                 (make-temp-file "bdd-cascade-" t))
+    :when (let* ((dir sentence-first-spec--dir)
+                 (src (expand-file-name "doc.org" dir)))
+            (with-temp-file src
+              (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                      "* Tibetan Text\n"
+                      "*** Sentence 4\n"
+                      "**** Segment 105\nབདག་གིས་ལས་བྱས།\n\n"
+                      "**** Segment 106\nཆོས་ཟབ་མོ་ཡིན།\n\n"))
+            (let* ((cascade-file
+                    (tibetan-cascade--create-file
+                     4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+                     src))
+                   (fire-1 (sentence-first-spec--fire
+                            (list :src src :c105 cascade-file)
+                            sentence-first-spec--response-1))
+                   (content (sentence-first-spec--read cascade-file))
+                   (fire-2 (sentence-first-spec--fire
+                            (list :src src :c105 cascade-file)
+                            sentence-first-spec--response-2)))
+              (list :fired-1 (car fire-1) :statuses (cdr fire-1)
+                    :fired-2 (car fire-2)
+                    :content content
+                    :rendering-105 (tibetan-cascade--read-subsegment-section
+                                    cascade-file 105 "Rendering")
+                    :seg-files (directory-files
+                                (file-name-directory cascade-file)
+                                nil "\\`seg-"))))
+    :then ((tibetan-bdd-assert-contains
+            (format "%S" (plist-get result :statuses)) "(:status ok)"
+            "Cascade queue job should complete ok")
+           (should (eq 'fired (plist-get result :fired-1)))
+           ;; Sentence-level Translation: plain whole, no markers.
+           (tibetan-bdd-assert-contains
+            (plist-get result :content)
+            "The lama went to rNgog's place and requested the dharma."
+            "Cascade file should carry the whole-sentence translation")
+           (should-not (string-match-p "⟦" (plist-get result :content)))
+           ;; Subsegment rendering = the extracted span only.
+           (should (equal "The lama went to rNgog's place"
+                          (plist-get result :rendering-105)))
+           ;; The sub-translations were DISCARDED.
+           (should-not (string-match-p "Having gone to rNgog's place"
+                                       (plist-get result :content)))
+           ;; NO seg files exist — one artifact per sentence.
+           (should (null (plist-get result :seg-files)))
+           ;; Second non-FORCE fire declines (nothing needs Claude).
+           (should-not (plist-get result :fired-2))
+           (progn (delete-directory sentence-first-spec--dir t) t))
+    :example "CASCADE v2: sentence file with shad subsegments (C3)"
+    :tags (:sentence-first :cascade))
 
   (spec "Fully populated sentence does not fire non-FORCE"
     :given (setq sentence-first-spec--dir
