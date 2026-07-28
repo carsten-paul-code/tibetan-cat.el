@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T14:10:52
+#+DATE: 2026-07-28T16:33:49
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1293 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1299 forms
 
 Regenerated automatically by:
 
@@ -62,7 +62,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (131)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (28)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (1)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (7)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
@@ -14962,6 +14962,86 @@ here if a corpus needs them.
 
 Pure and deterministic; nil for nil / empty / whitespace-only input;
 never signals.
+
+** ~tibetan-cascade--extract-l2-body~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 82
+:SIGNATURE: (tibetan-cascade--extract-l2-body content heading)
+:END:
+
+Body of `** HEADING' inside the renderer output CONTENT, or nil.
+Bounds follow the §5.38-C1 discipline (stars-then-SPACE), so
+markdown-bold body lines never truncate the section.
+
+** ~tibetan-cascade--extract-particles-body~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 101
+:SIGNATURE: (tibetan-cascade--extract-particles-body content)
+:END:
+
+Body of the `*** Particles' subsection in CONTENT, or nil.
+
+** ~tibetan-cascade--subsegment-block~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 117
+:SIGNATURE: (tibetan-cascade--subsegment-block seg-num ordinal text)
+:END:
+
+The `** Segment SEG-NUM' subtree for one shad unit (a string).
+ORDINAL is the 1-based position inside the sentence — display /
+bookkeeping only, never a file key (the GLOBAL segment number is the
+key).  The four deterministic sections are extracted from one
+segment-renderer pass over TEXT (★ Resources glosses, Steinert web
+links, and Bialek particle bullets come along for free); when the
+renderer is unavailable the Wylie/Phonetics fall back to the pure
+converters and the rest degrade to visible markers.
+
+** ~tibetan-cascade--scaffold~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 160
+:SIGNATURE: (tibetan-cascade--scaffold sent-num segs source-file)
+:END:
+
+Return the full cascade sent-file body for SENT-NUM (a string).
+SEGS is an ordered list of (GLOBAL-SEG-NUM . TEXT) conses — the
+sentence's shad units as they appear in the source.  SOURCE-FILE is
+the absolute source path (nil tolerated: no #+SOURCE header).
+
+Layout: user slots on top, `* Tibetan Analysis' (sentence-level —
+rendered through the compressed sentence renderer when available),
+`* Subsegments' with one `** Segment N' subtree per unit, and
+`* Footnotes' at the bottom.  The `#+TIBETAN_LAYOUT: cascade' header
+marks the file for every reader (§2.8: explicit, never sniffed).
+
+** ~tibetan-cascade--create-file~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 234
+:SIGNATURE: (tibetan-cascade--create-file sent-num segs source-file)
+:END:
+
+Write the cascade sent file for SENT-NUM; return its path.
+SEGS as in `tibetan-cascade--scaffold'.  The path comes from the
+suffix-aware `tibetan-sentence--filepath' (cascade files KEEP the
+`sent-NNN-SHORT.org' name — every resolver/glob/batch works
+unchanged); falls back to a bare `sent-NNN.org' beside
+SOURCE-FILE when the sentence module is not loaded.
+
+** ~tibetan-cascade-rendering-placeholder~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 75
+:DEFAULT: "[Awaiting sentence translation…]"
+:END:
+
+Placeholder body of a subsegment's `*** Rendering' section.
+Counts as needs-request: a subsegment whose Rendering still carries
+this (or any `[…'-anchored placeholder) re-fires at SENTENCE level —
+there is no per-segment fallback in cascade mode.
 
 
 * persist/tibetan-claude-queue.el

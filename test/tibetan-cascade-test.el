@@ -153,5 +153,99 @@ last unit; newlines act as ordinary separator whitespace."
   (should-not (tibetan-cascade-split-shad-units ""))
   (should-not (tibetan-cascade-split-shad-units "   \n  ")))
 
+;; ============================================================================
+;; C2.1 — cascade sent-file scaffold + create-file
+;; ============================================================================
+;; One file per sentence: user slots on top, sentence-level analysis,
+;; `* Subsegments' keyed by the source's GLOBAL segment numbers with
+;; :SUBSEG: ordinals, per-unit deterministic sections extracted from
+;; the segment renderer, Footnotes at the bottom.
+
+(defmacro tibetan-cascade-test--with-stub-renderer (&rest body)
+  "Run BODY with `tibetan-analysis-generate-content' stubbed to a
+canned, text-parameterized segment layout (deterministic extraction
+checks, no dictionary machinery)."
+  (declare (indent 0))
+  `(cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+              (lambda (text &rest _)
+                (format (concat "** Wylie Transliteration\nWYLIE(%s)\n\n"
+                                "** Phonetics\nPHON(%s)\n\n"
+                                "** Interlinear Gloss\nGLOSS(%s)\n\n"
+                                "** Translation\n[Requesting translation...]\n\n"
+                                "** Grammar\n*** Particles\nPART(%s)\n\n"
+                                "*** Claude Grammar\n\n"
+                                "** Provided Translations\n\n")
+                        text text text text))))
+     ,@body))
+
+(ert-deftest tibetan-cascade-scaffold-structure ()
+  "C2.1: layout, header marker, global-number keys, ordinal props,
+per-unit sections, and top/bottom user-slot ordering."
+  (tibetan-cascade-test--with-stub-renderer
+    (let ((s (tibetan-cascade--scaffold
+              4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+              "/tmp/doc.org")))
+      ;; Header marker + segments line.
+      (should (string-match-p "^#\\+TIBETAN_LAYOUT: cascade$" s))
+      (should (string-match-p "^#\\+SEGMENTS: 105, 106$" s))
+      ;; Top-level ordering.
+      (let ((notes (string-match "^\\* My Notes$" s))
+            (wt    (string-match "^\\* Working Translation$" s))
+            (tt    (string-match "^\\* Tibetan Text$" s))
+            (ta    (string-match "^\\* Tibetan Analysis$" s))
+            (subs  (string-match "^\\* Subsegments$" s))
+            (foot  (string-match "^\\* Footnotes$" s)))
+        (should (and notes wt tt ta subs foot))
+        (should (< notes wt tt ta subs foot)))
+      ;; Subsegments keyed by GLOBAL segment number, ordinal as prop.
+      (should (string-match-p "^\\*\\* Segment 105$" s))
+      (should (string-match-p "^\\*\\* Segment 106$" s))
+      (should (string-match-p "^:SUBSEG: 1$" s))
+      (should (string-match-p "^:SUBSEG: 2$" s))
+      ;; Every unit: Rendering stub + the four deterministic sections
+      ;; demoted to L3, with UNIT-scoped content.  Counted within the
+      ;; * Subsegments region only — the sentence-level Grammar
+      ;; legitimately carries its own *** Particles.
+      (let ((region (substring s
+                               (string-match "^\\* Subsegments$" s)
+                               (string-match "^\\* Footnotes$" s))))
+        (dolist (h '("Rendering" "Wylie" "Phonetics" "Interlinear Gloss"
+                     "Particles"))
+          (should (= 2 (cl-count-if
+                        (lambda (line) (equal line (concat "*** " h)))
+                        (split-string region "\n"))))))
+      (should (string-match-p "\\[Awaiting sentence translation…\\]" s))
+      (should (string-match-p (regexp-quote "GLOSS(བདག་གིས་ལས་བྱས། )") s))
+      (should (string-match-p (regexp-quote "PART(ཆོས་ཟབ་མོ་ཡིན།)") s))
+      ;; The full sentence text sits under * Tibetan Text.
+      (should (string-match-p
+               (regexp-quote "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།") s)))))
+
+(ert-deftest tibetan-cascade-create-file-writes-marked-sent-file ()
+  "C2.1: create-file writes the suffix-aware sent path with the
+cascade marker + #+SOURCE link and returns the path."
+  (tibetan-cascade-test--with-stub-renderer
+    (let* ((dir (make-temp-file "cascade-create-" t))
+           (src (expand-file-name "doc.org" dir)))
+      (unwind-protect
+          (progn
+            (with-temp-file src
+              (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                      "* Tibetan Text\n*** Sentence 4\n"
+                      "**** Segment 105\nབདག\n\n**** Segment 106\nཆོས\n"))
+            (let* ((default-directory dir)
+                   (path (tibetan-cascade--create-file
+                          4 '((105 . "བདག") (106 . "ཆོས")) src)))
+              (should (file-exists-p path))
+              (should (string-match-p "sent-004"
+                                      (file-name-nondirectory path)))
+              (with-temp-buffer
+                (insert-file-contents path)
+                (let ((c (buffer-string)))
+                  (should (string-match-p "^#\\+TIBETAN_LAYOUT: cascade$" c))
+                  (should (string-match-p "^#\\+SOURCE: \\[\\[file:" c))
+                  (should (string-match-p "^\\* Subsegments$" c))))))
+        (delete-directory dir t)))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here

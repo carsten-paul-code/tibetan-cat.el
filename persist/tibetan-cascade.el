@@ -68,5 +68,192 @@ never signals."
           (setq start len)))
       (nreverse units))))
 
+;; ============================================================================
+;; C2.1 — sent-file scaffold + create-file
+;; ============================================================================
+
+(defconst tibetan-cascade-rendering-placeholder
+  "[Awaiting sentence translation…]"
+  "Placeholder body of a subsegment's `*** Rendering' section.
+Counts as needs-request: a subsegment whose Rendering still carries
+this (or any `[…'-anchored placeholder) re-fires at SENTENCE level —
+there is no per-segment fallback in cascade mode.")
+
+(defun tibetan-cascade--extract-l2-body (content heading)
+  "Body of `** HEADING' inside the renderer output CONTENT, or nil.
+Bounds follow the §5.38-C1 discipline (stars-then-SPACE), so
+markdown-bold body lines never truncate the section."
+  (when (and content heading)
+    (with-temp-buffer
+      (insert content)
+      (goto-char (point-min))
+      (when (re-search-forward
+             (format "^\\*\\* %s$" (regexp-quote heading)) nil t)
+        (forward-line 1)
+        (let* ((start (point))
+               (end (if (re-search-forward "^\\*\\{1,2\\} " nil t)
+                        (line-beginning-position)
+                      (point-max)))
+               (body (string-trim
+                      (buffer-substring-no-properties start end))))
+          (unless (string-empty-p body) body))))))
+
+(defun tibetan-cascade--extract-particles-body (content)
+  "Body of the `*** Particles' subsection in CONTENT, or nil."
+  (when content
+    (with-temp-buffer
+      (insert content)
+      (goto-char (point-min))
+      (when (re-search-forward "^\\*\\*\\* Particles$" nil t)
+        (forward-line 1)
+        (let* ((start (point))
+               (end (if (re-search-forward "^\\*\\{1,3\\} " nil t)
+                        (line-beginning-position)
+                      (point-max)))
+               (body (string-trim
+                      (buffer-substring-no-properties start end))))
+          (unless (string-empty-p body) body))))))
+
+(defun tibetan-cascade--subsegment-block (seg-num ordinal text)
+  "The `** Segment SEG-NUM' subtree for one shad unit (a string).
+ORDINAL is the 1-based position inside the sentence — display /
+bookkeeping only, never a file key (the GLOBAL segment number is the
+key).  The four deterministic sections are extracted from one
+segment-renderer pass over TEXT (★ Resources glosses, Steinert web
+links, and Bialek particle bullets come along for free); when the
+renderer is unavailable the Wylie/Phonetics fall back to the pure
+converters and the rest degrade to visible markers."
+  (let* ((content (and (fboundp 'tibetan-analysis-generate-content)
+                       (condition-case nil
+                           (tibetan-analysis-generate-content text)
+                         (error nil))))
+         (wylie (or (tibetan-cascade--extract-l2-body
+                     content "Wylie Transliteration")
+                    (and (fboundp 'tibetan-to-wylie-fixed)
+                         (condition-case nil
+                             (tibetan-to-wylie-fixed text)
+                           (error nil)))
+                    "[Wylie not available]"))
+         (phonetics (or (tibetan-cascade--extract-l2-body
+                         content "Phonetics")
+                        (and (fboundp 'tibetan-to-phonetics)
+                             (condition-case nil
+                                 (tibetan-to-phonetics text)
+                               (error nil)))
+                        "[Phonetics not available]"))
+         (gloss (or (tibetan-cascade--extract-l2-body
+                     content "Interlinear Gloss")
+                    "[Interlinear not available]"))
+         (particles (or (tibetan-cascade--extract-particles-body content)
+                        "[Particles not available]")))
+    (concat (format "** Segment %d\n" seg-num)
+            ":PROPERTIES:\n"
+            (format ":SUBSEG: %d\n" ordinal)
+            ":END:\n\n"
+            (string-trim text) "\n\n"
+            "*** Rendering\n" tibetan-cascade-rendering-placeholder "\n\n"
+            "*** Wylie\n" (string-trim wylie) "\n\n"
+            "*** Phonetics\n" (string-trim phonetics) "\n\n"
+            "*** Interlinear Gloss\n" (string-trim gloss) "\n\n"
+            "*** Particles\n" (string-trim particles) "\n\n")))
+
+(defun tibetan-cascade--scaffold (sent-num segs source-file)
+  "Return the full cascade sent-file body for SENT-NUM (a string).
+SEGS is an ordered list of (GLOBAL-SEG-NUM . TEXT) conses — the
+sentence's shad units as they appear in the source.  SOURCE-FILE is
+the absolute source path (nil tolerated: no #+SOURCE header).
+
+Layout: user slots on top, `* Tibetan Analysis' (sentence-level —
+rendered through the compressed sentence renderer when available),
+`* Subsegments' with one `** Segment N' subtree per unit, and
+`* Footnotes' at the bottom.  The `#+TIBETAN_LAYOUT: cascade' header
+marks the file for every reader (§2.8: explicit, never sniffed)."
+  (let* ((source-name (and source-file
+                           (file-name-nondirectory source-file)))
+         (date (format-time-string "%Y-%m-%d"))
+         (tibetan-text (mapconcat #'cdr segs ""))
+         (hash (and (fboundp 'tibetan-sentence--compute-hash)
+                    (condition-case nil
+                        (tibetan-sentence--compute-hash tibetan-text)
+                      (error nil))))
+         (segs-csv (mapconcat (lambda (s) (number-to-string (car s)))
+                              segs ", ")))
+    (with-temp-buffer
+      (insert (format "#+TITLE: Sentence %d Analysis\n" sent-num))
+      (insert "#+STARTUP: showall\n")
+      (insert "#+OPTIONS: toc:nil num:nil\n")
+      (insert "#+TIBETAN_LAYOUT: cascade\n")
+      (when source-name
+        (insert (format
+                 "#+SOURCE: [[file:../%s::*Sentence %d][%s / Sentence %d]]\n"
+                 source-name sent-num source-name sent-num)))
+      (insert (format "#+SEGMENTS: %s\n" segs-csv))
+      (when hash
+        (insert (format "#+TIBETAN_HASH: %s\n" hash)))
+      (insert (format "#+CREATED: %s\n" date))
+      (insert (format "#+LAST_ANALYZED: %s\n" date))
+      (insert "\n")
+      (insert "* My Notes\n\n\n")
+      (insert "* Working Translation\n\n\n")
+      (insert "* Tibetan Text\n")
+      (insert (string-trim-right tibetan-text))
+      (insert "\n\n")
+      ;; Sentence-level analysis — compressed sentence renderer when
+      ;; loaded (Claude Vocabulary / Translation / Grammar / Sentence
+      ;; Structure / Concept Notes / Provided Translations), minimal
+      ;; placeholders otherwise.
+      (insert "* Tibetan Analysis\n")
+      (insert ":PROPERTIES:\n:GENERATED: t\n:END:\n\n")
+      (let ((auto (and (fboundp 'tibetan-sentence--render-auto-analysis)
+                       (condition-case nil
+                           (tibetan-sentence--render-auto-analysis
+                            tibetan-text)
+                         (error nil)))))
+        (if auto
+            (progn (insert auto)
+                   (unless (string-suffix-p "\n" auto) (insert "\n")))
+          (insert "** Translation\n[Requesting translation...]\n\n")
+          (insert "** Provided Translations\n\n"))
+        ;; The sentence-level DM fire lands in a nested slot — make
+        ;; sure it exists whichever renderer path ran.
+        (unless (save-excursion
+                  (goto-char (point-min))
+                  (re-search-forward "^\\*\\* DharmaMitra Translation$"
+                                     nil t))
+          (insert "** DharmaMitra Translation\n[Awaiting DharmaMitra…]\n\n")))
+      ;; Subsegments — the cascade's replacement for seg files.
+      (insert "* Subsegments\n\n")
+      (let ((ordinal 0))
+        (dolist (seg segs)
+          (cl-incf ordinal)
+          (insert (tibetan-cascade--subsegment-block
+                   (car seg) ordinal (cdr seg)))))
+      (insert "* Footnotes\n\n")
+      (buffer-string))))
+
+(defun tibetan-cascade--create-file (sent-num segs source-file)
+  "Write the cascade sent file for SENT-NUM; return its path.
+SEGS as in `tibetan-cascade--scaffold'.  The path comes from the
+suffix-aware `tibetan-sentence--filepath' (cascade files KEEP the
+`sent-NNN-SHORT.org' name — every resolver/glob/batch works
+unchanged); falls back to a bare `sent-NNN.org' beside
+SOURCE-FILE when the sentence module is not loaded."
+  (let* ((folder (file-name-as-directory
+                  (expand-file-name
+                   "analysis" (file-name-directory source-file))))
+         (filepath (if (fboundp 'tibetan-sentence--filepath)
+                       ;; Explicit FOLDER: the sentence module's default
+                       ;; derivation needs the source BUFFER current,
+                       ;; which batch/cascade callers don't guarantee.
+                       (tibetan-sentence--filepath sent-num folder
+                                                   source-file)
+                     (expand-file-name (format "sent-%03d.org" sent-num)
+                                       folder)))
+         (body (tibetan-cascade--scaffold sent-num segs source-file)))
+    (make-directory (file-name-directory filepath) t)
+    (with-temp-file filepath
+      (insert body))
+    filepath))
+
 (provide 'tibetan-cascade)
 ;;; tibetan-cascade.el ends here
