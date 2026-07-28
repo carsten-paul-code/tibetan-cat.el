@@ -685,5 +685,82 @@ NOTHING (preserve pattern)."
                                                     (buffer-string)))))
       (delete-directory dir t))))
 
+;; ============================================================================
+;; Target language from #+TIBETAN_TARGET_LANG (Part B Phase 0.2)
+;; ============================================================================
+;; DM always translated to English regardless of the document's
+;; target-lang header.  The fire functions now resolve the source's
+;; `#+TIBETAN_TARGET_LANG:' and map "de" → "german" (enum verified
+;; against the live DM OpenAPI spec 2026-07-28).
+
+(defmacro tibetan-dm-trans-test--with-de-source (&rest body)
+  "Bind DIR, SOURCE-FILE (target-lang de) and ANALYSIS-FILE (#+SOURCE→it)."
+  (declare (indent 0))
+  `(let* ((dir (make-temp-file "tibetan-dm-lang-" t))
+          (source-file (expand-file-name "quelle.org" dir))
+          (analysis-file (expand-file-name "seg-005.org" dir)))
+     (unwind-protect
+         (progn
+           (with-temp-file source-file
+             (insert "#+TITLE: Quelle\n#+TIBETAN_TARGET_LANG: de\n\n"
+                     "* Tibetan Text\n"))
+           (with-temp-file analysis-file
+             (insert "#+TITLE: Segment 5 Analysis\n"
+                     "#+SOURCE: [[file:quelle.org::*Segment 5][Segment 5]]\n\n"
+                     (tibetan-dm-trans-test--baseline-analysis)))
+           ,@body)
+       (delete-directory dir t))))
+
+(ert-deftest tibetan-dm-trans-target-lang-maps-de-to-german ()
+  "`--target-lang' maps de→german, everything else→english."
+  (skip-unless (fboundp 'tibetan-analysis--read-source-metadata))
+  (tibetan-dm-trans-test--with-de-source
+    ;; Direct source file with de header.
+    (should (equal "german"
+                   (tibetan-dharmamitra-translation--target-lang source-file)))
+    ;; Analysis file resolves through its #+SOURCE link.
+    (should (equal "german"
+                   (tibetan-dharmamitra-translation--target-lang analysis-file)))
+    ;; en header and absent header both → english.
+    (with-temp-file source-file
+      (insert "#+TITLE: Quelle\n#+TIBETAN_TARGET_LANG: en\n"))
+    (should (equal "english"
+                   (tibetan-dharmamitra-translation--target-lang source-file)))
+    (with-temp-file source-file (insert "#+TITLE: Quelle\n"))
+    (should (equal "english"
+                   (tibetan-dharmamitra-translation--target-lang source-file)))
+    ;; nil / garbage input degrades to english, never signals.
+    (should (equal "english"
+                   (tibetan-dharmamitra-translation--target-lang nil)))
+    (should (equal "english"
+                   (tibetan-dharmamitra-translation--target-lang
+                    "/nonexistent/nowhere.org")))))
+
+(ert-deftest tibetan-dm-trans-fire-tibetan-passes-target-lang ()
+  "`fire-tibetan' passes the resolved target-lang to chat-translate."
+  (skip-unless (fboundp 'tibetan-analysis--read-source-metadata))
+  (let (captured)
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+               (lambda (_text &rest args)
+                 (setq captured (plist-get args :target-lang))
+                 "Von mir wurde die Arbeit getan.")))
+      (tibetan-dm-trans-test--with-de-source
+        (tibetan-dharmamitra-translation-fire-tibetan
+         "བདག་གིས་ལས་བྱས།" analysis-file)
+        (should (equal "german" captured))))))
+
+(ert-deftest tibetan-dm-trans-fire-sentence-passes-target-lang ()
+  "`fire-tibetan-sentence' passes the resolved target-lang too."
+  (skip-unless (fboundp 'tibetan-analysis--read-source-metadata))
+  (let (captured)
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+               (lambda (_text &rest args)
+                 (setq captured (plist-get args :target-lang))
+                 "Ganzer Satz.")))
+      (tibetan-dm-trans-test--with-de-source
+        (tibetan-dharmamitra-translation-fire-tibetan-sentence
+         "བདག་གིས་ལས་བྱས།" 5 '(5) (list analysis-file) nil t)
+        (should (equal "german" captured))))))
+
 (provide 'tibetan-dharmamitra-translation-test)
 ;;; tibetan-dharmamitra-translation-test.el ends here

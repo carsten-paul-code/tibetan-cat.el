@@ -353,13 +353,46 @@ missing.  This predicate triggers when EITHER side needs work."
       (tibetan-dharmamitra-translation-needs-request-p
        analysis-file "Sanskrit")))
 
+(defun tibetan-dharmamitra-translation--target-lang (file)
+  "Return the DM chat-translate target language for FILE's document.
+
+Maps the source's `#+TIBETAN_TARGET_LANG:' header onto DharmaMitra's
+TargetLanguage enum: \"de\" → \"german\", everything else (including
+an absent header) → \"english\".  Both values verified against the
+live OpenAPI spec (components.schemas.TargetLanguage, 2026-07-28).
+
+FILE may be the source document itself or an analysis file whose
+`#+SOURCE:' link resolves to it — same resolution order as
+`tibetan-analysis--defer-mt-p'.  Soft-guarded via fboundp (this core
+module must load without persist/); never signals; degrades to
+\"english\" on any failure so a broken header can never block a
+translation fire."
+  (let ((lang
+         (when (and file (stringp file)
+                    (fboundp 'tibetan-analysis--read-source-metadata))
+           (condition-case nil
+               (or (plist-get (tibetan-analysis--read-source-metadata file)
+                              :target-lang)
+                   (let ((src (and (fboundp
+                                    'tibetan-analysis--source-file-from-analysis)
+                                   (tibetan-analysis--source-file-from-analysis
+                                    file))))
+                     (and src
+                          (plist-get
+                           (tibetan-analysis--read-source-metadata src)
+                           :target-lang))))
+             (error nil)))))
+    (if (equal lang "de") "german" "english")))
+
 ;;;###autoload
 (defun tibetan-dharmamitra-translation-fire-tibetan (tibetan-text analysis-file)
   "Translate TIBETAN-TEXT via DharmaMitra; write to ANALYSIS-FILE.
 
-Calls `tibetan-dharmamitra-api-chat-translate' on TIBETAN-TEXT
-with target-lang `english' and writes the result into the
-analysis file's `* DharmaMitra Translation (Tibetan)' section.
+Calls `tibetan-dharmamitra-api-chat-translate' on TIBETAN-TEXT —
+target-lang resolved from the document's `#+TIBETAN_TARGET_LANG:'
+header via `tibetan-dharmamitra-translation--target-lang' — and
+writes the result into the analysis file's nested
+`** DharmaMitra Translation' section.
 
 No-op when:
   - TIBETAN-TEXT is nil / empty
@@ -374,7 +407,11 @@ Returns t on successful write, nil otherwise."
              (stringp tibetan-text)
              (not (string-empty-p (string-trim tibetan-text)))
              analysis-file)
-    (let ((translation (tibetan-dharmamitra-api-chat-translate tibetan-text)))
+    (let ((translation (tibetan-dharmamitra-api-chat-translate
+                        tibetan-text
+                        :target-lang
+                        (tibetan-dharmamitra-translation--target-lang
+                         analysis-file))))
       (when (and translation (not (string-empty-p translation)))
         (tibetan-dharmamitra-translation--write-section
          analysis-file translation "Tibetan")))))
@@ -516,7 +553,11 @@ file's `#+SOURCE:' link), nothing fires.  Soft-guarded via fboundp."
                           child-files)))
     (let ((translation
            (condition-case err
-               (tibetan-dharmamitra-api-chat-translate sentence-text)
+               (tibetan-dharmamitra-api-chat-translate
+                sentence-text
+                :target-lang
+                (tibetan-dharmamitra-translation--target-lang
+                 (or (car child-files) sent-file)))
              (error
               (message "DharmaMitra sentence request failed (Sentence %s): %s"
                        sent-num (error-message-string err))
