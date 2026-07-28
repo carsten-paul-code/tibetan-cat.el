@@ -318,6 +318,18 @@ cache-constant).  FOLDER locates the child seg files for grounding."
                      (fboundp 'tibetan-sentence--collect-children-grounding))
             (tibetan-sentence--collect-children-grounding
              seg-nums folder)))
+         ;; C3.2: cascade documents have no child seg files — their
+         ;; grounding comes from the cascade file's own subsegment
+         ;; Interlinear sections.  Only consulted when the child-file
+         ;; blocks came up empty, so two-file docs are unaffected.
+         (cascade-block
+          (when (and (null vocab-block) (null grounding-block)
+                     folder
+                     (fboundp 'tibetan-analysis--cascade-p)
+                     (fboundp 'tibetan-cascade--prompt-grounding)
+                     (tibetan-analysis--cascade-p source-file))
+            (tibetan-cascade--prompt-grounding sentence source-file
+                                               folder)))
          (zettel-block
           (when (and (fboundp 'tibetan-analysis--collect-zettel-references)
                      (fboundp 'tibetan-analysis--format-zettel-references-block))
@@ -336,6 +348,7 @@ cache-constant).  FOLDER locates the child seg files for grounding."
                 enumeration
                 (or vocab-block "")
                 (or grounding-block "")
+                (or cascade-block "")
                 (or zettel-block "")
                 "\n\nProduce the five sections now, with `### Segment N' "
                 "subsections exactly as instructed.")))
@@ -446,6 +459,15 @@ is already populated — M7 discipline).  Concept Notes are copied to
 every child under the sentence label.  Children missing from the
 response get a VISIBLE stub via the failure-stub writer — never a
 silent blank.  The sent file gets the whole-sentence pieces."
+  (if (and (plist-get ctx :cascade)
+           (fboundp 'tibetan-cascade--land-response))
+      ;; C3.2: cascade documents land into the ONE cascade file —
+      ;; sentence-level sections + per-subsegment span renderings.
+      (tibetan-cascade--land-response response ctx)
+    (tibetan-sentence-claude--handle-response-1 response ctx)))
+
+(defun tibetan-sentence-claude--handle-response-1 (response ctx)
+  "Two-file landing body of `tibetan-sentence-claude--handle-response'."
   (let* ((sent-num (plist-get ctx :sent-num))
          (seg-nums (plist-get ctx :seg-nums))
          (child-files (plist-get ctx :child-files))
@@ -507,19 +529,26 @@ silent blank.  The sent file gets the whole-sentence pieces."
           (tibetan-analysis--insert-claude-sections md sent-file))))))
 
 (defun tibetan-sentence-claude--request (sentence child-files sent-file
-                                         source-file folder force)
+                                         source-file folder force
+                                         &optional cascade)
   "Queue the sentence-first Claude request.  Mirrors
 `tibetan-analysis--request-claude-translation' (429 retry via the
 queue; on exhaustion a visible failure stub lands in every child that
-is still empty)."
+is still empty).
+
+CASCADE (C3.2) marks a cascade-document request: CHILD-FILES is nil,
+SENT-FILE is the one cascade file, and the response handler routes to
+`tibetan-cascade--land-response' instead of the two-file fan-out.
+Same prompts, same schema, same queue — only the landing differs."
   (require 'tibetan-claude-queue)
   (let* ((sent-num (plist-get sentence :sent-num))
          (seg-nums (plist-get sentence :seg-nums))
-         (label (format "sent-%03d (segs %s)" (or sent-num 0)
-                        (mapconcat #'number-to-string seg-nums ",")))
+         (label (format "sent-%03d (segs %s)%s" (or sent-num 0)
+                        (mapconcat #'number-to-string seg-nums ",")
+                        (if cascade " [cascade]" "")))
          (ctx (list :sent-num sent-num :seg-nums seg-nums
                     :child-files child-files :sent-file sent-file
-                    :force force))
+                    :force force :cascade (and cascade t)))
          (claim-key (cons (file-truename source-file) sent-num)))
     (tibetan-claude-queue-submit
      (lambda (done)
@@ -622,7 +651,22 @@ per-segment Claude)."
       ;; sent file + span-marked whole-translation layout is wanted for
       ;; EVERY sentence).  Only an empty seg-nums list declines.
       (when (and sentence (plist-get sentence :seg-nums))
-        (let* ((folder (file-name-directory (expand-file-name analysis-file)))
+        (if (and (fboundp 'tibetan-cascade--fire-sentence)
+                 (fboundp 'tibetan-analysis--cascade-p)
+                 (tibetan-analysis--cascade-p source-file))
+            ;; C3.2: cascade documents — no child seg files; the one
+            ;; cascade file is gated/claimed/landed by the cascade fire.
+            (tibetan-cascade--fire-sentence
+             sentence source-file
+             (file-name-directory (expand-file-name analysis-file))
+             force)
+          (tibetan-analysis--fire-sentence-level-2
+           sentence analysis-file source-file force))))))
+
+(defun tibetan-analysis--fire-sentence-level-2 (sentence analysis-file
+                                                source-file force)
+  "Two-file (child seg + sent file) body of the sentence dispatcher."
+  (let* ((folder (file-name-directory (expand-file-name analysis-file)))
                (seg-nums (plist-get sentence :seg-nums))
                ;; §5.44: resolve child seg / sent paths through the
                ;; §5.23/§5.37 suffix-aware resolvers (bare for an
@@ -678,7 +722,7 @@ per-segment Claude)."
                   (tibetan-sentence-claude--schedule-dm
                    sentence child-files
                    (and (file-exists-p sent-file) sent-file) force)
-                  'fired)))))))))
+                  'fired))))))
 
 (provide 'tibetan-sentence-claude)
 ;;; tibetan-sentence-claude.el ends here

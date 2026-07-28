@@ -532,5 +532,78 @@ clobbers an already-populated Rendering."
                    (tibetan-cascade--read-subsegment-section
                     cascade-file 106 "Rendering")))))
 
+;; ============================================================================
+;; C3.2 — cascade fire (dispatcher branch, claim, request, DM)
+;; ============================================================================
+
+(require 'tibetan-sentence-claude)
+
+(ert-deftest tibetan-cascade-prompt-grounding-from-subsegments ()
+  "The cascade prompt grounding comes from the cascade file's OWN
+subsegment Interlinear sections (there are no child seg files)."
+  (tibetan-cascade-test--with-cascade-file
+    (let ((g (tibetan-cascade--prompt-grounding
+              (list :sent-num 4 :seg-nums '(105 106))
+              (expand-file-name "doc.org" dir)
+              (file-name-directory cascade-file))))
+      (should g)
+      (should (string-match-p "=== Segment 105 ===" g))
+      (should (string-match-p
+               (regexp-quote "GLOSS(བདག་གིས་ལས་བྱས། )") g))
+      (should (string-match-p "do NOT invent meanings" g)))))
+
+(ert-deftest tibetan-cascade-fire-end-to-end ()
+  "Dispatcher on a cascade document: no child seg files — one claim,
+one request, landing into the single cascade file (spans + sentence
+sections), one DM schedule targeting the cascade file.  A second
+non-FORCE fire finds nothing needing Claude and declines."
+  (tibetan-cascade-test--with-cascade-file
+    (let ((src (expand-file-name "doc.org" dir))
+          (dm-calls '())
+          (had-gptel (featurep 'gptel)))
+      (unwind-protect
+          (progn
+            (unless had-gptel (provide 'gptel))
+            (tibetan-sentence-claude-clear-inflight)
+            (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+                       (lambda (thunk &rest _)
+                         (funcall thunk (lambda (_s) nil))))
+                      ((symbol-function 'gptel-request)
+                       (lambda (_prompt &rest args)
+                         (funcall (plist-get args :callback)
+                                  tibetan-cascade-test--response
+                                  '(:status 200))))
+                      ((symbol-function 'tibetan-analysis--ensure-gptel-ready)
+                       (lambda (&rest _) t))
+                      ((symbol-function 'run-at-time)
+                       (lambda (_s _r fn &rest args) (apply fn args) nil))
+                      ((symbol-function 'tibetan-sentence-claude--schedule-dm)
+                       (lambda (_sentence child-files sent-file _force)
+                         (push (cons child-files sent-file) dm-calls)))
+                      ((symbol-function 'tibetan-sentence--sentence-for-segment)
+                       (lambda (_seg-id _src)
+                         (list :sent-num 4 :seg-nums '(105 106)
+                               :tibetan-text "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།"))))
+              ;; Fire — analysis-file only anchors the folder.
+              (should (eq 'fired
+                          (tibetan-analysis--fire-sentence-level
+                           "བདག" cascade-file src 105 nil)))
+              ;; Landed: spans + sentence-level Translation.
+              (should (equal "The lama went to rNgog's place"
+                             (tibetan-cascade--read-subsegment-section
+                              cascade-file 105 "Rendering")))
+              (should-not (tibetan-analysis--claude-needs-request-p
+                           cascade-file))
+              ;; DM scheduled ONCE, against the cascade file itself.
+              (should (equal (list (cons (list cascade-file) nil))
+                             dm-calls))
+              ;; Second non-FORCE fire: nothing needs Claude → nil.
+              (tibetan-sentence-claude-clear-inflight)
+              (should-not (tibetan-analysis--fire-sentence-level
+                           "བདག" cascade-file src 105 nil))))
+        (tibetan-sentence-claude-clear-inflight)
+        (unless had-gptel
+          (setq features (delq 'gptel features)))))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here

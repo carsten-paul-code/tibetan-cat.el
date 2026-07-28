@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T16:44:28
+#+DATE: 2026-07-28T16:48:13
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1314 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1318 forms
 
 Regenerated automatically by:
 
@@ -62,11 +62,11 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (131)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (28)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (22)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (24)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
-  - [[#persist/tibetan-sentence-claude.el][persist/tibetan-sentence-claude.el]]  (24)
+  - [[#persist/tibetan-sentence-claude.el][persist/tibetan-sentence-claude.el]]  (26)
   - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (57)
   - [[#persist/tibetan-structure-reorg.el][persist/tibetan-structure-reorg.el]]  (15)
   - [[#philology/tibetan-bialek-textbook-refs.el][philology/tibetan-bialek-textbook-refs.el]]  (2)
@@ -15214,6 +15214,37 @@ visible `[Claude sentence response missing Segment N …]' stub that
 still counts as needs-request.  Returns non-nil when the file was
 touched.
 
+** ~tibetan-cascade--prompt-grounding~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 666
+:SIGNATURE: (tibetan-cascade--prompt-grounding sentence source-file folder)
+:END:
+
+Per-subsegment Interlinear grounding for the sentence-first prompt.
+In cascade mode there are no child seg files — the grounding blocks
+come from the cascade file's own subsegment `*** Interlinear Gloss'
+sections (same anti-hallucination purpose as the §5.34 child
+grounding).  nil when the file or every gloss is unavailable.
+
+** ~tibetan-cascade--fire-sentence~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 695
+:SIGNATURE: (tibetan-cascade--fire-sentence sentence source-file folder
+                                       &optional force)
+:END:
+
+Fire ONE sentence-level Claude call for a CASCADE document.
+SENTENCE is the walker plist; the target is the single cascade file
+(resolved suffix-aware in FOLDER) — there are no child seg files.
+Fire gate: FORCE, the sentence-level Claude slots still needing a
+request, or ANY subsegment Rendering still a placeholder/stub.
+Claim/request/DM all ride the §5.40 machinery — the request carries
+the `:cascade' context flag so the response lands through
+`tibetan-cascade--land-response'; DM targets the cascade file's own
+nested slot.  Returns `fired' / `dedup-hit' / nil (does not apply).
+
 ** ~tibetan-cascade-rendering-placeholder~  /constant/
 :PROPERTIES:
 :KIND: defconst
@@ -15997,7 +16028,7 @@ cache-constant).  FOLDER locates the child seg files for grounding.
 ** ~tibetan-sentence-claude--schedule-dm~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 382
+:LINE: 395
 :SIGNATURE: (tibetan-sentence-claude--schedule-dm sentence child-files
                                              sent-file force)
 :END:
@@ -16009,7 +16040,7 @@ rate limit.  Timers run during the batch drain loop's
 ** ~tibetan-sentence-claude-clear-inflight~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
-:LINE: 412
+:LINE: 425
 :SIGNATURE: (tibetan-sentence-claude-clear-inflight)
 :INTERACTIVE: t
 :END:
@@ -16019,7 +16050,7 @@ Clear the sentence-level in-flight registry (crash recovery).
 ** ~tibetan-sentence-claude--claim~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 419
+:LINE: 432
 :SIGNATURE: (tibetan-sentence-claude--claim source-file sent-num label)
 :END:
 
@@ -16028,7 +16059,7 @@ Claim (SOURCE-FILE . SENT-NUM); nil when already in flight.
 ** ~tibetan-sentence-claude--release~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 426
+:LINE: 439
 :SIGNATURE: (tibetan-sentence-claude--release key)
 :END:
 
@@ -16037,7 +16068,7 @@ Release the in-flight claim KEY.
 ** ~tibetan-sentence-claude--segment-label~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 430
+:LINE: 443
 :SIGNATURE: (tibetan-sentence-claude--segment-label sent-num seg-nums)
 :END:
 
@@ -16048,7 +16079,7 @@ Single-segment sentences (B-1.2) label as `segment N' — a
 ** ~tibetan-sentence-claude--handle-response~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 439
+:LINE: 452
 :SIGNATURE: (tibetan-sentence-claude--handle-response response ctx)
 :END:
 
@@ -16062,12 +16093,22 @@ every child under the sentence label.  Children missing from the
 response get a VISIBLE stub via the failure-stub writer — never a
 silent blank.  The sent file gets the whole-sentence pieces.
 
+** ~tibetan-sentence-claude--handle-response-1~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 469
+:SIGNATURE: (tibetan-sentence-claude--handle-response-1 response ctx)
+:END:
+
+Two-file landing body of `tibetan-sentence-claude--handle-response'.
+
 ** ~tibetan-sentence-claude--request~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 509
+:LINE: 531
 :SIGNATURE: (tibetan-sentence-claude--request sentence child-files sent-file
-                                         source-file folder force)
+                                         source-file folder force
+                                         &optional cascade)
 :END:
 
 Queue the sentence-first Claude request.  Mirrors
@@ -16075,10 +16116,15 @@ Queue the sentence-first Claude request.  Mirrors
 queue; on exhaustion a visible failure stub lands in every child that
 is still empty).
 
+CASCADE (C3.2) marks a cascade-document request: CHILD-FILES is nil,
+SENT-FILE is the one cascade file, and the response handler routes to
+`tibetan-cascade--land-response' instead of the two-file fan-out.
+Same prompts, same schema, same queue — only the landing differs.
+
 ** ~tibetan-analysis--fire-sentence-level~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 587
+:LINE: 616
 :SIGNATURE: (tibetan-analysis--fire-sentence-level tibetan-text analysis-file
                                               source-file seg-id
                                               &optional force)
@@ -16095,17 +16141,27 @@ per-segment Claude).
 ** ~tibetan-analysis--fire-sentence-level-1~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 608
+:LINE: 637
 :SIGNATURE: (tibetan-analysis--fire-sentence-level-1 analysis-file source-file
                                                 seg-id force)
 :END:
 
 Unguarded body of `tibetan-analysis--fire-sentence-level'.
 
+** ~tibetan-analysis--fire-sentence-level-2~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 666
+:SIGNATURE: (tibetan-analysis--fire-sentence-level-2 sentence analysis-file
+                                                source-file force)
+:END:
+
+Two-file (child seg + sent file) body of the sentence dispatcher.
+
 ** ~tibetan-dharmamitra-sentence-request-delay~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 367
+:LINE: 380
 :TYPE: 'number
 :GROUP: tibetan-cat
 :DEFAULT: 6.5
@@ -16157,7 +16213,7 @@ constant per document, so it forms a stable Anthropic cache prefix
 ** ~gptel-cache~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 365
+:LINE: 378
 :END:
 
 /(no docstring)/
@@ -16165,7 +16221,7 @@ constant per document, so it forms a stable Anthropic cache prefix
 ** ~tibetan-sentence-claude--dm-schedule-count~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 376
+:LINE: 389
 :DEFAULT: 0
 :END:
 
@@ -16174,7 +16230,7 @@ Cumulative counter for staggering sentence-level DM fires.
 ** ~tibetan-sentence-claude--inflight~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 404
+:LINE: 417
 :DEFAULT: (make-hash-table :test #'equal)
 :END:
 

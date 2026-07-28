@@ -653,5 +653,83 @@ touched."
                        n))))))
       t)))
 
+;; ============================================================================
+;; C3.2 — cascade fire (claim + request + DM through the §5.40 machinery)
+;; ============================================================================
+
+(declare-function tibetan-sentence-claude--claim "tibetan-sentence-claude")
+(declare-function tibetan-sentence-claude--request "tibetan-sentence-claude")
+(declare-function tibetan-sentence-claude--schedule-dm
+                  "tibetan-sentence-claude")
+(declare-function tibetan-sentence--filepath "tibetan-sentence-persist")
+
+(defun tibetan-cascade--prompt-grounding (sentence source-file folder)
+  "Per-subsegment Interlinear grounding for the sentence-first prompt.
+In cascade mode there are no child seg files — the grounding blocks
+come from the cascade file's own subsegment `*** Interlinear Gloss'
+sections (same anti-hallucination purpose as the §5.34 child
+grounding).  nil when the file or every gloss is unavailable."
+  (let* ((sent-num (plist-get sentence :sent-num))
+         (file (and sent-num
+                    (fboundp 'tibetan-sentence--filepath)
+                    (tibetan-sentence--filepath sent-num folder
+                                                source-file))))
+    (when (and file (file-exists-p file))
+      (let ((blocks
+             (delq nil
+                   (mapcar
+                    (lambda (n)
+                      (let ((gloss (tibetan-cascade--read-subsegment-section
+                                    file n "Interlinear Gloss")))
+                        (when (and gloss
+                                   (not (string-match-p "\\`\\[" gloss)))
+                          (format "=== Segment %d ===\n%s" n gloss))))
+                    (plist-get sentence :seg-nums)))))
+        (when blocks
+          (concat "\n\nPer-segment vocabulary matches (the tool's own "
+                  "layered dictionary lookup; dictionary-attested — base "
+                  "the Vocabulary subsections on them and do NOT invent "
+                  "meanings for listed words):\n"
+                  (mapconcat #'identity blocks "\n")))))))
+
+(defun tibetan-cascade--fire-sentence (sentence source-file folder
+                                       &optional force)
+  "Fire ONE sentence-level Claude call for a CASCADE document.
+SENTENCE is the walker plist; the target is the single cascade file
+\(resolved suffix-aware in FOLDER) — there are no child seg files.
+Fire gate: FORCE, the sentence-level Claude slots still needing a
+request, or ANY subsegment Rendering still a placeholder/stub.
+Claim/request/DM all ride the §5.40 machinery — the request carries
+the `:cascade' context flag so the response lands through
+`tibetan-cascade--land-response'; DM targets the cascade file's own
+nested slot.  Returns `fired' / `dedup-hit' / nil (does not apply)."
+  (let* ((sent-num (plist-get sentence :sent-num))
+         (seg-nums (plist-get sentence :seg-nums))
+         (file (and sent-num
+                    (fboundp 'tibetan-sentence--filepath)
+                    (tibetan-sentence--filepath sent-num folder
+                                                source-file))))
+    (when (and file (file-exists-p file) seg-nums
+               (fboundp 'tibetan-sentence-claude--claim)
+               (fboundp 'tibetan-sentence-claude--request))
+      (when (or force
+                (and (fboundp 'tibetan-analysis--claude-needs-request-p)
+                     (tibetan-analysis--claude-needs-request-p file))
+                (cl-some
+                 (lambda (n)
+                   (tibetan-cascade--subsegment-rendering-needs-request-p
+                    file n))
+                 seg-nums))
+        (let ((label (format "sent-%03d (cascade)" sent-num)))
+          (if (not (tibetan-sentence-claude--claim
+                    source-file sent-num label))
+              'dedup-hit
+            (tibetan-sentence-claude--request
+             sentence nil file source-file folder force 'cascade)
+            (when (fboundp 'tibetan-sentence-claude--schedule-dm)
+              (tibetan-sentence-claude--schedule-dm
+               sentence (list file) nil force))
+            'fired))))))
+
 (provide 'tibetan-cascade)
 ;;; tibetan-cascade.el ends here
