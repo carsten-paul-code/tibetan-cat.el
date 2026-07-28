@@ -1614,8 +1614,7 @@ Returns plist:
 
 (defun tibetan-sentence--folder-sentence-files (folder)
   "Return sent-NNN*.org files in FOLDER, sorted by sentence id."
-  (let* ((all (and (file-directory-p folder)
-                   (directory-files folder t "\\`sent-[0-9]+.*\\.org\\'")))
+  (let* ((all (tibetan-analysis--folder-analysis-files-strict folder "sent"))
          (ordered
           (sort (copy-sequence (or all '()))
                 (lambda (a b)
@@ -1718,8 +1717,8 @@ generated sent files afterwards."
              (read-directory-name "Analysis folder: ")
            nil)))
   (let* ((folder (or folder (tibetan-sentence--analysis-folder)))
-         (sent-files (when (file-directory-p folder)
-                       (directory-files folder t "\\`sent-[0-9]+.*\\.org\\'")))
+         (sent-files (tibetan-analysis--folder-analysis-files-strict
+                      folder "sent"))
          (stamp (format-time-string "%Y-%m-%d-%H%M%S"))
          (archive-dir (expand-file-name
                        (concat "archive/" stamp "/")
@@ -1931,9 +1930,8 @@ turns it into one confirmable operation."
          (sents  (car counts))
          (segs   (cdr counts))
          (folder (tibetan-sentence--analysis-folder))
-         (sent-files (when (file-directory-p folder)
-                       (directory-files folder t
-                                        "\\`sent-[0-9]+.*\\.org\\'")))
+         (sent-files (tibetan-analysis--folder-analysis-files-strict
+                      folder "sent"))
          (summary
           (format "Resegment %s:
   1. Archive %d existing sent-*.org file%s into archive/

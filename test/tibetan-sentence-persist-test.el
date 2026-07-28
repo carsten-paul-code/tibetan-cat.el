@@ -2148,5 +2148,23 @@ Without a SOURCE-FILE it stays the legacy bare `sent-NNN.org'."
                            (expand-file-name "sent-005.org" dir))))
       (delete-directory dir t))))
 
+(ert-deftest tibetan-sentence-folder-files-skip-conflict-copies ()
+  "`--folder-sentence-files' excludes iCloud conflict copies (Phase 0.1)."
+  (let ((tmp-dir (make-temp-file "sent-strict-" t)))
+    (unwind-protect
+        (progn
+          (dolist (name '("sent-001.org" "sent-002-khu.org"
+                          ;; decoys the old permissive glob matched:
+                          "sent-001 2.org" "sent-002-khu 2.org"
+                          "sent-003.bak.org"))
+            (with-temp-file (expand-file-name name tmp-dir)
+              (insert "stub\n")))
+          (let ((files (mapcar #'file-name-nondirectory
+                               (tibetan-sentence--folder-sentence-files
+                                tmp-dir))))
+            (should (equal '("sent-001.org" "sent-002-khu.org") files))))
+      (when (file-directory-p tmp-dir)
+        (delete-directory tmp-dir t)))))
+
 (provide 'tibetan-sentence-persist-test)
 ;;; tibetan-sentence-persist-test.el ends here

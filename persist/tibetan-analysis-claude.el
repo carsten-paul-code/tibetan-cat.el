@@ -1326,13 +1326,18 @@ ordering.  SEG-ID is an integer."
     (let* ((dir (file-name-directory analysis-file))
            (prefix (format "seg-%03d" seg-id))
            ;; Accept either `seg-012.org' or `seg-012-short-title.org'.
+           ;; The suffix branch is fully anchored so iCloud conflict
+           ;; copies (`seg-012-khu 2.org') and backups never match.
+           ;; (Inlined rather than shared with the persist module's
+           ;; `tibetan-analysis--analysis-file-re' — this module sits
+           ;; BELOW tibetan-analysis-persist in the require graph.)
            (candidates
             (and (file-directory-p dir)
                  (directory-files
                   dir t
                   (concat "\\`"
                           (regexp-quote prefix)
-                          "\\(\\.org\\'\\|-\\)")))))
+                          "\\(?:-[[:alnum:]_-]+\\)?\\.org\\'")))))
       (car candidates))))
 
 (defun tibetan-analysis--format-neighbor-segment

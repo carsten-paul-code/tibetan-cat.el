@@ -81,7 +81,8 @@ Returns list of plists with :segment-num, :tibetan-text, :hash, :sentence-num."
 Returns list of plists with :filename, :filepath, :segment-num,
 :hash, :has-notes."
   (when (file-directory-p directory)
-    (let ((files (directory-files directory nil "^seg-[0-9]+.*\\.org$"))
+    (let ((files (tibetan-analysis--folder-analysis-files-strict
+                  directory "seg" t))
           (inventory '()))
       (dolist (file files)
         (let* ((filepath (expand-file-name file directory))
@@ -127,7 +128,8 @@ Returns t if My Notes, Working Translation, or Footnotes have content."
   "Find analysis file in DIRECTORY with matching HASH.
 Returns filepath or nil if not found."
   (when (and hash directory (file-directory-p directory))
-    (let ((files (directory-files directory t "^seg-[0-9]+.*\\.org$"))
+    (let ((files (tibetan-analysis--folder-analysis-files-strict
+                  directory "seg"))
           (found nil))
       (while (and files (not found))
         (let* ((file (car files))

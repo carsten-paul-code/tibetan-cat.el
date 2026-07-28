@@ -654,7 +654,7 @@ request failed...]' fail-stub."
 Matches `seg-NNN*.org' — sentence files are deliberately excluded so
 we focus the batch on the segments used in class."
   (when (and folder (file-directory-p folder))
-    (sort (directory-files folder t "\\`seg-[0-9]+.*\\.org\\'")
+    (sort (tibetan-analysis--folder-analysis-files-strict folder "seg")
           #'string<)))
 
 ;;;###autoload

@@ -831,5 +831,28 @@ glosses."
             (should (string-match-p "farm work" block))))
       (delete-file f))))
 
+(ert-deftest tibetan-analysis-neighbor-resolver-ignores-conflict-copies ()
+  "The ±2-neighbor resolver's suffix branch is anchored (Phase 0.1).
+An iCloud conflict copy `seg-012-khu 2.org' must never be picked as
+the neighbor — neither when a clean twin exists nor when the copy is
+the only candidate."
+  (let ((tmp-dir (make-temp-file "neighbor-strict-" t)))
+    (unwind-protect
+        (let ((anchor (expand-file-name "seg-011-khu.org" tmp-dir)))
+          (with-temp-file anchor (insert "stub\n"))
+          ;; Only a conflict copy present → resolver must return nil.
+          (with-temp-file (expand-file-name "seg-012-khu 2.org" tmp-dir)
+            (insert "stub\n"))
+          (should-not (tibetan-analysis--neighbor-analysis-file anchor 12))
+          ;; Clean twin appears → resolver must return the clean file.
+          (with-temp-file (expand-file-name "seg-012-khu.org" tmp-dir)
+            (insert "stub\n"))
+          (should (equal "seg-012-khu.org"
+                         (file-name-nondirectory
+                          (tibetan-analysis--neighbor-analysis-file
+                           anchor 12)))))
+      (when (file-directory-p tmp-dir)
+        (delete-directory tmp-dir t)))))
+
 (provide 'tibetan-analysis-claude-prompt-test)
 ;;; tibetan-analysis-claude-prompt-test.el ends here

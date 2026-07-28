@@ -3575,5 +3575,50 @@ line; the face exists."
     ;; Single-line: must NOT match across newlines.
     (should-not (string-match re "⟪first\nsecond⟫"))))
 
+;; ============================================================================
+;; STRICT ANALYSIS-FILE GLOB (Part B Phase 0.1)
+;; ============================================================================
+;; iCloud conflict copies ("seg-005-lam 4.org") and dotted backups
+;; ("seg-001.bak.org") used to match the folder globs' permissive
+;; `seg-[0-9]+.*\.org' and trip batch runs.
+
+(ert-deftest tibetan-analysis-file-re-strict-shapes ()
+  "The strict analysis-file regexp accepts clean names only."
+  (let ((seg-re (tibetan-analysis--analysis-file-re "seg"))
+        (sent-re (tibetan-analysis--analysis-file-re "sent")))
+    ;; Clean shapes: bare and §5.23-suffixed.
+    (should (string-match-p seg-re "seg-001.org"))
+    (should (string-match-p seg-re "seg-001-khu.org"))
+    (should (string-match-p seg-re "seg-137-gotrapat.org"))
+    (should (string-match-p sent-re "sent-024-khu.org"))
+    ;; iCloud conflict copies (space before the copy number).
+    (should-not (string-match-p seg-re "seg-001 2.org"))
+    (should-not (string-match-p seg-re "seg-001-khu 2.org"))
+    (should-not (string-match-p sent-re "sent-009-lam 4.org"))
+    ;; Extra dots / backup shapes.
+    (should-not (string-match-p seg-re "seg-001.bak.org"))
+    (should-not (string-match-p seg-re "seg-001-khu.org~"))
+    ;; A sent file never matches the seg regexp and vice versa.
+    (should-not (string-match-p seg-re "sent-001.org"))
+    (should-not (string-match-p sent-re "seg-001.org"))))
+
+(ert-deftest tibetan-analysis-folder-files-skip-conflict-copies ()
+  "`--folder-analysis-files' excludes conflict copies and dotted decoys."
+  (let ((tmp-dir (make-temp-file "seg-strict-" t)))
+    (unwind-protect
+        (progn
+          (dolist (name '("seg-001.org" "seg-002-khu.org"
+                          ;; decoys that the old permissive glob matched:
+                          "seg-001 2.org" "seg-002-khu 2.org"
+                          "seg-003.bak.org"))
+            (with-temp-file (expand-file-name name tmp-dir)
+              (insert "stub\n")))
+          (let ((files (mapcar #'file-name-nondirectory
+                               (tibetan-analysis--folder-analysis-files
+                                tmp-dir))))
+            (should (equal '("seg-001.org" "seg-002-khu.org") files))))
+      (when (file-directory-p tmp-dir)
+        (delete-directory tmp-dir t)))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

@@ -5396,9 +5396,30 @@ without touching the file.  Otherwise return a plist:
          `(:file ,filepath :seg-id ,seg-id :ok nil
                  :error ,(error-message-string err))))))))
 
+(defun tibetan-analysis--analysis-file-re (prefix)
+  "Return the strict regexp matching PREFIX-NNN[-SUFFIX].org basenames.
+PREFIX is \"seg\" or \"sent\".  Accepts `seg-012.org' and the §5.23
+per-source-suffixed `seg-012-khu.org'; rejects iCloud conflict copies
+\(`seg-012-khu 2.org' — space before the copy number), dotted decoys
+\(`seg-012.bak.org'), and backup files (`seg-012.org~').  The old
+permissive `PREFIX-[0-9]+.*\\.org' matched all of those and tripped
+every folder batch (Part B Phase 0.1)."
+  (concat "\\`" (regexp-quote prefix)
+          "-[0-9]+\\(?:-[[:alnum:]_-]+\\)?\\.org\\'"))
+
+(defun tibetan-analysis--folder-analysis-files-strict
+    (folder prefix &optional relative)
+  "Return FOLDER's strictly-matched PREFIX-NNN[-SUFFIX].org files.
+Absolute paths unless RELATIVE is non-nil.  Unsorted (directory-files
+order) — callers apply their own ordering.  Returns nil when FOLDER
+is nil or not a directory."
+  (when (and folder (file-directory-p folder))
+    (directory-files folder (not relative)
+                     (tibetan-analysis--analysis-file-re prefix))))
+
 (defun tibetan-analysis--folder-analysis-files (folder)
   "Return the list of seg-NNN*.org files under FOLDER, sorted by seg-id."
-  (let* ((all (directory-files folder t "\\`seg-[0-9]+.*\\.org\\'"))
+  (let* ((all (tibetan-analysis--folder-analysis-files-strict folder "seg"))
          (ordered
           (sort (copy-sequence all)
                 (lambda (a b)
