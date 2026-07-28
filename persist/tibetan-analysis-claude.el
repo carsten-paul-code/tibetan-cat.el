@@ -374,6 +374,14 @@ Keys:
                    `detailed' = full §5.21 segment layout
                    (sentence file mirrors a segment file's
                    depth).  §5.27 Phase 1 (2026-05-26).
+  :layout          value of `#+TIBETAN_LAYOUT:' (downcased) —
+                   CASCADE v2 (2026-07-28).  `\"cascade\"' marks
+                   a one-file-per-sentence document (shads as
+                   nested subsegments inside the sent file; no
+                   separate seg files).  Absent/empty → nil =
+                   the legacy two-file model.  Explicit header
+                   only, never auto-detected (§2.8) — flipping
+                   it is a git-visible event, like :defer-mt.
 
 §5.22 final (2026-05-21):  the `:sentence-compressed' plist key
 \(briefly added in §5.22 initial as an opt-in for compressed
@@ -392,7 +400,7 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
   (let (title work author sources ctx vocab corpus target-lang source-mode
               dm-sanskrit-source dm-tibetan-source
               text-type class-mode sentence-detail
-              author-header defer-mt)
+              author-header defer-mt layout)
     (when (and source-file (file-exists-p source-file))
       (condition-case nil
           (with-temp-buffer
@@ -467,6 +475,13 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
               (let ((val (string-trim (match-string 1))))
                 (when (string-equal (downcase val) "t")
                   (setq defer-mt t))))
+            ;; CASCADE v2 (2026-07-28): per-document layout marker.
+            (goto-char (point-min))
+            (when (re-search-forward
+                   "^#\\+TIBETAN_LAYOUT:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (unless (string-empty-p val)
+                  (setq layout (downcase val)))))
             (goto-char (point-min))
             (while (re-search-forward
                     "^#\\+TIBETAN_CLAUDE_CONTEXT:[ \t]*\\(.*\\)$" nil t)
@@ -514,7 +529,8 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
           :text-type text-type
           :class-mode class-mode
           :sentence-detail sentence-detail
-          :defer-mt defer-mt)))
+          :defer-mt defer-mt
+          :layout layout)))
 
 
 (defun tibetan-analysis--defer-mt-p (file)
@@ -534,6 +550,30 @@ Never signals; returns nil for nil / unresolvable input."
               (and src
                    (plist-get (tibetan-analysis--read-source-metadata src)
                               :defer-mt))))
+      (error nil))))
+
+(defun tibetan-analysis--cascade-p (file)
+  "Return non-nil when FILE's document uses the CASCADE layout.
+
+CASCADE v2 (2026-07-28): a source carrying `#+TIBETAN_LAYOUT: cascade'
+persists ONE analysis file per sentence with the shad-units nested as
+subsegments — no separate seg files.  FILE may be the source document
+itself or an analysis file whose `#+SOURCE:' link resolves to it —
+same resolution order as `tibetan-analysis--defer-mt-p'.  Only the
+literal value \"cascade\" (any case) activates the mode; anything
+else, including absence, is the legacy two-file model.  Never
+signals; returns nil for nil / unresolvable input."
+  (when (and file (stringp file))
+    (condition-case nil
+        (equal "cascade"
+               (or (plist-get (tibetan-analysis--read-source-metadata file)
+                              :layout)
+                   (let ((src (tibetan-analysis--source-file-from-analysis
+                               file)))
+                     (and src
+                          (plist-get
+                           (tibetan-analysis--read-source-metadata src)
+                           :layout)))))
       (error nil))))
 
 ;;;###autoload

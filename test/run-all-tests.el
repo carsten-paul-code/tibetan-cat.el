@@ -107,6 +107,8 @@
 ;; Portfolio-mode MT deferral (#+TIBETAN_DEFER_MT) + freeze helper
 (condition-case nil (require 'tibetan-defer-mt-test) (error nil))
 (condition-case nil (require 'tibetan-portfolio-test) (error nil))
+;; Cascade layout (#+TIBETAN_LAYOUT, predicate, shad-unit splitter)
+(condition-case nil (require 'tibetan-cascade-test) (error nil))
 
 ;; Batch reanalysis (preserves user notes + Claude translation)
 (condition-case nil (require 'tibetan-batch-reanalyze-test) (error nil))
