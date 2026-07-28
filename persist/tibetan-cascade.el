@@ -901,5 +901,105 @@ is what counts."
             (set-window-point win (with-current-buffer buf (point)))))
         buf))))
 
+;; ============================================================================
+;; C4.3 — reanalyze routing (single file, per-segment, batch guard)
+;; ============================================================================
+
+(declare-function tibetan-sentence--sent-id-from-filename
+                  "tibetan-sentence-persist")
+(declare-function tibetan-sentence--source-file-from-analysis
+                  "tibetan-sentence-persist")
+(declare-function tibetan-analysis--should-fire-claude-p
+                  "tibetan-analysis-claude")
+
+(cl-defun tibetan-cascade-reanalyze-file (filepath &key source-file
+                                                   re-request-claude)
+  "Headless re-analysis of the cascade file FILEPATH.
+Sentence number from the filename; segs freshly re-read from
+SOURCE-FILE (or the file's #+SOURCE link); regenerate preserves all
+user/Claude/DM content (C2.3).  RE-REQUEST-CLAUDE follows the
+§5.22-follow-up policy (nil / t / :missing-only) — the fire itself
+still defers under #+TIBETAN_DEFER_MT.  Returns
+\(:file F :sent-id N :ok BOOL :error STR)."
+  (let* ((sent-id (and (fboundp 'tibetan-sentence--sent-id-from-filename)
+                       (tibetan-sentence--sent-id-from-filename filepath)))
+         (src (or source-file
+                  (and (fboundp 'tibetan-sentence--source-file-from-analysis)
+                       (tibetan-sentence--source-file-from-analysis
+                        filepath))))
+         (segs (and sent-id src
+                    (tibetan-cascade--segs-for-sentence src sent-id))))
+    (cond
+     ((null sent-id)
+      (list :file filepath :ok nil
+            :error "Could not extract sent-id from filename"))
+     ((null src)
+      (list :file filepath :sent-id sent-id :ok nil
+            :error "Could not resolve source file"))
+     ((null segs)
+      (list :file filepath :sent-id sent-id :ok nil
+            :error (format "Sentence %d not found in source" sent-id)))
+     (t
+      (condition-case err
+          (progn
+            (tibetan-cascade--regenerate filepath sent-id segs src)
+            (when (and re-request-claude
+                       (or (not (fboundp 'tibetan-analysis--should-fire-claude-p))
+                           (tibetan-analysis--should-fire-claude-p
+                            re-request-claude filepath)))
+              (tibetan-cascade--fire-sentence
+               (list :sent-num sent-id
+                     :seg-nums (mapcar #'car segs)
+                     :tibetan-text (mapconcat #'cdr segs ""))
+               src (file-name-directory (expand-file-name filepath))
+               (eq re-request-claude t)))
+            (list :file filepath :sent-id sent-id :ok t))
+        (error (list :file filepath :sent-id sent-id :ok nil
+                     :error (error-message-string err))))))))
+
+;;;###autoload
+(defun tibetan-cascade-reanalyze-for-segment (seg-id source-file
+                                              &optional re-request-claude)
+  "Re-analyze the cascade file owning SEG-ID (the C-c u R branch).
+SEG-ID as in `tibetan-cascade-open-for-segment' (number or composite
+label).  Returns the `tibetan-cascade-reanalyze-file' plist."
+  (when (and (stringp seg-id)
+             (string-match "Segment \\([0-9]+\\)" seg-id))
+    (setq seg-id (string-to-number (match-string 1 seg-id))))
+  (let* ((sentence (and (fboundp 'tibetan-sentence--sentence-for-segment)
+                        (condition-case nil
+                            (tibetan-sentence--sentence-for-segment
+                             seg-id source-file)
+                          (error nil))))
+         (sent-num (plist-get sentence :sent-num)))
+    (if (not sent-num)
+        (list :ok nil
+              :error (format "Segment %s not inside a sentence" seg-id))
+      (let* ((folder (file-name-as-directory
+                      (expand-file-name
+                       "analysis" (file-name-directory source-file))))
+             (file (if (fboundp 'tibetan-sentence--filepath)
+                       (tibetan-sentence--filepath sent-num folder
+                                                   source-file)
+                     (expand-file-name (format "sent-%03d.org" sent-num)
+                                       folder))))
+        (if (file-exists-p file)
+            (tibetan-cascade-reanalyze-file
+             file :source-file source-file
+             :re-request-claude re-request-claude)
+          (list :ok nil :error (format "No cascade file for sentence %d"
+                                       sent-num)))))))
+
+(defun tibetan-cascade-file-p (filepath)
+  "Non-nil when FILEPATH itself carries `#+TIBETAN_LAYOUT: cascade'.
+The batch-safety predicate: folder batches must route such files to
+the cascade regenerate — the two-file sentence regenerate would
+destroy the * Subsegments tree."
+  (and filepath (stringp filepath) (file-exists-p filepath)
+       (fboundp 'tibetan-analysis--read-source-metadata)
+       (equal "cascade"
+              (plist-get (tibetan-analysis--read-source-metadata filepath)
+                         :layout))))
+
 (provide 'tibetan-cascade)
 ;;; tibetan-cascade.el ends here

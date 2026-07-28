@@ -4815,7 +4815,22 @@ segment > sentence > paragraph > legacy, most-specific-wins."
    ((and (derived-mode-p 'org-mode)
          (fboundp 'tibetan-org-at-segment-p)
          (tibetan-org-at-segment-p))
-    (tibetan--reanalyze-segment-impl))
+    ;; C4.3: cascade documents re-analyze the OWNING sentence's
+    ;; cascade file (preserve + explicit re-fire), never a seg file.
+    (if (and (fboundp 'tibetan-cascade-reanalyze-for-segment)
+             (fboundp 'tibetan-analysis--cascade-p)
+             (buffer-file-name)
+             (tibetan-analysis--cascade-p (buffer-file-name)))
+        (when (y-or-n-p "Re-analyze this segment's SENTENCE (cascade; content preserved, Claude re-fired)? ")
+          (let* ((seg-data (tibetan-get-current-segment-any-format))
+                 (r (tibetan-cascade-reanalyze-for-segment
+                     (car seg-data) (buffer-file-name) t)))
+            (if (plist-get r :ok)
+                (message "Cascade sentence %s re-analyzed"
+                         (plist-get r :sent-id))
+              (message "Cascade re-analysis failed: %s"
+                       (plist-get r :error)))))
+      (tibetan--reanalyze-segment-impl)))
    ((and (derived-mode-p 'org-mode)
          (fboundp 'tibetan-org-at-sentence-p)
          (tibetan-org-at-sentence-p)

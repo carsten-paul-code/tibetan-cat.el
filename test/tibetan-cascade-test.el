@@ -715,5 +715,49 @@ never creates a seg file."
               (with-current-buffer b (set-buffer-modified-p nil))
               (kill-buffer b))))))))
 
+;; ============================================================================
+;; C4.3 — reanalyze routing + folder-batch safety
+;; ============================================================================
+
+(ert-deftest tibetan-cascade-sentence-batch-must-not-reshape-cascade-file ()
+  "The sentence folder batch (C-c u r on sent files) routes cascade
+files to the cascade regenerate — a cascade file must NEVER be
+reshaped into the two-file sentence layout (it would lose the whole
+* Subsegments tree)."
+  (tibetan-cascade-test--with-cascade-source
+    (let ((tibetan-auto-fire-claude-on-create nil))
+      (tibetan-auto-analyze-document)
+      (let* ((analysis (expand-file-name "analysis" dir))
+             (sent4 (car (directory-files analysis t "\\`sent-004"))))
+        (tibetan-cascade--write-subsegment-section
+         sent4 105 "Rendering" "KEEP ACROSS BATCH.")
+        (let ((results (tibetan-sentence-batch-reanalyze
+                        :folder analysis :re-request-claude nil)))
+          (should results))
+        ;; Still a cascade file, subsegments intact, rendering kept.
+        (should (equal '(105 106)
+                       (tibetan-cascade--subsegment-numbers sent4)))
+        (should (equal "KEEP ACROSS BATCH."
+                       (tibetan-cascade--read-subsegment-section
+                        sent4 105 "Rendering")))))))
+
+(ert-deftest tibetan-cascade-reanalyze-for-segment-routes ()
+  "C-c u R at a segment of a cascade source regenerates the owning
+cascade file (preserving content) instead of a seg file."
+  (tibetan-cascade-test--with-cascade-source
+    (let ((tibetan-auto-fire-claude-on-create nil))
+      (tibetan-auto-analyze-document)
+      (let* ((analysis (expand-file-name "analysis" dir))
+             (sent4 (car (directory-files analysis t "\\`sent-004"))))
+        (tibetan-cascade--write-subsegment-section
+         sent4 105 "Rendering" "KEEP ACROSS REANALYZE.")
+        (let ((r (tibetan-cascade-reanalyze-for-segment
+                  "Sentence 4, Segment 106" src)))
+          (should (plist-get r :ok)))
+        (should (equal "KEEP ACROSS REANALYZE."
+                       (tibetan-cascade--read-subsegment-section
+                        sent4 105 "Rendering")))
+        (should (= 0 (length (directory-files analysis nil "\\`seg-"))))))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here

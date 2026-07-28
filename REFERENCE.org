@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T17:33:46
+#+DATE: 2026-07-28T17:36:07
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1326 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1330 forms
 
 Regenerated automatically by:
 
@@ -62,12 +62,12 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (131)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (29)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (30)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (33)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
   - [[#persist/tibetan-sentence-claude.el][persist/tibetan-sentence-claude.el]]  (26)
-  - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (58)
+  - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (59)
   - [[#persist/tibetan-structure-reorg.el][persist/tibetan-structure-reorg.el]]  (15)
   - [[#philology/tibetan-bialek-textbook-refs.el][philology/tibetan-bialek-textbook-refs.el]]  (2)
   - [[#philology/tibetan-madhyamaka-terms.el][philology/tibetan-madhyamaka-terms.el]]  (6)
@@ -13648,7 +13648,7 @@ segment > sentence > paragraph > legacy, most-specific-wins.
 ** ~tibetan--reanalyze-segment-impl~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4831
+:LINE: 4846
 :SIGNATURE: (tibetan--reanalyze-segment-impl)
 :END:
 
@@ -13657,7 +13657,7 @@ Segment-level implementation; see `tibetan-reanalyze-segment'.
 ** ~tibetan-open-paragraph-analysis~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 4961
+:LINE: 4976
 :SIGNATURE: (tibetan-open-paragraph-analysis)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -13675,7 +13675,7 @@ right-side window.
 ** ~tibetan-reanalyze-paragraph~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 5018
+:LINE: 5033
 :SIGNATURE: (tibetan-reanalyze-paragraph)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -13689,7 +13689,7 @@ the segment-level `tibetan-reanalyze-segment' contract.
 ** ~tibetan-analysis--read-section-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5067
+:LINE: 5082
 :SIGNATURE: (tibetan-analysis--read-section-body filepath section-name)
 :END:
 
@@ -13700,7 +13700,7 @@ Works for top-level (* …) sections.
 ** ~tibetan-analysis--seg-id-from-filename~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5086
+:LINE: 5101
 :SIGNATURE: (tibetan-analysis--seg-id-from-filename filepath)
 :END:
 
@@ -13709,7 +13709,7 @@ Return the numeric segment id encoded in FILEPATH's basename, or nil.
 ** ~tibetan-analysis--fire-parallel-claude-with-plist~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5096
+:LINE: 5111
 :SIGNATURE: (tibetan-analysis--fire-parallel-claude-with-plist tibetan-text sanskrit-plist source-file analysis-file)
 :END:
 
@@ -13731,7 +13731,7 @@ Returns t when the Sanskrit call was dispatched, nil otherwise.
 ** ~tibetan-analysis--fire-parallel-mode-claude-calls~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5158
+:LINE: 5173
 :SIGNATURE: (tibetan-analysis--fire-parallel-mode-claude-calls tibetan-text source-file analysis-file)
 :END:
 
@@ -13747,7 +13747,7 @@ Sanskrit sibling is a placeholder.
 ** ~tibetan-analysis-reanalyze-file~  /function (cl)/
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 5180
+:LINE: 5195
 :SIGNATURE: (tibetan-analysis-reanalyze-file filepath &key source-file re-request-claude dry-run)
 :END:
 
@@ -13778,7 +13778,7 @@ without touching the file.  Otherwise return a plist:
 ** ~tibetan-analysis--analysis-file-re~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5413
+:LINE: 5428
 :SIGNATURE: (tibetan-analysis--analysis-file-re prefix)
 :END:
 
@@ -13793,7 +13793,7 @@ every folder batch (Part B Phase 0.1).
 ** ~tibetan-analysis--folder-analysis-files-strict~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5424
+:LINE: 5439
 :SIGNATURE: (tibetan-analysis--folder-analysis-files-strict folder prefix &optional relative)
 :END:
 
@@ -13805,7 +13805,7 @@ is nil or not a directory.
 ** ~tibetan-analysis--folder-analysis-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5434
+:LINE: 5449
 :SIGNATURE: (tibetan-analysis--folder-analysis-files folder)
 :END:
 
@@ -13814,7 +13814,7 @@ Return the list of seg-NNN*.org files under FOLDER, sorted by seg-id.
 ** ~tibetan-analysis-batch-reanalyze~  /function (cl)/  ⚡  ↗
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 5445
+:LINE: 5460
 :SIGNATURE: (tibetan-analysis-batch-reanalyze &key folder source-file re-request-claude dry-run)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -15320,6 +15320,47 @@ SEG-ID may be a number or a composite label like `"Sentence 5,
 Segment 107"' (what `tibetan-get-current-segment-any-format'
 returns for the nested §2.12 layout) — the trailing segment number
 is what counts.
+
+** ~tibetan-cascade-reanalyze-file~  /function (cl)/
+:PROPERTIES:
+:KIND: cl-defun
+:LINE: 915
+:SIGNATURE: (tibetan-cascade-reanalyze-file filepath &key source-file
+                                                   re-request-claude)
+:END:
+
+Headless re-analysis of the cascade file FILEPATH.
+Sentence number from the filename; segs freshly re-read from
+SOURCE-FILE (or the file's #+SOURCE link); regenerate preserves all
+user/Claude/DM content (C2.3).  RE-REQUEST-CLAUDE follows the
+§5.22-follow-up policy (nil / t / :missing-only) — the fire itself
+still defers under #+TIBETAN_DEFER_MT.  Returns
+(:file F :sent-id N :ok BOOL :error STR).
+
+** ~tibetan-cascade-reanalyze-for-segment~  /function/  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 961
+:SIGNATURE: (tibetan-cascade-reanalyze-for-segment seg-id source-file
+                                              &optional re-request-claude)
+:AUTOLOAD: t
+:END:
+
+Re-analyze the cascade file owning SEG-ID (the C-c u R branch).
+SEG-ID as in `tibetan-cascade-open-for-segment' (number or composite
+label).  Returns the `tibetan-cascade-reanalyze-file' plist.
+
+** ~tibetan-cascade-file-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 993
+:SIGNATURE: (tibetan-cascade-file-p filepath)
+:END:
+
+Non-nil when FILEPATH itself carries `#+TIBETAN_LAYOUT: cascade'.
+The batch-safety predicate: folder batches must route such files to
+the cascade regenerate — the two-file sentence regenerate would
+destroy the * Subsegments tree.
 
 ** ~tibetan-cascade-rendering-placeholder~  /constant/
 :PROPERTIES:
@@ -16948,10 +16989,23 @@ dispatched after regeneration.  With DRY-RUN, no files are written.
 Returns plist:
   (:file F :sent-id ID :ok BOOL :error STR :seg-nums (...)).
 
+C4.3 (2026-07-28): a cascade file (`#+TIBETAN_LAYOUT: cascade' in
+the FILE itself) routes to `tibetan-cascade-reanalyze-file' — the
+two-file sentence regenerate would destroy its * Subsegments tree.
+
+** ~tibetan-sentence--reanalyze-file-two-file~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 1561
+:SIGNATURE: (tibetan-sentence--reanalyze-file-two-file filepath source-file re-request-claude dry-run)
+:END:
+
+Two-file body of `tibetan-sentence-reanalyze-file'.
+
 ** ~tibetan-sentence--folder-sentence-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1615
+:LINE: 1633
 :SIGNATURE: (tibetan-sentence--folder-sentence-files folder)
 :END:
 
@@ -16960,7 +17014,7 @@ Return sent-NNN*.org files in FOLDER, sorted by sentence id.
 ** ~tibetan-sentence-batch-reanalyze~  /function (cl)/  ⚡  ↗
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 1626
+:LINE: 1644
 :SIGNATURE: (tibetan-sentence-batch-reanalyze &key folder source-file re-request-claude dry-run)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -16979,7 +17033,7 @@ Returns plist:
 ** ~tibetan-sentence--analysis-folder~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1692
+:LINE: 1710
 :SIGNATURE: (tibetan-sentence--analysis-folder)
 :END:
 
@@ -16989,7 +17043,7 @@ Falls back to `<cwd>/analysis/' when not in a source buffer.
 ** ~tibetan-sentence-archive-analysis-folder~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1701
+:LINE: 1719
 :SIGNATURE: (tibetan-sentence-archive-analysis-folder &optional folder)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -17012,7 +17066,7 @@ generated sent files afterwards.
 ** ~tibetan-sentence-create-all~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1749
+:LINE: 1767
 :SIGNATURE: (tibetan-sentence-create-all)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -17037,7 +17091,7 @@ sentence, no seg files.
 ** ~tibetan-sentence--create-all-two-file~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1774
+:LINE: 1792
 :SIGNATURE: (tibetan-sentence--create-all-two-file)
 :END:
 
@@ -17046,7 +17100,7 @@ Two-file body of `tibetan-sentence-create-all'.
 ** ~tibetan-sentence--fire-claude-on-new-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1860
+:LINE: 1878
 :SIGNATURE: (tibetan-sentence--fire-claude-on-new-files plists source-file)
 :END:
 
@@ -17061,7 +17115,7 @@ failures are swallowed to `message'.
 ** ~tibetan-sentence-resegment~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1915
+:LINE: 1933
 :SIGNATURE: (tibetan-sentence-resegment)
 :INTERACTIVE: t
 :AUTOLOAD: t

@@ -1542,7 +1542,25 @@ When RE-REQUEST-CLAUDE is non-nil, a fresh Claude request is
 dispatched after regeneration.  With DRY-RUN, no files are written.
 
 Returns plist:
-  (:file F :sent-id ID :ok BOOL :error STR :seg-nums (...))."
+  (:file F :sent-id ID :ok BOOL :error STR :seg-nums (...)).
+
+C4.3 (2026-07-28): a cascade file (`#+TIBETAN_LAYOUT: cascade' in
+the FILE itself) routes to `tibetan-cascade-reanalyze-file' — the
+two-file sentence regenerate would destroy its * Subsegments tree."
+  (if (and (fboundp 'tibetan-cascade-file-p)
+           (fboundp 'tibetan-cascade-reanalyze-file)
+           (tibetan-cascade-file-p filepath))
+      (if dry-run
+          (list :file filepath :ok t :dry-run t :cascade t)
+        (tibetan-cascade-reanalyze-file
+         filepath :source-file source-file
+         :re-request-claude re-request-claude))
+    (tibetan-sentence--reanalyze-file-two-file
+     filepath source-file re-request-claude dry-run)))
+
+(defun tibetan-sentence--reanalyze-file-two-file
+    (filepath source-file re-request-claude dry-run)
+  "Two-file body of `tibetan-sentence-reanalyze-file'."
   (let* ((sent-id (tibetan-sentence--sent-id-from-filename filepath))
          (src (or source-file
                   (tibetan-sentence--source-file-from-analysis filepath)))
