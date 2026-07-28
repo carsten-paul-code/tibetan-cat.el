@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T18:12:05
+#+DATE: 2026-07-28T18:15:20
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1337 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1338 forms
 
 Regenerated automatically by:
 
@@ -54,7 +54,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#doc-prep/tibetan-ocr-runner.el][doc-prep/tibetan-ocr-runner.el]]  (17)
   - [[#doc-prep/tibetan-ocr-validate.el][doc-prep/tibetan-ocr-validate.el]]  (23)
   - [[#doc-prep/tibetan-segment-migrate.el][doc-prep/tibetan-segment-migrate.el]]  (12)
-  - [[#doc-prep/tibetan-sentence-structure.el][doc-prep/tibetan-sentence-structure.el]]  (23)
+  - [[#doc-prep/tibetan-sentence-structure.el][doc-prep/tibetan-sentence-structure.el]]  (24)
   - [[#doc-prep/tibetan-wylie-ingest.el][doc-prep/tibetan-wylie-ingest.el]]  (26)
   - [[#persist/tibetan-analysis-claude.el][persist/tibetan-analysis-claude.el]]  (66)
   - [[#persist/tibetan-analysis-combine.el][persist/tibetan-analysis-combine.el]]  (14)
@@ -9858,15 +9858,30 @@ the next line up to the following Org heading.
 :SIGNATURE: (tibetan--collect-segment-boundaries)
 :END:
 
-Walk the current buffer and return a plist per `*** Segment' heading.
-Each plist has the shape (:seg-num N :pos POS :confidence CONF) where
-CONF is one of nil, \='strong, or \='weak.  Returns them in
-document order.
+Walk the current buffer and return a plist per Segment heading.
+Each plist: (:seg-num N :pos POS :confidence CONF :genre G
+:section-pos SP :text T).  CONF is nil / \='strong / \='weak;
+G is nil / \='verse / \='prose (Phase 2.1); SP anchors the
+enclosing Section (Phase 2.3 hard break); T is the segment body
+(the verse grouper needs it).  Matches `***' AND `****' Segment
+depth (Phase 2.4 re-run ergonomics).  Document order.
+
+** ~tibetan--verse-starter-set~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 374
+:SIGNATURE: (tibetan--verse-starter-set segs)
+:END:
+
+Segment numbers that START a verse sentence, per the grouper.
+SEGS is the full collector list; maximal runs of verse segments
+within one Section are grouped by
+`tibetan-sentence--group-verse-segments'.
 
 ** ~tibetan-detect-sentence-boundaries~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
-:LINE: 355
+:LINE: 401
 :SIGNATURE: (tibetan-detect-sentence-boundaries &optional include-weak)
 :INTERACTIVE: t
 :END:
@@ -9884,7 +9899,7 @@ The preview lists each sentence start and tags its trigger as
 ** ~tibetan-add-sentence-structure~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
-:LINE: 411
+:LINE: 457
 :SIGNATURE: (tibetan-add-sentence-structure &optional include-weak)
 :INTERACTIVE: t
 :END:
@@ -9918,7 +9933,7 @@ Into:
 ** ~tibetan-mark-sentence-start~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
-:LINE: 489
+:LINE: 559
 :SIGNATURE: (tibetan-mark-sentence-start)
 :INTERACTIVE: t
 :END:
@@ -9930,7 +9945,7 @@ the segment heading from *** to ****.
 ** ~tibetan-sentence-reset-structure--counts~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 521
+:LINE: 591
 :SIGNATURE: (tibetan-sentence-reset-structure--counts buffer)
 :END:
 
@@ -9941,7 +9956,7 @@ Used by the reset command to show the user what it will touch.
 ** ~tibetan-sentence-reset-structure~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 538
+:LINE: 608
 :SIGNATURE: (tibetan-sentence-reset-structure)
 :INTERACTIVE: t
 :AUTOLOAD: t

@@ -671,5 +671,69 @@ partial group."
   ;; Empty input → nil.
   (should-not (tibetan-sentence--group-verse-segments nil)))
 
+;; ============================================================================
+;; Phase 2.3+2.4 (C5.4) — genre-aware transform + Section hard break
+;; ============================================================================
+
+(ert-deftest tibetan-add-sentence-structure-section-hard-break ()
+  "A Section boundary always starts a new sentence — even when the
+previous segment ended on a converb (the cross-section leak)."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* Tibetan Text\n"
+            "** Section 1\n"
+            "*** Segment 1\nལས་བྱས་ནས།\n\n"
+            "** Section 2\n"
+            "*** Segment 2\nཆོས་བྱས་སོ།\n\n")
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+      (tibetan-add-sentence-structure))
+    (should (string-match-p "^\\*\\* Section 2\n\\*\\*\\* Sentence 2$"
+                            (buffer-string)))))
+
+(ert-deftest tibetan-add-sentence-structure-verse-uses-grouper ()
+  "In a [verse] section the grouper decides: bare `།།' does NOT
+break (prose logic would split every line), quotative closers do."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* Tibetan Text\n"
+            "** Section 1 [verse]\n"
+            "*** Segment 1\nཚིག་དང་པོ།།\n\n"
+            "*** Segment 2\nཁྱོད་ཤོག་ཅེས།།\n\n"
+            "*** Segment 3\nཚིག་གསུམ།།\n\n"
+            "*** Segment 4\nམཐའ་མ།།\n\n")
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+      (tibetan-add-sentence-structure))
+    (let ((s (buffer-string)))
+      ;; Exactly two sentences: (1 2) and (3 4).
+      (should (= 2 (cl-count-if
+                    (lambda (l) (string-match-p "^\\*\\*\\* Sentence" l))
+                    (split-string s "\n"))))
+      (should (string-match-p
+               "\\*\\*\\* Sentence 2\n\\*\\*\\*\\* Segment 3" s)))))
+
+(ert-deftest tibetan-add-sentence-structure-rerun-offers-reset ()
+  "Re-running on an already-structured buffer offers a reset and then
+rebuilds — the silent zero-segments no-op is gone (2.4).  Verified
+via the strong→weak upgrade: without a working reset the second run
+cannot regroup."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* Tibetan Text\n"
+            "** Section 1\n"
+            "*** Segment 1\nཕར་བལྟས།\n\n"
+            "*** Segment 2\nལས་བྱས་སོ།\n\n")
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
+              ((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
+      ;; Strong-only: the weak boundary after seg 1 does not split.
+      (tibetan-add-sentence-structure)
+      (should (= 1 (cl-count-if
+                    (lambda (l) (string-match-p "^\\*\\*\\* Sentence" l))
+                    (split-string (buffer-string) "\n"))))
+      ;; Re-run WITH weak: must reset + regroup into two sentences.
+      (tibetan-add-sentence-structure t)
+      (should (= 2 (cl-count-if
+                    (lambda (l) (string-match-p "^\\*\\*\\* Sentence" l))
+                    (split-string (buffer-string) "\n")))))))
+
 (provide 'tibetan-sentence-structure-test)
 ;;; tibetan-sentence-structure-test.el ends here

@@ -337,20 +337,66 @@ the next line up to the following Org heading."
          (buffer-substring-no-properties start (point-max)))))))
 
 (defun tibetan--collect-segment-boundaries ()
-  "Walk the current buffer and return a plist per `*** Segment' heading.
-Each plist has the shape (:seg-num N :pos POS :confidence CONF) where
-CONF is one of nil, \\='strong, or \\='weak.  Returns them in
-document order."
+  "Walk the current buffer and return a plist per Segment heading.
+Each plist: (:seg-num N :pos POS :confidence CONF :genre G
+:section-pos SP :text T).  CONF is nil / \\='strong / \\='weak;
+G is nil / \\='verse / \\='prose (Phase 2.1); SP anchors the
+enclosing Section (Phase 2.3 hard break); T is the segment body
+\(the verse grouper needs it).  Matches `***' AND `****' Segment
+depth (Phase 2.4 re-run ergonomics).  Document order."
   (let (acc)
     (save-excursion
       (goto-char (point-min))
-      (while (re-search-forward "^\\*\\*\\* Segment \\([0-9]+\\)" nil t)
+      (while (re-search-forward "^\\*\\{3,4\\} Segment \\([0-9]+\\)" nil t)
         (let* ((seg-num (string-to-number (match-string 1)))
                (seg-pos (match-beginning 0))
-               (conf    (tibetan--segment-boundary-at-point)))
-          (push (list :seg-num seg-num :pos seg-pos :confidence conf)
+               (text (save-excursion
+                       (forward-line 1)
+                       (let ((start (point)))
+                         (if (re-search-forward "^\\*" nil t)
+                             (buffer-substring-no-properties
+                              start (line-beginning-position))
+                           (buffer-substring-no-properties
+                            start (point-max))))))
+               (conf (tibetan-is-sentence-boundary-p text))
+               (genre (tibetan-sentence--section-genre-at-pos seg-pos))
+               (section-pos (save-excursion
+                              (goto-char seg-pos)
+                              (if (re-search-backward
+                                   "^\\*\\{1,2\\} " nil t)
+                                  (point)
+                                0))))
+          (push (list :seg-num seg-num :pos seg-pos :confidence conf
+                      :genre genre :section-pos section-pos :text text)
                 acc))))
     (nreverse acc)))
+
+(defun tibetan--verse-starter-set (segs)
+  "Segment numbers that START a verse sentence, per the grouper.
+SEGS is the full collector list; maximal runs of verse segments
+within one Section are grouped by
+`tibetan-sentence--group-verse-segments'."
+  (let ((starters '())
+        (run '())
+        (run-section nil))
+    (cl-flet ((flush ()
+                (when run
+                  (dolist (g (tibetan-sentence--group-verse-segments
+                              (nreverse run)))
+                    (push (car g) starters))
+                  (setq run '()))))
+      (dolist (seg segs)
+        (if (eq (plist-get seg :genre) 'verse)
+            (progn
+              (unless (equal (plist-get seg :section-pos) run-section)
+                (flush))
+              (setq run-section (plist-get seg :section-pos))
+              (push (cons (plist-get seg :seg-num)
+                          (plist-get seg :text))
+                    run))
+          (flush)))
+      (flush))
+    starters))
 
 (defun tibetan-detect-sentence-boundaries (&optional include-weak)
   "Preview sentence boundaries in the current buffer.
@@ -437,26 +483,50 @@ Into:
   (interactive "P")
   (unless (derived-mode-p 'org-mode)
     (error "This command only works in org-mode buffers"))
+  ;; Phase 2.4: a re-run on an already-structured buffer used to find
+  ;; zero `***' segments and silently do nothing — offer the reset.
+  (when (save-excursion
+          (goto-char (point-min))
+          (re-search-forward "^\\*\\*\\* Sentence [0-9]+\\b" nil t))
+    (if (yes-or-no-p
+         "Sentence structure already exists — reset it first (then rebuild)? ")
+        (tibetan-sentence-reset-structure)
+      (user-error "Cancelled — existing sentence structure kept")))
   (unless (yes-or-no-p
            (format "Add sentence structure (%s)? This will modify segment headings. "
                    (if include-weak "strong + weak" "strong only")))
     (user-error "Cancelled"))
   (let* ((threshold (if include-weak '(strong weak) '(strong)))
          (segs (tibetan--collect-segment-boundaries))
+         (verse-starters (tibetan--verse-starter-set segs))
          (prev-conf 'first)
+         (prev-section nil)
          (current-sent 1)
          (annotated nil))
-    ;; First pass: annotate each segment with :starts-sentence / :sentence-num
+    ;; First pass: annotate each segment with :starts-sentence /
+    ;; :sentence-num.  Phase 2.3: a Section boundary is a HARD
+    ;; sentence break (the collector saw only segment headings before
+    ;; — a sentence could silently leak across `** Section' lines);
+    ;; verse sections delegate to the grouper; prose keeps the
+    ;; confidence-threshold classifier.
     (dolist (seg segs)
       (let* ((conf (plist-get seg :confidence))
-             (starts (or (eq prev-conf 'first)
-                         (memq prev-conf threshold))))
+             (section (plist-get seg :section-pos))
+             (starts (cond
+                      ((eq prev-conf 'first) t)
+                      ((not (equal section prev-section)) t)
+                      ((eq (plist-get seg :genre) 'verse)
+                       (and (memq (plist-get seg :seg-num)
+                                  verse-starters)
+                            t))
+                      (t (and (memq prev-conf threshold) t)))))
         (push (append seg
                       (list :starts-sentence starts
                             :sentence-num (and starts current-sent)))
               annotated)
         (when starts (setq current-sent (1+ current-sent)))
-        (setq prev-conf conf)))
+        (setq prev-conf conf
+              prev-section section)))
     ;; Second pass: walk back-to-front and rewrite headings in place.
     ;;
     ;; Every segment (regardless of whether it starts a new sentence)
