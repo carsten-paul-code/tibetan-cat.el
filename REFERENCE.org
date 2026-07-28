@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T17:36:07
+#+DATE: 2026-07-28T18:07:31
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1330 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1331 forms
 
 Regenerated automatically by:
 
@@ -62,7 +62,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (131)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (29)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (33)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (34)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
@@ -5375,12 +5375,15 @@ Replaces spaces with tsheg, removes extra whitespace.
 :END:
 
 Split Tibetan TEXT into syllables.
-Returns list of syllables.
+Returns list of syllables.  Phase 2b (2026-07-28): a shad run is a
+HARD boundary like a tsheg — sources sometimes run clauses together
+without a space after the shad (…འཁྲུལ།གཉིས…), and a tsheg-only
+split fused the flanking syllables into garbage tokens.
 
 ** ~tibetan-clean-text~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 165
+:LINE: 170
 :SIGNATURE: (tibetan-clean-text text)
 :END:
 
@@ -5390,7 +5393,7 @@ Keeps only syllables and tsheg.
 ** ~tibetan-display-in-side-window~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 175
+:LINE: 180
 :SIGNATURE: (tibetan-display-in-side-window buffer-name)
 :END:
 
@@ -5400,7 +5403,7 @@ Returns the window.
 ** ~tibetan-close-side-window~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 186
+:LINE: 191
 :SIGNATURE: (tibetan-close-side-window buffer-name)
 :END:
 
@@ -5409,7 +5412,7 @@ Close side window displaying BUFFER-NAME.
 ** ~tibetan-insert-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 198
+:LINE: 203
 :SIGNATURE: (tibetan-insert-section title &optional level)
 :END:
 
@@ -5418,7 +5421,7 @@ Insert org-mode section with TITLE at LEVEL (default 2).
 ** ~tibetan-insert-separator~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 203
+:LINE: 208
 :SIGNATURE: (tibetan-insert-separator)
 :END:
 
@@ -6356,7 +6359,7 @@ populates the final `(word . meaning)' cell.
 ** ~tibetan-vocabulary-initialize~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1152
+:LINE: 1157
 :SIGNATURE: (tibetan-vocabulary-initialize)
 :END:
 
@@ -6375,7 +6378,7 @@ kept for users who install the package without the bundled data dir.
 ** ~reload-all-glossaries~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1177
+:LINE: 1182
 :SIGNATURE: (reload-all-glossaries)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -6388,7 +6391,7 @@ resets the idempotence guard and re-emits every bundled source.
 ** ~tibetan-vocab-extract-short-meaning~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1205
+:LINE: 1210
 :SIGNATURE: (tibetan-vocab-extract-short-meaning full-meaning)
 :END:
 
@@ -6398,7 +6401,7 @@ Returns just the core translation without lengthy explanations.
 ** ~tibetan-vocab-has-extended-info-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1227
+:LINE: 1232
 :SIGNATURE: (tibetan-vocab-has-extended-info-p full-meaning)
 :END:
 
@@ -6407,7 +6410,7 @@ Check if FULL-MEANING has extended information worth showing.
 ** ~tibetan-vocab-format-entry~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1233
+:LINE: 1238
 :SIGNATURE: (tibetan-vocab-format-entry tibetan-word full-meaning &optional format-type)
 :END:
 
@@ -6424,7 +6427,7 @@ Returns formatted string.
 ** ~tibetan-vocab-format-list~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1275
+:LINE: 1280
 :SIGNATURE: (tibetan-vocab-format-list vocab-pairs &optional format-type)
 :END:
 
@@ -6436,7 +6439,7 @@ Returns formatted string.
 ** ~tibetan-vocab-format-detailed-list~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1287
+:LINE: 1292
 :SIGNATURE: (tibetan-vocab-format-detailed-list vocab-pairs &optional for-org)
 :END:
 
@@ -15361,6 +15364,28 @@ Non-nil when FILEPATH itself carries `#+TIBETAN_LAYOUT: cascade'.
 The batch-safety predicate: folder batches must route such files to
 the cascade regenerate — the two-file sentence regenerate would
 destroy the * Subsegments tree.
+
+** ~tibetan-shad-split-segments~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 1014
+:SIGNATURE: (tibetan-shad-split-segments)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+Split every Segment of the current source buffer into shad units.
+One-time SOURCE transform preparing a document for cascade analysis
+(segment = shad unit; sentence = group of segments).  Renumbers ALL
+segments globally from 1 afterwards — therefore it REFUSES with a
+`user-error' when analysis/ already holds seg files for this source:
+renumbering would orphan them (the §5.26/§5.33 data-loss class).
+Never run it on a two-file corpus.
+
+A `:PROPERTIES:' drawer (e.g. :FOLIO:) stays on the FIRST unit of a
+split segment; Working Translation siblings are untouched; the
+concatenated Tibetan is preserved (the C1 splitter's contract).
+Returns (:segments-before N :segments-after M).
 
 ** ~tibetan-cascade-rendering-placeholder~  /constant/
 :PROPERTIES:

@@ -759,5 +759,80 @@ cascade file (preserving content) instead of a seg file."
                         sent4 105 "Rendering")))
         (should (= 0 (length (directory-files analysis nil "\\`seg-"))))))))
 
+;; ============================================================================
+;; C5.2 — tibetan-shad-split-segments (one-time source transform)
+;; ============================================================================
+
+(ert-deftest tibetan-shad-split-segments-splits-and-renumbers ()
+  "Each multi-shad Segment splits into per-shad Segments; global
+numbering is sequential afterwards; Working Translation siblings and
+:FOLIO: drawers (on the first unit) survive; the concatenated
+Tibetan is unchanged."
+  (let* ((dir (make-temp-file "shad-split-" t))
+         (src (expand-file-name "doc.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file src
+            (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                    "* Tibetan Text\n"
+                    "*** Sentence 1\n"
+                    "**** Segment 1\n"
+                    ":PROPERTIES:\n:FOLIO: 13a6\n:END:\n"
+                    "ཚིག་དང་པོ། ཚིག་གཉིས་པ། ཚིག་གསུམ་པ།\n\n"
+                    "**** Working Translation\nUSER DRAFT.\n\n"
+                    "*** Sentence 2\n"
+                    "**** Segment 2\nམཐའ་མ་འདི་ཡིན།\n\n"))
+          (with-current-buffer (find-file-noselect src)
+            (unwind-protect
+                (progn
+                  (let ((r (tibetan-shad-split-segments)))
+                    (should (= 2 (plist-get r :segments-before)))
+                    (should (= 4 (plist-get r :segments-after))))
+                  (let ((s (buffer-string)))
+                    ;; Sequential global numbering.
+                    (should (equal '(1 2 3 4)
+                                   (let (ns) (goto-char (point-min))
+                                        (while (re-search-forward
+                                                "^\\*+ Segment \\([0-9]+\\)"
+                                                nil t)
+                                          (push (string-to-number
+                                                 (match-string 1))
+                                                ns))
+                                        (nreverse ns))))
+                    ;; FOLIO stays on the first unit only.
+                    (should (= 1 (cl-count-if
+                                  (lambda (l) (equal l ":FOLIO: 13a6"))
+                                  (split-string s "\n"))))
+                    ;; User draft intact; all Tibetan preserved.
+                    (should (string-match-p "USER DRAFT\\." s))
+                    (dolist (u '("ཚིག་དང་པོ།" "ཚིག་གཉིས་པ།"
+                                 "ཚིག་གསུམ་པ།" "མཐའ་མ་འདི་ཡིན།"))
+                      (should (string-match-p (regexp-quote u) s)))))
+              (set-buffer-modified-p nil)
+              (kill-buffer))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-shad-split-segments-refuses-two-file-corpus ()
+  "The transform REFUSES when analysis/ holds seg files for this
+source — renumbering would orphan them (the §5.26/§5.33 class)."
+  (let* ((dir (make-temp-file "shad-guard-" t))
+         (src (expand-file-name "doc.org" dir))
+         (analysis (expand-file-name "analysis" dir)))
+    (unwind-protect
+        (progn
+          (make-directory analysis)
+          (with-temp-file (expand-file-name "seg-001.org" analysis)
+            (insert "#+SOURCE: [[file:../doc.org::*Segment 1][doc / Segment 1]]\n"))
+          (with-temp-file src
+            (insert "#+TITLE: D\n\n* Tibetan Text\n*** Sentence 1\n"
+                    "**** Segment 1\nཚིག་དང་པོ། ཚིག་གཉིས་པ།\n"))
+          (with-current-buffer (find-file-noselect src)
+            (unwind-protect
+                (should-error (tibetan-shad-split-segments)
+                              :type 'user-error)
+              (set-buffer-modified-p nil)
+              (kill-buffer))))
+      (delete-directory dir t))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here

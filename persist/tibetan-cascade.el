@@ -1001,5 +1001,107 @@ destroy the * Subsegments tree."
               (plist-get (tibetan-analysis--read-source-metadata filepath)
                          :layout))))
 
+;; ============================================================================
+;; C5.2 — one-time source transform: segment = shad unit
+;; ============================================================================
+
+(declare-function tibetan-analysis--folder-analysis-files-strict
+                  "tibetan-analysis-persist")
+(declare-function tibetan-analysis--file-source-basename
+                  "tibetan-analysis-persist")
+
+;;;###autoload
+(defun tibetan-shad-split-segments ()
+  "Split every Segment of the current source buffer into shad units.
+One-time SOURCE transform preparing a document for cascade analysis
+\(segment = shad unit; sentence = group of segments).  Renumbers ALL
+segments globally from 1 afterwards — therefore it REFUSES with a
+`user-error' when analysis/ already holds seg files for this source:
+renumbering would orphan them (the §5.26/§5.33 data-loss class).
+Never run it on a two-file corpus.
+
+A `:PROPERTIES:' drawer (e.g. :FOLIO:) stays on the FIRST unit of a
+split segment; Working Translation siblings are untouched; the
+concatenated Tibetan is preserved (the C1 splitter's contract).
+Returns (:segments-before N :segments-after M)."
+  (interactive)
+  (unless (buffer-file-name)
+    (user-error "Buffer must be saved to a file first"))
+  (let* ((source-file (buffer-file-name))
+         (folder (expand-file-name
+                  "analysis" (file-name-directory source-file))))
+    (when (file-directory-p folder)
+      (let ((seg-files
+             (if (fboundp 'tibetan-analysis--folder-analysis-files-strict)
+                 (tibetan-analysis--folder-analysis-files-strict
+                  folder "seg")
+               (directory-files folder t "\\`seg-"))))
+        (when (cl-some
+               (lambda (f)
+                 (if (fboundp 'tibetan-analysis--file-source-basename)
+                     (equal (tibetan-analysis--file-source-basename f)
+                            (file-name-nondirectory source-file))
+                   ;; Resolver unavailable → any seg file blocks.
+                   t))
+               seg-files)
+          (user-error
+           "analysis/ holds seg files for this source — shad-splitting would renumber and orphan them"))))
+    (let ((before 0) (after 0))
+      (save-excursion
+        ;; Pass 1: split each multi-unit segment in place.
+        (goto-char (point-min))
+        (while (re-search-forward "^\\(\\*+\\) Segment [0-9]+.*$" nil t)
+          (cl-incf before)
+          (let* ((stars (match-string 1))
+                 (h-start (line-beginning-position))
+                 (h-end (line-end-position))
+                 (subtree-end (save-excursion
+                                (goto-char h-end)
+                                (if (re-search-forward "^\\*+ " nil t)
+                                    (line-beginning-position)
+                                  (point-max))))
+                 (drawer
+                  (save-excursion
+                    (goto-char h-end)
+                    (forward-line 1)
+                    (when (looking-at "^:PROPERTIES:$")
+                      (let ((ds (point)))
+                        (when (re-search-forward "^:END:$" subtree-end t)
+                          (forward-line 1)
+                          (buffer-substring-no-properties ds (point)))))))
+                 (body-start (save-excursion
+                               (goto-char h-end)
+                               (forward-line 1)
+                               (when drawer
+                                 (re-search-forward "^:END:$" subtree-end t)
+                                 (forward-line 1))
+                               (point)))
+                 (body (buffer-substring-no-properties body-start
+                                                       subtree-end))
+                 (units (tibetan-cascade-split-shad-units
+                         (string-trim body))))
+            (if (or (null units) (< (length units) 2))
+                (progn (cl-incf after)
+                       (goto-char subtree-end))
+              (cl-incf after (length units))
+              (delete-region h-start subtree-end)
+              (goto-char h-start)
+              (let ((first t))
+                (dolist (u units)
+                  (insert stars " Segment 0\n")
+                  (when (and first drawer) (insert drawer))
+                  (setq first nil)
+                  (insert (string-trim u) "\n\n"))))))
+        ;; Pass 2: renumber globally from 1.
+        (goto-char (point-min))
+        (let ((n 0))
+          (while (re-search-forward "^\\(\\*+\\) Segment [0-9]+" nil t)
+            (cl-incf n)
+            (replace-match (format "\\1 Segment %d" n) t nil))))
+      (when (called-interactively-p 'any)
+        (message "Shad-split: %d segment%s → %d shad-unit segments"
+                 before (if (= 1 before) "" "s") after))
+      (list :segments-before before :segments-after after))))
+
 (provide 'tibetan-cascade)
 ;;; tibetan-cascade.el ends here
