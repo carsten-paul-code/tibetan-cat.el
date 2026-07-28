@@ -605,5 +605,77 @@ non-FORCE fire finds nothing needing Claude and declines."
         (unless had-gptel
           (setq features (delq 'gptel features)))))))
 
+;; ============================================================================
+;; C4.1 — create-all + C-c u B branch
+;; ============================================================================
+
+(defmacro tibetan-cascade-test--with-cascade-source (&rest body)
+  "Visit a 2-sentence cascade source; bind SRC, DIR, and BUF (current)."
+  (declare (indent 0))
+  `(tibetan-cascade-test--with-stub-renderer
+     (let* ((dir (make-temp-file "cascade-src-" t))
+            (src (expand-file-name "doc.org" dir)))
+       (unwind-protect
+           (progn
+             (with-temp-file src
+               (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                       "* Tibetan Text\n"
+                       "*** Sentence 4\n"
+                       "**** Segment 105\nབདག་གིས་ལས་བྱས།\n\n"
+                       "**** Segment 106\nཆོས་ཟབ་མོ་ཡིན།\n\n"
+                       "*** Sentence 5\n"
+                       "**** Segment 107\nམཐའ་མ་འདི་ཡིན།\n\n"))
+             (let ((buf (find-file-noselect src)))
+               (unwind-protect
+                   (with-current-buffer buf ,@body)
+                 (when (buffer-live-p buf)
+                   (with-current-buffer buf (set-buffer-modified-p nil))
+                   (kill-buffer buf)))))
+         (delete-directory dir t)))))
+
+(ert-deftest tibetan-cascade-create-all-one-file-per-sentence ()
+  "C-c u B on a cascade source creates ONE cascade file per sentence
+and ZERO seg files; a second run skips existing files."
+  (tibetan-cascade-test--with-cascade-source
+    (let ((tibetan-auto-fire-claude-on-create nil))
+      (tibetan-auto-analyze-document)
+      (let ((analysis (expand-file-name "analysis" dir)))
+        (should (= 2 (length (directory-files analysis nil "\\`sent-"))))
+        (should (= 0 (length (directory-files analysis nil "\\`seg-"))))
+        (let ((sent4 (car (directory-files analysis t "\\`sent-004"))))
+          (should (equal '(105 106)
+                         (tibetan-cascade--subsegment-numbers sent4)))
+          (should (string-match-p
+                   "^#\\+TIBETAN_LAYOUT: cascade$"
+                   (with-temp-buffer (insert-file-contents sent4)
+                                     (buffer-string)))))
+        ;; Second run: nothing new, nothing clobbered.
+        (let ((result (tibetan-cascade-create-all)))
+          (should (= 0 (plist-get result :created)))
+          (should (= 2 (plist-get result :skipped))))))))
+
+(ert-deftest tibetan-cascade-fire-defers-under-defer-mt ()
+  "The cascade fire is a LEAF fire entry point — the P1 defer-MT
+guard applies: a deferring source returns 'deferred and never
+submits to the queue."
+  (tibetan-cascade-test--with-cascade-file
+    (let ((src (expand-file-name "doc.org" dir))
+          (submits 0))
+      ;; Flip the source to defer-MT (it already has the cascade header).
+      (with-temp-buffer
+        (insert-file-contents src)
+        (goto-char (point-min))
+        (forward-line 1)
+        (insert "#+TIBETAN_DEFER_MT: t\n")
+        (write-region (point-min) (point-max) src nil 'silent))
+      (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+                 (lambda (&rest _) (cl-incf submits))))
+        (should (eq 'deferred
+                    (tibetan-cascade--fire-sentence
+                     (list :sent-num 4 :seg-nums '(105 106)
+                           :tibetan-text "x")
+                     src (file-name-directory cascade-file))))
+        (should (= 0 submits))))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here

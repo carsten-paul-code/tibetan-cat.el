@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T16:48:13
+#+DATE: 2026-07-28T17:31:40
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1318 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1324 forms
 
 Regenerated automatically by:
 
@@ -61,13 +61,13 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-combined.el][persist/tibetan-analysis-combined.el]]  (15)
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (131)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
-  - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (28)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (24)
+  - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (29)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (28)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
   - [[#persist/tibetan-sentence-claude.el][persist/tibetan-sentence-claude.el]]  (26)
-  - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (57)
+  - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (58)
   - [[#persist/tibetan-structure-reorg.el][persist/tibetan-structure-reorg.el]]  (15)
   - [[#philology/tibetan-bialek-textbook-refs.el][philology/tibetan-bialek-textbook-refs.el]]  (2)
   - [[#philology/tibetan-madhyamaka-terms.el][philology/tibetan-madhyamaka-terms.el]]  (6)
@@ -14710,10 +14710,19 @@ newly-created `seg-*.org'.  Requests are staggered by
 
 Progress is shown in the echo area.
 
+** ~tibetan-auto--analyze-document-two-file~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 366
+:SIGNATURE: (tibetan-auto--analyze-document-two-file force)
+:END:
+
+Two-file (seg + sent) body of `tibetan-auto-analyze-document'.
+
 ** ~tibetan-auto--fire-dm-on-new-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 473
+:LINE: 482
 :SIGNATURE: (tibetan-auto--fire-dm-on-new-files filepath-and-text-pairs)
 :END:
 
@@ -14736,7 +14745,7 @@ Phase A.3 of multi-translator-parallel-reading (2026-04-30).
 ** ~tibetan-auto--fire-claude-on-new-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 525
+:LINE: 534
 :SIGNATURE: (tibetan-auto--fire-claude-on-new-files filepath-and-text-pairs)
 :END:
 
@@ -14751,7 +14760,7 @@ swallowed to `message' and do not abort the batch.
 ** ~tibetan-auto--extract-tibetan-text-from-analysis~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 602
+:LINE: 611
 :SIGNATURE: (tibetan-auto--extract-tibetan-text-from-analysis filepath)
 :END:
 
@@ -14761,7 +14770,7 @@ of analysis file FILEPATH.  Returns a trimmed string, or nil.
 ** ~tibetan-auto--claude-needs-request-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 617
+:LINE: 626
 :SIGNATURE: (tibetan-auto--claude-needs-request-p filepath)
 :END:
 
@@ -14783,7 +14792,7 @@ request failed...]' fail-stub.
 ** ~tibetan-auto--analysis-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 652
+:LINE: 661
 :SIGNATURE: (tibetan-auto--analysis-files folder)
 :END:
 
@@ -14794,7 +14803,7 @@ we focus the batch on the segments used in class.
 ** ~tibetan-auto-request-claude-translations~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 661
+:LINE: 670
 :SIGNATURE: (tibetan-auto-request-claude-translations &optional force)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -14910,7 +14919,7 @@ DM rate-limiting compared to back-to-back firing.
 ** ~tibetan-auto-claude-request-delay~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 593
+:LINE: 602
 :TYPE: 'number
 :GROUP: tibetan-cat
 :DEFAULT: 1.5
@@ -15245,6 +15254,46 @@ the `:cascade' context flag so the response lands through
 `tibetan-cascade--land-response'; DM targets the cascade file's own
 nested slot.  Returns `fired' / `dedup-hit' / nil (does not apply).
 
+** ~tibetan-cascade--fire-sentence-1~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 714
+:SIGNATURE: (tibetan-cascade--fire-sentence-1 sentence source-file folder force)
+:END:
+
+Unguarded body of `tibetan-cascade--fire-sentence'.
+
+** ~tibetan-cascade--collect-sentences~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 750
+:SIGNATURE: (tibetan-cascade--collect-sentences)
+:END:
+
+Collect the current buffer's sentences with per-segment texts.
+Ordered list of plists (:sent-num N :segs ((GLOBAL-NUM . TEXT) …)).
+Sentences without segment children are skipped.  Matches both
+`*** Sentence' and legacy `** Sentence' levels; segments at any
+deeper level (the `tibetan-auto--collect-segments' convention).
+
+** ~tibetan-cascade-create-all~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 781
+:SIGNATURE: (tibetan-cascade-create-all &optional force)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+Create the cascade sent file for EVERY sentence of the current
+source buffer (one file per sentence — no seg files).  Skips
+existing files unless FORCE.  When
+`tibetan-auto-fire-claude-on-create' is non-nil, fires the
+sentence-level Claude/DM call for each newly-created file (the
+queue throttles; `tibetan-cascade--fire-sentence' itself defers
+under `#+TIBETAN_DEFER_MT').  Returns
+(:created N :skipped M :files LIST).
+
 ** ~tibetan-cascade-rendering-placeholder~  /constant/
 :PROPERTIES:
 :KIND: defconst
@@ -15262,6 +15311,14 @@ there is no per-segment fallback in cascade mode.
 :KIND: defconst
 :LINE: 374
 :DEFAULT: '
+:END:
+
+/(no docstring)/
+
+** ~tibetan-auto-fire-claude-on-create~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 748
 :END:
 
 /(no docstring)/
@@ -16946,10 +17003,23 @@ regenerate from scratch, archive first with
 
 Reports created / skipped counts on completion.
 
+C4.1 (2026-07-28): cascade documents (`#+TIBETAN_LAYOUT: cascade')
+route to `tibetan-cascade-create-all' — one cascade file per
+sentence, no seg files.
+
+** ~tibetan-sentence--create-all-two-file~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 1774
+:SIGNATURE: (tibetan-sentence--create-all-two-file)
+:END:
+
+Two-file body of `tibetan-sentence-create-all'.
+
 ** ~tibetan-sentence--fire-claude-on-new-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1848
+:LINE: 1860
 :SIGNATURE: (tibetan-sentence--fire-claude-on-new-files plists source-file)
 :END:
 
@@ -16964,7 +17034,7 @@ failures are swallowed to `message'.
 ** ~tibetan-sentence-resegment~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1903
+:LINE: 1915
 :SIGNATURE: (tibetan-sentence-resegment)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -18096,7 +18166,7 @@ Get particle annotation for WORD using analysis-persist function.
 ** ~sentence-first-spec--corpus~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 79
+:LINE: 80
 :SIGNATURE: (sentence-first-spec--corpus dir &optional populated-children)
 :END:
 
@@ -18107,7 +18177,7 @@ POPULATED-CHILDREN.  Returns a plist of the four paths.
 ** ~sentence-first-spec--read~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 120
+:LINE: 121
 :SIGNATURE: (sentence-first-spec--read path)
 :END:
 
@@ -18116,7 +18186,7 @@ File PATH's content as a string.
 ** ~sentence-first-spec--fire~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 124
+:LINE: 125
 :SIGNATURE: (sentence-first-spec--fire paths response)
 :END:
 
@@ -18133,7 +18203,7 @@ that silent no-op cost a debugging round).
 ** ~sentence-first-spec--response-1~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 34
+:LINE: 35
 :DEFAULT: "## Translation
 ⟦105⟧The lama went to rNgog's place⟦/105⟧ and ⟦106⟧requested the dharma⟦/106⟧.
 ### Segment 105
@@ -18145,7 +18215,7 @@ First-run canned response for segments 105+106.
 ** ~sentence-first-spec--response-2~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 66
+:LINE: 67
 :DEFAULT: (replace-regexp-in-string
    "requested the dharma" "BACKFILL-RUN wording"
    (replace-regexp-in-string

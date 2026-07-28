@@ -1757,10 +1757,22 @@ the user may have hand-edited since last segment change).  To
 regenerate from scratch, archive first with
 `tibetan-sentence-archive-analysis-folder'.
 
-Reports created / skipped counts on completion."
+Reports created / skipped counts on completion.
+
+C4.1 (2026-07-28): cascade documents (`#+TIBETAN_LAYOUT: cascade')
+route to `tibetan-cascade-create-all' — one cascade file per
+sentence, no seg files."
   (interactive)
   (unless buffer-file-name
     (user-error "Current buffer has no source file"))
+  (if (and (fboundp 'tibetan-cascade-create-all)
+           (fboundp 'tibetan-analysis--cascade-p)
+           (tibetan-analysis--cascade-p buffer-file-name))
+      (tibetan-cascade-create-all)
+    (tibetan-sentence--create-all-two-file)))
+
+(defun tibetan-sentence--create-all-two-file ()
+  "Two-file body of `tibetan-sentence-create-all'."
   (let ((source-file buffer-file-name)
         (created 0) (skipped 0) (failed 0)
         (sentences '()))

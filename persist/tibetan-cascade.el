@@ -703,6 +703,16 @@ Claim/request/DM all ride the §5.40 machinery — the request carries
 the `:cascade' context flag so the response lands through
 `tibetan-cascade--land-response'; DM targets the cascade file's own
 nested slot.  Returns `fired' / `dedup-hit' / nil (does not apply)."
+  ;; P1 discipline: this is a LEAF fire entry point — the defer-MT
+  ;; guard applies here too, not only in the dispatcher above it
+  ;; (create-all and future batch drivers call this directly).
+  (if (and (fboundp 'tibetan-analysis--defer-mt-p)
+           (tibetan-analysis--defer-mt-p source-file))
+      'deferred
+    (tibetan-cascade--fire-sentence-1 sentence source-file folder force)))
+
+(defun tibetan-cascade--fire-sentence-1 (sentence source-file folder force)
+  "Unguarded body of `tibetan-cascade--fire-sentence'."
   (let* ((sent-num (plist-get sentence :sent-num))
          (seg-nums (plist-get sentence :seg-nums))
          (file (and sent-num
@@ -730,6 +740,96 @@ nested slot.  Returns `fired' / `dedup-hit' / nil (does not apply)."
               (tibetan-sentence-claude--schedule-dm
                sentence (list file) nil force))
             'fired))))))
+
+;; ============================================================================
+;; C4.1 — create-all (the cascade branch of C-c u B / C-c s N)
+;; ============================================================================
+
+(defvar tibetan-auto-fire-claude-on-create)
+
+(defun tibetan-cascade--collect-sentences ()
+  "Collect the current buffer's sentences with per-segment texts.
+Ordered list of plists (:sent-num N :segs ((GLOBAL-NUM . TEXT) …)).
+Sentences without segment children are skipped.  Matches both
+`*** Sentence' and legacy `** Sentence' levels; segments at any
+deeper level (the `tibetan-auto--collect-segments' convention)."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((sentences '()))
+      (while (re-search-forward "^\\(\\*+\\) Sentence \\([0-9]+\\)" nil t)
+        (let* ((level (length (match-string 1)))
+               (sent-num (string-to-number (match-string 2)))
+               (limit (save-excursion
+                        (if (re-search-forward
+                             (format "^\\*\\{1,%d\\} " level) nil t)
+                            (line-beginning-position)
+                          (point-max))))
+               (segs '()))
+          (while (re-search-forward "^\\*+ Segment \\([0-9]+\\)" limit t)
+            (let ((n (string-to-number (match-string 1)))
+                  (text (and (fboundp 'tibetan-org-get-segment-text)
+                             (tibetan-org-get-segment-text))))
+              (when (and text (not (string-empty-p (string-trim text))))
+                (push (cons n text) segs))))
+          (when segs
+            (push (list :sent-num sent-num :segs (nreverse segs))
+                  sentences))
+          (goto-char limit)))
+      (nreverse sentences))))
+
+;;;###autoload
+(defun tibetan-cascade-create-all (&optional force)
+  "Create the cascade sent file for EVERY sentence of the current
+source buffer (one file per sentence — no seg files).  Skips
+existing files unless FORCE.  When
+`tibetan-auto-fire-claude-on-create' is non-nil, fires the
+sentence-level Claude/DM call for each newly-created file (the
+queue throttles; `tibetan-cascade--fire-sentence' itself defers
+under `#+TIBETAN_DEFER_MT').  Returns
+\(:created N :skipped M :files LIST)."
+  (interactive "P")
+  (unless (buffer-file-name)
+    (error "Buffer must be saved to a file first"))
+  (let* ((source-file (buffer-file-name))
+         (sentences (tibetan-cascade--collect-sentences))
+         (folder (file-name-as-directory
+                  (expand-file-name
+                   "analysis" (file-name-directory source-file))))
+         (created '())
+         (skipped 0))
+    (unless sentences
+      (error "No sentences found. Run tibetan-prepare-document first"))
+    (dolist (s sentences)
+      (let* ((sent-num (plist-get s :sent-num))
+             (file (if (fboundp 'tibetan-sentence--filepath)
+                       (tibetan-sentence--filepath sent-num folder
+                                                   source-file)
+                     (expand-file-name (format "sent-%03d.org" sent-num)
+                                       folder))))
+        (if (and (file-exists-p file) (not force))
+            (cl-incf skipped)
+          (tibetan-cascade--create-file sent-num (plist-get s :segs)
+                                        source-file)
+          (push (cons s file) created))))
+    (setq created (nreverse created))
+    (when (and (boundp 'tibetan-auto-fire-claude-on-create)
+               tibetan-auto-fire-claude-on-create)
+      (dolist (c created)
+        (let* ((s (car c))
+               (sentence (list :sent-num (plist-get s :sent-num)
+                               :seg-nums (mapcar #'car (plist-get s :segs))
+                               :tibetan-text (mapconcat
+                                              #'cdr (plist-get s :segs)
+                                              ""))))
+          (condition-case err
+              (tibetan-cascade--fire-sentence sentence source-file folder)
+            (error (message "Cascade fire skipped (Sentence %s): %s"
+                            (plist-get s :sent-num)
+                            (error-message-string err)))))))
+    (message "Cascade: %d sentence file%s created, %d skipped"
+             (length created) (if (= 1 (length created)) "" "s") skipped)
+    (list :created (length created) :skipped skipped
+          :files (mapcar #'cdr created))))
 
 (provide 'tibetan-cascade)
 ;;; tibetan-cascade.el ends here

@@ -355,7 +355,16 @@ Progress is shown in the echo area."
   (interactive "P")
   (unless (buffer-file-name)
     (error "Buffer must be saved to a file first"))
+  (if (and (fboundp 'tibetan-cascade-create-all)
+           (fboundp 'tibetan-analysis--cascade-p)
+           (tibetan-analysis--cascade-p (buffer-file-name)))
+      ;; C4.1: cascade documents create ONE file per sentence — no
+      ;; seg files, no per-segment fires.
+      (tibetan-cascade-create-all force)
+    (tibetan-auto--analyze-document-two-file force)))
 
+(defun tibetan-auto--analyze-document-two-file (force)
+  "Two-file (seg + sent) body of `tibetan-auto-analyze-document'."
   (let* ((tibetan-auto-skip-existing (not force))
          (source-file (buffer-file-name))
          (segments (tibetan-auto--collect-segments))
