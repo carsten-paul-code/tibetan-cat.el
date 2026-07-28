@@ -422,5 +422,115 @@ modulo the LAST_ANALYZED stamp."
         (tibetan-cascade--regenerate cascade-file 4 segs src)
         (should (equal first (funcall strip)))))))
 
+;; ============================================================================
+;; C3.1 — span extraction + response landing
+;; ============================================================================
+
+(defconst tibetan-cascade-test--response
+  "## Translation
+⟦105⟧The lama went to rNgog's place⟦/105⟧ and ⟦106⟧requested the dharma⟦/106⟧.
+### Segment 105
+Having gone to rNgog's place,
+### Segment 106
+[he] requested the dharma.
+
+## Vocabulary
+### Segment 105
+rngog, proper noun, \"rNgog\", a disciple
+### Segment 106
+chos, noun, \"dharma\", the teaching
+
+## Grammar
+A two-clause chain: ablative converb then main verb.
+### Segment 105
+- *Verb backbone:* phyin is the past of 'gro.
+### Segment 106
+- *Verb backbone:* zhus is the past of zhu.
+
+## Particles
+### Segment 105
+nas, nas, 2.11, ablative converb
+### Segment 106
+la, la, 1.4, dative
+
+## Concept Notes
+- **rNgog** — one of Mar pa's four pillars.
+"
+  "Canned sentence-first response for cascade landing tests.")
+
+(ert-deftest tibetan-cascade-extract-span ()
+  "Pure span extraction: own pair → span text; residual markers
+stripped defensively; absent / malformed pairs → nil."
+  (let ((whole "⟦105⟧The lama went⟦/105⟧ and ⟦106⟧asked⟦/106⟧."))
+    (should (equal "The lama went"
+                   (tibetan-cascade--extract-span whole 105)))
+    (should (equal "asked" (tibetan-cascade--extract-span whole 106)))
+    (should-not (tibetan-cascade--extract-span whole 107)))
+  ;; Malformed: close before open, or missing close → nil.
+  (should-not (tibetan-cascade--extract-span "⟦/105⟧ x ⟦105⟧" 105))
+  (should-not (tibetan-cascade--extract-span "⟦105⟧never closed" 105))
+  (should-not (tibetan-cascade--extract-span nil 105))
+  ;; Defensive: a stray sibling marker inside the span is stripped.
+  (should (equal "went and asked"
+                 (tibetan-cascade--extract-span
+                  "⟦105⟧went ⟦106⟧and asked⟦/105⟧" 105))))
+
+(ert-deftest tibetan-cascade-land-response-writes-all ()
+  "Landing writes the sentence-level sections (Translation stripped of
+markers, Vocabulary/Grammar/Particles with their segment subsections,
+Concept Notes) AND each subsegment's Rendering = its extracted span.
+The per-segment SUB-TRANSLATIONS are DISCARDED by design."
+  (tibetan-cascade-test--with-cascade-file
+    (tibetan-cascade--land-response
+     tibetan-cascade-test--response
+     (list :sent-num 4 :seg-nums '(105 106)
+           :sent-file cascade-file :cascade t :force nil))
+    (let ((s (with-temp-buffer
+               (insert-file-contents cascade-file)
+               (buffer-string))))
+      ;; Sentence-level Translation: whole, markers stripped.
+      (should (string-match-p
+               "The lama went to rNgog's place and requested the dharma\\."
+               s))
+      (should-not (string-match-p "⟦" s))
+      ;; Vocabulary + Grammar landed with per-segment content.
+      (should (string-match-p "rngog, proper noun" s))
+      (should (string-match-p "two-clause chain" s))
+      (should (string-match-p "one of Mar pa's four pillars" s))
+      ;; Renderings = extracted spans.
+      (should (equal "The lama went to rNgog's place"
+                     (tibetan-cascade--read-subsegment-section
+                      cascade-file 105 "Rendering")))
+      (should (equal "requested the dharma"
+                     (tibetan-cascade--read-subsegment-section
+                      cascade-file 106 "Rendering")))
+      ;; The ### sub-translations are DISCARDED.
+      (should-not (string-match-p "Having gone to rNgog's place" s)))))
+
+(ert-deftest tibetan-cascade-land-response-missing-span-stub ()
+  "A segment whose span pair is absent gets a VISIBLE stub that still
+counts as needs-request; the sibling lands normally.  Non-FORCE never
+clobbers an already-populated Rendering."
+  (tibetan-cascade-test--with-cascade-file
+    ;; Pre-populate 106's rendering; feed a response whose whole
+    ;; translation lacks 105's markers and carries DIFFERENT 106 text.
+    (tibetan-cascade--write-subsegment-section
+     cascade-file 106 "Rendering" "KEEP ME.")
+    (tibetan-cascade--land-response
+     "## Translation\nNo markers for one-oh-five ⟦106⟧new text⟦/106⟧.\n"
+     (list :sent-num 4 :seg-nums '(105 106)
+           :sent-file cascade-file :cascade t :force nil))
+    ;; 105 → stub, still needs request.
+    (should (string-match-p
+             "\\`\\[Claude sentence response missing Segment 105"
+             (tibetan-cascade--read-subsegment-section
+              cascade-file 105 "Rendering")))
+    (should (tibetan-cascade--subsegment-rendering-needs-request-p
+             cascade-file 105))
+    ;; 106 was populated → non-FORCE landing left it alone.
+    (should (equal "KEEP ME."
+                   (tibetan-cascade--read-subsegment-section
+                    cascade-file 106 "Rendering")))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here

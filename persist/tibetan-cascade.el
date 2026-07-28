@@ -536,5 +536,122 @@ so only the known machine prefixes gate."
         (string-match-p "\\`\\[Claude" body)
         (string-match-p "\\`\\[Requesting" body))))
 
+;; ============================================================================
+;; C3.1 — span extraction + response landing
+;; ============================================================================
+
+(declare-function tibetan-sentence-claude--parse-response
+                  "tibetan-sentence-claude")
+(declare-function tibetan-sentence-claude--strip-span-markers
+                  "tibetan-sentence-claude")
+(declare-function tibetan-sentence-claude--synthesize-segment-markdown
+                  "tibetan-sentence-claude")
+(declare-function tibetan-analysis--insert-claude-sections
+                  "tibetan-analysis-claude")
+(declare-function tibetan-analysis--claude-needs-request-p
+                  "tibetan-analysis-claude")
+
+(defun tibetan-cascade--extract-span (whole seg-num)
+  "The text between `⟦SEG-NUM⟧' and `⟦/SEG-NUM⟧' in WHOLE, or nil.
+Any residual span markers inside the extract are stripped
+defensively (the schema forbids nesting, but Claude occasionally
+misplaces a sibling marker).  nil on absent or malformed pairs —
+the caller then writes a visible stub, never a silent blank."
+  (when (and whole (stringp whole) seg-num)
+    (let* ((open (format "⟦%d⟧" seg-num))
+           (close (format "⟦/%d⟧" seg-num))
+           (s (string-search open whole))
+           (e (string-search close whole)))
+      (when (and s e (< s e))
+        (let ((span (string-trim
+                     (replace-regexp-in-string
+                      "⟦/?[0-9]+⟧" ""
+                      (substring whole (+ s (length open)) e)))))
+          (unless (string-empty-p span) span))))))
+
+(defun tibetan-cascade--reassemble-subsections (parsed key seg-nums
+                                                &optional preamble)
+  "Rebuild the `### Segment N' markdown for KEY from PARSED slots.
+PREAMBLE (e.g. the cross-clause Grammar overview) opens the body.
+nil when nothing is available for any segment."
+  (let* ((blocks
+          (delq nil
+                (mapcar
+                 (lambda (n)
+                   (let* ((slot (cdr (assq n (plist-get parsed
+                                                        :per-segment))))
+                          (body (and slot (plist-get slot key))))
+                     (when (and body (not (string-empty-p body)))
+                       (format "### Segment %d\n%s" n body))))
+                 seg-nums)))
+         (parts (if (and preamble (not (string-empty-p (or preamble ""))))
+                    (cons preamble blocks)
+                  blocks)))
+    (when parts
+      (mapconcat #'identity parts "\n\n"))))
+
+(defun tibetan-cascade--land-response (response ctx)
+  "Land a sentence-first RESPONSE into the ONE cascade file.
+CTX: (:sent-num N :seg-nums L :sent-file FILE :cascade t :force BOOL).
+
+Sentence level (landing-gated like every Claude write): Translation =
+the whole-sentence rendering with the ⟦N⟧ markers STRIPPED;
+Vocabulary / Grammar / Particles keep their per-segment subsections
+\(reassembled from the parse); Concept Notes as-is — all through
+`tibetan-analysis--insert-claude-sections' (heading placement, md-h3
+conversion, §5.38-C1b sanitization, zettel cross-links for free).
+The `### Segment N' SUB-TRANSLATIONS are DISCARDED by design — the
+subsegment rendering is always the extracted span of the whole, so
+the subsegment translation is contained in the sentence translation
+by construction.
+
+Per subsegment (gated per Rendering): the extracted span, or a
+visible `[Claude sentence response missing Segment N …]' stub that
+still counts as needs-request.  Returns non-nil when the file was
+touched."
+  (let* ((sent-num (plist-get ctx :sent-num))
+         (seg-nums (plist-get ctx :seg-nums))
+         (file (or (plist-get ctx :cascade-file)
+                   (plist-get ctx :sent-file)))
+         (force (plist-get ctx :force))
+         (parsed (and (fboundp 'tibetan-sentence-claude--parse-response)
+                      (tibetan-sentence-claude--parse-response
+                       response seg-nums)))
+         (whole (plist-get parsed :translation-whole)))
+    (ignore sent-num)
+    (when (and parsed file (file-exists-p file))
+      ;; Sentence-level sections.
+      (let ((md (tibetan-sentence-claude--synthesize-segment-markdown
+                 (list :translation
+                       (and whole
+                            (tibetan-sentence-claude--strip-span-markers
+                             whole))
+                       :vocabulary (tibetan-cascade--reassemble-subsections
+                                    parsed :vocabulary seg-nums)
+                       :grammar (tibetan-cascade--reassemble-subsections
+                                 parsed :grammar seg-nums
+                                 (plist-get parsed :grammar-preamble))
+                       :particles (tibetan-cascade--reassemble-subsections
+                                   parsed :particles seg-nums)
+                       :concepts (plist-get parsed :concepts)))))
+        (when (and md (not (string-empty-p md))
+                   (or force
+                       (tibetan-analysis--claude-needs-request-p file)))
+          (tibetan-analysis--insert-claude-sections md file)))
+      ;; Subsegment renderings — span or visible stub, per-unit gated.
+      (dolist (n seg-nums)
+        (when (or force
+                  (tibetan-cascade--subsegment-rendering-needs-request-p
+                   file n))
+          (let ((span (tibetan-cascade--extract-span whole n)))
+            (tibetan-cascade--write-subsegment-section
+             file n "Rendering"
+             (if span
+                 ;; §5.38-C1b: neutralise line-leading `*' runs.
+                 (replace-regexp-in-string "^\\(\\*+\\)" " \\1" span)
+               (format "[Claude sentence response missing Segment %d — re-fire the sentence (C-c u R)]"
+                       n))))))
+      t)))
+
 (provide 'tibetan-cascade)
 ;;; tibetan-cascade.el ends here

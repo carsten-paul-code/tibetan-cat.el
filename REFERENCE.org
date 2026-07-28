@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T16:39:01
+#+DATE: 2026-07-28T16:44:28
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1311 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1314 forms
 
 Regenerated automatically by:
 
@@ -62,7 +62,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (131)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (28)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (19)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (22)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
@@ -15162,6 +15162,57 @@ Missing body, the creation placeholder, or a failure/missing stub all
 count.  Deliberately NOT `[`-anchored wholesale: a real extracted span
 may open with an editorial bracket (`[He] spoke…' — the §5.40 lesson),
 so only the known machine prefixes gate.
+
+** ~tibetan-cascade--extract-span~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 554
+:SIGNATURE: (tibetan-cascade--extract-span whole seg-num)
+:END:
+
+The text between `⟦SEG-NUM⟧' and `⟦/SEG-NUM⟧' in WHOLE, or nil.
+Any residual span markers inside the extract are stripped
+defensively (the schema forbids nesting, but Claude occasionally
+misplaces a sibling marker).  nil on absent or malformed pairs —
+the caller then writes a visible stub, never a silent blank.
+
+** ~tibetan-cascade--reassemble-subsections~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 572
+:SIGNATURE: (tibetan-cascade--reassemble-subsections parsed key seg-nums
+                                                &optional preamble)
+:END:
+
+Rebuild the `### Segment N' markdown for KEY from PARSED slots.
+PREAMBLE (e.g. the cross-clause Grammar overview) opens the body.
+nil when nothing is available for any segment.
+
+** ~tibetan-cascade--land-response~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 593
+:SIGNATURE: (tibetan-cascade--land-response response ctx)
+:END:
+
+Land a sentence-first RESPONSE into the ONE cascade file.
+CTX: (:sent-num N :seg-nums L :sent-file FILE :cascade t :force BOOL).
+
+Sentence level (landing-gated like every Claude write): Translation =
+the whole-sentence rendering with the ⟦N⟧ markers STRIPPED;
+Vocabulary / Grammar / Particles keep their per-segment subsections
+(reassembled from the parse); Concept Notes as-is — all through
+`tibetan-analysis--insert-claude-sections' (heading placement, md-h3
+conversion, §5.38-C1b sanitization, zettel cross-links for free).
+The `### Segment N' SUB-TRANSLATIONS are DISCARDED by design — the
+subsegment rendering is always the extracted span of the whole, so
+the subsegment translation is contained in the sentence translation
+by construction.
+
+Per subsegment (gated per Rendering): the extracted span, or a
+visible `[Claude sentence response missing Segment N …]' stub that
+still counts as needs-request.  Returns non-nil when the file was
+touched.
 
 ** ~tibetan-cascade-rendering-placeholder~  /constant/
 :PROPERTIES:
