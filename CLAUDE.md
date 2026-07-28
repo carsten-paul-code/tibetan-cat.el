@@ -3363,12 +3363,34 @@ RED-verified that the two-file sentence regenerate would otherwise
 DESTROY the * Subsegments tree on a C-c u r folder batch.  Legacy
 bodies extracted verbatim (`-two-file` suffix) at every branch.
 
-Suite: **ERT 2235** (0 unexpected, 1 skip) + **BDD 248**; compile
-clean.  NEXT: C5 recognition (verse grouper, Part B Phase 2/2b/3),
-C7 Rgyan importer; C6/C8 migrations post-Aug-24.  Also 2026-07-28:
-the buddhist-studies corpus is LOCAL now
-(`/Users/cp/buddhist-studies`, git/GitHub sync — iCloud had been
-planting conflict copies inside .git itself).
+**C5 recognition layer (same day, `a70cc11` `37630c6` `33e31c6`
+`b9c1876` `8281a1c`)**: Phase 2b — a shad is a HARD token boundary
+at all five splitter sites (the bialek sites were DELETING shads,
+actively gluing the flanking syllables — the seg-137 'khulgnyis
+class); `tibetan-shad-split-segments` one-time source transform
+(refuses on two-file corpora — renumbering is the §5.26 hazard);
+Phase 2.1+2.2 — Section genre detection ([verse]/[prose] tag or
+:GENRE_PART:) + the pure verse grouper, GOLD-standard-tested against
+the hand-grouped Khu-dbon Sentences 10–11: verse needs its OWN
+closer set (the -o family + ཞེས/ཅེས/ཟེར + mid-line དེ་སྐད་ཟེར; the
+prose final-particle list would break at ཡིན/ཡོད/གྱུར/བཞུགས/གསུང
+five times across the gold span), frame OPENERS do not close, and
+the 8-line cap (defcustom) does the heavy lifting; Phase 2.3+2.4 —
+genre-aware `tibetan-add-sentence-structure` with a HARD sentence
+break at every Section line (the cross-section converb leak is
+RED-verified fixed) and re-run ergonomics (offers reset instead of
+the silent zero-segments no-op); Phase 3 — Hill-DB weak→strong
+promotion, corpus-evaluated BEFORE committing (Milarepa 16/58,
+Khu-dbon 5/150 promoted, ~2.4%, no over-segmentation) with a
+tunable stop-list (ཆེ ཆེས འདྲ དགའ — the last protects proper names
+like ཐོས་པ་དགའ; ཚར is a Hill coverage gap, addable per §5.39).
+
+Suite: **ERT 2247** (0 unexpected, 1 skip) + **BDD 248**; compile
+clean.  NEXT: C7 Rgyan importer + §-context; C6/C8 migrations
+post-Aug-24; Khu-dbon backfill unblocked (operational, needs the
+user's go for API spend).  Also 2026-07-28: the buddhist-studies
+corpus is LOCAL now (`/Users/cp/buddhist-studies`, git/GitHub sync —
+iCloud had been planting conflict copies inside .git itself).
 
 ## 6. Open work (prioritised)
 
