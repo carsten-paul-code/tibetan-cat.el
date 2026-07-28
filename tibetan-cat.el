@@ -218,14 +218,15 @@
 ;; Course-specific path (Tibetisch III, WS25-26).  Not a structural part
 ;; of the zettelkasten infrastructure, so doesn't get its own constant in
 ;; shared-paths.el — but we build it off `zk/buddhist-studies-root' when
-;; available to localise the only iCloud-prefix string.
+;; available.  Fallback literal is the plain local tree (the corpus left
+;; iCloud Drive on 2026-07-28).
 (when (boundp 'tibetan-interlinear-portfolio-file)
   (setq tibetan-interlinear-portfolio-file
         (expand-file-name
          "WS25-26/Hausarbeiten/Tibetisch III/Hausarbeit_Tibetisch_III.org"
          (if (boundp 'zk/buddhist-studies-root)
              zk/buddhist-studies-root
-           "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/"))))
+           "~/buddhist-studies/"))))
 
 ;; ============================================================================
 ;; CONFIGURATION — THESAURUS (Pass 5b)
@@ -245,8 +246,7 @@
   (setq tibetan-thesaurus-directory
         (if (boundp 'zk/thesaurus-directory)
             zk/thesaurus-directory
-          (expand-file-name
-           "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/thesaurus/"))))
+          (expand-file-name "~/buddhist-studies/thesaurus/"))))
 
 (when (boundp 'tibetan-thesaurus-kramer-source-directory)
   (setq tibetan-thesaurus-kramer-source-directory
@@ -258,7 +258,7 @@
         (if (boundp 'zk/zettelkasten-directory)
             zk/zettelkasten-directory
           (expand-file-name
-           "~/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/knowledge/zettelkasten/"))))
+           "~/buddhist-studies/knowledge/zettelkasten/"))))
 
 ;; Thesaurus init is more specific than `*.org' in the Kramer source
 ;; directory (the zettelkasten holds many non-Kramer files too).  The
