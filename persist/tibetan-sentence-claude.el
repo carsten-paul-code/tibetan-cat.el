@@ -225,8 +225,8 @@ preamble, Concept Notes = the sentence-level body."
   "
 
 SENTENCE-FIRST MODE — this request covers a COMPLETE SENTENCE that
-spans several numbered segments (the shad-delimited units your user
-prompt lists under `### Segment N' headers).  Adjust the five
+spans one or more numbered segments (the shad-delimited units your
+user prompt lists under `### Segment N' headers).  Adjust the five
 sections as follows, keeping all other rules unchanged:
 
 - `## Translation': FIRST give the fluent translation of the WHOLE
@@ -324,12 +324,15 @@ cache-constant).  FOLDER locates the child seg files for grounding."
             (tibetan-analysis--format-zettel-references-block
              (tibetan-analysis--collect-zettel-references text))))
          (user (concat
-                (format "Classical Tibetan sentence (Sentence %s — segments %s):\n\n"
+                (format "Classical Tibetan sentence (Sentence %s — segment%s %s):\n\n"
                         (or sent-num "?")
+                        (if (cdr seg-nums) "s" "")
                         (mapconcat #'number-to-string seg-nums ", "))
                 text
                 (if wylie (format "\n\nWylie: %s" wylie) "")
-                "\n\nThe sentence spans these segments:\n"
+                (if (cdr seg-nums)
+                    "\n\nThe sentence spans these segments:\n"
+                  "\n\nThe sentence consists of this single segment:\n")
                 enumeration
                 (or vocab-block "")
                 (or grounding-block "")
@@ -425,9 +428,13 @@ crash only suppresses until `tibetan-sentence-claude-clear-inflight'.")
   (when key (remhash key tibetan-sentence-claude--inflight)))
 
 (defun tibetan-sentence-claude--segment-label (sent-num seg-nums)
-  "The `(Sentence N — segments A–B)' label line."
-  (format "(Sentence %s — segments %s–%s)"
-          sent-num (apply #'min seg-nums) (apply #'max seg-nums)))
+  "The `(Sentence N — segments A–B)' label line.
+Single-segment sentences (B-1.2) label as `segment N' — a
+`segments 136–136' range reads like a bug."
+  (if (cdr seg-nums)
+      (format "(Sentence %s — segments %s–%s)"
+              sent-num (apply #'min seg-nums) (apply #'max seg-nums))
+    (format "(Sentence %s — segment %s)" sent-num (car seg-nums))))
 
 (defun tibetan-sentence-claude--handle-response (response ctx)
   "Land a sentence-first RESPONSE into the files named by CTX.
@@ -611,7 +618,10 @@ per-segment Claude)."
                         (tibetan-sentence--sentence-for-segment
                          seg-id source-file)
                       (error nil))))
-      (when (and sentence (> (length (plist-get sentence :seg-nums)) 1))
+      ;; B-1.2: single-segment sentences fire sentence-level too (the
+      ;; sent file + span-marked whole-translation layout is wanted for
+      ;; EVERY sentence).  Only an empty seg-nums list declines.
+      (when (and sentence (plist-get sentence :seg-nums))
         (let* ((folder (file-name-directory (expand-file-name analysis-file)))
                (seg-nums (plist-get sentence :seg-nums))
                ;; §5.44: resolve child seg / sent paths through the

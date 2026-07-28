@@ -564,10 +564,17 @@ file's `#+SOURCE:' link), nothing fires.  Soft-guarded via fboundp."
               nil))))
       (when (and translation (stringp translation)
                  (not (string-empty-p (string-trim translation))))
-        (let ((body (format "(Sentence %s — segments %s–%s)\n\n%s"
-                            sent-num
-                            (apply #'min seg-nums) (apply #'max seg-nums)
-                            (string-trim translation))))
+        (let* ((label
+                ;; Delegate to the sentence-claude label helper (singular-
+                ;; aware since B-1.2) — inline fallback only when persist/
+                ;; is absent, which no production caller hits (the only
+                ;; caller, --schedule-dm, lives there).
+                (if (fboundp 'tibetan-sentence-claude--segment-label)
+                    (tibetan-sentence-claude--segment-label sent-num seg-nums)
+                  (format "(Sentence %s — segments %s–%s)"
+                          sent-num
+                          (apply #'min seg-nums) (apply #'max seg-nums))))
+               (body (format "%s\n\n%s" label (string-trim translation))))
           (dolist (f (append child-files (and sent-file (list sent-file))))
             (when (and f (file-exists-p f)
                        (or force

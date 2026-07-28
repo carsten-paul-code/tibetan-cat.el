@@ -392,7 +392,9 @@ single-segment sentences → nil (caller falls back to per-segment)."
                          "ཆོས" (expand-file-name "seg-106.org" dir)
                          src 106 t)))
             (should (= 1 submits))
-            ;; Single-seg sentence → nil (fall back).
+            ;; Sentence whose child seg file does not exist → nil (fall
+            ;; back).  (Since B-1.2 the single-seg guard is gone — the
+            ;; decline here comes from the missing seg-107.org child.)
             (should-not (tibetan-analysis--fire-sentence-level
                          "བདག" (expand-file-name "seg-107.org" dir)
                          src 107 t))
@@ -405,6 +407,40 @@ single-segment sentences → nil (caller falls back to per-segment)."
                            flat 9 t)))))
       (tibetan-sentence-claude-clear-inflight)
       (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-claude-single-seg-fires-sentence-level ()
+  "A single-segment sentence fires through the dispatcher (B-1.2).
+The >1-segment guard made e.g. Khu-dbon Sentence 25 (= Segment 136
+alone) fall back to the legacy per-sentence call — no ⟦N⟧ span, no
+sent-file fan-out, a different prompt schema."
+  (let ((dir (make-temp-file "tstc-single" t))
+        (submits 0))
+    (unwind-protect
+        (let* ((src (expand-file-name "doc.org" dir)))
+          (with-temp-file src
+            (insert "#+TITLE: D\n\n* Tibetan Text\n"
+                    "*** Sentence 5\n"
+                    "**** Segment 107\nབདག\n\n"))
+          (with-temp-file (expand-file-name "seg-107.org" dir)
+            (insert "#+SOURCE: [[file:doc.org::*Segment 107][doc / Segment 107]]\n"
+                    "* Tibetan Text\nx\n"))
+          (tibetan-sentence-claude-clear-inflight)
+          (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+                     (lambda (&rest _) (cl-incf submits))))
+            (should (eq 'fired
+                        (tibetan-analysis--fire-sentence-level
+                         "བདག" (expand-file-name "seg-107.org" dir)
+                         src 107 t)))
+            (should (= 1 submits))))
+      (tibetan-sentence-claude-clear-inflight)
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-claude-segment-label-singular ()
+  "Singleton sentences label as `segment N', multi as `segments A–B'."
+  (should (equal "(Sentence 5 — segment 107)"
+                 (tibetan-sentence-claude--segment-label 5 '(107))))
+  (should (equal "(Sentence 4 — segments 105–106)"
+                 (tibetan-sentence-claude--segment-label 4 '(105 106)))))
 
 (ert-deftest tibetan-sentence-claude-fire-gate-includes-sent-file ()
   "A placeholder SENT file alone opens the fire gate (Part B 1.1).
