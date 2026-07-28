@@ -136,6 +136,60 @@ outrank it — locked by multisource-resources-comes-first."
       (should (equal "Steinert/01-Hopkins2015"
                      (plist-get (car entries) :source))))))
 
+(ert-deftest tibetan-vocab-lookup-detailed-delegates-to-ranked-assembler ()
+  "D1b: `tibetan-vocab-lookup-detailed' returns the multisource
+assembler's TOP-RANKED entry — ONE ranking authority.  Pre-D1b it
+ran a private first-match chain whose Steinert preference was
+RY-FIRST (contradicting the F2 Hopkins-first user decision) and
+whose Bundled step outranked Steinert entirely — so verb detection,
+closed-set gloss enrichment, and the bialek tokenizer saw different
+glosses than the Interlinear."
+  (tibetan-mst--with-stubs
+      (:resources nil
+       :steinert (list (list :source "08-IvesWaldo"
+                             :gloss "region; territory; realm of the senses"
+                             :sanskrit nil)
+                       (list :source "01-Hopkins2015"
+                             :gloss "object; place"
+                             :sanskrit nil)
+                       (list :source "02-RangjungYeshe"
+                             :gloss "homeland, village, sphere of activity"
+                             :sanskrit nil))
+       :rangjung nil :bundled nil :dharmamitra nil)
+    (cl-letf (((symbol-function 'tibetan-steinert-sanskrit-for)
+               (lambda (_w) nil)))
+      (clrhash tibetan-detailed-vocab-cache)
+      (let ((result (tibetan-vocab-lookup-detailed "ཡུལ")))
+        (should (equal "Steinert/01-Hopkins2015"
+                       (plist-get result :source)))
+        ;; The assembler's first-sense extraction applies: :primary is
+        ;; the first sense, the full gloss lives in :detailed.
+        (should (string-match-p "object"
+                                (or (plist-get result :primary) "")))
+        (should (string-match-p "object; place"
+                                (or (plist-get result :detailed) ""))))
+      (clrhash tibetan-detailed-vocab-cache))))
+
+(ert-deftest tibetan-vocab-lookup-detailed-steinert-beats-bundled ()
+  "D1b: with both a Bundled and a Steinert/Hopkins hit, the ranked
+assembler's ordering wins (Hopkins rank 4 < Bundled rank 9).  The
+old chain consulted Bundled before Steinert and returned it."
+  (tibetan-mst--with-stubs
+      (:resources nil
+       :steinert (list (list :source "01-Hopkins2015"
+                             :gloss "object; place"
+                             :sanskrit nil))
+       :rangjung nil
+       :bundled "bundled gloss for object"
+       :dharmamitra nil)
+    (cl-letf (((symbol-function 'tibetan-steinert-sanskrit-for)
+               (lambda (_w) nil)))
+      (clrhash tibetan-detailed-vocab-cache)
+      (should (equal "Steinert/01-Hopkins2015"
+                     (plist-get (tibetan-vocab-lookup-detailed "ཡུལ")
+                                :source)))
+      (clrhash tibetan-detailed-vocab-cache))))
+
 (ert-deftest tibetan-vocab-multisource-dedupes-near-duplicates ()
   "Two sources with near-identical glosses only produce one entry."
   (tibetan-mst--with-stubs

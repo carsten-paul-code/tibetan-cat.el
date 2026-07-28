@@ -1,6 +1,6 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T14:06:52
+#+DATE: 2026-07-28T14:09:39
 #+OPTIONS: toc:2 num:nil
 
 Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1293 forms
@@ -5603,15 +5603,33 @@ all via strict exact-key lookups.
 :SIGNATURE: (tibetan-vocab-lookup-detailed word)
 :END:
 
-Look up WORD and return detailed dictionary entry.
-Tries: Resources vocab, custom vocab, bundled glossaries, DharmaMitra.
-WORD can be Tibetan script or Wylie.
-Returns plist with :primary :detailed :sanskrit :wylie :source, or nil.
+Look up WORD and return the best detailed dictionary entry.
+
+D1b (2026-07-28): delegates to the ranked multisource assembler —
+`tibetan-vocab-multisource-entries' is the ONE ranking authority
+(Thesaurus → Resources/Custom/Zettel → corpus-Steinert →
+Hopkins-first Steinert → Rangjung Yeshe → Bundled → DharmaMitra), so
+every consumer of this function (verb detection, closed-set gloss
+enrichment, the bialek tokenizer) sees the SAME best gloss as the
+Interlinear.  The pre-D1b private chain consulted Bundled before
+Steinert and picked whichever of five preferred Steinert sub-sources
+happened to come first in hits order — both contradicting the F2
+Hopkins-first decision.
+
+WORD can be Tibetan script or Wylie.  Returns the top-ranked entry
+plist (:primary :detailed :sanskrit :wylie :source, plus
+:zettel-id / :zettel-path on curated hits), or nil.  Two post-passes
+kept from the pre-D1b contract: Sanskrit enrichment via
+`tibetan-steinert-sanskrit-for' when the entry carries no native
+Sanskrit (the assembler itself never synthesises Sanskrit), and
+stem-reference enrichment via `tibetan-vocab--enrich-with-base'
+(recursion-guarded by `tibetan-vocab--enriching').  Results cached
+per raw WORD in `tibetan-detailed-vocab-cache'.
 
 ** ~tibetan-vocab--dedup-fingerprint~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 559
+:LINE: 476
 :SIGNATURE: (tibetan-vocab--dedup-fingerprint text)
 :END:
 
@@ -5623,7 +5641,7 @@ near-duplicates and only the first is shown.
 ** ~tibetan-vocab--looks-like-sanskrit-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 580
+:LINE: 497
 :SIGNATURE: (tibetan-vocab--looks-like-sanskrit-p text)
 :END:
 
@@ -5646,7 +5664,7 @@ so when in doubt we fall through to `t'.
 ** ~tibetan-vocab--make-source-entry~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 615
+:LINE: 532
 :SIGNATURE: (tibetan-vocab--make-source-entry seen source-name raw-gloss
                                               native-sanskrit wylie)
 :END:
@@ -5666,7 +5684,7 @@ text — never synthesised from elsewhere.
 ** ~tibetan-vocab-rank-source~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 672
+:LINE: 589
 :SIGNATURE: (tibetan-vocab-rank-source source)
 :END:
 
@@ -5694,7 +5712,7 @@ Rank layers (2026-04-22):
 ** ~tibetan-vocab--sort-entries-by-rank~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 722
+:LINE: 639
 :SIGNATURE: (tibetan-vocab--sort-entries-by-rank entries)
 :END:
 
@@ -5705,7 +5723,7 @@ rank stay in insertion order.
 ** ~tibetan-vocab-find-sanskrit~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 731
+:LINE: 648
 :SIGNATURE: (tibetan-vocab-find-sanskrit entries)
 :END:
 
@@ -5717,7 +5735,7 @@ out Wylie cross-references that masquerade in the Sanskrit slot.
 ** ~tibetan-vocab-best-entry~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 744
+:LINE: 661
 :SIGNATURE: (tibetan-vocab-best-entry entries)
 :END:
 
@@ -5727,7 +5745,7 @@ Return the top-ranked entry from ENTRIES (or nil).  Shortcut for
 ** ~tibetan-vocab-term-anchor~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 749
+:LINE: 666
 :SIGNATURE: (tibetan-vocab-term-anchor wylie)
 :END:
 
@@ -5749,7 +5767,7 @@ Examples:
 ** ~tibetan-vocab-detailed-cap-entries~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 786
+:LINE: 703
 :SIGNATURE: (tibetan-vocab-detailed-cap-entries entries)
 :END:
 
@@ -5767,7 +5785,7 @@ returns
 ** ~tibetan-vocab-multisource-entries~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 810
+:LINE: 727
 :SIGNATURE: (tibetan-vocab-multisource-entries word)
 :END:
 
@@ -5789,7 +5807,7 @@ when the source entry carries it natively.
 ** ~tibetan-vocab-detailed-max-sources~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 773
+:LINE: 690
 :TYPE: 'integer
 :GROUP: tibetan-cat
 :DEFAULT: 3
@@ -5873,7 +5891,7 @@ further enrichment to prevent recursion cycles.
 ** ~tibetan-vocab--steinert-cap~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 552
+:LINE: 469
 :DEFAULT: 5
 :END:
 
@@ -5886,7 +5904,7 @@ review showed words like ཡུལ / ཤོ / ལ producing overly long blocks.
 ** ~tibetan-vocab--sanskrit-diacritics~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 571
+:LINE: 488
 :DEFAULT: '
 :END:
 
@@ -5895,7 +5913,7 @@ review showed words like ཡུལ / ཤོ / ལ producing overly long blocks.
 ** ~tibetan-vocab--corpus~  /variable (buffer-local)/
 :PROPERTIES:
 :KIND: defvar-local
-:LINE: 654
+:LINE: 571
 :DEFAULT: nil
 :END:
 
@@ -5909,7 +5927,7 @@ corpus boost.
 ** ~tibetan-vocab--corpus-source-map~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 662
+:LINE: 579
 :DEFAULT: '
 :END:
 

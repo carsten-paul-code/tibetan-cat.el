@@ -386,130 +386,47 @@ all via strict exact-key lookups."
             (ignore-errors (tibetan-thesaurus-lookup c)))))))
 
 (defun tibetan-vocab-lookup-detailed (word)
-  "Look up WORD and return detailed dictionary entry.
-Tries: Resources vocab, custom vocab, bundled glossaries, DharmaMitra.
-WORD can be Tibetan script or Wylie.
-Returns plist with :primary :detailed :sanskrit :wylie :source, or nil."
+  "Look up WORD and return the best detailed dictionary entry.
+
+D1b (2026-07-28): delegates to the ranked multisource assembler —
+`tibetan-vocab-multisource-entries' is the ONE ranking authority
+\(Thesaurus → Resources/Custom/Zettel → corpus-Steinert →
+Hopkins-first Steinert → Rangjung Yeshe → Bundled → DharmaMitra), so
+every consumer of this function (verb detection, closed-set gloss
+enrichment, the bialek tokenizer) sees the SAME best gloss as the
+Interlinear.  The pre-D1b private chain consulted Bundled before
+Steinert and picked whichever of five preferred Steinert sub-sources
+happened to come first in hits order — both contradicting the F2
+Hopkins-first decision.
+
+WORD can be Tibetan script or Wylie.  Returns the top-ranked entry
+plist (:primary :detailed :sanskrit :wylie :source, plus
+:zettel-id / :zettel-path on curated hits), or nil.  Two post-passes
+kept from the pre-D1b contract: Sanskrit enrichment via
+`tibetan-steinert-sanskrit-for' when the entry carries no native
+Sanskrit (the assembler itself never synthesises Sanskrit), and
+stem-reference enrichment via `tibetan-vocab--enrich-with-base'
+\(recursion-guarded by `tibetan-vocab--enriching').  Results cached
+per raw WORD in `tibetan-detailed-vocab-cache'."
   (when (and word (stringp word) (not (string-empty-p word)))
-    ;; Check cache first
     (let ((cached (gethash word tibetan-detailed-vocab-cache)))
       (if cached
           cached
-        ;; Not cached - do full lookup
-        (let ((result nil)
-              (wylie (if (string-match-p "^[ༀ-࿿]" word)
-                         (tibetan-vocab--get-wylie word)
-                       word))
-              (tibetan (if (string-match-p "^[a-z]" word)
-                           (tibetan-vocab--tibetan-from-wylie word)
-                         word)))
-
-          ;; Try Resources vocabulary first (highest priority)
-          (unless result
-            (when (and (boundp 'tibetan-current-resources-vocab)
-                       tibetan-current-resources-vocab)
-              (let ((entry (or (gethash tibetan tibetan-current-resources-vocab)
-                               (and wylie (gethash wylie tibetan-current-resources-vocab)))))
-                (when entry
-                  (let ((parsed (tibetan-vocab--parse-entry entry)))
-                    (setq result (list :primary (plist-get parsed :primary)
-                                       :detailed (plist-get parsed :detailed)
-                                       :sanskrit (plist-get parsed :sanskrit)
-                                       :wylie wylie
-                                       :source "Resources")))))))
-
-          ;; Try custom vocabulary
-          (unless result
-            (when (and (boundp 'tibetan-current-custom-vocab)
-                       tibetan-current-custom-vocab)
-              (let ((entry (or (gethash tibetan tibetan-current-custom-vocab)
-                               (and wylie (gethash wylie tibetan-current-custom-vocab)))))
-                (when entry
-                  (let ((parsed (tibetan-vocab--parse-entry entry)))
-                    (setq result (list :primary (plist-get parsed :primary)
-                                       :detailed (plist-get parsed :detailed)
-                                       :sanskrit (plist-get parsed :sanskrit)
-                                       :wylie wylie
-                                       :source "Custom")))))))
-
-          ;; Try bundled glossaries (Hopkins, etc.)
-          (unless result
-            (when (and (boundp 'tibetan-comprehensive-vocabulary)
-                       tibetan-comprehensive-vocabulary)
-              (let ((entry (or (gethash tibetan tibetan-comprehensive-vocabulary)
-                               (and wylie (gethash wylie tibetan-comprehensive-vocabulary)))))
-                (when entry
-                  (let ((parsed (tibetan-vocab--parse-entry entry)))
-                    (setq result (list :primary (plist-get parsed :primary)
-                                       :detailed (plist-get parsed :detailed)
-                                       :sanskrit (plist-get parsed :sanskrit)
-                                       :wylie wylie
-                                       :source "Bundled")))))))
-
-          ;; Try Rangjung Yeshe dictionary (162k entries, lazy-loaded)
-          (unless result
-            (when (fboundp 'tibetan-lookup-word-in-rangjung-yeshe)
-              (let ((ry-result (tibetan-lookup-word-in-rangjung-yeshe (or tibetan word))))
-                (when ry-result
-                  (let ((parsed (tibetan-vocab--parse-entry ry-result)))
-                    (setq result (list :primary (plist-get parsed :primary)
-                                       :detailed (plist-get parsed :detailed)
-                                       :sanskrit (plist-get parsed :sanskrit)
-                                       :wylie wylie
-                                       :source "Rangjung Yeshe")))))))
-
-          ;; Try DharmaMitra as fallback
-          (unless result
-            (when (fboundp 'tibetan-lookup-word-in-dharmamitra)
-              (let ((dm-result (tibetan-lookup-word-in-dharmamitra (or tibetan word))))
-                (when dm-result
-                  (let ((parsed (tibetan-vocab--parse-entry dm-result)))
-                    (setq result (list :primary (plist-get parsed :primary)
-                                       :detailed (plist-get parsed :detailed)
-                                       :sanskrit nil
-                                       :wylie wylie
-                                       :source "DharmaMitra")))))))
-
-          ;; Steinert fallback: if nothing else matched, pull the best
-          ;; available gloss from Christian Steinert's aggregated DB.
-          (unless result
-            (when (fboundp 'tibetan-steinert-lookup)
-              (let ((hits (tibetan-steinert-lookup (or tibetan word) 5)))
-                (when hits
-                  (let* ((preferred (or (cl-find-if
-                                         (lambda (h)
-                                           (let ((src (plist-get h :source)))
-                                             (member src
-                                                     '("02-RangjungYeshe"
-                                                       "01-Hopkins2015"
-                                                       "43-84000Dict"
-                                                       "07-JimValby"
-                                                       "08-IvesWaldo"))))
-                                         hits)
-                                        (car hits)))
-                         (gloss (plist-get preferred :gloss))
-                         (parsed (tibetan-vocab--parse-entry gloss)))
-                    (setq result (list :primary (plist-get parsed :primary)
-                                       :detailed (plist-get parsed :detailed)
-                                       :sanskrit (plist-get parsed :sanskrit)
-                                       :wylie wylie
-                                       :source (format "Steinert/%s"
-                                                       (plist-get preferred :source)))))))))
-
-          ;; Sanskrit enrichment: if we have a result with no Sanskrit,
-          ;; probe Steinert's Sanskrit-indexed sources so the Detailed
-          ;; Dictionary can surface the Sanskrit equivalent.
+        (let* ((tibetan (if (string-match-p "^[a-z]" word)
+                            (tibetan-vocab--tibetan-from-wylie word)
+                          word))
+               (result (car (tibetan-vocab-multisource-entries word))))
+          ;; Sanskrit enrichment: probe the Sanskrit-indexed tables
+          ;; only when the ranked entry carries none natively.
           (when (and result
                      (not (plist-get result :sanskrit))
                      (fboundp 'tibetan-steinert-sanskrit-for))
             (let ((skt (tibetan-steinert-sanskrit-for (or tibetan word))))
               (when (and skt (not (string-empty-p skt)))
                 (setq result (plist-put result :sanskrit skt)))))
-
           ;; Follow stem references like "pf. of byed" -> append base meaning
           (when result
             (setq result (tibetan-vocab--enrich-with-base result)))
-
           ;; Cache and return
           (when result
             (puthash word result tibetan-detailed-vocab-cache))
