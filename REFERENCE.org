@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T16:33:49
+#+DATE: 2026-07-28T16:35:47
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1299 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1304 forms
 
 Regenerated automatically by:
 
@@ -62,7 +62,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (131)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (28)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (7)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (12)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
@@ -15030,6 +15030,65 @@ suffix-aware `tibetan-sentence--filepath' (cascade files KEEP the
 `sent-NNN-SHORT.org' name — every resolver/glob/batch works
 unchanged); falls back to a bare `sent-NNN.org' beside
 SOURCE-FILE when the sentence module is not loaded.
+
+** ~tibetan-cascade--subsegment-bounds~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 262
+:SIGNATURE: (tibetan-cascade--subsegment-bounds seg-num)
+:END:
+
+In the current buffer: (START . END) of `** Segment SEG-NUM' under
+`* Subsegments', or nil.  END stops at the next L1/L2 heading (§5.38-C1
+stars-then-space) or at the * Subsegments region's end.
+
+** ~tibetan-cascade--subsegment-numbers~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 281
+:SIGNATURE: (tibetan-cascade--subsegment-numbers file)
+:END:
+
+Ordered list of GLOBAL segment numbers under FILE's * Subsegments.
+nil for nil / missing / non-cascade files; never signals.
+
+** ~tibetan-cascade--read-subsegment-section~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 301
+:SIGNATURE: (tibetan-cascade--read-subsegment-section file seg-num heading)
+:END:
+
+Body of `*** HEADING' inside FILE's `** Segment SEG-NUM' subtree.
+Trimmed string, or nil when the subsegment or heading is absent /
+the body is empty.  Placeholders are returned verbatim — use
+`tibetan-cascade--subsegment-rendering-needs-request-p' for gating.
+
+** ~tibetan-cascade--write-subsegment-section~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 329
+:SIGNATURE: (tibetan-cascade--write-subsegment-section file seg-num heading body)
+:END:
+
+Replace the body of `*** HEADING' in FILE's `** Segment SEG-NUM'.
+Returns t on success; nil (file untouched) when the subsegment or
+heading is absent.  BODY is inserted verbatim — the C3 landing path
+sanitizes Claude-derived text (line-leading `*', §5.28 class) BEFORE
+calling this primitive.
+
+** ~tibetan-cascade--subsegment-rendering-needs-request-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 362
+:SIGNATURE: (tibetan-cascade--subsegment-rendering-needs-request-p file seg-num)
+:END:
+
+Non-nil when SEG-NUM's `*** Rendering' still needs the sentence fire.
+Missing body, the creation placeholder, or a failure/missing stub all
+count.  Deliberately NOT `[`-anchored wholesale: a real extracted span
+may open with an editorial bracket (`[He] spoke…' — the §5.40 lesson),
+so only the known machine prefixes gate.
 
 ** ~tibetan-cascade-rendering-placeholder~  /constant/
 :PROPERTIES:

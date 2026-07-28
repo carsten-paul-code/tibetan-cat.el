@@ -255,5 +255,122 @@ SOURCE-FILE when the sentence module is not loaded."
       (insert body))
     filepath))
 
+;; ============================================================================
+;; C2.2 — subsegment subtree I/O (keyed by GLOBAL segment number)
+;; ============================================================================
+
+(defun tibetan-cascade--subsegment-bounds (seg-num)
+  "In the current buffer: (START . END) of `** Segment SEG-NUM' under
+`* Subsegments', or nil.  END stops at the next L1/L2 heading (§5.38-C1
+stars-then-space) or at the * Subsegments region's end."
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward "^\\* Subsegments$" nil t)
+      (let ((limit (save-excursion
+                     (if (re-search-forward "^\\* " nil t)
+                         (line-beginning-position)
+                       (point-max)))))
+        (when (re-search-forward
+               (format "^\\*\\* Segment %d$" seg-num) limit t)
+          (let ((start (line-beginning-position))
+                (end (if (re-search-forward "^\\*\\{1,2\\} " limit t)
+                         (line-beginning-position)
+                       limit)))
+            (cons start end)))))))
+
+(defun tibetan-cascade--subsegment-numbers (file)
+  "Ordered list of GLOBAL segment numbers under FILE's * Subsegments.
+nil for nil / missing / non-cascade files; never signals."
+  (when (and file (stringp file) (file-exists-p file))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents file)
+          (goto-char (point-min))
+          (when (re-search-forward "^\\* Subsegments$" nil t)
+            (let ((limit (save-excursion
+                           (if (re-search-forward "^\\* " nil t)
+                               (line-beginning-position)
+                             (point-max))))
+                  (nums '()))
+              (while (re-search-forward
+                      "^\\*\\* Segment \\([0-9]+\\)$" limit t)
+                (push (string-to-number (match-string 1)) nums))
+              (nreverse nums))))
+      (error nil))))
+
+(defun tibetan-cascade--read-subsegment-section (file seg-num heading)
+  "Body of `*** HEADING' inside FILE's `** Segment SEG-NUM' subtree.
+Trimmed string, or nil when the subsegment or heading is absent /
+the body is empty.  Placeholders are returned verbatim — use
+`tibetan-cascade--subsegment-rendering-needs-request-p' for gating."
+  (when (and file (stringp file) (file-exists-p file) heading)
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents file)
+          (let ((bounds (tibetan-cascade--subsegment-bounds seg-num)))
+            (when bounds
+              (save-restriction
+                (narrow-to-region (car bounds) (cdr bounds))
+                (goto-char (point-min))
+                (when (re-search-forward
+                       (format "^\\*\\*\\* %s$" (regexp-quote heading))
+                       nil t)
+                  (forward-line 1)
+                  (let* ((start (point))
+                         (end (if (re-search-forward "^\\*\\{1,3\\} " nil t)
+                                  (line-beginning-position)
+                                (point-max)))
+                         (body (string-trim
+                                (buffer-substring-no-properties
+                                 start end))))
+                    (unless (string-empty-p body) body)))))))
+      (error nil))))
+
+(defun tibetan-cascade--write-subsegment-section (file seg-num heading body)
+  "Replace the body of `*** HEADING' in FILE's `** Segment SEG-NUM'.
+Returns t on success; nil (file untouched) when the subsegment or
+heading is absent.  BODY is inserted verbatim — the C3 landing path
+sanitizes Claude-derived text (line-leading `*', §5.28 class) BEFORE
+calling this primitive."
+  (when (and file (stringp file) (file-exists-p file) heading body)
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents file)
+          (let ((bounds (tibetan-cascade--subsegment-bounds seg-num))
+                (done nil))
+            (when bounds
+              (save-restriction
+                (narrow-to-region (car bounds) (cdr bounds))
+                (goto-char (point-min))
+                (when (re-search-forward
+                       (format "^\\*\\*\\* %s$" (regexp-quote heading))
+                       nil t)
+                  (forward-line 1)
+                  (let ((start (point))
+                        (end (if (re-search-forward "^\\*\\{1,3\\} " nil t)
+                                 (line-beginning-position)
+                               (point-max))))
+                    (delete-region start end)
+                    (goto-char start)
+                    (insert (string-trim-right body) "\n\n")
+                    (setq done t)))))
+            (when done
+              (write-region (point-min) (point-max) file nil 'silent)
+              t)))
+      (error nil))))
+
+(defun tibetan-cascade--subsegment-rendering-needs-request-p (file seg-num)
+  "Non-nil when SEG-NUM's `*** Rendering' still needs the sentence fire.
+Missing body, the creation placeholder, or a failure/missing stub all
+count.  Deliberately NOT `[`-anchored wholesale: a real extracted span
+may open with an editorial bracket (`[He] spoke…' — the §5.40 lesson),
+so only the known machine prefixes gate."
+  (let ((body (tibetan-cascade--read-subsegment-section
+               file seg-num "Rendering")))
+    (or (null body)
+        (string-match-p "\\`\\[Awaiting" body)
+        (string-match-p "\\`\\[Claude" body)
+        (string-match-p "\\`\\[Requesting" body))))
+
 (provide 'tibetan-cascade)
 ;;; tibetan-cascade.el ends here

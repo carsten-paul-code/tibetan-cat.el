@@ -247,5 +247,90 @@ cascade marker + #+SOURCE link and returns the path."
                   (should (string-match-p "^\\* Subsegments$" c))))))
         (delete-directory dir t)))))
 
+;; ============================================================================
+;; C2.2 — subsegment subtree I/O (keyed by GLOBAL segment number)
+;; ============================================================================
+
+(defmacro tibetan-cascade-test--with-cascade-file (&rest body)
+  "Create a scaffolded 2-unit cascade file; bind CASCADE-FILE and DIR."
+  (declare (indent 0))
+  `(tibetan-cascade-test--with-stub-renderer
+     (let* ((dir (make-temp-file "cascade-io-" t))
+            (src (expand-file-name "doc.org" dir)))
+       (unwind-protect
+           (progn
+             (with-temp-file src
+               (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                       "* Tibetan Text\n*** Sentence 4\n"
+                       "**** Segment 105\nབདག\n\n**** Segment 106\nཆོས\n"))
+             (let ((cascade-file
+                    (tibetan-cascade--create-file
+                     4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+                     src)))
+               ,@body))
+         (delete-directory dir t)))))
+
+(ert-deftest tibetan-cascade-subsegment-numbers ()
+  "The ordered global segment numbers under * Subsegments."
+  (tibetan-cascade-test--with-cascade-file
+    (should (equal '(105 106)
+                   (tibetan-cascade--subsegment-numbers cascade-file)))
+    ;; Degenerate inputs → nil, never signals.
+    (should-not (tibetan-cascade--subsegment-numbers nil))
+    (should-not (tibetan-cascade--subsegment-numbers
+                 "/nonexistent/nowhere.org"))))
+
+(ert-deftest tibetan-cascade-subsegment-section-read ()
+  "Read a subsegment's L3 section body by global number + heading."
+  (tibetan-cascade-test--with-cascade-file
+    (should (equal tibetan-cascade-rendering-placeholder
+                   (tibetan-cascade--read-subsegment-section
+                    cascade-file 105 "Rendering")))
+    (should (equal "WYLIE(བདག་གིས་ལས་བྱས། )"
+                   (tibetan-cascade--read-subsegment-section
+                    cascade-file 105 "Wylie")))
+    (should (equal "GLOSS(ཆོས་ཟབ་མོ་ཡིན།)"
+                   (tibetan-cascade--read-subsegment-section
+                    cascade-file 106 "Interlinear Gloss")))
+    ;; Absent subsegment / heading → nil.
+    (should-not (tibetan-cascade--read-subsegment-section
+                 cascade-file 107 "Rendering"))
+    (should-not (tibetan-cascade--read-subsegment-section
+                 cascade-file 105 "No Such Heading"))))
+
+(ert-deftest tibetan-cascade-subsegment-section-write ()
+  "Write replaces exactly ONE section body; everything else is
+byte-identical.  Re-read returns the new body; the needs-request
+predicate flips."
+  (tibetan-cascade-test--with-cascade-file
+    (should (tibetan-cascade--subsegment-rendering-needs-request-p
+             cascade-file 105))
+    (let ((before (with-temp-buffer
+                    (insert-file-contents cascade-file)
+                    (buffer-string))))
+      (should (tibetan-cascade--write-subsegment-section
+               cascade-file 105 "Rendering" "⟪He went⟫ and asked."))
+      (let ((after (with-temp-buffer
+                     (insert-file-contents cascade-file)
+                     (buffer-string))))
+        ;; Only the one body changed: replacing new-body -> placeholder
+        ;; reproduces the BEFORE image byte-for-byte.
+        (should (equal before
+                       (replace-regexp-in-string
+                        (regexp-quote "⟪He went⟫ and asked.")
+                        tibetan-cascade-rendering-placeholder
+                        after t t))))
+      (should (equal "⟪He went⟫ and asked."
+                     (tibetan-cascade--read-subsegment-section
+                      cascade-file 105 "Rendering")))
+      (should-not (tibetan-cascade--subsegment-rendering-needs-request-p
+                   cascade-file 105))
+      ;; The sibling subsegment still needs its rendering.
+      (should (tibetan-cascade--subsegment-rendering-needs-request-p
+               cascade-file 106))
+      ;; Writing to an absent subsegment fails soft (nil, no file touch).
+      (should-not (tibetan-cascade--write-subsegment-section
+                   cascade-file 107 "Rendering" "x")))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here
