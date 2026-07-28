@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T17:31:40
+#+DATE: 2026-07-28T17:33:46
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1324 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1326 forms
 
 Regenerated automatically by:
 
@@ -62,7 +62,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (131)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (29)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (28)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (30)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
@@ -13626,7 +13626,7 @@ sentence.
 ** ~tibetan--open-segment-analysis-impl~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4621
+:LINE: 4645
 :SIGNATURE: (tibetan--open-segment-analysis-impl)
 :END:
 
@@ -13635,7 +13635,7 @@ Segment-level implementation; see `tibetan-open-segment-analysis'.
 ** ~tibetan-reanalyze-segment~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 4785
+:LINE: 4809
 :SIGNATURE: (tibetan-reanalyze-segment)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -13648,7 +13648,7 @@ segment > sentence > paragraph > legacy, most-specific-wins.
 ** ~tibetan--reanalyze-segment-impl~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 4807
+:LINE: 4831
 :SIGNATURE: (tibetan--reanalyze-segment-impl)
 :END:
 
@@ -13657,7 +13657,7 @@ Segment-level implementation; see `tibetan-reanalyze-segment'.
 ** ~tibetan-open-paragraph-analysis~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 4937
+:LINE: 4961
 :SIGNATURE: (tibetan-open-paragraph-analysis)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -13675,7 +13675,7 @@ right-side window.
 ** ~tibetan-reanalyze-paragraph~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 4994
+:LINE: 5018
 :SIGNATURE: (tibetan-reanalyze-paragraph)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -13689,7 +13689,7 @@ the segment-level `tibetan-reanalyze-segment' contract.
 ** ~tibetan-analysis--read-section-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5043
+:LINE: 5067
 :SIGNATURE: (tibetan-analysis--read-section-body filepath section-name)
 :END:
 
@@ -13700,7 +13700,7 @@ Works for top-level (* …) sections.
 ** ~tibetan-analysis--seg-id-from-filename~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5062
+:LINE: 5086
 :SIGNATURE: (tibetan-analysis--seg-id-from-filename filepath)
 :END:
 
@@ -13709,7 +13709,7 @@ Return the numeric segment id encoded in FILEPATH's basename, or nil.
 ** ~tibetan-analysis--fire-parallel-claude-with-plist~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5072
+:LINE: 5096
 :SIGNATURE: (tibetan-analysis--fire-parallel-claude-with-plist tibetan-text sanskrit-plist source-file analysis-file)
 :END:
 
@@ -13731,7 +13731,7 @@ Returns t when the Sanskrit call was dispatched, nil otherwise.
 ** ~tibetan-analysis--fire-parallel-mode-claude-calls~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5134
+:LINE: 5158
 :SIGNATURE: (tibetan-analysis--fire-parallel-mode-claude-calls tibetan-text source-file analysis-file)
 :END:
 
@@ -13747,7 +13747,7 @@ Sanskrit sibling is a placeholder.
 ** ~tibetan-analysis-reanalyze-file~  /function (cl)/
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 5156
+:LINE: 5180
 :SIGNATURE: (tibetan-analysis-reanalyze-file filepath &key source-file re-request-claude dry-run)
 :END:
 
@@ -13778,7 +13778,7 @@ without touching the file.  Otherwise return a plist:
 ** ~tibetan-analysis--analysis-file-re~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5389
+:LINE: 5413
 :SIGNATURE: (tibetan-analysis--analysis-file-re prefix)
 :END:
 
@@ -13793,7 +13793,7 @@ every folder batch (Part B Phase 0.1).
 ** ~tibetan-analysis--folder-analysis-files-strict~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5400
+:LINE: 5424
 :SIGNATURE: (tibetan-analysis--folder-analysis-files-strict folder prefix &optional relative)
 :END:
 
@@ -13805,7 +13805,7 @@ is nil or not a directory.
 ** ~tibetan-analysis--folder-analysis-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 5410
+:LINE: 5434
 :SIGNATURE: (tibetan-analysis--folder-analysis-files folder)
 :END:
 
@@ -13814,7 +13814,7 @@ Return the list of seg-NNN*.org files under FOLDER, sorted by seg-id.
 ** ~tibetan-analysis-batch-reanalyze~  /function (cl)/  ⚡  ↗
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 5421
+:LINE: 5445
 :SIGNATURE: (tibetan-analysis-batch-reanalyze &key folder source-file re-request-claude dry-run)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -15293,6 +15293,33 @@ sentence-level Claude/DM call for each newly-created file (the
 queue throttles; `tibetan-cascade--fire-sentence' itself defers
 under `#+TIBETAN_DEFER_MT').  Returns
 (:created N :skipped M :files LIST).
+
+** ~tibetan-cascade--segs-for-sentence~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 841
+:SIGNATURE: (tibetan-cascade--segs-for-sentence source-file sent-num)
+:END:
+
+SOURCE-FILE's sentence SENT-NUM as (GLOBAL-NUM . TEXT) pairs, or nil.
+
+** ~tibetan-cascade-open-for-segment~  /function/  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 855
+:SIGNATURE: (tibetan-cascade-open-for-segment seg-id source-file)
+:AUTOLOAD: t
+:END:
+
+Open the cascade file owning SEG-ID; point on its subsegment subtree.
+Resolves the sentence through the §5.40 walker, creates the cascade
+file when missing (C-c u A parity: opening implies creating), and
+displays it in the side window.  Returns the buffer.
+
+SEG-ID may be a number or a composite label like `"Sentence 5,
+Segment 107"' (what `tibetan-get-current-segment-any-format'
+returns for the nested §2.12 layout) — the trailing segment number
+is what counts.
 
 ** ~tibetan-cascade-rendering-placeholder~  /constant/
 :PROPERTIES:

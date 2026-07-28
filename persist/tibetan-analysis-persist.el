@@ -4603,12 +4603,36 @@ sentence."
    ((and (derived-mode-p 'org-mode)
          (fboundp 'tibetan-org-at-segment-p)
          (tibetan-org-at-segment-p))
-    (tibetan--open-segment-analysis-impl))
+    ;; C4.2: in a cascade document the segment's analysis lives as a
+    ;; subtree of the sentence's cascade file — open there, at the
+    ;; subtree.  Two-file docs keep the classic seg-file path.
+    (if (and (fboundp 'tibetan-cascade-open-for-segment)
+             (fboundp 'tibetan-analysis--cascade-p)
+             (buffer-file-name)
+             (tibetan-analysis--cascade-p (buffer-file-name)))
+        (let ((seg-data (tibetan-get-current-segment-any-format)))
+          (if (car-safe seg-data)
+              (tibetan-cascade-open-for-segment (car seg-data)
+                                                (buffer-file-name))
+            (user-error "Could not determine the segment at point")))
+      (tibetan--open-segment-analysis-impl)))
    ((and (derived-mode-p 'org-mode)
          (fboundp 'tibetan-org-at-sentence-p)
          (tibetan-org-at-sentence-p)
          (fboundp 'tibetan-sentence-open-analysis))
-    (tibetan-sentence-open-analysis))
+    ;; C4.2: cascade documents open the sentence's cascade file (via
+    ;; its first segment); two-file docs keep the sentence path.
+    (if (and (fboundp 'tibetan-cascade-open-for-segment)
+             (fboundp 'tibetan-sentence--collect-current-sentence)
+             (fboundp 'tibetan-analysis--cascade-p)
+             (buffer-file-name)
+             (tibetan-analysis--cascade-p (buffer-file-name)))
+        (let* ((data (tibetan-sentence--collect-current-sentence))
+               (seg (car (plist-get data :seg-nums))))
+          (if seg
+              (tibetan-cascade-open-for-segment seg (buffer-file-name))
+            (user-error "Sentence at point has no segments")))
+      (tibetan-sentence-open-analysis)))
    ((and (derived-mode-p 'org-mode)
          (fboundp 'tibetan-org-at-paragraph-p)
          (tibetan-org-at-paragraph-p))

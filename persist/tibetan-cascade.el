@@ -831,5 +831,75 @@ under `#+TIBETAN_DEFER_MT').  Returns
     (list :created (length created) :skipped skipped
           :files (mapcar #'cdr created))))
 
+;; ============================================================================
+;; C4.2 — open dispatch (C-c u A at a segment of a cascade document)
+;; ============================================================================
+
+(declare-function tibetan-sentence--sentence-for-segment
+                  "tibetan-sentence-persist")
+
+(defun tibetan-cascade--segs-for-sentence (source-file sent-num)
+  "SOURCE-FILE's sentence SENT-NUM as (GLOBAL-NUM . TEXT) pairs, or nil."
+  (when (and source-file (file-readable-p source-file))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents source-file)
+          (org-mode)
+          (plist-get
+           (cl-find sent-num (tibetan-cascade--collect-sentences)
+                    :key (lambda (p) (plist-get p :sent-num)))
+           :segs))
+      (error nil))))
+
+;;;###autoload
+(defun tibetan-cascade-open-for-segment (seg-id source-file)
+  "Open the cascade file owning SEG-ID; point on its subsegment subtree.
+Resolves the sentence through the §5.40 walker, creates the cascade
+file when missing (C-c u A parity: opening implies creating), and
+displays it in the side window.  Returns the buffer.
+
+SEG-ID may be a number or a composite label like `\"Sentence 5,
+Segment 107\"' (what `tibetan-get-current-segment-any-format'
+returns for the nested §2.12 layout) — the trailing segment number
+is what counts."
+  (when (and (stringp seg-id)
+             (string-match "Segment \\([0-9]+\\)" seg-id))
+    (setq seg-id (string-to-number (match-string 1 seg-id))))
+  (let* ((sentence (and (fboundp 'tibetan-sentence--sentence-for-segment)
+                        (condition-case nil
+                            (tibetan-sentence--sentence-for-segment
+                             seg-id source-file)
+                          (error nil))))
+         (sent-num (plist-get sentence :sent-num)))
+    (unless sent-num
+      (user-error "Segment %s is not inside a sentence of %s"
+                  seg-id (file-name-nondirectory (or source-file "?"))))
+    (let* ((folder (file-name-as-directory
+                    (expand-file-name
+                     "analysis" (file-name-directory source-file))))
+           (file (if (fboundp 'tibetan-sentence--filepath)
+                     (tibetan-sentence--filepath sent-num folder
+                                                 source-file)
+                   (expand-file-name (format "sent-%03d.org" sent-num)
+                                     folder))))
+      (unless (file-exists-p file)
+        (tibetan-cascade--create-file
+         sent-num
+         (tibetan-cascade--segs-for-sentence source-file sent-num)
+         source-file))
+      (let ((buf (find-file-noselect file)))
+        (with-current-buffer buf
+          (when (fboundp 'tibetan-analysis-setup-faces)
+            (tibetan-analysis-setup-faces))
+          (goto-char (point-min))
+          (when (re-search-forward
+                 (format "^\\*\\* Segment %d$" seg-id) nil t)
+            (beginning-of-line)))
+        (let ((win (display-buffer-in-side-window
+                    buf '((side . right) (window-width . 0.5)))))
+          (when (windowp win)
+            (set-window-point win (with-current-buffer buf (point)))))
+        buf))))
+
 (provide 'tibetan-cascade)
 ;;; tibetan-cascade.el ends here

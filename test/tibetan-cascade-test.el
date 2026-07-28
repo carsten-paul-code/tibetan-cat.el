@@ -677,5 +677,43 @@ submits to the queue."
                      src (file-name-directory cascade-file))))
         (should (= 0 submits))))))
 
+;; ============================================================================
+;; C4.2 — open dispatch (C-c u A at a segment of a cascade doc)
+;; ============================================================================
+
+(ert-deftest tibetan-cascade-open-for-segment-creates-and-positions ()
+  "Opening at a segment creates the cascade file when missing and
+puts point on that segment's subtree; C-c u A dispatches there and
+never creates a seg file."
+  (tibetan-cascade-test--with-cascade-source
+    (cl-letf (((symbol-function 'display-buffer-in-side-window)
+               (lambda (buf &rest _) (get-buffer-window buf t))))
+      (let ((tibetan-auto-fire-claude-on-create nil)
+            (buf nil))
+        (unwind-protect
+            (progn
+              ;; Direct open — file does not exist yet.
+              (setq buf (tibetan-cascade-open-for-segment 106 src))
+              (should (buffer-live-p buf))
+              (with-current-buffer buf
+                (should (string-match-p "sent-004" (buffer-name)))
+                (should (looking-at "\\*\\* Segment 106$")))
+              ;; C-c u A from the source buffer at Segment 107 —
+              ;; must route to the cascade file, not seg-107.org.
+              (goto-char (point-min))
+              (re-search-forward "^\\*\\*\\*\\* Segment 107")
+              (tibetan-open-segment-analysis)
+              (let ((analysis (expand-file-name "analysis" dir)))
+                (should (= 0 (length
+                              (directory-files analysis nil "\\`seg-"))))
+                (should (= 2 (length
+                              (directory-files analysis nil "\\`sent-"))))))
+          (dolist (b (buffer-list))
+            (when (and (buffer-file-name b)
+                       (string-match-p "sent-00[45]"
+                                       (buffer-file-name b)))
+              (with-current-buffer b (set-buffer-modified-p nil))
+              (kill-buffer b))))))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here
