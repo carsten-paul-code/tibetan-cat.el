@@ -641,11 +641,20 @@ per-segment Claude)."
           ;; All children must exist (auto-analyze creates files before
           ;; firing) — otherwise fall back to the per-segment path.
           (when (cl-every #'file-exists-p child-files)
-            ;; Fire gate: FORCE, or any child still needs Claude.
+            ;; Fire gate: FORCE, any child still needing Claude, or an
+            ;; EXISTING sent file that is still a placeholder (B-1.1).
+            ;; The child-only gate made a corpus with populated children
+            ;; and placeholder sent files (Khu-dbon, all 178 sentences)
+            ;; unfillable without FORCE.  A missing sent file does NOT
+            ;; open the gate — the request would land children only,
+            ;; and those are already covered by the child clause.
             (when (or force
                       (cl-some (lambda (f)
                                  (tibetan-analysis--claude-needs-request-p f))
-                               child-files))
+                               child-files)
+                      (and (file-exists-p sent-file)
+                           (tibetan-analysis--claude-needs-request-p
+                            sent-file)))
               (let ((label (format "sent-%03d" (plist-get sentence :sent-num))))
                 (if (not (tibetan-sentence-claude--claim
                           source-file (plist-get sentence :sent-num) label))

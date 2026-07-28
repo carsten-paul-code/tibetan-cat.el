@@ -406,6 +406,47 @@ single-segment sentences → nil (caller falls back to per-segment)."
       (tibetan-sentence-claude-clear-inflight)
       (delete-directory dir t))))
 
+(ert-deftest tibetan-sentence-claude-fire-gate-includes-sent-file ()
+  "A placeholder SENT file alone opens the fire gate (Part B 1.1).
+Khu-dbon state: all children populated, every sent file a
+placeholder — the child-only gate never fired, so the backfill was
+impossible without FORCE (which would rewrite the populated
+children)."
+  (let ((dir (make-temp-file "tstc-gate" t))
+        (submits 0))
+    (unwind-protect
+        (let* ((src (expand-file-name "doc.org" dir)))
+          (with-temp-file src
+            (insert "#+TITLE: D\n\n* Tibetan Text\n"
+                    "*** Sentence 4\n"
+                    "**** Segment 105\nབདག\n\n"
+                    "**** Segment 106\nཆོས\n\n"))
+          ;; BOTH children populated → child gate closed.
+          (dolist (n '(105 106))
+            (with-temp-file (expand-file-name (format "seg-%03d.org" n) dir)
+              (insert (format
+                       "#+SOURCE: [[file:doc.org::*Segment %d][doc / Segment %d]]\n"
+                       n n)
+                      "* Tibetan Text\nx\n\n"
+                      "* Tibetan Analysis\n"
+                      "** Translation\nThis segment: filled content.\n")))
+          ;; Sent file exists but is a placeholder → needs Claude.
+          (with-temp-file (expand-file-name "sent-004.org" dir)
+            (insert "#+SOURCE: [[file:doc.org::*Sentence 4][doc / Sentence 4]]\n"
+                    "* Tibetan Analysis\n"
+                    "** Translation\n[Requesting translation...]\n"))
+          (tibetan-sentence-claude-clear-inflight)
+          (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+                     (lambda (&rest _) (cl-incf submits))))
+            ;; Non-FORCE: the placeholder sent file must open the gate.
+            (should (eq 'fired
+                        (tibetan-analysis--fire-sentence-level
+                         "བདག" (expand-file-name "seg-105.org" dir)
+                         src 105 nil)))
+            (should (= 1 submits))))
+      (tibetan-sentence-claude-clear-inflight)
+      (delete-directory dir t))))
+
 ;; ----------------------------------------------------------------------------
 ;; Phase 5 — fire-site wiring
 ;; ----------------------------------------------------------------------------
