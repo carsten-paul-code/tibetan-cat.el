@@ -219,7 +219,9 @@ These are hard preferences. Treat them as rules, not suggestions.
     ```
 
     Reference implementation:
-    `/Users/cp/Library/Mobile Documents/com~apple~CloudDocs/buddhist-studies/SS26/Tibetisch IV/work in progress/Milarepa-prepared.org`.
+    `/Users/cp/buddhist-studies/SS26/Tibetisch IV/work in progress/Milarepa-prepared.org`
+    (the corpus is a plain local tree since the 2026-07-28
+    iCloud→local migration; git/GitHub is the sync + backup channel).
     The sentence-aware commands (`C-c u B` auto-analyze-document,
     `C-c s N` sentence-create-all, `C-c s Z` resegment) expect this
     hierarchy — flat `** Section → *** Segment` layouts (older Gal
