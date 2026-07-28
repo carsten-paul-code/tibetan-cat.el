@@ -152,6 +152,90 @@ ends its own short sentence.  `ཅེས་སྐད' / `ཞེས་སྐད' 
 patterns (`...ces skad') close reported speech.  Both are
 STRONG boundaries on the rnam-thar corpus.")
 
+;; ----------------------------------------------------------------------------
+;; Phase 2.1+2.2 (C5.3, 2026-07-28) — genre detection + pure verse grouper
+;; ----------------------------------------------------------------------------
+
+(defcustom tibetan-verse-sentence-max-lines 8
+  "Hard cap on verse lines per auto-grouped verse sentence.
+The Khu-dbon gold grouping (Sentences 10/11/13 = exactly 8 lines
+each) shows the cap does most of the work on rnam-thar verse; the
+manual override (C-c s m) remains the instrument of record."
+  :type 'integer
+  :group 'tibetan-cat)
+
+(defvar tibetan-verse-sentence-closing-particles
+  '("སོ" "ཏོ" "ནོ" "དོ" "རོ" "འོ" "ངོ" "གོ" "བོ")
+  "The declarative -o family — the only FINAL particles that close a
+VERSE sentence.  Deliberately much narrower than
+`tibetan-sentence-final-particles': in verse, copulas (ཡིན ཡོད) and
+plain finite verbs (གྱུར བཞུགས གསུང …) end nearly every line without
+ending the sentence — the Khu-dbon gold grouping breaks at NONE of
+them.")
+
+(defvar tibetan-verse-quotative-closers
+  '("ཞེས" "ཅེས" "ཟེར")
+  "Quotative markers that close a VERSE sentence at line end.")
+
+(defun tibetan-sentence--verse-line-closes-sentence-p (text)
+  "Non-nil when verse line TEXT closes a verse sentence.
+Bare `།།' never counts (every verse line ends with it).  What
+counts: the quote-closing frame `དེ་སྐད་ཟེར' anywhere in the line
+\(Khu-dbon seg 42 — the frame sits mid-line before the final verb),
+a declarative -o particle, or a quotative closer as last syllable.
+Frame OPENERS (`འདི་སྐད་གསུང་།།') deliberately do NOT close — the
+gold keeps the quotation inside the same verse sentence."
+  (when (and text (not (string-empty-p (string-trim text))))
+    (let* ((trimmed (string-trim text))
+           (last-syl (tibetan--last-syllable trimmed)))
+      (or (string-match-p "དེ་སྐད་ཟེར" trimmed)
+          (member last-syl tibetan-verse-sentence-closing-particles)
+          (member last-syl tibetan-verse-quotative-closers)))))
+
+(defun tibetan-sentence--group-verse-segments (segments)
+  "Group verse SEGMENTS — an ordered list of (NUM . TEXT) — into
+sentences.  Returns a list of lists of segment numbers.  Pure:
+closer lines and the `tibetan-verse-sentence-max-lines' cap end a
+group; a trailing partial group is kept."
+  (let ((groups '())
+        (current '())
+        (lines 0))
+    (dolist (seg segments)
+      (push (car seg) current)
+      (cl-incf lines)
+      (when (or (tibetan-sentence--verse-line-closes-sentence-p (cdr seg))
+                (>= lines tibetan-verse-sentence-max-lines))
+        (push (nreverse current) groups)
+        (setq current '() lines 0)))
+    (when current
+      (push (nreverse current) groups))
+    (nreverse groups)))
+
+(defun tibetan-sentence--section-genre-at-pos (&optional pos)
+  "Genre of the `Section' subtree containing POS (default point).
+`verse' / `prose' from a `[verse]' / `[prose]' tag in the heading
+title, or from a `:GENRE_PART:' drawer property; nil when the
+enclosing Section carries neither (callers default to prose)."
+  (save-excursion
+    (when pos (goto-char pos))
+    (end-of-line)
+    (let ((case-fold-search t))
+      (when (re-search-backward "^\\*\\{1,2\\} Section\\b.*$" nil t)
+        (let ((heading (match-string 0)))
+          (cond
+           ((string-match-p "\\[verse\\]" heading) 'verse)
+           ((string-match-p "\\[prose\\]" heading) 'prose)
+           (t
+            (save-excursion
+              (forward-line 1)
+              (when (looking-at "^:PROPERTIES:$")
+                (let ((end (save-excursion
+                             (re-search-forward "^:END:$" nil t))))
+                  (when (and end
+                             (re-search-forward
+                              "^:GENRE_PART:[ \t]*\\([a-z]+\\)" end t))
+                    (intern (downcase (match-string 1))))))))))))))
+
 (defun tibetan--last-syllable (text)
   "Return the final tsheg-separated syllable of TEXT, or nil if none.
 Strips trailing shad, tsheg, and whitespace before splitting."

@@ -598,5 +598,78 @@ ordering."
       (should-not prompted)
       (should (string= original (buffer-string))))))
 
+;; ============================================================================
+;; Phase 2.1+2.2 (C5.3) — genre detection + pure verse grouper
+;; ============================================================================
+
+(ert-deftest tibetan-sentence-section-genre-at-pos ()
+  "Genre from the enclosing Section heading's [verse]/[prose] tag or
+its :GENRE_PART: property; nil without either."
+  (with-temp-buffer
+    (insert "* Tibetan Text\n"
+            "** Section 1 — opening\n*** Sentence 1\ntext1\n"
+            "** Section 2 — book p. 81 [verse]\n*** Sentence 10\ntext2\n"
+            "** Section 4 [prose]\ntext3\n"
+            "** Section 5\n:PROPERTIES:\n:GENRE_PART: verse\n:END:\ntext4\n")
+    (goto-char (point-min))
+    (search-forward "text1")
+    (should-not (tibetan-sentence--section-genre-at-pos))
+    (search-forward "text2")
+    (should (eq 'verse (tibetan-sentence--section-genre-at-pos)))
+    (search-forward "text3")
+    (should (eq 'prose (tibetan-sentence--section-genre-at-pos)))
+    (search-forward "text4")
+    (should (eq 'verse (tibetan-sentence--section-genre-at-pos)))))
+
+(ert-deftest tibetan-sentence-verse-grouper-khu-dbon-gold ()
+  "GOLD STANDARD: Khu-dbon Sentences 10–11 (hand-grouped in class).
+Segments 27–42 with their real line endings must group (27…34)
+\(35…42).  What the gold teaches (encoded here, deviating from the
+plan sketch where they conflict):
+- bare `།།' never breaks (every verse line ends with it);
+- the 8-line cap does the heavy lifting;
+- the quote-CLOSING frame `དེ་སྐད་ཟེར' breaks even mid-line (seg 42);
+- a frame OPENER (`འདི་སྐད་གསུང་།།', seg 36) must NOT break — the
+  quotation continues inside the same verse sentence."
+  (let ((segs '((27 . "བབས་ནས།དེ་དག་བཞུགས་པའི་གཞལ་མེད་ཁང་ཆེན་པོ་ཞིག་བྱ་དགོས་པར་དགོངས།གཡེང་སྒོམ་རིན་གྱིས་ལན་ཅིག་རང")
+                (28 . "དར་མ་རྡོ་རྗེ་ཞེས་བྱའི་གྲགས་པ་ཅན།།")
+                (29 . "མོན་བོད་མཚམས་ཀྱི་བསོད་ནམས་ལྗོན་ཤིང་ནི།།")
+                (30 . "དགེ་བའི་བཤེས་གཉེན་བྱིན་རླབས་རླུང་གིས་བསྐུལ།།")
+                (31 . "རྒྱ་མ་སྒང་དུ་འབྲས་བུ་སྨིན་ཕྱིར་ལྷགས།།")
+                (32 . "ལ་སྒང་ཞིག་ཏུ་གཟིམས་པའི་རྨི་ལམ་ན།།")
+                (33 . "རྣམ་པར་རྒྱལ་པའི་ཁང་བཟང་ཆེན་པོ་ཞིག།གཏེར་མཛོད་རྣམ་པ་མང་པོའི་ནང་སྒོ་ཅན།།")
+                (34 . "དེ་ཡི་ཉི་མཐོངས་ཞིག་ལ་དབོན་གྱིས་བཞུགས།།")
+                (35 . "དེ་ཚེ་མི་མཆོག་གངས་རི་ལྟ་བུ་ཞིག།ལྡེ་མིག་ཕྱག་སྤར་གང་འདི་ཐོགས་ནས་ཀྱང་།།")
+                (36 . "དབོན་རྒན་ཕྱག་ཏུ་གཏད་ནས་འདི་སྐད་གསུང་།།")
+                (37 . "འདི་རྣམས་གཞན་ལ་མ་བྱིན་ཁྱོད་ཀྱིས་བཟུང་།།")
+                (38 . "འདི་ན་སློབ་དཔོན་ཀླུ་སྒྲུབ་གཏེར་ཡོད་ཀྱི།།")
+                (39 . "རིན་ཆེན་སྣ་ཚོགས་འབྲུ་དང་སྨན་གྱི་ཚོགས།།")
+                (40 . "དམ་པའི་ཆོས་ཀྱི་གཏེར་མཛོད་ཆེན་པོ་ཡིན།།")
+                (41 . "དགོས་འདོད་མ་ལུས་མཛོད་རྣམས་འདི་ན་ཡོད།།")
+                (42 . "དེ་སྐད་ཟེར་ནས་མི་དེ་མི་སྣང་གྱུར།།"))))
+    (should (equal '((27 28 29 30 31 32 33 34)
+                     (35 36 37 38 39 40 41 42))
+                   (tibetan-sentence--group-verse-segments segs)))))
+
+(ert-deftest tibetan-sentence-verse-grouper-rules ()
+  "Closer-based early breaks, the max-lines cap, and the trailing
+partial group."
+  ;; Quotative closer at the line end breaks early.
+  (should (equal '((1 2) (3))
+                 (tibetan-sentence--group-verse-segments
+                  '((1 . "ཚིག་དང་པོ།།") (2 . "ཁྱོད་ཤོག་ཅེས།།")
+                    (3 . "མཐའ་མ།།")))))
+  ;; Sentence-final particle breaks.
+  (should (equal '((1) (2))
+                 (tibetan-sentence--group-verse-segments
+                  '((1 . "བྱས་སོ།།") (2 . "ཚིག་གཉིས།།")))))
+  ;; Cap: 10 markerless lines → 8 + 2.
+  (let ((segs (cl-loop for i from 1 to 10
+                       collect (cons i "ཚིག་ཞིག།།"))))
+    (should (equal '((1 2 3 4 5 6 7 8) (9 10))
+                   (tibetan-sentence--group-verse-segments segs))))
+  ;; Empty input → nil.
+  (should-not (tibetan-sentence--group-verse-segments nil)))
+
 (provide 'tibetan-sentence-structure-test)
 ;;; tibetan-sentence-structure-test.el ends here

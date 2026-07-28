@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T18:07:31
+#+DATE: 2026-07-28T18:12:05
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1331 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1337 forms
 
 Regenerated automatically by:
 
@@ -54,7 +54,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#doc-prep/tibetan-ocr-runner.el][doc-prep/tibetan-ocr-runner.el]]  (17)
   - [[#doc-prep/tibetan-ocr-validate.el][doc-prep/tibetan-ocr-validate.el]]  (23)
   - [[#doc-prep/tibetan-segment-migrate.el][doc-prep/tibetan-segment-migrate.el]]  (12)
-  - [[#doc-prep/tibetan-sentence-structure.el][doc-prep/tibetan-sentence-structure.el]]  (17)
+  - [[#doc-prep/tibetan-sentence-structure.el][doc-prep/tibetan-sentence-structure.el]]  (23)
   - [[#doc-prep/tibetan-wylie-ingest.el][doc-prep/tibetan-wylie-ingest.el]]  (26)
   - [[#persist/tibetan-analysis-claude.el][persist/tibetan-analysis-claude.el]]  (66)
   - [[#persist/tibetan-analysis-combine.el][persist/tibetan-analysis-combine.el]]  (14)
@@ -9738,10 +9738,49 @@ colon immediately after the keyword name).
 :SOURCE_PATH: /Users/cp/tibetan-cat.el/doc-prep/tibetan-sentence-structure.el
 :END:
 
+** ~tibetan-sentence--verse-line-closes-sentence-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 180
+:SIGNATURE: (tibetan-sentence--verse-line-closes-sentence-p text)
+:END:
+
+Non-nil when verse line TEXT closes a verse sentence.
+Bare `།།' never counts (every verse line ends with it).  What
+counts: the quote-closing frame `དེ་སྐད་ཟེར' anywhere in the line
+(Khu-dbon seg 42 — the frame sits mid-line before the final verb),
+a declarative -o particle, or a quotative closer as last syllable.
+Frame OPENERS (`འདི་སྐད་གསུང་།།') deliberately do NOT close — the
+gold keeps the quotation inside the same verse sentence.
+
+** ~tibetan-sentence--group-verse-segments~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 195
+:SIGNATURE: (tibetan-sentence--group-verse-segments segments)
+:END:
+
+Group verse SEGMENTS — an ordered list of (NUM . TEXT) — into
+sentences.  Returns a list of lists of segment numbers.  Pure:
+closer lines and the `tibetan-verse-sentence-max-lines' cap end a
+group; a trailing partial group is kept.
+
+** ~tibetan-sentence--section-genre-at-pos~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 214
+:SIGNATURE: (tibetan-sentence--section-genre-at-pos &optional pos)
+:END:
+
+Genre of the `Section' subtree containing POS (default point).
+`verse' / `prose' from a `[verse]' / `[prose]' tag in the heading
+title, or from a `:GENRE_PART:' drawer property; nil when the
+enclosing Section carries neither (callers default to prose).
+
 ** ~tibetan--last-syllable~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 155
+:LINE: 239
 :SIGNATURE: (tibetan--last-syllable text)
 :END:
 
@@ -9751,7 +9790,7 @@ Strips trailing shad, tsheg, and whitespace before splitting.
 ** ~tibetan--last-two-syllables~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 165
+:LINE: 249
 :SIGNATURE: (tibetan--last-two-syllables text)
 :END:
 
@@ -9761,7 +9800,7 @@ or nil if fewer than two syllables remain after stripping shad/tsheg.
 ** ~tibetan-is-sentence-boundary-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 176
+:LINE: 260
 :SIGNATURE: (tibetan-is-sentence-boundary-p text)
 :END:
 
@@ -9804,7 +9843,7 @@ the dominant structure.
 ** ~tibetan--segment-boundary-at-point~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 243
+:LINE: 327
 :SIGNATURE: (tibetan--segment-boundary-at-point)
 :END:
 
@@ -9815,7 +9854,7 @@ the next line up to the following Org heading.
 ** ~tibetan--collect-segment-boundaries~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 255
+:LINE: 339
 :SIGNATURE: (tibetan--collect-segment-boundaries)
 :END:
 
@@ -9827,7 +9866,7 @@ document order.
 ** ~tibetan-detect-sentence-boundaries~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
-:LINE: 271
+:LINE: 355
 :SIGNATURE: (tibetan-detect-sentence-boundaries &optional include-weak)
 :INTERACTIVE: t
 :END:
@@ -9845,7 +9884,7 @@ The preview lists each sentence start and tags its trigger as
 ** ~tibetan-add-sentence-structure~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
-:LINE: 327
+:LINE: 411
 :SIGNATURE: (tibetan-add-sentence-structure &optional include-weak)
 :INTERACTIVE: t
 :END:
@@ -9879,7 +9918,7 @@ Into:
 ** ~tibetan-mark-sentence-start~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
-:LINE: 405
+:LINE: 489
 :SIGNATURE: (tibetan-mark-sentence-start)
 :INTERACTIVE: t
 :END:
@@ -9891,7 +9930,7 @@ the segment heading from *** to ****.
 ** ~tibetan-sentence-reset-structure--counts~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 437
+:LINE: 521
 :SIGNATURE: (tibetan-sentence-reset-structure--counts buffer)
 :END:
 
@@ -9902,7 +9941,7 @@ Used by the reset command to show the user what it will touch.
 ** ~tibetan-sentence-reset-structure~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 454
+:LINE: 538
 :SIGNATURE: (tibetan-sentence-reset-structure)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -9927,6 +9966,20 @@ whose structure is already in place.  The segment regex in the
 auto-segmenter only matches three-asterisk `*** Segment', so
 without resetting the demoted segments a re-run would silently
 find zero segments and do nothing useful.
+
+** ~tibetan-verse-sentence-max-lines~  /customize variable/
+:PROPERTIES:
+:KIND: defcustom
+:LINE: 159
+:TYPE: 'integer
+:GROUP: tibetan-cat
+:DEFAULT: 8
+:END:
+
+Hard cap on verse lines per auto-grouped verse sentence.
+The Khu-dbon gold grouping (Sentences 10/11/13 = exactly 8 lines
+each) shows the cap does most of the work on rnam-thar verse; the
+manual override (C-c s m) remains the instrument of record.
 
 ** ~tibetan-sentence-final-particles~  /variable/
 :PROPERTIES:
@@ -9986,6 +10039,24 @@ find zero segments and do nothing useful.
 :PROPERTIES:
 :KIND: defvar
 :LINE: 141
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+** ~tibetan-verse-sentence-closing-particles~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 167
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+** ~tibetan-verse-quotative-closers~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 176
 :DEFAULT: '
 :END:
 
