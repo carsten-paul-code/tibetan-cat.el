@@ -188,6 +188,7 @@
 (require 'tibetan-sentence-persist)
 (require 'tibetan-sentence-claude nil t)   ; §5.40 sentence-level Claude/DM calls    ; Persistent sentence analysis (C-c s A / C-c s R / C-c s r)
 (require 'tibetan-portfolio nil t)         ; Portfolio mode: freeze-draft helper (companion to #+TIBETAN_DEFER_MT)
+(require 'tibetan-cascade nil t)           ; CASCADE v2: sentence files with shad subsegments (#+TIBETAN_LAYOUT: cascade)
 (require 'tibetan-compound-analysis)   ; Persistent compound analysis (C-c v A / C-c v R)
 (require 'tibetan-clause-analysis)     ; Clause analysis (converbs, main verbs)
 (require 'tibetan-auto-analysis)       ; Auto-analyze document (C-c u B)

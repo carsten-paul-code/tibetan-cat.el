@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T13:59:48
+#+DATE: 2026-07-28T14:02:30
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  71 modules  ·  1298 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1299 forms
 
 Regenerated automatically by:
 
@@ -62,6 +62,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (132)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (28)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (1)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
@@ -14980,6 +14981,37 @@ Callback function for progress reporting.
 Called with (CURRENT TOTAL MESSAGE).
 
 
+* persist/tibetan-cascade.el
+:PROPERTIES:
+:CUSTOM_ID: persist/tibetan-cascade.el
+:SOURCE_PATH: /Users/cp/tibetan-cat.el/persist/tibetan-cascade.el
+:END:
+
+** ~tibetan-cascade-split-shad-units~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 38
+:SIGNATURE: (tibetan-cascade-split-shad-units text)
+:END:
+
+Split TEXT into its shad-terminated units.
+
+Returns a list of strings whose CONCATENATION reproduces TEXT
+exactly: each unit carries its terminating shad run — including
+double shads `།།', the pecha-style spaced `། །', and any following
+whitespace (so the next unit starts clean at its first content
+character).  Text after the last shad, or text containing no shad at
+all, forms a final (or only) unit — a fused segment like Khu-dbon's
+seg-137 becomes one subsegment, never zero.
+
+Recognised shads: ། (U+0F0D) and ༎ (U+0F0E).  Rarer marks (ter-shad
+etc.) are treated as ordinary content — extend the character class
+here if a corpus needs them.
+
+Pure and deterministic; nil for nil / empty / whitespace-only input;
+never signals.
+
+
 * persist/tibetan-claude-queue.el
 :PROPERTIES:
 :CUSTOM_ID: persist/tibetan-claude-queue.el
@@ -18130,7 +18162,7 @@ Holds the result of the WHEN clause for use in THEN assertions.
 ** ~tibetan-cat-setup~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 291
+:LINE: 292
 :SIGNATURE: (tibetan-cat-setup)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -18142,7 +18174,7 @@ Loads glossaries and prepares the system for use.
 ** ~tibetan-cat-version~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 377
+:LINE: 378
 :SIGNATURE: (tibetan-cat-version)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -18153,7 +18185,7 @@ Display Tibetan CAT version and feature summary.
 ** ~tibetan-cat--server-socket-path~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 420
+:LINE: 421
 :SIGNATURE: (tibetan-cat--server-socket-path server-name)
 :END:
 
@@ -18165,7 +18197,7 @@ removed when the server is stopped).
 ** ~tibetan-cat-open-zettel-for-word-at-point~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 431
+:LINE: 432
 :SIGNATURE: (tibetan-cat-open-zettel-for-word-at-point &optional arg)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -18198,7 +18230,7 @@ in the appropriate instance.
 ** ~tibetan-cat-zettel-target-server~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 400
+:LINE: 401
 :TYPE: 'string
 :GROUP: tibetan-cat
 :DEFAULT: "research-emacs"
@@ -18220,7 +18252,7 @@ Empty string disables remote routing entirely.
 ** ~tibetan-cat-version~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 288
+:LINE: 289
 :END:
 
 /(no docstring)/
@@ -18228,7 +18260,7 @@ Empty string disables remote routing entirely.
 ** ~tibetan-cat-version~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 373
+:LINE: 374
 :DEFAULT: "2.1.0"
 :END:
 
@@ -18237,7 +18269,7 @@ Version of Tibetan CAT system.
 ** ~server-socket-dir~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 418
+:LINE: 419
 :END:
 
 /(no docstring)/

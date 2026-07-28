@@ -20,6 +20,7 @@
   (add-to-list 'load-path (expand-file-name "../analysis" dir)))
 
 (require 'tibetan-analysis-claude)
+(require 'tibetan-cascade)
 
 ;; ============================================================================
 ;; Fixture
@@ -90,6 +91,67 @@ analysis file through its #+SOURCE link; never signals."
   (should-not (tibetan-analysis--cascade-p nil))
   (should-not (tibetan-analysis--cascade-p 42))
   (should-not (tibetan-analysis--cascade-p "/nonexistent/nowhere.org")))
+
+;; ============================================================================
+;; C1 commit 2 — pure shad-unit splitter (persist/tibetan-cascade.el)
+;; ============================================================================
+;; Deterministic, mechanical, never wrong: all linguistic intelligence
+;; lives at the sentence boundary; the subsegment generator just cuts
+;; at shads.  Contract: concatenating the returned units reproduces
+;; the input EXACTLY (separator whitespace stays with the preceding
+;; unit, so units render cleanly).
+
+(ert-deftest tibetan-cascade-split-shad-units-basic ()
+  "Prose with internal shads splits into shad-terminated units."
+  (let ((units (tibetan-cascade-split-shad-units
+                "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན། མཐའ་མ་འདི་ཡིན།")))
+    (should (equal '("བདག་གིས་ལས་བྱས། "
+                     "ཆོས་ཟབ་མོ་ཡིན། "
+                     "མཐའ་མ་འདི་ཡིན།")
+                   units))))
+
+(ert-deftest tibetan-cascade-split-shad-units-concat-identity ()
+  "Concatenation of the units reproduces the input byte-for-byte."
+  (dolist (text '("བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན། མཐའ་མ།"
+                  "ཤོག་གཅིག།། ཤོག་གཉིས།"
+                  "ཚིག་དང་པོ། ། ཚིག་གཉིས་པ། །"
+                  "line1།\nline2།\nline3།"
+                  "ཤད་མེད་པའི་ཚིག"))
+    (should (equal text
+                   (apply #'concat
+                          (tibetan-cascade-split-shad-units text))))))
+
+(ert-deftest tibetan-cascade-split-shad-units-shadless-single-unit ()
+  "Text without any shad is ONE unit (the §5.32 seg-137 fused case
+becomes a single subsegment, not zero)."
+  (should (equal '("ཤད་མེད་པའི་ཚིག")
+                 (tibetan-cascade-split-shad-units "ཤད་མེད་པའི་ཚིག"))))
+
+(ert-deftest tibetan-cascade-split-shad-units-double-shad ()
+  "`།།' and the pecha-style spaced `། །' both close ONE unit and stay
+attached to it whole — a bare double shad never yields an empty unit."
+  (should (equal '("ཤོག་གཅིག།། " "ཤོག་གཉིས།")
+                 (tibetan-cascade-split-shad-units
+                  "ཤོག་གཅིག།། ཤོག་གཉིས།")))
+  (should (equal '("ཚིག་དང་པོ། ། " "ཚིག་གཉིས་པ། །")
+                 (tibetan-cascade-split-shad-units
+                  "ཚིག་དང་པོ། ། ཚིག་གཉིས་པ། །"))))
+
+(ert-deftest tibetan-cascade-split-shad-units-trailing-and-newlines ()
+  "A final shad (with or without trailing whitespace) stays with the
+last unit; newlines act as ordinary separator whitespace."
+  (should (equal '("ཚིག་དང་པོ། " "ཚིག་གཉིས་པ།")
+                 (tibetan-cascade-split-shad-units
+                  "ཚིག་དང་པོ། ཚིག་གཉིས་པ།")))
+  (should (equal '("line1།\n" "line2།\n" "line3།")
+                 (tibetan-cascade-split-shad-units
+                  "line1།\nline2།\nline3།"))))
+
+(ert-deftest tibetan-cascade-split-shad-units-degenerate-input ()
+  "nil / empty / blank input → nil, never signals."
+  (should-not (tibetan-cascade-split-shad-units nil))
+  (should-not (tibetan-cascade-split-shad-units ""))
+  (should-not (tibetan-cascade-split-shad-units "   \n  ")))
 
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here
