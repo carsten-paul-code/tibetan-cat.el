@@ -3,7 +3,13 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-05-26 (§5.26: BUG fix — regenerate-
+editing. Last updated 2026-07-28 (§5.46: C0 = Part B Phase 0+1
+landed — strict analysis-file glob, DM honors #+TIBETAN_TARGET_LANG,
+sentence-first fire gate includes the sent file, single-segment
+sentences fire sentence-level, BDD end-to-end suite.  ERT 2226 /
+BDD 247.  Khu-dbon backfill + Portfolio P5 freeze+fire UNBLOCKED.
+The CASCADE v2 plan lives at
+`~/.claude/plans/idempotent-pondering-wozniak.md`.  Previous: §5.26 BUG fix — regenerate-
 auto preserves Claude content under `:missing-only' too;
 `(not re-request-claude)' was treating `:missing-only' as
 truthy → wipe.  Caused 274 / 287 Milarepa segs to lose Claude
@@ -3225,6 +3231,74 @@ Test:  `tibetan-wylie-subscript-ha' (`test/tibetan-wylie-test.el'),
 confirmed RED first (`"la"' ≠ `"lha"').  Suite 2209 → **2210** (0
 unexpected, 1 skip).  Existing analysis files keep the old "lao" until
 regenerated;  any re-fire / reanalyze picks up the fix.
+
+### 5.46 C0 = Part B Phase 0+1: always-sentence-first + prerequisite bug fixes (done, 2026-07-28)
+
+First implementation slice of the approved CASCADE v2 plan
+(`~/.claude/plans/idempotent-pondering-wozniak.md`) — the C0 stage
+that unblocks BOTH the Portfolio P5 freeze+fire (Aug 9–10) and the
+Khu-dbon sent-file backfill (Part B Phase 4).  Six commits, each
+test-first with RED-verified failure modes:
+
+- **B-0.1 strict glob** (`0a56056`).  One regexp builder
+  `tibetan-analysis--analysis-file-re' (PREFIX-NNN[-SUFFIX].org —
+  no spaces, no extra dots, fully anchored) + wrapper
+  `--folder-analysis-files-strict' in tibetan-analysis-persist.el;
+  all 7 folder-glob sites route through it, so iCloud conflict
+  copies (`seg-005-lam 4.org') no longer trip batches.  The
+  ±2-neighbor resolver's UNANCHORED `-' branch (which could feed a
+  stale conflict copy into the Claude prompt) is anchored inline in
+  tibetan-analysis-claude.el (that module sits BELOW persist in the
+  require graph).
+- **B-0.2 DM target-lang** (`64d4ac2`).  New
+  `tibetan-dharmamitra-translation--target-lang' resolves
+  `#+TIBETAN_TARGET_LANG:' (de→"german", else "english"; enum
+  verified against the live DM OpenAPI spec) via the same
+  source-resolution order as `--defer-mt-p'; threaded into
+  fire-tibetan + fire-tibetan-sentence (the two leaves all callers
+  delegate to).  NOTE for the Portfolio: after the freeze, DM output
+  is now GERMAN for target-lang-de documents — the old "DM=EN,
+  Claude=DE" division of labor needs an explicit header flip if the
+  EN comparator is still wanted.
+- **B-1.1 fire gate includes sent file** (`a44d7f7`).  Third gate
+  clause: an EXISTING placeholder sent file opens the sentence-level
+  fire; landing stays per-file gated, so a backfill fire fills ONLY
+  the sent file and leaves populated children byte-identical.  A
+  missing sent file deliberately does NOT open the gate.
+- **B-1.2 singletons fire sentence-level** (`ba2ab80`).  The
+  `>1'-segment dispatcher guard is gone (non-empty seg-nums
+  suffices); `--segment-label' is singular-aware (`segment 136', not
+  `segments 136–136') and the DM sentence fire delegates its label
+  to it (fboundp-guarded); SENTENCE-FIRST addendum says "one or more
+  numbered segments" (one-time sentence-level cache-prefix
+  invalidation, schema unchanged).
+- **B-1.3 call sites route singletons** (`f0b8ef3`).  The two
+  `>1' conjuncts in tibetan-sentence-persist.el (open-analysis
+  create branch, C-u reanalyze branch) dropped — the legacy
+  `tibetan-sentence--request-claude' is now reachable ONLY as the
+  dispatcher-nil fallback (flat layout / missing children).
+- **BDD end-to-end** (`47b4a14`).  New suite
+  spec/suites/sentence-first-spec.el (3 specs): full fan-out with
+  ⟪span⟫ landing; the Khu-dbon backfill state (populated children
+  byte-identical, sent file absorbs); gate-closed no-fire.  Only the
+  process edges are stubbed (queue thunk synchronous, canned gptel
+  :callback, immediate run-at-time).
+
+PITFALL captured: `features' is NOT a special variable — in a
+lexical-binding file, let-binding it silently creates a lexical
+shadow that `featurep' never consults.  Provide/withdraw the feature
+under unwind-protect instead.  (Cost one debugging round: a
+dynamic-scope repro script masked the failure.)
+
+Suite 2215 → **2226 ERT** (0 unexpected, 1 skip); BDD 244 → **247**;
+`make compile' clean; REFERENCE.org regenerated per def-touching
+commit.
+
+Next per the plan's sequencing: Khu-dbon backfill (Phase 4,
+operational — needs a git snapshot of buddhist-studies first) and the
+Portfolio P5 freeze+fire are UNBLOCKED; cascade core C1–C4 follows.
+The MA-Reading §5.36 caveat still stands: do NOT batch-regenerate MA
+Reading until its wordlist is repopulated.
 
 ## 6. Open work (prioritised)
 
