@@ -129,6 +129,16 @@ written as two syllables rather than fused (e.g. པ་ལ vs. པར), and the
 fixed nominalizer + genitive + ཚེ pattern that introduces a temporal
 subordinate clause (e.g. ཡོད་པའི་ཚེ། \"while being\").")
 
+(defvar tibetan-sentence-hill-promotion-stoplist
+  '("ཆེ" "ཆེས" "འདྲ" "དགའ")
+  "Hill verb stems EXCLUDED from the Phase-3 weak→strong promotion.
+These read non-verbally at least as often as verbally at a bare-shad
+line end — ཆེ/ཆེས \"great; very\", འདྲ \"similar\", and དགའ, which
+ends proper names (ཐོས་པ་དགའ, Milarepa's birth name) that are
+syntactically indistinguishable from a mid-sentence title.  The
+2026-07-28 corpus sweep flagged them among 21 otherwise-genuine
+finite pasts.  Tune here rather than in code.")
+
 (defvar tibetan-sentence-dialogue-single-syllables
   '("ཅེས" "ཞེས")
   "Quotative markers that close direct speech with a shad.
@@ -321,7 +331,25 @@ the dominant structure."
        ;; Bare single shad: weak boundary when the last syllable is
        ;; multi-character.  Single-character stems (e.g. fused ergative
        ;; ཁོས → ས) are too ambiguous; leave those as nil.
-       ((and last-syl (>= (length last-syl) 2)) 'weak)
+       ;; Phase 3 (C5.5, 2026-07-28): PROMOTE weak → strong when the
+       ;; last syllable resolves to a Hill verb stem — the weak tier's
+       ;; docstring always said "most commonly a finite past verb that
+       ;; is not in the explicit list"; the Hill DB names them.
+       ;; Corpus evaluation before committing (plan requirement):
+       ;; Milarepa 282 prose segs / 58 weak / 16 promoted; Khu-dbon
+       ;; 586 / 150 / 5 — ~2.4% overall, no over-segmentation, and
+       ;; the promoted stems are genuine finite pasts.  The three
+       ;; adjectival/ambiguous stems found in the sweep sit on the
+       ;; stop-list below instead of gating the whole feature.
+       ((and last-syl (>= (length last-syl) 2))
+        (if (and (fboundp 'tibetan-verb-lookup)
+                 (not (member last-syl
+                              tibetan-sentence-hill-promotion-stoplist))
+                 (condition-case nil
+                     (tibetan-verb-lookup last-syl)
+                   (error nil)))
+            'strong
+          'weak))
        (t nil)))))
 
 (defun tibetan--segment-boundary-at-point ()

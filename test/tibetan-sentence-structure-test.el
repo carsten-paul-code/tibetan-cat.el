@@ -160,14 +160,15 @@ Milarepa: ཡོད་པའི་ཚེ། \"while being\", ཚོགས་བ�
   (should-not (tibetan-is-sentence-boundary-p "དེ་ཡང།")))
 
 (ert-deftest tibetan-is-sentence-boundary-p-unknown-residual-is-weak ()
-  "Multi-syllable last word + bare single shad, not matching any closed
-list, falls through to weak.  This is the residual class the auto
-segmenter leaves for human review.
-The specific verbs asserted here (ཚར \"finished\", and a made-up form)
-are not in the finite-verb list and should stay weak until profiled."
+  "The residual weak class after the Phase-3 Hill promotion (C5.5,
+2026-07-28): forms NOT in the Hill DB (ཚར \"finished\" — a coverage
+gap, addable per the §5.39 recipe) and stems on
+`tibetan-sentence-hill-promotion-stoplist' stay weak for human
+review; known Hill stems promote (see …-hill-promotion)."
   (should (eq 'weak (tibetan-is-sentence-boundary-p "ཚར།")))
   ;; Proper name in sentence-final position: staying weak is right —
   ;; syntactically indistinguishable from a mid-sentence title.
+  ;; དགའ sits on the promotion stop-list for exactly this reason.
   (should (eq 'weak (tibetan-is-sentence-boundary-p "ཐོས་པ་དགའ།"))))
 
 (ert-deftest tibetan-is-sentence-boundary-p-coordinator-dang ()
@@ -734,6 +735,22 @@ cannot regroup."
       (should (= 2 (cl-count-if
                     (lambda (l) (string-match-p "^\\*\\*\\* Sentence" l))
                     (split-string (buffer-string) "\n")))))))
+
+;; ============================================================================
+;; Phase 3 (C5.5) — Hill-DB fallback promotes weak → strong
+;; ============================================================================
+
+(ert-deftest tibetan-sentence-boundary-hill-promotion ()
+  "A bare-shad phrase whose last syllable is a Hill verb stem is a
+STRONG boundary; ambiguous adjectival stems on the stop-list stay
+weak; non-verb weak endings stay weak."
+  (skip-unless (fboundp 'tibetan-verb-lookup))
+  ;; ཕུལ "offered" — Hill past stem → promoted.
+  (should (eq 'strong (tibetan-is-sentence-boundary-p "མཎྜལ་ཕུལ།")))
+  ;; ཆེས — adjectival/intensifier ambiguity → stop-listed → weak.
+  (should (eq 'weak (tibetan-is-sentence-boundary-p "ཤིན་ཏུ་ཆེས།")))
+  ;; པོ — no verb reading → weak as before.
+  (should (eq 'weak (tibetan-is-sentence-boundary-p "ཁོའི་གྲོགས་པོ།"))))
 
 (provide 'tibetan-sentence-structure-test)
 ;;; tibetan-sentence-structure-test.el ends here

@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T18:15:20
+#+DATE: 2026-07-28T18:18:50
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1338 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1339 forms
 
 Regenerated automatically by:
 
@@ -54,7 +54,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#doc-prep/tibetan-ocr-runner.el][doc-prep/tibetan-ocr-runner.el]]  (17)
   - [[#doc-prep/tibetan-ocr-validate.el][doc-prep/tibetan-ocr-validate.el]]  (23)
   - [[#doc-prep/tibetan-segment-migrate.el][doc-prep/tibetan-segment-migrate.el]]  (12)
-  - [[#doc-prep/tibetan-sentence-structure.el][doc-prep/tibetan-sentence-structure.el]]  (24)
+  - [[#doc-prep/tibetan-sentence-structure.el][doc-prep/tibetan-sentence-structure.el]]  (25)
   - [[#doc-prep/tibetan-wylie-ingest.el][doc-prep/tibetan-wylie-ingest.el]]  (26)
   - [[#persist/tibetan-analysis-claude.el][persist/tibetan-analysis-claude.el]]  (66)
   - [[#persist/tibetan-analysis-combine.el][persist/tibetan-analysis-combine.el]]  (14)
@@ -9741,7 +9741,7 @@ colon immediately after the keyword name).
 ** ~tibetan-sentence--verse-line-closes-sentence-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 180
+:LINE: 190
 :SIGNATURE: (tibetan-sentence--verse-line-closes-sentence-p text)
 :END:
 
@@ -9756,7 +9756,7 @@ gold keeps the quotation inside the same verse sentence.
 ** ~tibetan-sentence--group-verse-segments~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 195
+:LINE: 205
 :SIGNATURE: (tibetan-sentence--group-verse-segments segments)
 :END:
 
@@ -9768,7 +9768,7 @@ group; a trailing partial group is kept.
 ** ~tibetan-sentence--section-genre-at-pos~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 214
+:LINE: 224
 :SIGNATURE: (tibetan-sentence--section-genre-at-pos &optional pos)
 :END:
 
@@ -9780,7 +9780,7 @@ enclosing Section carries neither (callers default to prose).
 ** ~tibetan--last-syllable~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 239
+:LINE: 249
 :SIGNATURE: (tibetan--last-syllable text)
 :END:
 
@@ -9790,7 +9790,7 @@ Strips trailing shad, tsheg, and whitespace before splitting.
 ** ~tibetan--last-two-syllables~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 249
+:LINE: 259
 :SIGNATURE: (tibetan--last-two-syllables text)
 :END:
 
@@ -9800,7 +9800,7 @@ or nil if fewer than two syllables remain after stripping shad/tsheg.
 ** ~tibetan-is-sentence-boundary-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 260
+:LINE: 270
 :SIGNATURE: (tibetan-is-sentence-boundary-p text)
 :END:
 
@@ -9843,7 +9843,7 @@ the dominant structure.
 ** ~tibetan--segment-boundary-at-point~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 327
+:LINE: 355
 :SIGNATURE: (tibetan--segment-boundary-at-point)
 :END:
 
@@ -9854,7 +9854,7 @@ the next line up to the following Org heading.
 ** ~tibetan--collect-segment-boundaries~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 339
+:LINE: 367
 :SIGNATURE: (tibetan--collect-segment-boundaries)
 :END:
 
@@ -9869,7 +9869,7 @@ depth (Phase 2.4 re-run ergonomics).  Document order.
 ** ~tibetan--verse-starter-set~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 374
+:LINE: 402
 :SIGNATURE: (tibetan--verse-starter-set segs)
 :END:
 
@@ -9881,7 +9881,7 @@ within one Section are grouped by
 ** ~tibetan-detect-sentence-boundaries~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
-:LINE: 401
+:LINE: 429
 :SIGNATURE: (tibetan-detect-sentence-boundaries &optional include-weak)
 :INTERACTIVE: t
 :END:
@@ -9899,7 +9899,7 @@ The preview lists each sentence start and tags its trigger as
 ** ~tibetan-add-sentence-structure~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
-:LINE: 457
+:LINE: 485
 :SIGNATURE: (tibetan-add-sentence-structure &optional include-weak)
 :INTERACTIVE: t
 :END:
@@ -9933,7 +9933,7 @@ Into:
 ** ~tibetan-mark-sentence-start~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
-:LINE: 559
+:LINE: 587
 :SIGNATURE: (tibetan-mark-sentence-start)
 :INTERACTIVE: t
 :END:
@@ -9945,7 +9945,7 @@ the segment heading from *** to ****.
 ** ~tibetan-sentence-reset-structure--counts~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 591
+:LINE: 619
 :SIGNATURE: (tibetan-sentence-reset-structure--counts buffer)
 :END:
 
@@ -9956,7 +9956,7 @@ Used by the reset command to show the user what it will touch.
 ** ~tibetan-sentence-reset-structure~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 608
+:LINE: 636
 :SIGNATURE: (tibetan-sentence-reset-structure)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -9985,7 +9985,7 @@ find zero segments and do nothing useful.
 ** ~tibetan-verse-sentence-max-lines~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 159
+:LINE: 169
 :TYPE: 'integer
 :GROUP: tibetan-cat
 :DEFAULT: 8
@@ -10041,7 +10041,7 @@ manual override (C-c s m) remains the instrument of record.
 
 /(no docstring)/
 
-** ~tibetan-sentence-dialogue-single-syllables~  /variable/
+** ~tibetan-sentence-hill-promotion-stoplist~  /variable/
 :PROPERTIES:
 :KIND: defvar
 :LINE: 132
@@ -10050,10 +10050,19 @@ manual override (C-c s m) remains the instrument of record.
 
 /(no docstring)/
 
+** ~tibetan-sentence-dialogue-single-syllables~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 142
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
 ** ~tibetan-sentence-dialogue-two-syllable-patterns~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 141
+:LINE: 151
 :DEFAULT: '
 :END:
 
@@ -10062,7 +10071,7 @@ manual override (C-c s m) remains the instrument of record.
 ** ~tibetan-verse-sentence-closing-particles~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 167
+:LINE: 177
 :DEFAULT: '
 :END:
 
@@ -10071,7 +10080,7 @@ manual override (C-c s m) remains the instrument of record.
 ** ~tibetan-verse-quotative-closers~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 176
+:LINE: 186
 :DEFAULT: '
 :END:
 
