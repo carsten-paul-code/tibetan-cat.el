@@ -3302,6 +3302,60 @@ Portfolio P5 freeze+fire are UNBLOCKED; cascade core C1–C4 follows.
 The MA-Reading §5.36 caveat still stands: do NOT batch-regenerate MA
 Reading until its wordlist is repopulated.
 
+### 5.47 CASCADE core C1–C3 + dictionary D1 (done, 2026-07-28)
+
+The cascade architecture is now LIVE end-to-end for opt-in documents
+(`#+TIBETAN_LAYOUT: cascade`), alongside the untouched two-file model.
+Eleven commits, all RED-first.  New module persist/tibetan-cascade.el.
+
+- **C1** (`eed52d4`, `7f9aba2`): `:layout` metadata key +
+  `tibetan-analysis--cascade-p` (mirrors --defer-mt-p; explicit
+  header, never sniffed); pure `tibetan-cascade-split-shad-units`
+  (concat-of-units == input, byte-for-byte; ། ༎ །། ། ། handled;
+  shad-less text = ONE unit).
+- **C2** (`b705a3d`, `d3a4071`, `5666381`): scaffold + create-file
+  (sent-NNN-SHORT.org name KEPT; `* Subsegments` keyed by GLOBAL
+  segment numbers, :SUBSEG: ordinal display-only; per-unit
+  Rendering/Wylie/Phonetics/Interlinear/Particles from one
+  segment-renderer pass per unit); subtree I/O primitives (byte-
+  identity-locked single-section writes; needs-request gates on
+  machine prefixes only — `[He] spoke…` is a real span, §5.40
+  lesson); regenerate with preservation (user slots, populated
+  Claude/DM bodies, populated Renderings, UNKNOWN L1 sections
+  verbatim — §5.38-H2; idempotent modulo LAST_ANALYZED).
+- **C3** (`83f5dc2`, `ab3bd6f`, `aeeb5a2`): ⟦N⟧ span extraction
+  (malformed → nil → visible stub); landing = sentence-level
+  sections via --insert-claude-sections (Vocab/Grammar/Particles
+  keep their ### Segment subsections; sub-TRANSLATIONS DISCARDED —
+  the rendering is the extracted span of the whole, so subsegment ⊂
+  sentence BY CONSTRUCTION; schema unchanged → same prompts, stable
+  cache prefixes); dispatcher branches on cascade-p into
+  `tibetan-cascade--fire-sentence` (gate: sentence needs OR any
+  Rendering placeholder; claim/queue/DM reused — DM targets the
+  cascade file's own nested slot); prompt grounding from the cascade
+  file's OWN subsegment Interlinear sections; BDD end-to-end spec
+  (one artifact, no seg files, spans landed, second fire declines).
+  Two-file paths byte-identical: extracted unchanged into
+  --handle-response-1 / --fire-sentence-level-2.
+- **D1** (`e3e509f`, `f7ffed0`, `a1c66e8`): dead COMPOUND-AWARE
+  subtree removed (190 lines, zero callers);
+  `tibetan-vocab-lookup-detailed` now delegates to the ranked
+  multisource assembler (ONE ranking authority — the old chain's
+  Steinert preference resolved in HITS ORDER, and Bundled outranked
+  Steinert; verb detection/tokenizer now see the same gloss as the
+  Interlinear); the two NON-delegated paths carry contract notes
+  (--mwu-exists-p = strict existence probe, seg-049 guard;
+  tibetan-dictionary-priority = bilingual walk-all + the only Hill
+  verb-DB consumer; D2 will feed both from dictionary-sources.json).
+
+Suite: **ERT 2230** (0 unexpected, 1 skip) + **BDD 248**; compile
+clean.  NEXT: C4 dispatch/UX (create/open/reanalyze/batch branch
+points for cascade docs — C-c u A at-Segment → open sent file at the
+subtree), then C5 recognition, C7 Rgyan importer; C6/C8 migrations
+post-Aug-24.  Also 2026-07-28: the buddhist-studies corpus is LOCAL
+now (`/Users/cp/buddhist-studies`, git/GitHub sync — iCloud had been
+planting conflict copies inside .git itself).
+
 ## 6. Open work (prioritised)
 
 ### P0 — Verify Detailed Dictionary on a real segment ✓ DONE 2026-04-15
