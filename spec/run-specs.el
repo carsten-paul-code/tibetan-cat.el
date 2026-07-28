@@ -87,6 +87,7 @@
 (require 'auto-analysis-spec)
 (require 'structure-reorg-spec)
 (require 'paragraph-analysis-spec)
+(require 'sentence-first-spec)
 
 ;; Run specs when loaded in batch mode
 (when noninteractive
