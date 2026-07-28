@@ -3348,12 +3348,26 @@ Eleven commits, all RED-first.  New module persist/tibetan-cascade.el.
   tibetan-dictionary-priority = bilingual walk-all + the only Hill
   verb-DB consumer; D2 will feed both from dictionary-sources.json).
 
-Suite: **ERT 2230** (0 unexpected, 1 skip) + **BDD 248**; compile
-clean.  NEXT: C4 dispatch/UX (create/open/reanalyze/batch branch
-points for cascade docs — C-c u A at-Segment → open sent file at the
-subtree), then C5 recognition, C7 Rgyan importer; C6/C8 migrations
-post-Aug-24.  Also 2026-07-28: the buddhist-studies corpus is LOCAL
-now (`/Users/cp/buddhist-studies`, git/GitHub sync — iCloud had been
+**C4 dispatch/UX (same day, `c7a1d81` `15e46f4` `3195d05`)**: all
+user-facing entry points branch on the layout — C-c u B / C-c s N →
+`tibetan-cascade-create-all` (one file per sentence, auto-fire with
+the queue throttling; `--fire-sentence` carries its own P1 defer-MT
+guard as a leaf fire point); C-c u A at-Segment AND at-Sentence →
+`tibetan-cascade-open-for-segment` (creates when missing, point on
+the `** Segment N` subtree; composite seg labels from the nested-
+layout detector tolerated); C-c u R → `tibetan-cascade-reanalyze-
+for-segment`; and the BATCH SAFETY guard: `tibetan-sentence-
+reanalyze-file` routes files that THEMSELVES carry `#+TIBETAN_LAYOUT:
+cascade` (`tibetan-cascade-file-p`) to the cascade regenerate —
+RED-verified that the two-file sentence regenerate would otherwise
+DESTROY the * Subsegments tree on a C-c u r folder batch.  Legacy
+bodies extracted verbatim (`-two-file` suffix) at every branch.
+
+Suite: **ERT 2235** (0 unexpected, 1 skip) + **BDD 248**; compile
+clean.  NEXT: C5 recognition (verse grouper, Part B Phase 2/2b/3),
+C7 Rgyan importer; C6/C8 migrations post-Aug-24.  Also 2026-07-28:
+the buddhist-studies corpus is LOCAL now
+(`/Users/cp/buddhist-studies`, git/GitHub sync — iCloud had been
 planting conflict copies inside .git itself).
 
 ## 6. Open work (prioritised)
