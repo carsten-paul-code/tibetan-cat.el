@@ -52,6 +52,17 @@
 (defcustom tibetan-dictionary-priority
   '(resources custom verbs rangjung-yeshe steinert local-glossary dharmamitra)
   "Priority order for dictionary lookup.
+
+CONTRACT NOTE (D1, 2026-07-28): this ordering drives the BILINGUAL
+assembler (`tibetan--collect-bilingual' → `tibetan-lookup-word'),
+which walks ALL sources merging a German half and an English half —
+a different contract from the best-single-gloss ranking in
+`tibetan-vocab-multisource-entries', and the only path that consults
+the Hill verb DB (`verbs') at all.  Deliberately NOT delegated to
+the ranked assembler.  D2 will derive BOTH orderings from the shared
+dictionary-sources.json manifest so there is one data authority even
+though the two contracts stay distinct.
+
 Each symbol names a dictionary source.  When looking up a word,
 sources are tried in order; the first match wins for each language
 category (English sources vs. German sources are merged separately).

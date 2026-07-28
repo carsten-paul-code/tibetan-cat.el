@@ -323,10 +323,17 @@ dynamic flag `tibetan-vocab--enriching'."
   "Return non-nil when COMPOUND (a tsheg-joined Tibetan string) is
 the EXACT key of an entry in any consulted dictionary.
 
-The strict MWU existence check, shared by
-`tibetan-extract-vocabulary' (Interlinear) and
-`tibetan-vocab-extract-detailed' (Detailed Dictionary) so both
-agree on which syllable groupings form MWUs.  Critical:  this
+CONTRACT NOTE (D1, 2026-07-28): this is deliberately NOT a delegate
+of `tibetan-vocab-multisource-entries' and must not become one.  The
+assembler's Resources/Custom probes fall back to the WYLIE key and
+its Rangjung-Yeshe leaf applies `tibetan-strip-particles' — either
+would re-introduce the exact seg-049 false-MWU class this predicate
+exists to prevent.  It is an EXISTENCE probe, not a ranking: order
+here only affects short-circuit cost, never which gloss surfaces.
+
+The strict MWU existence check used by `tibetan-extract-vocabulary'
+\(Interlinear) so syllable groupings form MWUs only on exact
+dictionary keys.  Critical:  this
 does NOT fall back to particle-stripped substring matches —
 unlike `tibetan-lookup-word' (which strips trailing particles
 like `སོ' / `ནས' before hashing) or `tibetan-vocab-lookup-detailed'

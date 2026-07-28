@@ -1,6 +1,6 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T14:09:39
+#+DATE: 2026-07-28T14:10:52
 #+OPTIONS: toc:2 num:nil
 
 Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1293 forms
@@ -5567,10 +5567,17 @@ dynamic flag `tibetan-vocab--enriching'.
 Return non-nil when COMPOUND (a tsheg-joined Tibetan string) is
 the EXACT key of an entry in any consulted dictionary.
 
-The strict MWU existence check, shared by
-`tibetan-extract-vocabulary' (Interlinear) and
-`tibetan-vocab-extract-detailed' (Detailed Dictionary) so both
-agree on which syllable groupings form MWUs.  Critical:  this
+CONTRACT NOTE (D1, 2026-07-28): this is deliberately NOT a delegate
+of `tibetan-vocab-multisource-entries' and must not become one.  The
+assembler's Resources/Custom probes fall back to the WYLIE key and
+its Rangjung-Yeshe leaf applies `tibetan-strip-particles' — either
+would re-introduce the exact seg-049 false-MWU class this predicate
+exists to prevent.  It is an EXISTENCE probe, not a ranking: order
+here only affects short-circuit cost, never which gloss surfaces.
+
+The strict MWU existence check used by `tibetan-extract-vocabulary'
+(Interlinear) so syllable groupings form MWUs only on exact
+dictionary keys.  Critical:  this
 does NOT fall back to particle-stripped substring matches —
 unlike `tibetan-lookup-word' (which strips trailing particles
 like `སོ' / `ནས' before hashing) or `tibetan-vocab-lookup-detailed'
@@ -5599,7 +5606,7 @@ all via strict exact-key lookups.
 ** ~tibetan-vocab-lookup-detailed~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 388
+:LINE: 395
 :SIGNATURE: (tibetan-vocab-lookup-detailed word)
 :END:
 
@@ -5629,7 +5636,7 @@ per raw WORD in `tibetan-detailed-vocab-cache'.
 ** ~tibetan-vocab--dedup-fingerprint~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 476
+:LINE: 483
 :SIGNATURE: (tibetan-vocab--dedup-fingerprint text)
 :END:
 
@@ -5641,7 +5648,7 @@ near-duplicates and only the first is shown.
 ** ~tibetan-vocab--looks-like-sanskrit-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 497
+:LINE: 504
 :SIGNATURE: (tibetan-vocab--looks-like-sanskrit-p text)
 :END:
 
@@ -5664,7 +5671,7 @@ so when in doubt we fall through to `t'.
 ** ~tibetan-vocab--make-source-entry~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 532
+:LINE: 539
 :SIGNATURE: (tibetan-vocab--make-source-entry seen source-name raw-gloss
                                               native-sanskrit wylie)
 :END:
@@ -5684,7 +5691,7 @@ text — never synthesised from elsewhere.
 ** ~tibetan-vocab-rank-source~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 589
+:LINE: 596
 :SIGNATURE: (tibetan-vocab-rank-source source)
 :END:
 
@@ -5712,7 +5719,7 @@ Rank layers (2026-04-22):
 ** ~tibetan-vocab--sort-entries-by-rank~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 639
+:LINE: 646
 :SIGNATURE: (tibetan-vocab--sort-entries-by-rank entries)
 :END:
 
@@ -5723,7 +5730,7 @@ rank stay in insertion order.
 ** ~tibetan-vocab-find-sanskrit~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 648
+:LINE: 655
 :SIGNATURE: (tibetan-vocab-find-sanskrit entries)
 :END:
 
@@ -5735,7 +5742,7 @@ out Wylie cross-references that masquerade in the Sanskrit slot.
 ** ~tibetan-vocab-best-entry~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 661
+:LINE: 668
 :SIGNATURE: (tibetan-vocab-best-entry entries)
 :END:
 
@@ -5745,7 +5752,7 @@ Return the top-ranked entry from ENTRIES (or nil).  Shortcut for
 ** ~tibetan-vocab-term-anchor~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 666
+:LINE: 673
 :SIGNATURE: (tibetan-vocab-term-anchor wylie)
 :END:
 
@@ -5767,7 +5774,7 @@ Examples:
 ** ~tibetan-vocab-detailed-cap-entries~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 703
+:LINE: 710
 :SIGNATURE: (tibetan-vocab-detailed-cap-entries entries)
 :END:
 
@@ -5785,7 +5792,7 @@ returns
 ** ~tibetan-vocab-multisource-entries~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 727
+:LINE: 734
 :SIGNATURE: (tibetan-vocab-multisource-entries word)
 :END:
 
@@ -5807,7 +5814,7 @@ when the source entry carries it natively.
 ** ~tibetan-vocab-detailed-max-sources~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 690
+:LINE: 697
 :TYPE: 'integer
 :GROUP: tibetan-cat
 :DEFAULT: 3
@@ -5891,7 +5898,7 @@ further enrichment to prevent recursion cycles.
 ** ~tibetan-vocab--steinert-cap~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 469
+:LINE: 476
 :DEFAULT: 5
 :END:
 
@@ -5904,7 +5911,7 @@ review showed words like ཡུལ / ཤོ / ལ producing overly long blocks.
 ** ~tibetan-vocab--sanskrit-diacritics~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 488
+:LINE: 495
 :DEFAULT: '
 :END:
 
@@ -5913,7 +5920,7 @@ review showed words like ཡུལ / ཤོ / ལ producing overly long blocks.
 ** ~tibetan-vocab--corpus~  /variable (buffer-local)/
 :PROPERTIES:
 :KIND: defvar-local
-:LINE: 571
+:LINE: 578
 :DEFAULT: nil
 :END:
 
@@ -5927,7 +5934,7 @@ corpus boost.
 ** ~tibetan-vocab--corpus-source-map~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 579
+:LINE: 586
 :DEFAULT: '
 :END:
 
@@ -5943,7 +5950,7 @@ corpus boost.
 ** ~tibetan-get-buffer-dict-priority~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 95
+:LINE: 106
 :SIGNATURE: (tibetan-get-buffer-dict-priority)
 :END:
 
@@ -5954,7 +5961,7 @@ Checks for #+TIBETAN_DICT_PRIORITY header first, falls back to
 ** ~tibetan--lookup-in-source~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 107
+:LINE: 118
 :SIGNATURE: (tibetan--lookup-in-source source word &optional word-stripped)
 :END:
 
@@ -5964,7 +5971,7 @@ Returns meaning string or nil.
 ** ~tibetan-vocab-safe-substring~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 147
+:LINE: 158
 :SIGNATURE: (tibetan-vocab-safe-substring str start &optional end)
 :END:
 
@@ -5974,7 +5981,7 @@ Returns empty string if indices are out of range or invalid.
 ** ~tibetan-rangjung-yeshe-get-path~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 188
+:LINE: 199
 :SIGNATURE: (tibetan-rangjung-yeshe-get-path)
 :END:
 
@@ -5984,7 +5991,7 @@ Returns the Tibetan-keyed version if it exists, otherwise Wylie version.
 ** ~tibetan-rangjung-yeshe-load~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 205
+:LINE: 216
 :SIGNATURE: (tibetan-rangjung-yeshe-load)
 :END:
 
@@ -5995,7 +6002,7 @@ Stores entries under both Tibetan and Wylie keys for flexible lookup.
 ** ~tibetan-lookup-word-in-rangjung-yeshe~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 242
+:LINE: 253
 :SIGNATURE: (tibetan-lookup-word-in-rangjung-yeshe word)
 :END:
 
@@ -6007,7 +6014,7 @@ Returns meaning if found, nil otherwise.
 ** ~tibetan--steinert-maybe-hint-build~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 295
+:LINE: 306
 :SIGNATURE: (tibetan--steinert-maybe-hint-build)
 :END:
 
@@ -6018,7 +6025,7 @@ so users who have intentionally disabled Steinert never see it.
 ** ~tibetan-lookup-word-in-steinert~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 307
+:LINE: 318
 :SIGNATURE: (tibetan-lookup-word-in-steinert word)
 :END:
 
@@ -6034,7 +6041,7 @@ lives in `tibetan-steinert-lookup' in core/tibetan-steinert.el.
 ** ~tibetan-get-custom-vocab-file~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 339
+:LINE: 350
 :SIGNATURE: (tibetan-get-custom-vocab-file)
 :END:
 
@@ -6044,7 +6051,7 @@ Returns absolute path or nil if not set.
 ** ~tibetan-find-resources-folder~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 352
+:LINE: 363
 :SIGNATURE: (tibetan-find-resources-folder)
 :END:
 
@@ -6060,7 +6067,7 @@ Returns absolute path or nil.
 ** ~tibetan-parse-wordlist-pdf~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 371
+:LINE: 382
 :SIGNATURE: (tibetan-parse-wordlist-pdf pdf-path)
 :END:
 
@@ -6071,7 +6078,7 @@ Returns hash-table with both Wylie and Tibetan keys.
 ** ~tibetan--store-vocab-entry~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 439
+:LINE: 450
 :SIGNATURE: (tibetan--store-vocab-entry vocab-table term def)
 :END:
 
@@ -6081,7 +6088,7 @@ Strips folio markers like (12a5) and collapses extra whitespace.
 ** ~tibetan-parse-wordlist-txt~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 462
+:LINE: 473
 :SIGNATURE: (tibetan-parse-wordlist-txt txt-path)
 :END:
 
@@ -6097,7 +6104,7 @@ Returns hash-table with both Wylie and Tibetan keys.
 ** ~tibetan-parse-wordlist-org~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 542
+:LINE: 553
 :SIGNATURE: (tibetan-parse-wordlist-org org-path)
 :END:
 
@@ -6112,7 +6119,7 @@ Returns hash-table with both Wylie and Tibetan keys.
 ** ~tibetan-load-resources-vocab~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 580
+:LINE: 591
 :SIGNATURE: (tibetan-load-resources-vocab)
 :END:
 
@@ -6123,7 +6130,7 @@ Priority: TXT > ORG > PDF (PDF requires pdftotext).
 ** ~tibetan-lookup-word-in-resources-vocab~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 632
+:LINE: 643
 :SIGNATURE: (tibetan-lookup-word-in-resources-vocab word)
 :END:
 
@@ -6133,7 +6140,7 @@ Returns meaning if found, nil otherwise.
 ** ~tibetan-parse-vocab-pdf~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 649
+:LINE: 660
 :SIGNATURE: (tibetan-parse-vocab-pdf pdf-path)
 :END:
 
@@ -6146,7 +6153,7 @@ Both Tibetan and Wylie keys are stored for lookup.
 ** ~tibetan--maybe-store-vocab-entry~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 718
+:LINE: 729
 :SIGNATURE: (tibetan--maybe-store-vocab-entry vocab-table term def)
 :END:
 
@@ -6156,7 +6163,7 @@ Tibetan keys, when TERM is non-nil and DEF non-empty.  No-op otherwise.
 ** ~tibetan-load-custom-vocab~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 730
+:LINE: 741
 :SIGNATURE: (tibetan-load-custom-vocab)
 :END:
 
@@ -6166,7 +6173,7 @@ Caches the parsed vocabulary for reuse.
 ** ~tibetan-lookup-word-in-custom-vocab~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 746
+:LINE: 757
 :SIGNATURE: (tibetan-lookup-word-in-custom-vocab word)
 :END:
 
@@ -6177,7 +6184,7 @@ Returns meaning if found, nil otherwise.
 ** ~tibetan-strip-particles~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 770
+:LINE: 781
 :SIGNATURE: (tibetan-strip-particles word)
 :END:
 
@@ -6196,7 +6203,7 @@ imperative, etc.), it is returned unchanged.  Without this guard
 ** ~tibetan-lookup-word-in-local-glossary~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 816
+:LINE: 827
 :SIGNATURE: (tibetan-lookup-word-in-local-glossary word)
 :END:
 
@@ -6207,7 +6214,7 @@ Returns meaning if found, nil otherwise.
 ** ~tibetan-lookup-word-in-dharmamitra~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 840
+:LINE: 851
 :SIGNATURE: (tibetan-lookup-word-in-dharmamitra word)
 :END:
 
@@ -6221,7 +6228,7 @@ every call (previously only hits were cached).
 ** ~tibetan-format-bilingual-meaning~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 869
+:LINE: 880
 :SIGNATURE: (tibetan-format-bilingual-meaning english german)
 :END:
 
@@ -6232,7 +6239,7 @@ If only one is available, return that. If both, format as
 ** ~tibetan-extract-english-from-bilingual~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 885
+:LINE: 896
 :SIGNATURE: (tibetan-extract-english-from-bilingual meaning)
 :END:
 
@@ -6242,7 +6249,7 @@ Handles formats like ='German // English=' or ='German (English)='.
 ** ~tibetan--collect-bilingual~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 903
+:LINE: 914
 :SIGNATURE: (tibetan--collect-bilingual word &optional word-stripped)
 :END:
 
@@ -6253,7 +6260,7 @@ Returns (ENGLISH-MEANING . GERMAN-MEANING) cons cell.
 ** ~tibetan-lookup-word~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 930
+:LINE: 941
 :SIGNATURE: (tibetan-lookup-word word &optional prev-word)
 :END:
 
@@ -6265,7 +6272,7 @@ and can be overridden per-buffer with #+TIBETAN_DICT_PRIORITY.
 ** ~tibetan-extract-vocab--tail-is-particle-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 977
+:LINE: 988
 :SIGNATURE: (tibetan-extract-vocab--tail-is-particle-p joined)
 :END:
 
@@ -6276,7 +6283,7 @@ in a case or converb particle listed in
 ** ~tibetan-extract-vocab--head-is-particle-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 986
+:LINE: 997
 :SIGNATURE: (tibetan-extract-vocab--head-is-particle-p joined)
 :END:
 
@@ -6293,7 +6300,7 @@ up `ལ་སྟོད' ("Latö, western Tsang") as a 2-syllable compound.
 ** ~tibetan-extract-vocab--tail-is-verb-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1003
+:LINE: 1014
 :SIGNATURE: (tibetan-extract-vocab--tail-is-verb-p joined)
 :END:
 
@@ -6314,7 +6321,7 @@ loop.  No-op (returns nil) when the verb classifier isn't loaded.
 ** ~tibetan-extract-vocabulary~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1023
+:LINE: 1034
 :SIGNATURE: (tibetan-extract-vocabulary tibetan-text)
 :END:
 
@@ -6349,7 +6356,7 @@ populates the final `(word . meaning)' cell.
 ** ~tibetan-vocabulary-initialize~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1141
+:LINE: 1152
 :SIGNATURE: (tibetan-vocabulary-initialize)
 :END:
 
@@ -6368,7 +6375,7 @@ kept for users who install the package without the bundled data dir.
 ** ~reload-all-glossaries~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1166
+:LINE: 1177
 :SIGNATURE: (reload-all-glossaries)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -6381,7 +6388,7 @@ resets the idempotence guard and re-emits every bundled source.
 ** ~tibetan-vocab-extract-short-meaning~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1194
+:LINE: 1205
 :SIGNATURE: (tibetan-vocab-extract-short-meaning full-meaning)
 :END:
 
@@ -6391,7 +6398,7 @@ Returns just the core translation without lengthy explanations.
 ** ~tibetan-vocab-has-extended-info-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1216
+:LINE: 1227
 :SIGNATURE: (tibetan-vocab-has-extended-info-p full-meaning)
 :END:
 
@@ -6400,7 +6407,7 @@ Check if FULL-MEANING has extended information worth showing.
 ** ~tibetan-vocab-format-entry~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1222
+:LINE: 1233
 :SIGNATURE: (tibetan-vocab-format-entry tibetan-word full-meaning &optional format-type)
 :END:
 
@@ -6417,7 +6424,7 @@ Returns formatted string.
 ** ~tibetan-vocab-format-list~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1264
+:LINE: 1275
 :SIGNATURE: (tibetan-vocab-format-list vocab-pairs &optional format-type)
 :END:
 
@@ -6429,7 +6436,7 @@ Returns formatted string.
 ** ~tibetan-vocab-format-detailed-list~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1276
+:LINE: 1287
 :SIGNATURE: (tibetan-vocab-format-detailed-list vocab-pairs &optional for-org)
 :END:
 
@@ -6452,7 +6459,7 @@ Returns formatted string with complete dictionary information.
 ** ~tibetan-dharmamitra-cache~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 169
+:LINE: 180
 :DEFAULT: (make-hash-table :test 'equal)
 :END:
 
@@ -6461,7 +6468,7 @@ Cache for DharmaMitra word translations to avoid repeated API calls.
 ** ~tibetan-custom-vocab-cache~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 172
+:LINE: 183
 :DEFAULT: (make-hash-table :test 'equal)
 :END:
 
@@ -6472,7 +6479,7 @@ Value: hash-table of (tibetan-term . definition)
 ** ~tibetan-rangjung-yeshe-vocabulary~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 181
+:LINE: 192
 :DEFAULT: nil
 :END:
 
@@ -6482,7 +6489,7 @@ Lazy-loaded on first lookup to avoid slow startup.
 ** ~tibetan-rangjung-yeshe-loaded~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 185
+:LINE: 196
 :DEFAULT: nil
 :END:
 
@@ -6491,7 +6498,7 @@ Whether Rangjung Yeshe dictionary has been loaded.
 ** ~tibetan-current-custom-vocab~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 274
+:LINE: 285
 :DEFAULT: nil
 :END:
 
@@ -6500,7 +6507,7 @@ Current buffer's custom vocabulary hash-table, or nil if none.
 ** ~tibetan--steinert-build-hint-shown~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 292
+:LINE: 303
 :DEFAULT: nil
 :END:
 
@@ -6509,7 +6516,7 @@ Non-nil once the one-shot build-hint message has been emitted.
 ** ~tibetan-resources-vocab-cache~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 332
+:LINE: 343
 :DEFAULT: (make-hash-table :test 'equal)
 :END:
 
@@ -6519,7 +6526,7 @@ Key: directory path, Value: hash-table of (term . definition)
 ** ~tibetan-current-resources-vocab~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 336
+:LINE: 347
 :DEFAULT: nil
 :END:
 
@@ -6528,7 +6535,7 @@ Current buffer's Resources vocabulary hash-table, or nil if none.
 ** ~tibetan-extract-vocab--particle-tails~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 959
+:LINE: 970
 :DEFAULT: '
 :END:
 
