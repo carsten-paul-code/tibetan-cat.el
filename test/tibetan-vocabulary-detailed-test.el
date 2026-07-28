@@ -55,118 +55,17 @@
 ;; VOCABULARY EXTRACTION TESTS
 ;; ============================================================================
 
-(ert-deftest tibetan-vocab-extract-detailed-function-exists ()
-  "Test that tibetan-vocab-extract-detailed function exists."
-  (should (fboundp 'tibetan-vocab-extract-detailed)))
-
-(ert-deftest tibetan-vocab-extract-detailed-empty-text ()
-  "Test vocabulary extraction with empty text."
-  (skip-unless (fboundp 'tibetan-vocab-extract-detailed))
-  ;; Empty text should return empty list
-  (let ((result (tibetan-vocab-extract-detailed "")))
-    (should (listp result))
-    (should (= (length result) 0))))
-
-(ert-deftest tibetan-vocab-extract-detailed-returns-list ()
-  "Test that vocabulary extraction returns a list."
-  (skip-unless (fboundp 'tibetan-vocab-extract-detailed))
-  ;; With Tibetan text
-  (let ((result (tibetan-vocab-extract-detailed "བདག་བྱེད")))
-    (should (listp result))))
-
-(ert-deftest tibetan-vocab-extract-detailed-from-compound ()
-  "Test vocabulary extraction from compound words."
-  (skip-unless (fboundp 'tibetan-vocab-extract-detailed))
-  ;; Multi-syllable compound
-  (let ((result (tibetan-vocab-extract-detailed "བྱང་ཆུབ")))
-    (should (listp result))
-    ;; May extract individual syllables or compounds
-    (should (>= (length result) 0))))
-
 ;; ============================================================================
 ;; FORMAT ENTRY TESTS
 ;; ============================================================================
-
-(ert-deftest tibetan-vocab-format-entry-short-function-exists ()
-  "Test that tibetan-vocab-format-entry-short function exists."
-  (should (fboundp 'tibetan-vocab-format-entry-short)))
-
-(ert-deftest tibetan-vocab-format-entry-short-nil-input ()
-  "Test short format with nil input."
-  (skip-unless (fboundp 'tibetan-vocab-format-entry-short))
-  ;; Should handle nil gracefully
-  (let ((result (tibetan-vocab-format-entry-short nil)))
-    (should (or (null result) (stringp result)))))
-
-(ert-deftest tibetan-vocab-format-entry-short-returns-string ()
-  "Test that short format returns a string."
-  (skip-unless (fboundp 'tibetan-vocab-format-entry-short))
-  ;; Test with a plist entry
-  (let ((entry '(:primary "verb" :detailed "to do" :source "glossary")))
-    (let ((result (tibetan-vocab-format-entry-short entry)))
-      (should (or (null result) (stringp result))))))
 
 ;; ============================================================================
 ;; FORMAT LIST TESTS
 ;; ============================================================================
 
-(ert-deftest tibetan-vocab-format-list-short-function-exists ()
-  "Test that tibetan-vocab-format-list-short function exists."
-  (should (fboundp 'tibetan-vocab-format-list-short)))
-
-(ert-deftest tibetan-vocab-format-list-full-function-exists ()
-  "Test that tibetan-vocab-format-list-full function exists."
-  (should (fboundp 'tibetan-vocab-format-list-full)))
-
-(ert-deftest tibetan-vocab-format-list-short-empty ()
-  "Test short list format with empty list."
-  (skip-unless (fboundp 'tibetan-vocab-format-list-short))
-  (let ((result (tibetan-vocab-format-list-short '())))
-    (should (or (null result) (stringp result)))))
-
-(ert-deftest tibetan-vocab-format-list-full-empty ()
-  "Test full list format with empty list."
-  (skip-unless (fboundp 'tibetan-vocab-format-list-full))
-  (let ((result (tibetan-vocab-format-list-full '())))
-    (should (or (null result) (stringp result)))))
-
-(ert-deftest tibetan-vocab-format-list-short-returns-string ()
-  "Test that short list format returns string."
-  (skip-unless (fboundp 'tibetan-vocab-format-list-short))
-  ;; Test with sample vocab list
-  (let ((vocab-list '(
-        (:primary "verb" :detailed "to do")
-        (:primary "noun" :detailed "person")
-        )))
-    (let ((result (tibetan-vocab-format-list-short vocab-list)))
-      (should (or (null result) (stringp result))))))
-
-(ert-deftest tibetan-vocab-format-list-full-returns-string ()
-  "Test that full list format returns string."
-  (skip-unless (fboundp 'tibetan-vocab-format-list-full))
-  ;; Test with sample vocab list including detailed info
-  (let ((vocab-list '(
-        (:primary "verb" :detailed "to do" :source "glossary")
-        (:primary "noun" :detailed "person" :sanskrit "puruṣa")
-        )))
-    (let ((result (tibetan-vocab-format-list-full vocab-list)))
-      (should (or (null result) (stringp result))))))
-
 ;; ============================================================================
 ;; INTEGRATION TESTS
 ;; ============================================================================
-
-(ert-deftest tibetan-vocabulary-detailed-workflow ()
-  "Test a complete vocabulary lookup and formatting workflow."
-  (skip-unless (fboundp 'tibetan-vocab-extract-detailed))
-  (skip-unless (fboundp 'tibetan-vocab-format-list-short))
-  ;; Extract vocabulary from text
-  (let ((extracted (tibetan-vocab-extract-detailed "བདག་བྱེད")))
-    ;; Format the result
-    (should (listp extracted))
-    ;; Try formatting
-    (let ((formatted (tibetan-vocab-format-list-short extracted)))
-      (should (or (null formatted) (stringp formatted))))))
 
 ;; ============================================================================
 ;; Example-sentence-as-gloss filter (item D1, 2026-06-03)
@@ -209,29 +108,6 @@ instead of the English/German meaning."
 ;; H1 (Fable-5 audit): DD verb-tail parity with the Interlinear loop
 ;; ============================================================================
 
-(ert-deftest tibetan-vocab-extract-detailed-rejects-three-syllable-verb-tail ()
-  "The DD greedy loop rejects a 3-syllable phrasal whose tail is a
-Hill verb (`དྲུང་དུ་ཕྱིན'), matching the Interlinear + parser loops —
-otherwise the surfaces disagree on grouping and term anchors dangle."
-  (skip-unless (fboundp 'tibetan-verb-lookup))
-  (cl-letf (((symbol-function 'tibetan-vocab--mwu-exists-p)
-             (lambda (w) (member w '("དྲུང་དུ་ཕྱིན" "ཡེ་ཤེས"))))
-            ((symbol-function 'tibetan-vocab-lookup-detailed)
-             (lambda (w) (list :wylie w :primary "stub" :detailed "stub"
-                               :sanskrit nil :source "Stub")))
-            ((symbol-function 'tibetan-load-resources-vocab) #'ignore)
-            ((symbol-function 'tibetan-load-custom-vocab) #'ignore))
-    (let ((tibetan-current-resources-vocab nil)
-          (tibetan-current-custom-vocab nil))
-      ;; 3-syllable verb-tail phrasal: NOT one unit.
-      (let ((tib (mapcar (lambda (p) (plist-get p :tibetan))
-                         (tibetan-vocab-extract-detailed "དྲུང་དུ་ཕྱིན"))))
-        (should-not (member "དྲུང་དུ་ཕྱིན" tib)))
-      ;; 2-syllable lexicalized noun: stays one unit.
-      (let ((tib (mapcar (lambda (p) (plist-get p :tibetan))
-                         (tibetan-vocab-extract-detailed "ཡེ་ཤེས་ལ"))))
-        (should (member "ཡེ་ཤེས" tib))))))
-
 (ert-deftest tibetan-vocab-parse-entry-fallback-skips-junk-senses ()
   "M5 (Fable-5 audit): the D1 Latin-sense fallback took the FIRST
 sense containing ANY Latin letter — a Dan-Martin page ref
@@ -247,6 +123,13 @@ must skip low-quality senses and split senses at depth 0 only."
                 "དཔེར་ན་སྟེ; [Skt; loan] example")))
     (should (string-match-p "example" (plist-get entry :primary)))
     (should-not (string= (plist-get entry :primary) "[Skt"))))
+
+;; RETIRED (D1a, 2026-07-28): 15 tests of the dead COMPOUND-AWARE
+;; subtree (tibetan-vocab-extract-detailed + formatters) — the subtree
+;; had zero production callers and was removed.  The ≥3-syllable
+;; verb-tail guard remains covered on the two LIVE loops by
+;; tibetan-vocabulary-test.el (interlinear) and
+;; tibetan-round1-verb-extraction-test.el (parser).
 
 (provide 'tibetan-vocabulary-detailed-test)
 ;;; tibetan-vocabulary-detailed-test.el ends here

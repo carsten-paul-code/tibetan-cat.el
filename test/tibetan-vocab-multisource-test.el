@@ -454,25 +454,11 @@ only automatic-dictionary sources get trimmed."
   (should (null (tibetan-vocab-detailed-cap-entries nil)))
   (should (null (tibetan-vocab-detailed-cap-entries '()))))
 
-(ert-deftest tibetan-analysis-detailed-dict-particle-p ()
-  "Single-syllable case/converb particles are detected as particles."
-  (skip-unless (fboundp 'tibetan-analysis--detailed-dict-is-particle-p))
-  (should (tibetan-analysis--detailed-dict-is-particle-p "ལ"))
-  (should (tibetan-analysis--detailed-dict-is-particle-p "ནས"))
-  (should (tibetan-analysis--detailed-dict-is-particle-p "ཏེ"))
-  (should (tibetan-analysis--detailed-dict-is-particle-p "ནི"))
-  (should (tibetan-analysis--detailed-dict-is-particle-p "གི"))
-  (should (tibetan-analysis--detailed-dict-is-particle-p "ཀྱི")))
-
-(ert-deftest tibetan-analysis-detailed-dict-content-word-not-particle ()
-  "Multi-syllable content words and lexical items are NOT flagged as
-particles (or they'd lose their dictionary entries)."
-  (skip-unless (fboundp 'tibetan-analysis--detailed-dict-is-particle-p))
-  (should-not (tibetan-analysis--detailed-dict-is-particle-p "བདག"))
-  (should-not (tibetan-analysis--detailed-dict-is-particle-p "སྟོད"))
-  (should-not (tibetan-analysis--detailed-dict-is-particle-p "འོངས"))
-  (should-not (tibetan-analysis--detailed-dict-is-particle-p "བྱང་ཆུབ"))
-  (should-not (tibetan-analysis--detailed-dict-is-particle-p "སངས་རྒྱས")))
+;; RETIRED (D1a, 2026-07-28): the two
+;; tibetan-analysis--detailed-dict-is-particle-p tests — the §5.10.1
+;; particle-exemption helper was orphaned by F1's Detailed-Dictionary
+;; retirement (zero production callers) and has been removed.  Both
+;; tests were already skip-unless-guarded, i.e. silently inert.
 
 ;; ----------------------------------------------------------------------------
 ;; Pass 5a: dictionary ranker, Sanskrit finder, term-anchor slug

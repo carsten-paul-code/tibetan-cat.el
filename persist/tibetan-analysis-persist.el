@@ -3079,26 +3079,16 @@ unrelated reasons."
         (format "%s;\n%s // %s" de-ref de-rest en-rest))
        (t gloss)))))
 
-(defun tibetan-analysis--detailed-dict-is-particle-p (tibetan)
-  "Return non-nil when TIBETAN is a pure case / converb particle.
-Matches a single-syllable token (no tsheg / word break) whose text
-appears in `tibetan-extract-vocab--particle-tails' — the same list
-used by the MWU loop and vocabulary extractor.  Particle entries in
-the Detailed Dictionary get a compact one-line rendering pointing
-at the Particle Overview section instead of a verbose multi-source
-dump."
-  (and (stringp tibetan)
-       (boundp 'tibetan-extract-vocab--particle-tails)
-       (not (string-match-p "་" tibetan))
-       (member (string-trim tibetan)
-               tibetan-extract-vocab--particle-tails)))
-
 ;; F1 (2026-07-22): `tibetan-analysis--render-detailed-dictionary'
 ;; REMOVED — the `** Detailed Dictionary' section was retired from the
 ;; layout (commits 907a662 + 287cea3); the Interlinear links to the
 ;; Steinert web dictionary instead.  The multi-source DATA layer
 ;; (`tibetan-vocab-multisource-entries') is unchanged and still feeds
 ;; the Interlinear/Word-list gloss selection.
+;; D1a (2026-07-28): the renderer's last helper,
+;; `tibetan-analysis--detailed-dict-is-particle-p' (§5.10.1 particle
+;; exemption), followed it — orphaned since F1, zero production
+;; callers.
 
 (defun tibetan-analysis--particle-wylie-equivalent-p (a b)
   "Return non-nil if particle Wylie strings A and B denote the same

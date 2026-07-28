@@ -727,44 +727,10 @@ should be picked up;  the single-syll fallback should not fire."
       (should-not (member "སངས" keys))
       (should-not (member "རྒྱས" keys)))))
 
-(ert-deftest tibetan-extract-vocabulary-and-detailed-agree-on-mwu-groupings ()
-  "Integration:  given the same input, the Interlinear path
-\(`tibetan-extract-vocabulary') and the Detailed Dictionary path
-\(`tibetan-vocab-extract-detailed') produce the SAME MWU
-groupings — measured by comparing the tibetan-text of each
-extracted unit.
-
-This is the canonical invariant the root-cause fix enforces:
-both paths must agree on which syllables form a lexical unit.
-Before the fix they disagreed because Interlinear used a loose
-particle-stripping lookup and DD used a strict gethash lookup."
-  (skip-unless (and (fboundp 'tibetan-extract-vocabulary)
-                    (fboundp 'tibetan-vocab-extract-detailed)))
-  (let ((tibetan-current-resources-vocab (make-hash-table :test 'equal))
-        (tibetan-current-custom-vocab nil)
-        (tibetan-detailed-vocab-cache (make-hash-table :test 'equal))
-        (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal)))
-    (puthash "རྣམས" "plural marker" tibetan-comprehensive-vocabulary)
-    (puthash "ཕྱར" "raise, lift" tibetan-comprehensive-vocabulary)
-    (puthash "ནས" "ablative" tibetan-comprehensive-vocabulary)
-    (puthash "ངོ" "face" tibetan-comprehensive-vocabulary)
-    (puthash "སོ" "tooth" tibetan-comprehensive-vocabulary)
-    (let* ((text "རྣམས་ངོ་སོ་ཕྱར་ནས")
-           (interlinear-keys
-            (mapcar #'car (tibetan-extract-vocabulary text)))
-           (detailed-keys
-            (mapcar (lambda (entry) (plist-get entry :tibetan))
-                    (tibetan-vocab-extract-detailed text))))
-      ;; Same set of MWU groupings (ignoring placeholder cases).
-      (let ((i-set (sort (cl-remove-if-not
-                          (lambda (k) (gethash k tibetan-comprehensive-vocabulary))
-                          interlinear-keys)
-                         #'string<))
-            (d-set (sort (cl-remove-if-not
-                          (lambda (k) (gethash k tibetan-comprehensive-vocabulary))
-                          detailed-keys)
-                         #'string<)))
-        (should (equal i-set d-set))))))
+;; RETIRED (D1a, 2026-07-28): the cross-path MWU parity test
+;; (extract-vocabulary vs the dead tibetan-vocab-extract-detailed) —
+;; its comparison target was removed with the dead COMPOUND-AWARE
+;; subtree.  The seg-049 guards on the LIVE path stand just above.
 
 ;; ============================================================================
 ;; FORMATTING TESTS
