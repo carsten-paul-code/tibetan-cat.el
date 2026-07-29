@@ -1220,5 +1220,93 @@ hand-owned from the moment it exists.  Returns
       (list :sections (length sections) :segments seg
             :file output-file))))
 
+;; ============================================================================
+;; C7.2 — §-refs ¶-context (USER prompt only; system stays constant)
+;; ============================================================================
+
+(defun tibetan-cascade--sentence-lopez-section (source-file sent-num)
+  "The :LOPEZ_SECTION: of the Section wrapping SENT-NUM, or nil."
+  (when (and source-file (file-readable-p source-file) sent-num)
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents source-file)
+          (goto-char (point-min))
+          (when (re-search-forward
+                 (format "^\\*+ Sentence %d\\b" sent-num) nil t)
+            (when (re-search-backward "^\\*\\{1,2\\} Section\\b" nil t)
+              (forward-line 1)
+              (when (looking-at "^:PROPERTIES:$")
+                (let ((end (save-excursion
+                             (re-search-forward "^:END:$" nil t))))
+                  (when (and end
+                             (re-search-forward
+                              "^:LOPEZ_SECTION:[ \t]*\\([0-9]+\\)" end t))
+                    (string-to-number (match-string 1))))))))
+      (error nil))))
+
+(defun tibetan-cascade--section-refs-block (sentence source-file)
+  "The §-level reference-translation block for SENTENCE's Section.
+Resolves `#+TIBETAN_SECTION_REFS:' relative to SOURCE-FILE, locates
+the `** §N' subtree, and collects every `*** <name>' child EXCEPT
+the B2 Tibetan and the Wylie — i.e. Lopez, Wangjié & Mulligan, and
+any additional §-indexed translations the generator carries.  The
+bodies stay in the comparative file and the prompt: they are NEVER
+written into analysis files (copyright + regen safety).  nil when
+anything along the chain is missing."
+  (let* ((refs-rel (and (fboundp 'tibetan-analysis--read-source-metadata)
+                        (plist-get
+                         (tibetan-analysis--read-source-metadata
+                          source-file)
+                         :section-refs)))
+         (refs-file (and refs-rel
+                         (expand-file-name
+                          refs-rel (file-name-directory
+                                    (expand-file-name source-file)))))
+         (secnum (and refs-file (file-readable-p refs-file)
+                      (tibetan-cascade--sentence-lopez-section
+                       source-file (plist-get sentence :sent-num)))))
+    (when secnum
+      (condition-case nil
+          (with-temp-buffer
+            (insert-file-contents refs-file)
+            (goto-char (point-min))
+            (when (re-search-forward
+                   (format "^\\*\\* §%d\\b" secnum) nil t)
+              (let ((limit (save-excursion
+                             (if (re-search-forward "^\\*\\* " nil t)
+                                 (line-beginning-position)
+                               (point-max))))
+                    (blocks '()))
+                (while (re-search-forward
+                        "^\\*\\*\\* \\(.+\\)$" limit t)
+                  (let ((name (string-trim (match-string 1))))
+                    (forward-line 1)
+                    ;; Skip a :PROPERTIES: drawer (:READ_ONLY: etc.).
+                    (when (looking-at "^:PROPERTIES:$")
+                      (when (re-search-forward "^:END:$" limit t)
+                        (forward-line 1)))
+                    (let* ((start (point))
+                           (end (if (re-search-forward
+                                     "^\\*\\{1,3\\} " limit t)
+                                    (progn (goto-char
+                                            (line-beginning-position))
+                                           (point))
+                                  limit))
+                           (body (string-trim
+                                  (buffer-substring-no-properties
+                                   start end))))
+                      (unless (or (string-prefix-p "Tibetisch" name)
+                                  (string-prefix-p "Wylie" name)
+                                  (string-empty-p body))
+                        (push (format "=== %s ===\n%s" name body)
+                              blocks)))))
+                (when blocks
+                  (concat
+                   (format
+                    "\n\nReference translations for Lopez §%d (¶-level context ONLY — they span several sentences; do NOT copy their wording, and never reproduce them in your output sections):\n"
+                    secnum)
+                   (mapconcat #'identity (nreverse blocks) "\n"))))))
+        (error nil)))))
+
 (provide 'tibetan-cascade)
 ;;; tibetan-cascade.el ends here

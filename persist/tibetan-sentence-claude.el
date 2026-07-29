@@ -330,6 +330,12 @@ cache-constant).  FOLDER locates the child seg files for grounding."
                      (tibetan-analysis--cascade-p source-file))
             (tibetan-cascade--prompt-grounding sentence source-file
                                                folder)))
+         ;; C7.2: §-level reference translations from the comparative
+         ;; document (#+TIBETAN_SECTION_REFS) — USER prompt only, so
+         ;; the system prompt stays cache-constant.
+         (section-refs-block
+          (when (fboundp 'tibetan-cascade--section-refs-block)
+            (tibetan-cascade--section-refs-block sentence source-file)))
          (zettel-block
           (when (and (fboundp 'tibetan-analysis--collect-zettel-references)
                      (fboundp 'tibetan-analysis--format-zettel-references-block))
@@ -349,6 +355,7 @@ cache-constant).  FOLDER locates the child seg files for grounding."
                 (or vocab-block "")
                 (or grounding-block "")
                 (or cascade-block "")
+                (or section-refs-block "")
                 (or zettel-block "")
                 "\n\nProduce the five sections now, with `### Segment N' "
                 "subsections exactly as instructed.")))

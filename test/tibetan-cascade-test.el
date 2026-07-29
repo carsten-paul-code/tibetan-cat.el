@@ -895,5 +895,70 @@ text — and NEVER copies the copyrighted reference translations."
             (should-not (string-match-p "bden par yod" s))))
       (delete-directory dir t))))
 
+;; ============================================================================
+;; C7.2 — §-refs ¶-context injection (USER prompt only)
+;; ============================================================================
+
+(defmacro tibetan-cascade-test--with-rgyan-source (&rest body)
+  "Bind DIR, REFS (mini comparative), SRC (cascade source with a
+Section §167 wrapping Sentence 4 → segments 105/106)."
+  (declare (indent 0))
+  `(let* ((dir (make-temp-file "rgyan-refs-" t))
+          (refs (expand-file-name "Rgyan-comparative.org" dir))
+          (src (expand-file-name "Rgyan-cat.org" dir)))
+     (unwind-protect
+         (progn
+           (with-temp-file refs
+             (insert tibetan-cascade-test--comparative))
+           (with-temp-file src
+             (insert "#+TITLE: Rgyan CAT\n"
+                     "#+TIBETAN_LAYOUT: cascade\n"
+                     "#+TIBETAN_SECTION_REFS: Rgyan-comparative.org\n\n"
+                     "* Tibetan Text\n"
+                     "** Section §167\n"
+                     ":PROPERTIES:\n:LOPEZ_SECTION: 167\n:END:\n\n"
+                     "*** Sentence 4\n"
+                     "**** Segment 105\nབདེན་པར་ཡོད་འཛིན།\n\n"
+                     "**** Segment 106\nཁྱད་པར་ཕྱེ་དགོས།\n\n"))
+           ,@body)
+       (delete-directory dir t))))
+
+(ert-deftest tibetan-cascade-section-refs-metadata-and-block ()
+  "`#+TIBETAN_SECTION_REFS:' parses into :section-refs; the block
+carries the §'s reference translations (all L3 children except the
+B2 Tibetan and Wylie) with the context-only instruction."
+  (tibetan-cascade-test--with-rgyan-source
+    (should (equal "Rgyan-comparative.org"
+                   (plist-get (tibetan-analysis--read-source-metadata src)
+                              :section-refs)))
+    (let ((block (tibetan-cascade--section-refs-block
+                  (list :sent-num 4 :seg-nums '(105 106)) src)))
+      (should block)
+      (should (string-match-p "Lopez §167" block))
+      (should (string-match-p "COPYRIGHTED LOPEZ TEXT" block))
+      (should (string-match-p "Wangjié & Mulligan" block))
+      (should (string-match-p "COPYRIGHTED WM TEXT" block))
+      ;; The B2 Tibetan and Wylie children are NOT reference
+      ;; translations — excluded.
+      (should-not (string-match-p "bden par yod" block))
+      ;; Context-only instruction present.
+      (should (string-match-p "context" block)))
+    ;; Sentence in a section without refs resolution → nil, no error.
+    (should-not (tibetan-cascade--section-refs-block
+                 (list :sent-num 99) src))))
+
+(ert-deftest tibetan-cascade-build-prompts-injects-section-refs ()
+  "The sentence-first USER prompt carries the §-refs block for a
+cascade document with #+TIBETAN_SECTION_REFS (system prompt stays
+refs-free — cache-constant)."
+  (tibetan-cascade-test--with-rgyan-source
+    (let* ((prompts (tibetan-sentence-claude--build-prompts
+                     (list :sent-num 4 :seg-nums '(105 106)
+                           :tibetan-text "བདེན་པར་ཡོད་འཛིན། ཁྱད་པར་ཕྱེ་དགོས།")
+                     src nil)))
+      (should (string-match-p "COPYRIGHTED LOPEZ TEXT" (cdr prompts)))
+      (should-not (string-match-p "COPYRIGHTED LOPEZ TEXT"
+                                  (car prompts))))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here

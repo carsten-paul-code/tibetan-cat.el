@@ -400,7 +400,7 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
   (let (title work author sources ctx vocab corpus target-lang source-mode
               dm-sanskrit-source dm-tibetan-source
               text-type class-mode sentence-detail
-              author-header defer-mt layout)
+              author-header defer-mt layout section-refs)
     (when (and source-file (file-exists-p source-file))
       (condition-case nil
           (with-temp-buffer
@@ -482,6 +482,15 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
               (let ((val (string-trim (match-string 1))))
                 (unless (string-empty-p val)
                   (setq layout (downcase val)))))
+            ;; C7.2 (2026-07-29): path (relative to the source) of a
+            ;; §-comparative document whose reference translations are
+            ;; injected as ¶-context into the USER prompt.
+            (goto-char (point-min))
+            (when (re-search-forward
+                   "^#\\+TIBETAN_SECTION_REFS:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (unless (string-empty-p val)
+                  (setq section-refs val))))
             (goto-char (point-min))
             (while (re-search-forward
                     "^#\\+TIBETAN_CLAUDE_CONTEXT:[ \t]*\\(.*\\)$" nil t)
@@ -530,7 +539,8 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
           :class-mode class-mode
           :sentence-detail sentence-detail
           :defer-mt defer-mt
-          :layout layout)))
+          :layout layout
+          :section-refs section-refs)))
 
 
 (defun tibetan-analysis--defer-mt-p (file)

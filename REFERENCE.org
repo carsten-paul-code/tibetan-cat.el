@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-29T09:00:53
+#+DATE: 2026-07-29T09:02:59
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1340 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1342 forms
 
 Regenerated automatically by:
 
@@ -62,7 +62,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (131)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (29)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (35)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (37)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
@@ -10611,7 +10611,7 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist.
 ** ~tibetan-analysis--defer-mt-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 536
+:LINE: 546
 :SIGNATURE: (tibetan-analysis--defer-mt-p file)
 :END:
 
@@ -10627,7 +10627,7 @@ Never signals; returns nil for nil / unresolvable input.
 ** ~tibetan-analysis--cascade-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 555
+:LINE: 565
 :SIGNATURE: (tibetan-analysis--cascade-p file)
 :END:
 
@@ -10645,7 +10645,7 @@ signals; returns nil for nil / unresolvable input.
 ** ~tibetan-analysis-set-source-target-lang~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 580
+:LINE: 590
 :SIGNATURE: (tibetan-analysis-set-source-target-lang source-file lang)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -10671,7 +10671,7 @@ be written to.
 ** ~tibetan-analysis--source-file-from-analysis~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 637
+:LINE: 647
 :SIGNATURE: (tibetan-analysis--source-file-from-analysis analysis-file)
 :END:
 
@@ -10683,7 +10683,7 @@ the directory of ANALYSIS-FILE.  Returns nil if nothing is found.
 ** ~tibetan-analysis--match-resources-vocab~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 653
+:LINE: 663
 :SIGNATURE: (tibetan-analysis--match-resources-vocab tibetan-text vocab-file)
 :END:
 
@@ -10694,7 +10694,7 @@ Tibetan term and second column is the gloss.
 ** ~tibetan-analysis--collect-zettel-references~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 702
+:LINE: 712
 :SIGNATURE: (tibetan-analysis--collect-zettel-references tibetan-text)
 :END:
 
@@ -10716,7 +10716,7 @@ matches.  Safe to call from prompt builders — wrapped in
 ** ~tibetan-analysis--format-zettel-references-block~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 741
+:LINE: 751
 :SIGNATURE: (tibetan-analysis--format-zettel-references-block zettels)
 :END:
 
@@ -10735,7 +10735,7 @@ term as it appears in the passage and to cite it correctly.
 ** ~tibetan-analysis--cross-link-zettels-in-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 780
+:LINE: 790
 :SIGNATURE: (tibetan-analysis--cross-link-zettels-in-body body)
 :END:
 
@@ -10763,7 +10763,7 @@ back to the unmodified body.
 ** ~tibetan-analysis--read-analysis-parser-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 848
+:LINE: 858
 :SIGNATURE: (tibetan-analysis--read-analysis-parser-sections analysis-file)
 :END:
 
@@ -10779,7 +10779,7 @@ Any missing section is nil.  Safe when ANALYSIS-FILE is nil or absent.
 ** ~tibetan-analysis--format-parser-grounding~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 890
+:LINE: 900
 :SIGNATURE: (tibetan-analysis--format-parser-grounding parser-sections)
 :END:
 
@@ -10790,7 +10790,7 @@ prompt.  Returns nil when every section is empty.
 ** ~tibetan-analysis--read-word-particle-list~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 917
+:LINE: 927
 :SIGNATURE: (tibetan-analysis--read-word-particle-list analysis-file)
 :END:
 
@@ -10802,7 +10802,7 @@ ANALYSIS-FILE is nil or does not exist.
 ** ~tibetan-analysis--read-interlinear-glosses~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 944
+:LINE: 954
 :SIGNATURE: (tibetan-analysis--read-interlinear-glosses analysis-file)
 :END:
 
@@ -10823,7 +10823,7 @@ nil or absent.
 ** ~tibetan-analysis--format-segment-vocabulary~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 993
+:LINE: 1003
 :SIGNATURE: (tibetan-analysis--format-segment-vocabulary analysis-file)
 :END:
 
@@ -10839,7 +10839,7 @@ it cleanly.
 ** ~tibetan-analysis--collect-paragraph-translations~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1031
+:LINE: 1041
 :SIGNATURE: (tibetan-analysis--collect-paragraph-translations analysis-file)
 :END:
 
@@ -10854,7 +10854,7 @@ Returns nil when neither source has populated content.
 ** ~tibetan-analysis--build-comparison-prompts~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1086
+:LINE: 1096
 :SIGNATURE: (tibetan-analysis--build-comparison-prompts tibetan-text translations)
 :END:
 
@@ -10871,7 +10871,7 @@ markdown sections (`## Comparison Matrix' and `## Diagnostic').
 ** ~tibetan-analysis--parse-comparison-response~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1137
+:LINE: 1147
 :SIGNATURE: (tibetan-analysis--parse-comparison-response response)
 :END:
 
@@ -10887,7 +10887,7 @@ Returns plist (:matrix STRING :diagnostic STRING) where:
 ** ~tibetan-analysis--write-comparison-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1160
+:LINE: 1170
 :SIGNATURE: (tibetan-analysis--write-comparison-section analysis-file matrix-org diagnostic)
 :END:
 
@@ -10904,7 +10904,7 @@ canonical position.  Idempotent.
 ** ~tibetan-translation-comparison-refresh~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1210
+:LINE: 1220
 :SIGNATURE: (tibetan-translation-comparison-refresh)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -10923,7 +10923,7 @@ surfaced via `message' rather than signalled.
 ** ~tibetan-analysis--format-reference-translations~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1301
+:LINE: 1311
 :SIGNATURE: (tibetan-analysis--format-reference-translations analysis-file)
 :END:
 
@@ -10940,7 +10940,7 @@ and flag substantive divergences in the `## Grammar' section.
 ** ~tibetan-analysis--neighbor-analysis-file~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1359
+:LINE: 1369
 :SIGNATURE: (tibetan-analysis--neighbor-analysis-file analysis-file seg-id)
 :END:
 
@@ -10953,7 +10953,7 @@ ordering.  SEG-ID is an integer.
 ** ~tibetan-analysis--format-neighbor-segment~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1383
+:LINE: 1393
 :SIGNATURE: (tibetan-analysis--format-neighbor-segment analysis-file seg-id offset)
 :END:
 
@@ -10966,7 +10966,7 @@ neighbor does not exist or has no Tibetan text.
 ** ~tibetan-analysis--format-surrounding-segments~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1410
+:LINE: 1420
 :SIGNATURE: (tibetan-analysis--format-surrounding-segments analysis-file)
 :END:
 
@@ -10980,7 +10980,7 @@ segments.
 ** ~tibetan-analysis--claude-static-system-blocks~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1460
+:LINE: 1470
 :SIGNATURE: (tibetan-analysis--claude-static-system-blocks source-file)
 :END:
 
@@ -10995,7 +10995,7 @@ guaranteed by construction, not by parallel maintenance.
 ** ~tibetan-analysis--build-claude-prompts~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1507
+:LINE: 1517
 :SIGNATURE: (tibetan-analysis--build-claude-prompts tibetan-text source-file &optional analysis-file)
 :END:
 
@@ -11025,7 +11025,7 @@ first three args.
 ** ~tibetan-analysis--read-authinfo-key~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1613
+:LINE: 1623
 :SIGNATURE: (tibetan-analysis--read-authinfo-key host)
 :END:
 
@@ -11036,7 +11036,7 @@ Returns the password string or nil.
 ** ~tibetan-analysis--ensure-gptel-ready~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1632
+:LINE: 1642
 :SIGNATURE: (tibetan-analysis--ensure-gptel-ready)
 :END:
 
@@ -11048,7 +11048,7 @@ Returns non-nil if gptel is ready to use.
 ** ~tibetan-analysis--write-claude-failure-stub~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1672
+:LINE: 1682
 :SIGNATURE: (tibetan-analysis--write-claude-failure-stub analysis-file msg)
 :END:
 
@@ -11061,7 +11061,7 @@ user can see at a glance which segments still need a real Claude pass.
 ** ~tibetan-analysis--claude-status-rate-limited-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1706
+:LINE: 1716
 :SIGNATURE: (tibetan-analysis--claude-status-rate-limited-p info)
 :END:
 
@@ -11070,7 +11070,7 @@ Non-nil when gptel callback INFO indicates HTTP 429 (rate limited).
 ** ~tibetan-analysis--request-claude-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1711
+:LINE: 1721
 :SIGNATURE: (tibetan-analysis--request-claude-translation tibetan-text analysis-file &optional source-file)
 :END:
 
@@ -11100,7 +11100,7 @@ after a `message'.
 ** ~tibetan-analysis--request-claude-translation-1~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1743
+:LINE: 1753
 :SIGNATURE: (tibetan-analysis--request-claude-translation-1 tibetan-text analysis-file &optional source-file)
 :END:
 
@@ -11109,7 +11109,7 @@ Unguarded body of `tibetan-analysis--request-claude-translation'.
 ** ~tibetan-analysis--parse-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1825
+:LINE: 1835
 :SIGNATURE: (tibetan-analysis--parse-claude-sections response)
 :END:
 
@@ -11147,7 +11147,7 @@ five-key shape.
 ** ~tibetan-analysis--claude-heading-re~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1940
+:LINE: 1950
 :SIGNATURE: (tibetan-analysis--claude-heading-re heading level)
 :END:
 
@@ -11156,7 +11156,7 @@ Regexp that anchors `HEADING' at org LEVEL at beginning-of-line.
 ** ~tibetan-analysis--claude-stop-re~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1946
+:LINE: 1956
 :SIGNATURE: (tibetan-analysis--claude-stop-re level)
 :END:
 
@@ -11165,7 +11165,7 @@ Regexp matching the start of any heading at org LEVEL or shallower.
 ** ~tibetan-analysis--claude-segment-layout-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1958
+:LINE: 1968
 :SIGNATURE: (tibetan-analysis--claude-segment-layout-p buffer)
 :END:
 
@@ -11189,7 +11189,7 @@ fresh per-segment scaffolds get Translation promoted to level 2.
 ** ~tibetan-analysis--claude-heading-inside-provided-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1998
+:LINE: 2008
 :SIGNATURE: (tibetan-analysis--claude-heading-inside-provided-p)
 :END:
 
@@ -11201,7 +11201,7 @@ and check whether its text is `Provided Translations'.
 ** ~tibetan-analysis--reparent-orphaned-claude-subsections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2008
+:LINE: 2018
 :SIGNATURE: (tibetan-analysis--reparent-orphaned-claude-subsections buffer)
 :END:
 
@@ -11221,7 +11221,7 @@ Translations section exists or when no orphans are found.
 ** ~tibetan-analysis--claude-l2-has-real-content-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2070
+:LINE: 2080
 :SIGNATURE: (tibetan-analysis--claude-l2-has-real-content-p heading-re buffer)
 :END:
 
@@ -11245,7 +11245,7 @@ level-3 content under `** Provided Translations'.
 ** ~tibetan-analysis--delete-claude-l2-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2109
+:LINE: 2119
 :SIGNATURE: (tibetan-analysis--delete-claude-l2-section heading-re buffer)
 :END:
 
@@ -11259,7 +11259,7 @@ with migrated content from a legacy level-3 location.
 ** ~tibetan-analysis--migrate-legacy-claude-headings~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2130
+:LINE: 2140
 :SIGNATURE: (tibetan-analysis--migrate-legacy-claude-headings buffer)
 :END:
 
@@ -11287,7 +11287,7 @@ Both branches are no-ops when nothing to migrate.
 ** ~tibetan-analysis--insert-concept-notes-heading~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2273
+:LINE: 2283
 :SIGNATURE: (tibetan-analysis--insert-concept-notes-heading buffer body)
 :END:
 
@@ -11311,7 +11311,7 @@ Claude…]' placeholder body.
 ** ~tibetan-analysis--insert-claude-vocabulary-heading~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2338
+:LINE: 2348
 :SIGNATURE: (tibetan-analysis--insert-claude-vocabulary-heading buffer body)
 :END:
 
@@ -11329,7 +11329,7 @@ two trailing newlines.
 ** ~tibetan-analysis--insert-claude-translation-heading~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2398
+:LINE: 2408
 :SIGNATURE: (tibetan-analysis--insert-claude-translation-heading buffer body)
 :END:
 
@@ -11346,7 +11346,7 @@ now `** Translation' (was `** Claude Translation'); see
 ** ~tibetan-analysis--migrate-claude-grammar-to-u4~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2455
+:LINE: 2465
 :SIGNATURE: (tibetan-analysis--migrate-claude-grammar-to-u4)
 :END:
 
@@ -11377,7 +11377,7 @@ caller's responsibility.
 ** ~tibetan-analysis--place-claude-grammar-heading~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2542
+:LINE: 2552
 :SIGNATURE: (tibetan-analysis--place-claude-grammar-heading)
 :END:
 
@@ -11400,7 +11400,7 @@ before invoking.
 ** ~tibetan-analysis--ensure-claude-headings~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2638
+:LINE: 2648
 :SIGNATURE: (tibetan-analysis--ensure-claude-headings buffer)
 :END:
 
@@ -11432,7 +11432,7 @@ whichever target heading is still missing.  Idempotent.
 ** ~tibetan-analysis--claude-body-md-h3-to-org~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2810
+:LINE: 2820
 :SIGNATURE: (tibetan-analysis--claude-body-md-h3-to-org body parent-level)
 :END:
 
@@ -11464,7 +11464,7 @@ are byte-identical pre- and post-Phase 4.
 ** ~tibetan-analysis--replace-claude-section-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2838
+:LINE: 2848
 :SIGNATURE: (tibetan-analysis--replace-claude-section-body buffer heading body &optional level)
 :END:
 
@@ -11484,7 +11484,7 @@ file.  Non-divergence bodies (no `### ' lines) are unchanged.
 ** ~tibetan-analysis--claude-effective-section-order~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2880
+:LINE: 2890
 :SIGNATURE: (tibetan-analysis--claude-effective-section-order buffer)
 :END:
 
@@ -11507,7 +11507,7 @@ a single buffer's layout drives heading levels consistently.
 ** ~tibetan-analysis--insert-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2920
+:LINE: 2930
 :SIGNATURE: (tibetan-analysis--insert-claude-sections response analysis-file)
 :END:
 
@@ -11531,7 +11531,7 @@ reanalyse.
 ** ~tibetan-analysis--parse-claude-vocabulary~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3019
+:LINE: 3029
 :SIGNATURE: (tibetan-analysis--parse-claude-vocabulary vocab-text)
 :END:
 
@@ -11544,7 +11544,7 @@ with `---' are skipped.
 ** ~tibetan-analysis--read-claude-section-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3044
+:LINE: 3054
 :SIGNATURE: (tibetan-analysis--read-claude-section-body filepath heading &optional level)
 :END:
 
@@ -11559,7 +11559,7 @@ and known error markers so we don't re-persist dead content.
 ** ~tibetan-analysis--read-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3090
+:LINE: 3100
 :SIGNATURE: (tibetan-analysis--read-claude-sections filepath)
 :END:
 
@@ -11590,7 +11590,7 @@ read / restore helpers in
 ** ~tibetan-analysis--parse-claude-particles~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3170
+:LINE: 3180
 :SIGNATURE: (tibetan-analysis--parse-claude-particles body)
 :END:
 
@@ -11604,7 +11604,7 @@ passages — those shouldn't crash the caller).
 ** ~tibetan-analysis--read-claude-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3191
+:LINE: 3201
 :SIGNATURE: (tibetan-analysis--read-claude-translation filepath)
 :END:
 
@@ -11616,7 +11616,7 @@ migrated yet.
 ** ~tibetan-analysis--claude-needs-request-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3198
+:LINE: 3208
 :SIGNATURE: (tibetan-analysis--claude-needs-request-p filepath)
 :END:
 
@@ -11636,7 +11636,7 @@ on files already populated.
 ** ~tibetan-analysis--should-fire-claude-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3216
+:LINE: 3226
 :SIGNATURE: (tibetan-analysis--should-fire-claude-p re-request-claude filepath)
 :END:
 
@@ -11656,7 +11656,7 @@ Returns non-nil when a request SHOULD be dispatched.
 ** ~tibetan-analysis--restore-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3235
+:LINE: 3245
 :SIGNATURE: (tibetan-analysis--restore-claude-sections filepath sections)
 :END:
 
@@ -11674,7 +11674,7 @@ L3 (via the else branch of `--claude-effective-section-order').
 ** ~tibetan-analysis--restore-claude-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3264
+:LINE: 3274
 :SIGNATURE: (tibetan-analysis--restore-claude-translation filepath translation)
 :END:
 
@@ -11684,7 +11684,7 @@ Legacy wrapper around `tibetan-analysis--restore-claude-sections'.
 ** ~tibetan-analysis-auto-regen-on-claude-arrival~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 2903
+:LINE: 2913
 :TYPE: 'boolean
 :GROUP: tibetan-cat
 :DEFAULT: t
@@ -11756,7 +11756,7 @@ source file's `#+TIBETAN_CLAUDE_CONTEXT:' headers.
 ** ~tibetan-analysis--claude-section-order~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 1900
+:LINE: 1910
 :DEFAULT: '
 :END:
 
@@ -15513,6 +15513,31 @@ OUTPUT-FILE.  Refuses to overwrite an existing OUTPUT-FILE — it is
 hand-owned from the moment it exists.  Returns
 (:sections N :segments N :file OUTPUT-FILE).
 
+** ~tibetan-cascade--sentence-lopez-section~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 1227
+:SIGNATURE: (tibetan-cascade--sentence-lopez-section source-file sent-num)
+:END:
+
+The :LOPEZ_SECTION: of the Section wrapping SENT-NUM, or nil.
+
+** ~tibetan-cascade--section-refs-block~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 1247
+:SIGNATURE: (tibetan-cascade--section-refs-block sentence source-file)
+:END:
+
+The §-level reference-translation block for SENTENCE's Section.
+Resolves `#+TIBETAN_SECTION_REFS:' relative to SOURCE-FILE, locates
+the `** §N' subtree, and collects every `*** <name>' child EXCEPT
+the B2 Tibetan and the Wylie — i.e. Lopez, Wangjié & Mulligan, and
+any additional §-indexed translations the generator carries.  The
+bodies stay in the comparative file and the prompt: they are NEVER
+written into analysis files (copyright + regen safety).  nil when
+anything along the chain is missing.
+
 ** ~tibetan-cascade-rendering-placeholder~  /constant/
 :PROPERTIES:
 :KIND: defconst
@@ -16304,7 +16329,7 @@ cache-constant).  FOLDER locates the child seg files for grounding.
 ** ~tibetan-sentence-claude--schedule-dm~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 395
+:LINE: 402
 :SIGNATURE: (tibetan-sentence-claude--schedule-dm sentence child-files
                                              sent-file force)
 :END:
@@ -16316,7 +16341,7 @@ rate limit.  Timers run during the batch drain loop's
 ** ~tibetan-sentence-claude-clear-inflight~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
-:LINE: 425
+:LINE: 432
 :SIGNATURE: (tibetan-sentence-claude-clear-inflight)
 :INTERACTIVE: t
 :END:
@@ -16326,7 +16351,7 @@ Clear the sentence-level in-flight registry (crash recovery).
 ** ~tibetan-sentence-claude--claim~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 432
+:LINE: 439
 :SIGNATURE: (tibetan-sentence-claude--claim source-file sent-num label)
 :END:
 
@@ -16335,7 +16360,7 @@ Claim (SOURCE-FILE . SENT-NUM); nil when already in flight.
 ** ~tibetan-sentence-claude--release~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 439
+:LINE: 446
 :SIGNATURE: (tibetan-sentence-claude--release key)
 :END:
 
@@ -16344,7 +16369,7 @@ Release the in-flight claim KEY.
 ** ~tibetan-sentence-claude--segment-label~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 443
+:LINE: 450
 :SIGNATURE: (tibetan-sentence-claude--segment-label sent-num seg-nums)
 :END:
 
@@ -16355,7 +16380,7 @@ Single-segment sentences (B-1.2) label as `segment N' — a
 ** ~tibetan-sentence-claude--handle-response~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 452
+:LINE: 459
 :SIGNATURE: (tibetan-sentence-claude--handle-response response ctx)
 :END:
 
@@ -16372,7 +16397,7 @@ silent blank.  The sent file gets the whole-sentence pieces.
 ** ~tibetan-sentence-claude--handle-response-1~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 469
+:LINE: 476
 :SIGNATURE: (tibetan-sentence-claude--handle-response-1 response ctx)
 :END:
 
@@ -16381,7 +16406,7 @@ Two-file landing body of `tibetan-sentence-claude--handle-response'.
 ** ~tibetan-sentence-claude--request~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 531
+:LINE: 538
 :SIGNATURE: (tibetan-sentence-claude--request sentence child-files sent-file
                                          source-file folder force
                                          &optional cascade)
@@ -16400,7 +16425,7 @@ Same prompts, same schema, same queue — only the landing differs.
 ** ~tibetan-analysis--fire-sentence-level~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 616
+:LINE: 623
 :SIGNATURE: (tibetan-analysis--fire-sentence-level tibetan-text analysis-file
                                               source-file seg-id
                                               &optional force)
@@ -16417,7 +16442,7 @@ per-segment Claude).
 ** ~tibetan-analysis--fire-sentence-level-1~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 637
+:LINE: 644
 :SIGNATURE: (tibetan-analysis--fire-sentence-level-1 analysis-file source-file
                                                 seg-id force)
 :END:
@@ -16427,7 +16452,7 @@ Unguarded body of `tibetan-analysis--fire-sentence-level'.
 ** ~tibetan-analysis--fire-sentence-level-2~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 666
+:LINE: 673
 :SIGNATURE: (tibetan-analysis--fire-sentence-level-2 sentence analysis-file
                                                 source-file force)
 :END:
@@ -16437,7 +16462,7 @@ Two-file (child seg + sent file) body of the sentence dispatcher.
 ** ~tibetan-dharmamitra-sentence-request-delay~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 380
+:LINE: 387
 :TYPE: 'number
 :GROUP: tibetan-cat
 :DEFAULT: 6.5
@@ -16489,7 +16514,7 @@ constant per document, so it forms a stable Anthropic cache prefix
 ** ~gptel-cache~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 378
+:LINE: 385
 :END:
 
 /(no docstring)/
@@ -16497,7 +16522,7 @@ constant per document, so it forms a stable Anthropic cache prefix
 ** ~tibetan-sentence-claude--dm-schedule-count~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 389
+:LINE: 396
 :DEFAULT: 0
 :END:
 
@@ -16506,7 +16531,7 @@ Cumulative counter for staggering sentence-level DM fires.
 ** ~tibetan-sentence-claude--inflight~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 417
+:LINE: 424
 :DEFAULT: (make-hash-table :test #'equal)
 :END:
 
