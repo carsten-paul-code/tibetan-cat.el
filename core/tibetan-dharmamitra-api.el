@@ -206,39 +206,68 @@ Returns a JSON-encoded string."
 (defun tibetan-dharmamitra-api--http-post (endpoint body)
   "POST BODY (string) to ENDPOINT (relative path under base URL).
 
-Returns response body as a UTF-8 decoded string, or signals an
-error.  Synchronous; respects
-`tibetan-dharmamitra-api-timeout'.
+Returns response body as a UTF-8 decoded string (nil/empty on
+failure).  Synchronous; respects `tibetan-dharmamitra-api-timeout'.
+
+TRANSPORT (2026-07-29): curl when available, url.el as fallback.
+DM's backend (vertex-gemini since mid-2026) streams SSE with no end
+url.el can detect — live symptom: url-retrieve-synchronously came
+back with `HTTP/1.1 200 OK' and an EMPTY body while curl streamed
+the identical request fine, which silently broke EVERY DharmaMitra
+call.  curl verifies TLS by default, preserving the §5.28
+verification guarantee.
 
 Tests stub this function via `cl-letf' so callers exercise the
 rest of the pipeline without touching the network."
-  (let* ((url (concat tibetan-dharmamitra-api-base-url endpoint))
-         (url-request-method "POST")
-         (url-request-extra-headers
-          `(("Content-Type" . "application/json")
-            ("Authorization" . ,(format "Bearer %s"
-                                        tibetan-dharmamitra-api-token))
-            ("Accept" . "application/json")))
-         (url-request-data (encode-coding-string body 'utf-8))
-         ;; Enforce TLS certificate verification.  Emacs' default
-         ;; `gnutls-verify-error' is nil — cert failures would NOT abort
-         ;; the connection, so the bearer token would be sent and the
-         ;; response trusted over an unverified (MITM-able) channel.
-         (gnutls-verify-error t)
-         (network-security-level 'high))
-    (with-current-buffer
-        (url-retrieve-synchronously url nil nil
-                                    tibetan-dharmamitra-api-timeout)
-      (unwind-protect
-          (progn
-            (goto-char (point-min))
-            ;; Skip past HTTP headers (terminated by an empty line).
-            (when (re-search-forward "^$" nil t)
-              (forward-char 1))
-            (decode-coding-string
-             (buffer-substring-no-properties (point) (point-max))
-             'utf-8))
-        (kill-buffer (current-buffer))))))
+  (let ((url (concat tibetan-dharmamitra-api-base-url endpoint)))
+    (if (executable-find "curl")
+        (with-temp-buffer
+          (let* ((payload (encode-coding-string body 'utf-8))
+                 (out (current-buffer))
+                 (exit (with-temp-buffer
+                         (set-buffer-multibyte nil)
+                         (insert payload)
+                         (call-process-region
+                          (point-min) (point-max) "curl" nil out nil
+                          "-s" "--max-time"
+                          (number-to-string
+                           tibetan-dharmamitra-api-timeout)
+                          "-X" "POST"
+                          "-H" (format "Authorization: Bearer %s"
+                                       tibetan-dharmamitra-api-token)
+                          "-H" "Content-Type: application/json"
+                          "--data-binary" "@-"
+                          url))))
+            (when (and (integerp exit) (zerop exit)
+                       (> (buffer-size) 0))
+              (decode-coding-string (buffer-string) 'utf-8))))
+      (let* ((url-request-method "POST")
+             (url-request-extra-headers
+              `(("Content-Type" . "application/json")
+                ("Authorization" . ,(format "Bearer %s"
+                                            tibetan-dharmamitra-api-token))
+                ("Accept" . "application/json")))
+             (url-request-data (encode-coding-string body 'utf-8))
+             ;; Enforce TLS certificate verification.  Emacs' default
+             ;; `gnutls-verify-error' is nil — cert failures would NOT
+             ;; abort the connection, so the bearer token would be sent
+             ;; and the response trusted over an unverified (MITM-able)
+             ;; channel.
+             (gnutls-verify-error t)
+             (network-security-level 'high))
+        (with-current-buffer
+            (url-retrieve-synchronously url nil nil
+                                        tibetan-dharmamitra-api-timeout)
+          (unwind-protect
+              (progn
+                (goto-char (point-min))
+                ;; Skip past HTTP headers (empty-line terminator).
+                (when (re-search-forward "^$" nil t)
+                  (forward-char 1))
+                (decode-coding-string
+                 (buffer-substring-no-properties (point) (point-max))
+                 'utf-8))
+            (kill-buffer (current-buffer))))))))
 
 ;; ============================================================================
 ;; PUBLIC API — chat-translate

@@ -1,6 +1,6 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-29T10:12:31
+#+DATE: 2026-07-29T10:39:22
 #+OPTIONS: toc:2 num:nil
 
 Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1354 forms
@@ -2335,9 +2335,16 @@ Returns a JSON-encoded string.
 
 POST BODY (string) to ENDPOINT (relative path under base URL).
 
-Returns response body as a UTF-8 decoded string, or signals an
-error.  Synchronous; respects
-`tibetan-dharmamitra-api-timeout'.
+Returns response body as a UTF-8 decoded string (nil/empty on
+failure).  Synchronous; respects `tibetan-dharmamitra-api-timeout'.
+
+TRANSPORT (2026-07-29): curl when available, url.el as fallback.
+DM's backend (vertex-gemini since mid-2026) streams SSE with no end
+url.el can detect — live symptom: url-retrieve-synchronously came
+back with `HTTP/1.1 200 OK' and an EMPTY body while curl streamed
+the identical request fine, which silently broke EVERY DharmaMitra
+call.  curl verifies TLS by default, preserving the §5.28
+verification guarantee.
 
 Tests stub this function via `cl-letf' so callers exercise the
 rest of the pipeline without touching the network.
@@ -2345,7 +2352,7 @@ rest of the pipeline without touching the network.
 ** ~tibetan-dharmamitra-api-chat-translate~  /function (cl)/  ↗
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 248
+:LINE: 277
 :SIGNATURE: (tibetan-dharmamitra-api-chat-translate text &key (target-lang "english") (input-encoding "auto"))
 :AUTOLOAD: t
 :END:
@@ -2369,7 +2376,7 @@ without an HTTP call.  Use
 ** ~tibetan-dharmamitra-api-search~  /function (cl)/  ↗
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 313
+:LINE: 342
 :SIGNATURE: (tibetan-dharmamitra-api-search input &key (source-lang "auto") (target-lang "all")
            include-files (max-depth 50))
 :AUTOLOAD: t

@@ -1125,5 +1125,35 @@ label; a populated member is skipped non-FORCE."
          "བདག ཆོས" "Section §167" (list cascade-file))
         (should (= 1 calls))))))
 
+;; ============================================================================
+;; BUG (2026-07-29): DM's SSE stream is unreadable for url.el → curl
+;; ============================================================================
+
+(ert-deftest tibetan-dm-http-post-uses-curl ()
+  "`--http-post' transports via curl when available: DM's backend
+now streams SSE with no end url.el can detect (live symptom:
+`200 OK' + EMPTY body from url-retrieve while curl streamed the
+same request fine), which silently broke EVERY DharmaMitra call."
+  (skip-unless (executable-find "curl"))
+  (let (captured-args)
+    (cl-letf (((symbol-function 'call-process-region)
+               (lambda (_start _end program &optional _delete buffer
+                               _display &rest args)
+                 (setq captured-args (cons program args))
+                 (with-current-buffer (if (bufferp buffer) buffer
+                                        (current-buffer))
+                   (insert "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n"))
+                 0)))
+      (let ((response (tibetan-dharmamitra-api--http-post
+                       "/chat-translate/v1/chat/completions"
+                       "{\"stream\":true}")))
+        (should (equal "curl" (car captured-args)))
+        (should (member "--data-binary" captured-args))
+        (should (cl-some (lambda (a)
+                           (and (stringp a)
+                                (string-match-p "chat-translate" a)))
+                         captured-args))
+        (should (string-match-p "delta" response))))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here
