@@ -3417,6 +3417,47 @@ user's go for API spend.  Also 2026-07-28: the buddhist-studies
 corpus is LOCAL now (`/Users/cp/buddhist-studies`, git/GitHub sync —
 iCloud had been planting conflict copies inside .git itself).
 
+### 5.48 Chunk integration — section-sized AI calls (done, 2026-07-29)
+
+Carsten's insight: AI translations improve with more text; send big
+chunks, split afterwards.  The sentence-first pipeline IS that idea
+at sentence scale; this scales it to SECTIONS.  Three commits
+(`f9cb2d0` `4565fe5` + docs), all RED-first.
+
+- **CH1 DM probe findings** (live, recorded in the plan): DM has NO
+  context-only channel — a preceding chat message is TRANSLATED too
+  (two-message ≈ concatenation).  But the chunk effect is REAL: the
+  isolated sentence detached ("who could there be…"); the passage
+  version resolved anaphora + kept terminology consistent.  2s per §;
+  `explain-grammar` (4s) / `deep-research` (17s) work, optional.
+  Backend is vertex-gemini regardless of the model field.
+- **CH2 Claude chunk-fire**: --collect-section-chunks (groups by
+  Section; implicit chunk without one; splits past
+  tibetan-cascade-chunk-max-segments = 40 — §5.40 showed output
+  LENGTH is the reliability ceiling); CHUNK MODE system addendum
+  (third coexisting cache prefix) demands ONLY `## Translation` with
+  every segment's ⟦N⟧ span — small output by design;
+  --land-chunk-response: per subsegment the extracted span (missing →
+  stub → the C3 sentence dispatcher is the AUTOMATIC fallback), per
+  sentence the marker-bounded SLICE of the whole (keeps connective
+  English between own segments), labeled `(Sentence N — §… chunk)`;
+  --fire-section (defer-MT-guarded leaf) + `chunk' request flavor in
+  --request/--handle-response (claim key = (chunk . FIRST-SENT)
+  cons); UX `tibetan-cascade-fire-sections` (prefix = FORCE).
+  Vocabulary/Grammar/Particles stay per-sentence.
+- **CH3 DM section fire**: ONE chat-translate per section, whole
+  translation into every member file's nested DM slot under
+  `(Section §N)` — per-file §5.29 gating, target-lang aware,
+  defer-MT guarded, ~10× friendlier to the 10/min limit; scheduled
+  via the §5.40 stagger from --fire-section.  Two-file corpora keep
+  sentence-level DM.
+
+Suite: **ERT 2255** (0 unexpected, 1 skip) + **BDD 248**; compile
+clean.  PENDING: the live one-section evaluation on Rgyan (marker
+fidelity %) before flipping cascade auto-fire to chunks — blocked on
+the user's C-c s S sentence grouping of Rgyan_167-186-cat.org and
+his go for the API spend.
+
 ## 6. Open work (prioritised)
 
 ### P0 — Verify Detailed Dictionary on a real segment ✓ DONE 2026-04-15
