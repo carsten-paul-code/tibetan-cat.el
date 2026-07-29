@@ -772,10 +772,216 @@ deeper level (the `tibetan-auto--collect-segments' convention)."
               (when (and text (not (string-empty-p (string-trim text))))
                 (push (cons n text) segs))))
           (when segs
-            (push (list :sent-num sent-num :segs (nreverse segs))
-                  sentences))
+            ;; CH2: record the enclosing Section (position anchor,
+            ;; heading label, Lopez number) for chunk grouping.
+            (let (section-pos section-label lopez)
+              (save-excursion
+                (goto-char (point-min))
+                (let ((sent-pos (progn
+                                  (re-search-forward
+                                   (format "^\\*+ Sentence %d\\b" sent-num)
+                                   nil t)
+                                  (match-beginning 0))))
+                  (goto-char sent-pos)
+                  (when (re-search-backward
+                         "^\\*\\{1,2\\} \\(Section\\b.*\\)$" nil t)
+                    (setq section-pos (point)
+                          section-label (string-trim (match-string 1)))
+                    (forward-line 1)
+                    (when (looking-at "^:PROPERTIES:$")
+                      (let ((end (save-excursion
+                                   (re-search-forward "^:END:$" nil t))))
+                        (when (and end
+                                   (re-search-forward
+                                    "^:LOPEZ_SECTION:[ \t]*\\([0-9]+\\)"
+                                    end t))
+                          (setq lopez (string-to-number
+                                       (match-string 1)))))))))
+              (push (list :sent-num sent-num :segs (nreverse segs)
+                          :section-pos section-pos
+                          :section-label section-label
+                          :lopez lopez)
+                    sentences)))
           (goto-char limit)))
       (nreverse sentences))))
+
+(defcustom tibetan-cascade-chunk-max-segments 40
+  "Hard cap on segments per chunk-fire call.
+The §5.40 record shows output LENGTH is the reliability ceiling —
+chunk responses carry only the marked translation, but an unbounded
+passage still risks marker drop-off.  Oversized sections split at
+sentence boundaries."
+  :type 'integer
+  :group 'tibetan-cat)
+
+(defun tibetan-cascade--collect-section-chunks ()
+  "Group the current buffer's sentences into section chunks.
+Ordered list of plists (:label STR-or-nil :lopez N-or-nil
+:sentences SENTENCE-PLISTS) — one chunk per Section (sentences
+before/without any Section form an implicit chunk), split further
+when a chunk would exceed `tibetan-cascade-chunk-max-segments'."
+  (let ((chunks '())
+        (cur-sentences '())
+        (cur-label nil) (cur-lopez nil)
+        (cur-key 'none) (cur-count 0))
+    (cl-flet ((flush ()
+                (when cur-sentences
+                  (push (list :label cur-label :lopez cur-lopez
+                              :sentences (nreverse cur-sentences))
+                        chunks))
+                (setq cur-sentences '() cur-count 0)))
+      (dolist (s (tibetan-cascade--collect-sentences))
+        (let ((key (or (plist-get s :section-pos) 0))
+              (nsegs (length (plist-get s :segs))))
+          (when (or (not (equal key cur-key))
+                    (and cur-sentences
+                         (> (+ cur-count nsegs)
+                            tibetan-cascade-chunk-max-segments)))
+            (flush))
+          (setq cur-key key
+                cur-label (plist-get s :section-label)
+                cur-lopez (plist-get s :lopez))
+          (push s cur-sentences)
+          (cl-incf cur-count nsegs)))
+      (flush))
+    (nreverse chunks)))
+
+(defconst tibetan-cascade--chunk-system-addendum
+  "
+
+CHUNK MODE — this request covers a PASSAGE spanning several
+sentences (the shad-delimited segments your user prompt lists under
+`### Segment N' headers).  Produce ONLY the section
+`## Translation': ONE fluent translation of the WHOLE passage.
+Inside it, wrap the English span corresponding to EACH listed
+segment in markers `⟦N⟧' before and `⟦/N⟧' after, using the exact
+segment numbers — every listed segment exactly once, no nesting, no
+overlaps (English may reorder the segments; mark the spans wherever
+they fall).  NO `### Segment' subsections, NO other `## ' sections,
+no commentary before or after."
+  "System-prompt addendum for the chunk-fire translation layer.
+Constant per document — a third coexisting Anthropic cache prefix
+beside the segment-level and sentence-level ones.  Output is the
+translation ONLY: the §5.40 record shows long multi-section
+responses drop content, so vocabulary/grammar stay per-sentence.")
+
+(defun tibetan-cascade--build-chunk-prompts (chunk source-file)
+  "Build (SYSTEM . USER) for a chunk-fire call over CHUNK."
+  (let* ((system (concat
+                  (if (boundp 'tibetan-analysis--claude-system-prompt)
+                      tibetan-analysis--claude-system-prompt
+                    "")
+                  tibetan-cascade--chunk-system-addendum
+                  (if (and source-file
+                           (fboundp
+                            'tibetan-analysis--claude-static-system-blocks))
+                      (tibetan-analysis--claude-static-system-blocks
+                       source-file)
+                    "")))
+         (sentences (plist-get chunk :sentences))
+         (all-segs (apply #'append
+                          (mapcar (lambda (s) (plist-get s :segs))
+                                  sentences)))
+         (text (mapconcat #'cdr all-segs ""))
+         (enumeration
+          (mapconcat (lambda (sp)
+                       (format "### Segment %d\n%s"
+                               (car sp) (string-trim (cdr sp))))
+                     all-segs "\n"))
+         (refs (when (fboundp 'tibetan-cascade--section-refs-block)
+                 (tibetan-cascade--section-refs-block
+                  (car sentences) source-file)))
+         (user (concat
+                (format "Classical Tibetan passage (%s — segments %s):\n\n"
+                        (or (plist-get chunk :label) "passage")
+                        (mapconcat (lambda (sp)
+                                     (number-to-string (car sp)))
+                                   all-segs ", "))
+                (string-trim text)
+                "\n\nThe passage consists of these segments:\n"
+                enumeration
+                (or refs "")
+                "\n\nProduce ONLY the `## Translation' section now, with every listed segment's span marked ⟦N⟧…⟦/N⟧ exactly as instructed.")))
+    (cons system user)))
+
+(defun tibetan-cascade--chunk-translation-body (response)
+  "The `## Translation' body of RESPONSE (whole response when the
+heading is absent — the markers still carry the information)."
+  (when (and response (stringp response))
+    (if (string-match "^## Translation[ \t]*\n" response)
+        (let* ((start (match-end 0))
+               (end (or (and (string-match "^## " response start)
+                             (match-beginning 0))
+                        (length response))))
+          (string-trim (substring response start end)))
+      (string-trim response))))
+
+(defun tibetan-cascade--land-chunk-response (response ctx)
+  "Land a chunk-fire RESPONSE into every member cascade file.
+CTX: (:chunk t :label STR :sentences ((:sent-num N :seg-nums L
+:file F) …) :force BOOL).
+
+Per subsegment: the extracted ⟦N⟧ span (or the visible missing-span
+stub — the C3 sentence-level dispatcher is the automatic fallback on
+the next open/batch).  Per sentence: the SLICE of the whole between
+its first span opening and its last span closing, all markers
+stripped — preserving the connective English between the sentence's
+own segments — labeled `(Sentence N — LABEL chunk)'.  All writes
+landing-gated per file (§5.38-M7)."
+  (let ((sentences (plist-get ctx :sentences))
+        (force (plist-get ctx :force))
+        (label (or (plist-get ctx :label) "section"))
+        (whole (tibetan-cascade--chunk-translation-body response)))
+    (when (and whole (not (string-empty-p whole)) sentences)
+      (dolist (s sentences)
+        (let ((file (plist-get s :file))
+              (sent-num (plist-get s :sent-num))
+              (seg-nums (plist-get s :seg-nums)))
+          (when (and file (file-exists-p file))
+            ;; Subsegment renderings.
+            (dolist (n seg-nums)
+              (when (or force
+                        (tibetan-cascade--subsegment-rendering-needs-request-p
+                         file n))
+                (let ((span (tibetan-cascade--extract-span whole n)))
+                  (tibetan-cascade--write-subsegment-section
+                   file n "Rendering"
+                   (if span
+                       (replace-regexp-in-string "^\\(\\*+\\)" " \\1"
+                                                 span)
+                     (format "[Claude sentence response missing Segment %d — re-fire the sentence (C-c u R)]"
+                             n))))))
+            ;; Sentence Translation: the marker-bounded slice.
+            (when (and (fboundp 'tibetan-analysis--claude-needs-request-p)
+                       (or force
+                           (tibetan-analysis--claude-needs-request-p
+                            file)))
+              (let* ((opens (delq nil
+                                  (mapcar (lambda (n)
+                                            (string-search
+                                             (format "⟦%d⟧" n) whole))
+                                          seg-nums)))
+                     (closes (delq nil
+                                   (mapcar
+                                    (lambda (n)
+                                      (let* ((c (format "⟦/%d⟧" n))
+                                             (p (string-search c whole)))
+                                        (and p (+ p (length c)))))
+                                    seg-nums))))
+                (when (and opens closes)
+                  (let* ((slice (substring whole
+                                           (apply #'min opens)
+                                           (apply #'max closes)))
+                         (plain (string-trim
+                                 (replace-regexp-in-string
+                                  "⟦/?[0-9]+⟧" "" slice))))
+                    (unless (string-empty-p plain)
+                      (tibetan-analysis--insert-claude-sections
+                       (format "## Translation\n(Sentence %s — %s chunk)\n%s\n"
+                               sent-num label plain)
+                       file)))))))))
+      t)))
+
 
 ;;;###autoload
 (defun tibetan-cascade-create-all (&optional force)

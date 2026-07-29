@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-29T09:02:59
+#+DATE: 2026-07-29T10:09:17
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1342 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1348 forms
 
 Regenerated automatically by:
 
@@ -62,7 +62,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (131)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (29)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (37)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (43)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
@@ -15374,10 +15374,61 @@ Sentences without segment children are skipped.  Matches both
 `*** Sentence' and legacy `** Sentence' levels; segments at any
 deeper level (the `tibetan-auto--collect-segments' convention).
 
+** ~tibetan-cascade--collect-section-chunks~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 817
+:SIGNATURE: (tibetan-cascade--collect-section-chunks)
+:END:
+
+Group the current buffer's sentences into section chunks.
+Ordered list of plists (:label STR-or-nil :lopez N-or-nil
+:sentences SENTENCE-PLISTS) — one chunk per Section (sentences
+before/without any Section form an implicit chunk), split further
+when a chunk would exceed `tibetan-cascade-chunk-max-segments'.
+
+** ~tibetan-cascade--build-chunk-prompts~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 868
+:SIGNATURE: (tibetan-cascade--build-chunk-prompts chunk source-file)
+:END:
+
+Build (SYSTEM . USER) for a chunk-fire call over CHUNK.
+
+** ~tibetan-cascade--chunk-translation-body~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 907
+:SIGNATURE: (tibetan-cascade--chunk-translation-body response)
+:END:
+
+The `## Translation' body of RESPONSE (whole response when the
+heading is absent — the markers still carry the information).
+
+** ~tibetan-cascade--land-chunk-response~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 919
+:SIGNATURE: (tibetan-cascade--land-chunk-response response ctx)
+:END:
+
+Land a chunk-fire RESPONSE into every member cascade file.
+CTX: (:chunk t :label STR :sentences ((:sent-num N :seg-nums L
+:file F) …) :force BOOL).
+
+Per subsegment: the extracted ⟦N⟧ span (or the visible missing-span
+stub — the C3 sentence-level dispatcher is the automatic fallback on
+the next open/batch).  Per sentence: the SLICE of the whole between
+its first span opening and its last span closing, all markers
+stripped — preserving the connective English between the sentence's
+own segments — labeled `(Sentence N — LABEL chunk)'.  All writes
+landing-gated per file (§5.38-M7).
+
 ** ~tibetan-cascade-create-all~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 781
+:LINE: 987
 :SIGNATURE: (tibetan-cascade-create-all &optional force)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -15395,7 +15446,7 @@ under `#+TIBETAN_DEFER_MT').  Returns
 ** ~tibetan-cascade--segs-for-sentence~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 841
+:LINE: 1047
 :SIGNATURE: (tibetan-cascade--segs-for-sentence source-file sent-num)
 :END:
 
@@ -15404,7 +15455,7 @@ SOURCE-FILE's sentence SENT-NUM as (GLOBAL-NUM . TEXT) pairs, or nil.
 ** ~tibetan-cascade-open-for-segment~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 855
+:LINE: 1061
 :SIGNATURE: (tibetan-cascade-open-for-segment seg-id source-file)
 :AUTOLOAD: t
 :END:
@@ -15422,7 +15473,7 @@ is what counts.
 ** ~tibetan-cascade-reanalyze-file~  /function (cl)/
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 915
+:LINE: 1121
 :SIGNATURE: (tibetan-cascade-reanalyze-file filepath &key source-file
                                                    re-request-claude)
 :END:
@@ -15438,7 +15489,7 @@ still defers under #+TIBETAN_DEFER_MT.  Returns
 ** ~tibetan-cascade-reanalyze-for-segment~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 961
+:LINE: 1167
 :SIGNATURE: (tibetan-cascade-reanalyze-for-segment seg-id source-file
                                               &optional re-request-claude)
 :AUTOLOAD: t
@@ -15451,7 +15502,7 @@ label).  Returns the `tibetan-cascade-reanalyze-file' plist.
 ** ~tibetan-cascade-file-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 993
+:LINE: 1199
 :SIGNATURE: (tibetan-cascade-file-p filepath)
 :END:
 
@@ -15463,7 +15514,7 @@ destroy the * Subsegments tree.
 ** ~tibetan-shad-split-segments~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1014
+:LINE: 1220
 :SIGNATURE: (tibetan-shad-split-segments)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -15485,7 +15536,7 @@ Returns (:segments-before N :segments-after M).
 ** ~tibetan-cascade-import-comparative~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1111
+:LINE: 1317
 :SIGNATURE: (tibetan-cascade-import-comparative comparative-file output-file)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -15516,7 +15567,7 @@ hand-owned from the moment it exists.  Returns
 ** ~tibetan-cascade--sentence-lopez-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1227
+:LINE: 1433
 :SIGNATURE: (tibetan-cascade--sentence-lopez-section source-file sent-num)
 :END:
 
@@ -15525,7 +15576,7 @@ The :LOPEZ_SECTION: of the Section wrapping SENT-NUM, or nil.
 ** ~tibetan-cascade--section-refs-block~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1247
+:LINE: 1453
 :SIGNATURE: (tibetan-cascade--section-refs-block sentence source-file)
 :END:
 
@@ -15537,6 +15588,21 @@ any additional §-indexed translations the generator carries.  The
 bodies stay in the comparative file and the prompt: they are NEVER
 written into analysis files (copyright + regen safety).  nil when
 anything along the chain is missing.
+
+** ~tibetan-cascade-chunk-max-segments~  /customize variable/
+:PROPERTIES:
+:KIND: defcustom
+:LINE: 808
+:TYPE: 'integer
+:GROUP: tibetan-cat
+:DEFAULT: 40
+:END:
+
+Hard cap on segments per chunk-fire call.
+The §5.40 record shows output LENGTH is the reliability ceiling —
+chunk responses carry only the marked translation, but an unbounded
+passage still risks marker drop-off.  Oversized sections split at
+sentence boundaries.
 
 ** ~tibetan-cascade-rendering-placeholder~  /constant/
 :PROPERTIES:
@@ -15566,6 +15632,22 @@ there is no per-segment fallback in cascade mode.
 :END:
 
 /(no docstring)/
+
+** ~tibetan-cascade--chunk-system-addendum~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 849
+:DEFAULT: "
+
+CHUNK MODE — this request covers a PASSAGE spanning several
+sentences (the shad-delimited segments your user prompt l
+:END:
+
+System-prompt addendum for the chunk-fire translation layer.
+Constant per document — a third coexisting Anthropic cache prefix
+beside the segment-level and sentence-level ones.  Output is the
+translation ONLY: the §5.40 record shows long multi-section
+responses drop content, so vocabulary/grammar stay per-sentence.
 
 
 * persist/tibetan-claude-queue.el

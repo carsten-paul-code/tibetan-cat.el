@@ -960,5 +960,91 @@ refs-free — cache-constant)."
       (should-not (string-match-p "COPYRIGHTED LOPEZ TEXT"
                                   (car prompts))))))
 
+;; ============================================================================
+;; CH2 — Claude chunk-fire: collector, prompts, landing
+;; ============================================================================
+
+(ert-deftest tibetan-cascade-collect-section-chunks ()
+  "Sentences group into section chunks with label + Lopez number; a
+document without Sections forms one implicit chunk; the segment cap
+splits oversized chunks at sentence boundaries."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* Tibetan Text\n"
+            "** Section §167\n"
+            ":PROPERTIES:\n:LOPEZ_SECTION: 167\n:END:\n\n"
+            "*** Sentence 1\n**** Segment 1\nཀ།\n\n**** Segment 2\nཁ།\n\n"
+            "*** Sentence 2\n**** Segment 3\nག།\n\n"
+            "** Section §168\n"
+            ":PROPERTIES:\n:LOPEZ_SECTION: 168\n:END:\n\n"
+            "*** Sentence 3\n**** Segment 4\nང།\n\n")
+    (let ((chunks (tibetan-cascade--collect-section-chunks)))
+      (should (= 2 (length chunks)))
+      (should (= 167 (plist-get (car chunks) :lopez)))
+      (should (equal '(1 2)
+                     (mapcar (lambda (s) (plist-get s :sent-num))
+                             (plist-get (car chunks) :sentences))))
+      (should (= 168 (plist-get (cadr chunks) :lopez)))))
+  ;; Cap: 3 one-segment sentences with max 2 segments per chunk → 2+1.
+  (with-temp-buffer
+    (org-mode)
+    (insert "* Tibetan Text\n"
+            "*** Sentence 1\n**** Segment 1\nཀ།\n\n"
+            "*** Sentence 2\n**** Segment 2\nཁ།\n\n"
+            "*** Sentence 3\n**** Segment 3\nག།\n\n")
+    (let* ((tibetan-cascade-chunk-max-segments 2)
+           (chunks (tibetan-cascade--collect-section-chunks)))
+      (should (= 2 (length chunks)))
+      (should (= 2 (length (plist-get (car chunks) :sentences))))
+      (should (= 1 (length (plist-get (cadr chunks) :sentences)))))))
+
+(ert-deftest tibetan-cascade-chunk-prompts-translation-only ()
+  "Chunk prompts: the system carries the CHUNK addendum (constant per
+document — its own cache prefix); the user enumerates every segment
+and demands ONLY the marked Translation."
+  (let* ((chunk (list :label "Section §167" :lopez 167
+                      :sentences
+                      (list (list :sent-num 1
+                                  :segs '((1 . "ཀ།") (2 . "ཁ།")))
+                            (list :sent-num 2 :segs '((3 . "ག།"))))))
+         (p1 (tibetan-cascade--build-chunk-prompts chunk "/tmp/doc.org"))
+         (p2 (tibetan-cascade--build-chunk-prompts chunk "/tmp/doc.org")))
+    ;; System constant across calls; contains the chunk contract.
+    (should (equal (car p1) (car p2)))
+    (should (string-match-p "CHUNK MODE" (car p1)))
+    (should (string-match-p "ONLY" (car p1)))
+    ;; User: passage + full enumeration + the marker instruction.
+    (should (string-match-p "### Segment 1" (cdr p1)))
+    (should (string-match-p "### Segment 3" (cdr p1)))
+    (should (string-match-p "⟦" (cdr p1)))))
+
+(ert-deftest tibetan-cascade-land-chunk-response ()
+  "Landing a chunk response: every subsegment Rendering = its span;
+every sentence Translation = ITS spans joined in ENGLISH order under
+a chunk label; missing spans → visible stubs; populated files
+untouched non-FORCE."
+  (tibetan-cascade-test--with-cascade-file
+    ;; Our fixture file holds Sentence 4 = segments 105+106.  Feed a
+    ;; chunk response where ENGLISH order inverts the segments.
+    (tibetan-cascade--land-chunk-response
+     "## Translation\n⟦106⟧The dharma is deep⟦/106⟧ — ⟦105⟧so he acted⟦/105⟧."
+     (list :chunk t :force nil
+           :label "Section §167"
+           :sentences (list (list :sent-num 4 :seg-nums '(105 106)
+                                  :file cascade-file))))
+    (should (equal "so he acted"
+                   (tibetan-cascade--read-subsegment-section
+                    cascade-file 105 "Rendering")))
+    (should (equal "The dharma is deep"
+                   (tibetan-cascade--read-subsegment-section
+                    cascade-file 106 "Rendering")))
+    (let ((s (with-temp-buffer (insert-file-contents cascade-file)
+                               (buffer-string))))
+      ;; Sentence Translation: English order (106 before 105), labeled.
+      (should (string-match-p
+               "The dharma is deep — so he acted" s))
+      (should (string-match-p "Section §167 chunk" s))
+      (should-not (string-match-p "⟦" s)))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here
