@@ -3452,11 +3452,28 @@ at sentence scale; this scales it to SECTIONS.  Three commits
   via the §5.40 stagger from --fire-section.  Two-file corpora keep
   sentence-level DM.
 
-Suite: **ERT 2255** (0 unexpected, 1 skip) + **BDD 248**; compile
-clean.  PENDING: the live one-section evaluation on Rgyan (marker
-fidelity %) before flipping cascade auto-fire to chunks — blocked on
-the user's C-c s S sentence grouping of Rgyan_167-186-cat.org and
-his go for the API spend.
+**LIVE EVALUATION + FLIP (2026-07-29, `d43b954` `5fd759b` `0e2f697`,
+corpus `14f1daf`)**: Rgyan auto-grouped (20 sections → 56 sentences /
+173 units; manual override remains the instrument), 56 cascade files
+created; §167 chunk-fired with real API: **9/9 spans, 0 stubs, 3/3
+sentence Translations** — coherent German honoring target-lang and
+the square-bracket conventions.  The evaluation surfaced a REAL BUG:
+DM's backend (vertex-gemini) streams SSE that url.el cannot consume
+\(200 OK + empty body; `stream:false` unimplemented server-side) —
+EVERY DharmaMitra call had been silently failing.  Fix: `--http-post`
+transports via curl (body over stdin; TLS verified by curl defaults —
+the §5.28 guarantee now test-locked on BOTH transports; url.el stays
+as fallback).  After the fix the §167 DM section fire landed the
+whole-§ German translation in all member files.  **Cascade auto-fire
+is now CHUNKED** (create-all fires one section call per chunk; gates
+skip populated members; missing spans fall back to the C3 sentence
+dispatcher automatically).  NOTE (one dirty commit): `d43b954` went
+in with one test red (the §5.28 TLS test, transport-shape-dependent);
+fixed in the immediate follow-up `5fd759b` — recorded per the
+suite-green-per-commit rule.
+
+Suite: **ERT 2257** (0 unexpected, 1 skip) + **BDD 248**; compile
+clean.
 
 ## 6. Open work (prioritised)
 
