@@ -1103,5 +1103,122 @@ Returns (:segments-before N :segments-after M)."
                  before (if (= 1 before) "" "s") after))
       (list :segments-before before :segments-after after))))
 
+;; ============================================================================
+;; C7.1 — comparative-document importer (the Rgyan §-layer)
+;; ============================================================================
+
+;;;###autoload
+(defun tibetan-cascade-import-comparative (comparative-file output-file)
+  "One-time import of a §-comparative document into a cascade CAT source.
+
+COMPARATIVE-FILE is GENERATOR-OWNED (build_comparative_doc.py —
+hand-edits are lost on re-run), so it must never become the CAT
+source itself.  This importer extracts, per `** §N' subtree, the
+`*** Tibetisch (B2)' body and the Lopez anchors
+\(:SECTION:/:B2_SEG_START:/:B2_SEG_END:) into OUTPUT-FILE:
+
+  ** Section §N          with :LOPEZ_SECTION: + the B2 anchors
+  *** Segment M          ONE initial segment per § (global numbering)
+
+The copyrighted §-level reference translations (Lopez, Wangjié &
+Mulligan, …) and the Wylie are NEVER copied — the CAT source points
+back via `#+TIBETAN_SECTION_REFS:' and the prompt builder injects
+them as ¶-context at request time (C7.2).
+
+After importing: run `tibetan-shad-split-segments' (segment = shad
+unit) and then the genre-aware `tibetan-add-sentence-structure' on
+OUTPUT-FILE.  Refuses to overwrite an existing OUTPUT-FILE — it is
+hand-owned from the moment it exists.  Returns
+\(:sections N :segments N :file OUTPUT-FILE)."
+  (interactive
+   (list (read-file-name "Comparative document: " nil nil t)
+         (read-file-name "CAT source to create: ")))
+  (unless (and comparative-file (file-readable-p comparative-file))
+    (user-error "Comparative document not readable: %s" comparative-file))
+  (when (file-exists-p output-file)
+    (user-error
+     "%s already exists — the CAT source is hand-owned once created"
+     (file-name-nondirectory output-file)))
+  (let ((sections '()))
+    ;; Collect (§-num b2-start b2-end tibetan-body) per § subtree.
+    (with-temp-buffer
+      (insert-file-contents comparative-file)
+      (goto-char (point-min))
+      (while (re-search-forward "^\\*\\* §\\([0-9]+\\)" nil t)
+        (let* ((secnum (string-to-number (match-string 1)))
+               (limit (save-excursion
+                        (if (re-search-forward "^\\*\\* " nil t)
+                            (line-beginning-position)
+                          (point-max))))
+               (b2-start nil) (b2-end nil) (tib nil))
+          (save-excursion
+            (when (re-search-forward
+                   "^:B2_SEG_START:[ \t]*\\([0-9]+\\)" limit t)
+              (setq b2-start (match-string 1))))
+          (save-excursion
+            (when (re-search-forward
+                   "^:B2_SEG_END:[ \t]*\\([0-9]+\\)" limit t)
+              (setq b2-end (match-string 1))))
+          (save-excursion
+            (when (re-search-forward "^\\*\\*\\* Tibetisch (B2)$" limit t)
+              (forward-line 1)
+              (let ((start (point))
+                    (end (if (re-search-forward "^\\*\\{1,3\\} " limit t)
+                             (line-beginning-position)
+                           limit)))
+                (setq tib (string-trim
+                           (buffer-substring-no-properties start end))))))
+          (push (list secnum b2-start b2-end tib) sections)
+          (goto-char limit))))
+    (setq sections (nreverse sections))
+    (unless sections
+      (user-error "No `** §N' subtrees found in %s"
+                  (file-name-nondirectory comparative-file)))
+    ;; Emit the CAT source.
+    (let ((refs (file-relative-name
+                 comparative-file (file-name-directory
+                                   (expand-file-name output-file))))
+          (seg 0))
+      (with-temp-file output-file
+        (insert (format "#+TITLE: %s — CAT-Quelle (B2)\n"
+                        (file-name-base output-file)))
+        (insert "#+STARTUP: showall\n")
+        (insert "#+OPTIONS: toc:nil num:nil\n")
+        (insert "#+TIBETAN_LAYOUT: cascade\n")
+        (insert "#+TIBETAN_TARGET_LANG: de\n")
+        (insert (format "#+TIBETAN_SECTION_REFS: %s\n" refs))
+        (insert (format "#+CREATED: %s\n"
+                        (format-time-string "%Y-%m-%d")))
+        (insert "\n")
+        (insert "# Einmalig importiert aus dem generator-eigenen\n"
+                (format "# Komparativdokument (%s).\n"
+                        (file-name-nondirectory comparative-file))
+                "# Ab jetzt HAND-EIGEN — der Importer überschreibt nie.\n"
+                "# Nächste Schritte: M-x tibetan-shad-split-segments,\n"
+                "# dann C-c s S (genre-bewusste Satzstruktur).\n\n")
+        (insert "* Tibetan Text\n")
+        (dolist (sec sections)
+          (cl-destructuring-bind (secnum b2-start b2-end tib) sec
+            (insert (format "** Section §%d\n" secnum))
+            (insert ":PROPERTIES:\n")
+            (insert (format ":LOPEZ_SECTION: %d\n" secnum))
+            (when b2-start
+              (insert (format ":B2_SEG_START: %s\n" b2-start)))
+            (when b2-end
+              (insert (format ":B2_SEG_END: %s\n" b2-end)))
+            (insert ":END:\n\n")
+            (cl-incf seg)
+            (insert (format "*** Segment %d\n" seg))
+            (insert (if (and tib (not (string-empty-p tib)))
+                        tib
+                      "[B2-Text fehlt — im Komparativdokument ergänzen]")
+                    "\n\n"))))
+      (when (called-interactively-p 'any)
+        (message "Imported %d §§ → %s (now: shad-split + C-c s S)"
+                 (length sections)
+                 (file-name-nondirectory output-file)))
+      (list :sections (length sections) :segments seg
+            :file output-file))))
+
 (provide 'tibetan-cascade)
 ;;; tibetan-cascade.el ends here

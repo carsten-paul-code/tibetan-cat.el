@@ -834,5 +834,66 @@ source — renumbering would orphan them (the §5.26/§5.33 class)."
               (kill-buffer))))
       (delete-directory dir t))))
 
+;; ============================================================================
+;; C7.1 — comparative-document importer (Rgyan §-layer)
+;; ============================================================================
+
+(defconst tibetan-cascade-test--comparative
+  (concat
+   "#+TITLE: Komparatives Übersetzungsdokument\n\n"
+   "# *** GENERIERT ***\n"
+   "# Hand-Edits gehen beim Re-Run verloren.\n\n"
+   "** §167   :seg_1565_to_1573:\n"
+   ":PROPERTIES:\n:SECTION: 167\n:B2_SEG_START: 1565\n"
+   ":B2_SEG_END: 1573\n:END:\n\n"
+   "*** Tibetisch (B2)\n\n"
+   "བདེན་པར་ཡོད་འཛིན་པ་གཉིས་ཁྱད་པར་ཕྱེ་དགོས།\n\n"
+   "*** Wylie\n\n/bden par yod 'dzin pa/\n\n"
+   "*** Lopez 2006\n:PROPERTIES:\n:READ_ONLY: t\n:END:\n\n"
+   "*§167.* COPYRIGHTED LOPEZ TEXT.\n\n"
+   "*** Wangjié & Mulligan\n:PROPERTIES:\n:READ_ONLY: t\n:END:\n\n"
+   "*§167.* COPYRIGHTED WM TEXT.\n\n"
+   "** §168   :seg_1574_to_1581:\n"
+   ":PROPERTIES:\n:SECTION: 168\n:B2_SEG_START: 1574\n"
+   ":B2_SEG_END: 1581\n:END:\n\n"
+   "*** Tibetisch (B2)\n\n"
+   "སྟོང་ཉིད་བདེན་འཛིན་དང་ཡོད་ཙམ་གཉིས།\n\n"
+   "*** Lopez 2006\n\n*§168.* MORE LOPEZ.\n")
+  "Two-§ miniature of the generator-owned comparative document.")
+
+(ert-deftest tibetan-cascade-import-comparative-structure ()
+  "The importer produces a cascade CAT source: one Section per § with
+the Lopez anchors carried, ONE initial Segment per § with the B2
+text — and NEVER copies the copyrighted reference translations."
+  (let* ((dir (make-temp-file "rgyan-import-" t))
+         (comp (expand-file-name "Rgyan-comparative.org" dir))
+         (out (expand-file-name "Rgyan-cat.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file comp
+            (insert tibetan-cascade-test--comparative))
+          (let ((r (tibetan-cascade-import-comparative comp out)))
+            (should (= 2 (plist-get r :sections))))
+          (let ((s (with-temp-buffer (insert-file-contents out)
+                                     (buffer-string))))
+            ;; Cascade CAT headers + the §-refs pointer.
+            (should (string-match-p "^#\\+TIBETAN_LAYOUT: cascade$" s))
+            (should (string-match-p
+                     "^#\\+TIBETAN_SECTION_REFS: Rgyan-comparative\\.org$"
+                     s))
+            ;; Sections carry the Lopez anchors.
+            (should (string-match-p "^\\*\\* Section §167$" s))
+            (should (string-match-p "^:LOPEZ_SECTION: 167$" s))
+            (should (string-match-p "^:B2_SEG_START: 1565$" s))
+            ;; One initial segment per §, globally numbered.
+            (should (string-match-p "^\\*\\*\\* Segment 1$" s))
+            (should (string-match-p "^\\*\\*\\* Segment 2$" s))
+            (should (string-match-p "ཁྱད་པར་ཕྱེ་དགོས།" s))
+            ;; COPYRIGHT: reference bodies and Wylie never imported.
+            (should-not (string-match-p "COPYRIGHTED" s))
+            (should-not (string-match-p "MORE LOPEZ" s))
+            (should-not (string-match-p "bden par yod" s))))
+      (delete-directory dir t))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here

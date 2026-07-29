@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-28T18:18:50
+#+DATE: 2026-07-29T09:00:53
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1339 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1340 forms
 
 Regenerated automatically by:
 
@@ -62,7 +62,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (131)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (29)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (34)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (35)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
@@ -15481,6 +15481,37 @@ A `:PROPERTIES:' drawer (e.g. :FOLIO:) stays on the FIRST unit of a
 split segment; Working Translation siblings are untouched; the
 concatenated Tibetan is preserved (the C1 splitter's contract).
 Returns (:segments-before N :segments-after M).
+
+** ~tibetan-cascade-import-comparative~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 1111
+:SIGNATURE: (tibetan-cascade-import-comparative comparative-file output-file)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+One-time import of a §-comparative document into a cascade CAT source.
+
+COMPARATIVE-FILE is GENERATOR-OWNED (build_comparative_doc.py —
+hand-edits are lost on re-run), so it must never become the CAT
+source itself.  This importer extracts, per `** §N' subtree, the
+`*** Tibetisch (B2)' body and the Lopez anchors
+(:SECTION:/:B2_SEG_START:/:B2_SEG_END:) into OUTPUT-FILE:
+
+  ** Section §N          with :LOPEZ_SECTION: + the B2 anchors
+  *** Segment M          ONE initial segment per § (global numbering)
+
+The copyrighted §-level reference translations (Lopez, Wangjié &
+Mulligan, …) and the Wylie are NEVER copied — the CAT source points
+back via `#+TIBETAN_SECTION_REFS:' and the prompt builder injects
+them as ¶-context at request time (C7.2).
+
+After importing: run `tibetan-shad-split-segments' (segment = shad
+unit) and then the genre-aware `tibetan-add-sentence-structure' on
+OUTPUT-FILE.  Refuses to overwrite an existing OUTPUT-FILE — it is
+hand-owned from the moment it exists.  Returns
+(:sections N :segments N :file OUTPUT-FILE).
 
 ** ~tibetan-cascade-rendering-placeholder~  /constant/
 :PROPERTIES:
