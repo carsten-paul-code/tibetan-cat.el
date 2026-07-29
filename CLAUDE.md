@@ -3385,10 +3385,35 @@ Khu-dbon 5/150 promoted, ~2.4%, no over-segmentation) with a
 tunable stop-list (ཆེ ཆེས འདྲ དགའ — the last protects proper names
 like ཐོས་པ་དགའ; ཚར is a Hill coverage gap, addable per §5.39).
 
-Suite: **ERT 2247** (0 unexpected, 1 skip) + **BDD 248**; compile
-clean.  NEXT: C7 Rgyan importer + §-context; C6/C8 migrations
-post-Aug-24; Khu-dbon backfill unblocked (operational, needs the
-user's go for API spend).  Also 2026-07-28: the buddhist-studies
+**C7 Rgyan §-layer (2026-07-29, `cc8778f` `7f6a759`)**:
+`tibetan-cascade-import-comparative` turns the GENERATOR-OWNED
+comparative document into a hand-owned cascade CAT source (Lopez
+anchors carried; copyrighted Lopez/W&M and the Wylie NEVER copied —
+locked by test; refuses to overwrite);  `#+TIBETAN_SECTION_REFS:` +
+`tibetan-cascade--section-refs-block` inject the enclosing Lopez §'s
+reference translations into the USER prompt at request time (system
+prompt stays byte-constant — cache prefix untouched, locked by
+test).
+
+**Operational runs (2026-07-29, corpus commit `e228b62`)** — the
+user moved Portfolio drafting to AFTER the cascade, so the Portfolio
+became BORN-CASCADE instead of the planned post-Aug-24 C8 migration:
+32 wizard-era analysis files (verified ZERO user content) quarantined
+to `analysis-pre-cascade-2026-07-29/`; source got the cascade header;
+shad-split 8 → 54 units; 8 cascade sent files created (54
+subsegments, all 53 ★ wordlist glosses in the per-unit Interlinears,
+ZERO API calls — the defer-MT guard held).  Rgyan:
+`Rgyan_167-186-cat.org` imported (20 §§) + shad-split → 173 units;
+sentence grouping (C-c s S) and the first C-c u B are the USER's
+next moves there.
+
+Suite: **ERT 2250** (0 unexpected, 1 skip) + **BDD 248**; compile
+clean.  REMAINING from the cascade plan: C6 migration tool —
+deferred until an actually-drafted two-file corpus needs converting
+(the Portfolio no longer does; Milarepa/Khu-dbon/MA Reading stay
+two-file by decision); Part B Phase 5 stretch — deferred; Khu-dbon
+sent-file backfill — unblocked since C0, operational, needs the
+user's go for API spend.  Also 2026-07-28: the buddhist-studies
 corpus is LOCAL now (`/Users/cp/buddhist-studies`, git/GitHub sync —
 iCloud had been planting conflict copies inside .git itself).
 
