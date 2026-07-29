@@ -1018,20 +1018,20 @@ under `#+TIBETAN_DEFER_MT').  Returns
                                         source-file)
           (push (cons s file) created))))
     (setq created (nreverse created))
-    (when (and (boundp 'tibetan-auto-fire-claude-on-create)
+    ;; CH (2026-07-29, after the live §167 evaluation — 9/9 spans):
+    ;; cascade auto-fire is CHUNKED — one translation-layer call +
+    ;; one DM call per SECTION.  Fire gates skip populated members,
+    ;; and missing spans fall back to the C3 sentence dispatcher on
+    ;; the next open/batch.
+    (when (and created
+               (boundp 'tibetan-auto-fire-claude-on-create)
                tibetan-auto-fire-claude-on-create)
-      (dolist (c created)
-        (let* ((s (car c))
-               (sentence (list :sent-num (plist-get s :sent-num)
-                               :seg-nums (mapcar #'car (plist-get s :segs))
-                               :tibetan-text (mapconcat
-                                              #'cdr (plist-get s :segs)
-                                              ""))))
-          (condition-case err
-              (tibetan-cascade--fire-sentence sentence source-file folder)
-            (error (message "Cascade fire skipped (Sentence %s): %s"
-                            (plist-get s :sent-num)
-                            (error-message-string err)))))))
+      (dolist (chunk (tibetan-cascade--collect-section-chunks))
+        (condition-case err
+            (tibetan-cascade--fire-section chunk source-file folder)
+          (error (message "Cascade chunk fire skipped (%s): %s"
+                          (or (plist-get chunk :label) "chunk")
+                          (error-message-string err))))))
     (message "Cascade: %d sentence file%s created, %d skipped"
              (length created) (if (= 1 (length created)) "" "s") skipped)
     (list :created (length created) :skipped skipped

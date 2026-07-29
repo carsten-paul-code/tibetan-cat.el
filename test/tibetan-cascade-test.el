@@ -1155,5 +1155,21 @@ same request fine), which silently broke EVERY DharmaMitra call."
                          captured-args))
         (should (string-match-p "delta" response))))))
 
+(ert-deftest tibetan-cascade-create-all-fires-chunks ()
+  "After the live evaluation (9/9 spans on Rgyan §167), cascade
+auto-fire is CHUNKED: create-all fires one section call per chunk —
+never per-sentence fires."
+  (tibetan-cascade-test--with-cascade-source
+    (let ((tibetan-auto-fire-claude-on-create t)
+          (chunk-fires 0) (sentence-fires 0))
+      (cl-letf (((symbol-function 'tibetan-cascade--fire-section)
+                 (lambda (&rest _) (cl-incf chunk-fires) 'fired))
+                ((symbol-function 'tibetan-cascade--fire-sentence)
+                 (lambda (&rest _) (cl-incf sentence-fires) 'fired)))
+        (tibetan-cascade-create-all))
+      ;; The 2-sentence fixture has no Sections → ONE implicit chunk.
+      (should (= 1 chunk-fires))
+      (should (= 0 sentence-fires)))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here
