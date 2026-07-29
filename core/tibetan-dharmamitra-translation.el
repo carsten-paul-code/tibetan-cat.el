@@ -584,5 +584,54 @@ file's `#+SOURCE:' link), nothing fires.  Soft-guarded via fboundp."
                f body)))
           t))))))
 
+;;;###autoload
+(defun tibetan-dharmamitra-translation-fire-section (section-text label
+                                                     files
+                                                     &optional force)
+  "Fire ONE DharmaMitra translation for a whole SECTION (CH3).
+SECTION-TEXT is the concatenated section Tibetan; LABEL names it
+\(e.g. \"Section §167\"); FILES are the member cascade sentence
+files.  The whole-section translation — CH1 probes showed DM
+resolves anaphora and keeps terminology consistent when given the
+full passage — is written into EVERY member file's nested
+`** DharmaMitra Translation' slot under `(LABEL)', per-file gated
+\(§5.29: a populated slot is never overwritten non-FORCE).  One
+call instead of one per sentence — ~10× friendlier to the 10/min
+limit.  Target language from the document (B-0.2).  Defers under
+`#+TIBETAN_DEFER_MT'.  Returns t on a successful write."
+  (unless (and (fboundp 'tibetan-analysis--defer-mt-p)
+               (tibetan-analysis--defer-mt-p (car files)))
+    (when (and section-text (stringp section-text)
+               (not (string-empty-p (string-trim section-text)))
+               files
+               (or force
+                   (cl-some (lambda (f)
+                              (tibetan-dharmamitra-translation-needs-request-p
+                               f "Tibetan"))
+                            files)))
+      (let ((translation
+             (condition-case err
+                 (tibetan-dharmamitra-api-chat-translate
+                  section-text
+                  :target-lang
+                  (tibetan-dharmamitra-translation--target-lang
+                   (car files)))
+               (error
+                (message "DharmaMitra section request failed (%s): %s"
+                         label (error-message-string err))
+                nil))))
+        (when (and translation (stringp translation)
+                   (not (string-empty-p (string-trim translation))))
+          (let ((body (format "(%s)\n\n%s" label
+                              (string-trim translation))))
+            (dolist (f files)
+              (when (and f (file-exists-p f)
+                         (or force
+                             (tibetan-dharmamitra-translation-needs-request-p
+                              f "Tibetan")))
+                (tibetan-dharmamitra-translation--write-nested-tibetan-section
+                 f body)))
+            t))))))
+
 (provide 'tibetan-dharmamitra-translation)
 ;;; tibetan-dharmamitra-translation.el ends here

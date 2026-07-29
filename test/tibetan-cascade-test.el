@@ -1046,5 +1046,84 @@ untouched non-FORCE."
       (should (string-match-p "Section §167 chunk" s))
       (should-not (string-match-p "⟦" s)))))
 
+;; ============================================================================
+;; CH2c — fire-section (claim + queue + landing through §5.40 machinery)
+;; ============================================================================
+
+(ert-deftest tibetan-cascade-fire-section-end-to-end ()
+  "One chunk claim → one queue submit → landing into every member
+file; ONE DM section schedule; a second non-FORCE fire declines."
+  (tibetan-cascade-test--with-cascade-file
+    (let ((src (expand-file-name "doc.org" dir))
+          (dm-calls 0)
+          (had-gptel (featurep 'gptel)))
+      (unwind-protect
+          (progn
+            (unless had-gptel (provide 'gptel))
+            (tibetan-sentence-claude-clear-inflight)
+            (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+                       (lambda (thunk &rest _)
+                         (funcall thunk (lambda (_s) nil))))
+                      ((symbol-function 'gptel-request)
+                       (lambda (_prompt &rest args)
+                         (funcall (plist-get args :callback)
+                                  "## Translation\n⟦105⟧He acted⟦/105⟧ and ⟦106⟧the dharma is deep⟦/106⟧."
+                                  '(:status 200))))
+                      ((symbol-function 'tibetan-analysis--ensure-gptel-ready)
+                       (lambda (&rest _) t))
+                      ((symbol-function 'run-at-time)
+                       (lambda (_s _r fn &rest args) (apply fn args) nil))
+                      ((symbol-function 'tibetan-cascade--schedule-dm-section)
+                       (lambda (&rest _) (cl-incf dm-calls))))
+              (let ((chunk (list :label "Section §167" :lopez 167
+                                 :sentences
+                                 (list (list :sent-num 4
+                                             :segs '((105 . "བདག")
+                                                     (106 . "ཆོས")))))))
+                (should (eq 'fired
+                            (tibetan-cascade--fire-section
+                             chunk src
+                             (file-name-directory cascade-file))))
+                (should (equal "He acted"
+                               (tibetan-cascade--read-subsegment-section
+                                cascade-file 105 "Rendering")))
+                (should (= 1 dm-calls))
+                ;; Everything landed → second non-FORCE fire declines.
+                (tibetan-sentence-claude-clear-inflight)
+                (should-not (tibetan-cascade--fire-section
+                             chunk src
+                             (file-name-directory cascade-file))))))
+        (tibetan-sentence-claude-clear-inflight)
+        (unless had-gptel
+          (setq features (delq 'gptel features)))))))
+
+;; ============================================================================
+;; CH3 — DharmaMitra chunk-level fire
+;; ============================================================================
+
+(ert-deftest tibetan-dm-fire-section-writes-all-members ()
+  "ONE chat-translate per section; the whole-section translation
+lands in EVERY member file's nested DM slot under the section
+label; a populated member is skipped non-FORCE."
+  (tibetan-cascade-test--with-cascade-file
+    (let ((calls 0))
+      (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+                 (lambda (_text &rest _)
+                   (cl-incf calls)
+                   "The whole section, coherently.")))
+        (should (tibetan-dharmamitra-translation-fire-section
+                 "བདག ཆོས" "Section §167" (list cascade-file)))
+        (should (= 1 calls))
+        (let ((s (with-temp-buffer (insert-file-contents cascade-file)
+                                   (buffer-string))))
+          (should (string-match-p "(Section §167)" s))
+          (should (string-match-p "The whole section, coherently\\." s))))
+      ;; Populated now → a second non-FORCE fire makes NO api call.
+      (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+                 (lambda (&rest _) (cl-incf calls) "OVERWRITE?")))
+        (tibetan-dharmamitra-translation-fire-section
+         "བདག ཆོས" "Section §167" (list cascade-file))
+        (should (= 1 calls))))))
+
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here

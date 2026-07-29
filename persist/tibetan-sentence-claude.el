@@ -466,12 +466,19 @@ is already populated — M7 discipline).  Concept Notes are copied to
 every child under the sentence label.  Children missing from the
 response get a VISIBLE stub via the failure-stub writer — never a
 silent blank.  The sent file gets the whole-sentence pieces."
-  (if (and (plist-get ctx :cascade)
-           (fboundp 'tibetan-cascade--land-response))
-      ;; C3.2: cascade documents land into the ONE cascade file —
-      ;; sentence-level sections + per-subsegment span renderings.
-      (tibetan-cascade--land-response response ctx)
-    (tibetan-sentence-claude--handle-response-1 response ctx)))
+  (cond
+   ((and (plist-get ctx :chunk)
+         (fboundp 'tibetan-cascade--land-chunk-response))
+    ;; CH2c: section chunks land spans + sentence slices into every
+    ;; member cascade file.
+    (tibetan-cascade--land-chunk-response response ctx))
+   ((and (plist-get ctx :cascade)
+         (fboundp 'tibetan-cascade--land-response))
+    ;; C3.2: cascade documents land into the ONE cascade file —
+    ;; sentence-level sections + per-subsegment span renderings.
+    (tibetan-cascade--land-response response ctx))
+   (t
+    (tibetan-sentence-claude--handle-response-1 response ctx))))
 
 (defun tibetan-sentence-claude--handle-response-1 (response ctx)
   "Two-file landing body of `tibetan-sentence-claude--handle-response'."
@@ -546,16 +553,31 @@ is still empty).
 CASCADE (C3.2) marks a cascade-document request: CHILD-FILES is nil,
 SENT-FILE is the one cascade file, and the response handler routes to
 `tibetan-cascade--land-response' instead of the two-file fan-out.
-Same prompts, same schema, same queue — only the landing differs."
+Same prompts, same schema, same queue — only the landing differs.
+
+CASCADE = `chunk' (CH2c) marks a SECTION-chunk request: SENTENCE is
+the chunk plist (:sent-num CLAIM-KEY :label :sentences), prompts come
+from `tibetan-cascade--build-chunk-prompts' (translation layer only),
+and the handler routes to `tibetan-cascade--land-chunk-response'."
   (require 'tibetan-claude-queue)
-  (let* ((sent-num (plist-get sentence :sent-num))
+  (let* ((chunk-p (eq cascade 'chunk))
+         (sent-num (plist-get sentence :sent-num))
          (seg-nums (plist-get sentence :seg-nums))
-         (label (format "sent-%03d (segs %s)%s" (or sent-num 0)
-                        (mapconcat #'number-to-string seg-nums ",")
-                        (if cascade " [cascade]" "")))
-         (ctx (list :sent-num sent-num :seg-nums seg-nums
-                    :child-files child-files :sent-file sent-file
-                    :force force :cascade (and cascade t)))
+         (label (if chunk-p
+                    (format "chunk %s (segs %s)"
+                            (or (plist-get sentence :label) sent-num)
+                            (mapconcat #'number-to-string seg-nums ","))
+                  (format "sent-%03d (segs %s)%s" (or sent-num 0)
+                          (mapconcat #'number-to-string seg-nums ",")
+                          (if cascade " [cascade]" ""))))
+         (ctx (if chunk-p
+                  (list :chunk t
+                        :label (plist-get sentence :label)
+                        :sentences (plist-get sentence :sentences)
+                        :force force)
+                (list :sent-num sent-num :seg-nums seg-nums
+                      :child-files child-files :sent-file sent-file
+                      :force force :cascade (and cascade t))))
          (claim-key (cons (file-truename source-file) sent-num)))
     (tibetan-claude-queue-submit
      (lambda (done)
@@ -565,8 +587,13 @@ Same prompts, same schema, same queue — only the landing differs."
                (error "gptel not loaded"))
              (when (fboundp 'tibetan-analysis--ensure-gptel-ready)
                (tibetan-analysis--ensure-gptel-ready))
-             (let* ((prompts (tibetan-sentence-claude--build-prompts
-                              sentence source-file folder))
+             (let* ((prompts
+                     (if (and chunk-p
+                              (fboundp 'tibetan-cascade--build-chunk-prompts))
+                         (tibetan-cascade--build-chunk-prompts
+                          sentence source-file)
+                       (tibetan-sentence-claude--build-prompts
+                        sentence source-file folder)))
                     (gptel-cache '(system)))
                (gptel-request
                 (cdr prompts)

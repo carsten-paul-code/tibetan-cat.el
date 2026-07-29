@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-07-29T10:09:17
+#+DATE: 2026-07-29T10:12:31
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1348 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1354 forms
 
 Regenerated automatically by:
 
@@ -29,7 +29,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#config/tibetan-keybindings.el][config/tibetan-keybindings.el]]  (3)
   - [[#config/tibetan-menu.el][config/tibetan-menu.el]]  (1)
   - [[#core/tibetan-dharmamitra-api.el][core/tibetan-dharmamitra-api.el]]  (13)
-  - [[#core/tibetan-dharmamitra-translation.el][core/tibetan-dharmamitra-translation.el]]  (13)
+  - [[#core/tibetan-dharmamitra-translation.el][core/tibetan-dharmamitra-translation.el]]  (14)
   - [[#core/tibetan-org-structure.el][core/tibetan-org-structure.el]]  (37)
   - [[#core/tibetan-phonetics.el][core/tibetan-phonetics.el]]  (17)
   - [[#core/tibetan-sanskrit-parallel-dharmamitra.el][core/tibetan-sanskrit-parallel-dharmamitra.el]]  (22)
@@ -62,7 +62,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (131)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (29)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (43)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (48)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
@@ -2771,6 +2771,28 @@ response writes nothing (preserve pattern, like --fire-tibetan).
 Portfolio mode: when the children's source defers MT
 (`#+TIBETAN_DEFER_MT: t', resolved via the first child's or the sent
 file's `#+SOURCE:' link), nothing fires.  Soft-guarded via fboundp.
+
+** ~tibetan-dharmamitra-translation-fire-section~  /function/  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 588
+:SIGNATURE: (tibetan-dharmamitra-translation-fire-section section-text label
+                                                     files
+                                                     &optional force)
+:AUTOLOAD: t
+:END:
+
+Fire ONE DharmaMitra translation for a whole SECTION (CH3).
+SECTION-TEXT is the concatenated section Tibetan; LABEL names it
+(e.g. "Section §167"); FILES are the member cascade sentence
+files.  The whole-section translation — CH1 probes showed DM
+resolves anaphora and keeps terminology consistent when given the
+full passage — is written into EVERY member file's nested
+`** DharmaMitra Translation' slot under `(LABEL)', per-file gated
+(§5.29: a populated slot is never overwritten non-FORCE).  One
+call instead of one per sentence — ~10× friendlier to the 10/min
+limit.  Target language from the document (B-0.2).  Defers under
+`#+TIBETAN_DEFER_MT'.  Returns t on a successful write.
 
 
 * core/tibetan-org-structure.el
@@ -15589,6 +15611,47 @@ bodies stay in the comparative file and the prompt: they are NEVER
 written into analysis files (copyright + regen safety).  nil when
 anything along the chain is missing.
 
+** ~tibetan-cascade--schedule-dm-section~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 1526
+:SIGNATURE: (tibetan-cascade--schedule-dm-section chunk files force)
+:END:
+
+Schedule ONE DharmaMitra call for CHUNK's whole text — staggered
+against the 10/min limit like the §5.40 sentence DM, but one call
+per SECTION instead of one per sentence.
+
+** ~tibetan-cascade--fire-section~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 1550
+:SIGNATURE: (tibetan-cascade--fire-section chunk source-file folder
+                                      &optional force)
+:END:
+
+Fire ONE chunk-level Claude call (translation layer) for CHUNK.
+Resolves every member sentence's cascade file; gate = FORCE, any
+member needing Claude, or any member Rendering placeholder.  Claim,
+queue, and gptel all ride the §5.40 machinery (`chunk' request
+flavor); DM rides the same claim at SECTION granularity.  Returns
+`fired' / `dedup-hit' / `deferred' / nil.
+
+** ~tibetan-cascade-fire-sections~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 1617
+:SIGNATURE: (tibetan-cascade-fire-sections &optional force)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+Chunk-fire every section of the current cascade source buffer.
+One translation-layer Claude call + one DharmaMitra call per section
+chunk (`tibetan-cascade--collect-section-chunks'); everything lands
+into the member cascade files.  With prefix FORCE, re-fires
+populated sections too.
+
 ** ~tibetan-cascade-chunk-max-segments~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
@@ -15648,6 +15711,22 @@ Constant per document — a third coexisting Anthropic cache prefix
 beside the segment-level and sentence-level ones.  Output is the
 translation ONLY: the §5.40 record shows long multi-section
 responses drop content, so vocabulary/grammar stay per-sentence.
+
+** ~tibetan-sentence-claude--dm-schedule-count~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 1523
+:END:
+
+/(no docstring)/
+
+** ~tibetan-dharmamitra-sentence-request-delay~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 1524
+:END:
+
+/(no docstring)/
 
 
 * persist/tibetan-claude-queue.el
@@ -16479,7 +16558,7 @@ silent blank.  The sent file gets the whole-sentence pieces.
 ** ~tibetan-sentence-claude--handle-response-1~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 476
+:LINE: 483
 :SIGNATURE: (tibetan-sentence-claude--handle-response-1 response ctx)
 :END:
 
@@ -16488,7 +16567,7 @@ Two-file landing body of `tibetan-sentence-claude--handle-response'.
 ** ~tibetan-sentence-claude--request~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 538
+:LINE: 545
 :SIGNATURE: (tibetan-sentence-claude--request sentence child-files sent-file
                                          source-file folder force
                                          &optional cascade)
@@ -16504,10 +16583,15 @@ SENT-FILE is the one cascade file, and the response handler routes to
 `tibetan-cascade--land-response' instead of the two-file fan-out.
 Same prompts, same schema, same queue — only the landing differs.
 
+CASCADE = `chunk' (CH2c) marks a SECTION-chunk request: SENTENCE is
+the chunk plist (:sent-num CLAIM-KEY :label :sentences), prompts come
+from `tibetan-cascade--build-chunk-prompts' (translation layer only),
+and the handler routes to `tibetan-cascade--land-chunk-response'.
+
 ** ~tibetan-analysis--fire-sentence-level~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 623
+:LINE: 650
 :SIGNATURE: (tibetan-analysis--fire-sentence-level tibetan-text analysis-file
                                               source-file seg-id
                                               &optional force)
@@ -16524,7 +16608,7 @@ per-segment Claude).
 ** ~tibetan-analysis--fire-sentence-level-1~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 644
+:LINE: 671
 :SIGNATURE: (tibetan-analysis--fire-sentence-level-1 analysis-file source-file
                                                 seg-id force)
 :END:
@@ -16534,7 +16618,7 @@ Unguarded body of `tibetan-analysis--fire-sentence-level'.
 ** ~tibetan-analysis--fire-sentence-level-2~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 673
+:LINE: 700
 :SIGNATURE: (tibetan-analysis--fire-sentence-level-2 sentence analysis-file
                                                 source-file force)
 :END:

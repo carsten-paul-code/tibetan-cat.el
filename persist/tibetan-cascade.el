@@ -1514,5 +1514,134 @@ anything along the chain is missing."
                    (mapconcat #'identity (nreverse blocks) "\n"))))))
         (error nil)))))
 
+;; ============================================================================
+;; CH2c — fire-section + UX
+;; ============================================================================
+
+(declare-function tibetan-dharmamitra-translation-fire-section
+                  "tibetan-dharmamitra-translation")
+(defvar tibetan-sentence-claude--dm-schedule-count)
+(defvar tibetan-dharmamitra-sentence-request-delay)
+
+(defun tibetan-cascade--schedule-dm-section (chunk files force)
+  "Schedule ONE DharmaMitra call for CHUNK's whole text — staggered
+against the 10/min limit like the §5.40 sentence DM, but one call
+per SECTION instead of one per sentence."
+  (when (and files
+             (fboundp 'tibetan-dharmamitra-translation-fire-section)
+             (boundp 'tibetan-sentence-claude--dm-schedule-count)
+             (boundp 'tibetan-dharmamitra-sentence-request-delay))
+    (let ((delay (* tibetan-sentence-claude--dm-schedule-count
+                    tibetan-dharmamitra-sentence-request-delay))
+          (text (mapconcat (lambda (s)
+                             (mapconcat #'cdr (plist-get s :segs) ""))
+                           (plist-get chunk :sentences) ""))
+          (label (or (plist-get chunk :label) "Section")))
+      (cl-incf tibetan-sentence-claude--dm-schedule-count)
+      (run-at-time
+       delay nil
+       (lambda ()
+         (condition-case err
+             (tibetan-dharmamitra-translation-fire-section
+              text label files force)
+           (error (message "Section DM fire failed (%s): %s"
+                           label (error-message-string err)))))))))
+
+(defun tibetan-cascade--fire-section (chunk source-file folder
+                                      &optional force)
+  "Fire ONE chunk-level Claude call (translation layer) for CHUNK.
+Resolves every member sentence's cascade file; gate = FORCE, any
+member needing Claude, or any member Rendering placeholder.  Claim,
+queue, and gptel all ride the §5.40 machinery (`chunk' request
+flavor); DM rides the same claim at SECTION granularity.  Returns
+`fired' / `dedup-hit' / `deferred' / nil."
+  (if (and (fboundp 'tibetan-analysis--defer-mt-p)
+           (tibetan-analysis--defer-mt-p source-file))
+      'deferred
+    (let ((sentences
+           (delq nil
+                 (mapcar
+                  (lambda (s)
+                    (let* ((sent-num (plist-get s :sent-num))
+                           (file (and sent-num
+                                      (fboundp 'tibetan-sentence--filepath)
+                                      (tibetan-sentence--filepath
+                                       sent-num folder source-file))))
+                      (when (and file (file-exists-p file))
+                        (list :sent-num sent-num
+                              :seg-nums (mapcar #'car
+                                                (plist-get s :segs))
+                              :segs (plist-get s :segs)
+                              :file file))))
+                  (plist-get chunk :sentences)))))
+      (when (and sentences
+                 (fboundp 'tibetan-sentence-claude--claim)
+                 (fboundp 'tibetan-sentence-claude--request))
+        (when (or force
+                  (cl-some
+                   (lambda (s)
+                     (let ((file (plist-get s :file)))
+                       (or (and (fboundp
+                                 'tibetan-analysis--claude-needs-request-p)
+                                (tibetan-analysis--claude-needs-request-p
+                                 file))
+                           (cl-some
+                            (lambda (n)
+                              (tibetan-cascade--subsegment-rendering-needs-request-p
+                               file n))
+                            (plist-get s :seg-nums)))))
+                   sentences))
+          (let* ((key (cons 'chunk (plist-get (car sentences) :sent-num)))
+                 (label (format "chunk %s"
+                                (or (plist-get chunk :label) key))))
+            (if (not (tibetan-sentence-claude--claim
+                      source-file key label))
+                'dedup-hit
+              (tibetan-sentence-claude--request
+               (list :sent-num key
+                     :seg-nums (apply #'append
+                                      (mapcar (lambda (s)
+                                                (plist-get s :seg-nums))
+                                              sentences))
+                     :label (plist-get chunk :label)
+                     :sentences sentences)
+               nil nil source-file folder force 'chunk)
+              (tibetan-cascade--schedule-dm-section
+               (list :label (plist-get chunk :label)
+                     :sentences sentences)
+               (mapcar (lambda (s) (plist-get s :file)) sentences)
+               force)
+              'fired)))))))
+
+;;;###autoload
+(defun tibetan-cascade-fire-sections (&optional force)
+  "Chunk-fire every section of the current cascade source buffer.
+One translation-layer Claude call + one DharmaMitra call per section
+chunk (`tibetan-cascade--collect-section-chunks'); everything lands
+into the member cascade files.  With prefix FORCE, re-fires
+populated sections too."
+  (interactive "P")
+  (unless (buffer-file-name)
+    (user-error "Buffer must be saved to a file first"))
+  (unless (and (fboundp 'tibetan-analysis--cascade-p)
+               (tibetan-analysis--cascade-p (buffer-file-name)))
+    (user-error "Not a cascade document (#+TIBETAN_LAYOUT: cascade)"))
+  (let* ((source-file (buffer-file-name))
+         (folder (file-name-as-directory
+                  (expand-file-name
+                   "analysis" (file-name-directory source-file))))
+         (chunks (tibetan-cascade--collect-section-chunks))
+         (fired 0) (other 0))
+    (unless chunks
+      (user-error "No sentences found"))
+    (dolist (c chunks)
+      (if (eq 'fired (tibetan-cascade--fire-section
+                      c source-file folder force))
+          (cl-incf fired)
+        (cl-incf other)))
+    (message "Chunk-fire: %d section call%s queued, %d skipped/deferred"
+             fired (if (= 1 fired) "" "s") other)
+    (list :fired fired :skipped other)))
+
 (provide 'tibetan-cascade)
 ;;; tibetan-cascade.el ends here
