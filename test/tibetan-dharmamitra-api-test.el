@@ -278,21 +278,35 @@ Callers can `or' against this."
     (should (null (tibetan-dharmamitra-api-chat-translate "x")))))
 
 (ert-deftest tibetan-dharmamitra-api-http-post-enforces-tls-verification ()
-  "`--http-post' must bind `gnutls-verify-error' to t around the
-`url-retrieve-synchronously' call.
+  "TLS verification holds on BOTH transports (§5.28 guarantee).
 
-Emacs' default `gnutls-verify-error' is nil, meaning certificate
-failures do NOT abort the connection — the bearer token would be sent
-and the response trusted over an unverified (MITM-able) channel.  This
-test sets the global default to nil and captures the dynamic value of
-`gnutls-verify-error' at the moment `--http-post' contacts the server;
-it must be t."
+curl path (default since the 2026-07-29 transport fix): curl
+verifies certificates by default — the invocation must never pass an
+insecure flag.  url.el fallback: `gnutls-verify-error' must be bound
+to t at the moment `url-retrieve-synchronously' contacts the server
+\(Emacs' default nil would send the bearer token over an unverified,
+MITM-able channel)."
+  ;; curl path: no --insecure/-k in the argument list.
+  (let (curl-args)
+    (cl-letf (((symbol-function 'call-process-region)
+               (lambda (_s _e prog &optional _d buffer _disp &rest args)
+                 (setq curl-args (cons prog args))
+                 (with-current-buffer (if (bufferp buffer) buffer
+                                        (current-buffer))
+                   (insert "data: {}\n"))
+                 0)))
+      (tibetan-dharmamitra-api--http-post "/x" "{}")
+      (when curl-args                     ; curl present on this host
+        (should-not (member "-k" curl-args))
+        (should-not (member "--insecure" curl-args)))))
+  ;; url.el fallback: force it by hiding curl.
   (let ((captured 'unset)
         (gnutls-verify-error nil))        ; hostile default
-    (cl-letf (((symbol-function 'url-retrieve-synchronously)
+    (cl-letf (((symbol-function 'executable-find)
+               (lambda (_name) nil))
+              ((symbol-function 'url-retrieve-synchronously)
                (lambda (&rest _)
                  (setq captured gnutls-verify-error)
-                 ;; Return a minimal HTTP buffer so --http-post can parse.
                  (let ((buf (generate-new-buffer " *tls-test*")))
                    (with-current-buffer buf
                      (insert "HTTP/1.1 200 OK\n\nok"))
