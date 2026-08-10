@@ -3475,6 +3475,57 @@ suite-green-per-commit rule.
 Suite: **ERT 2257** (0 unexpected, 1 skip) + **BDD 248**; compile
 clean.
 
+### 5.49 Defer-MT visibility + two batch data-hazards fixed (2026-08-10)
+
+Commits `1fd2aef` `08a39f6` `ca20688` `d89cc47` (corpus `612abfe`
+`e51f461`).  Trigger: Carsten did `C-c u A` on the Portfolio's first
+sentence and read the generic `[Requesting translation...]` /
+`[Awaiting DharmaMitra…]` placeholders as a FAILED request — but
+`#+TIBETAN_DEFER_MT` was working exactly as designed (his own P1
+protocol).  The tool never said WHY the slots were empty.
+
+**Defer-MT visibility (1fd2aef + 08a39f6)**: new
+`tibetan-analysis-defer-mt-placeholder` — emitted instead of the
+generic placeholders by all three scaffold builders (cascade
+scaffold, two-file segment `tibetan-analysis-create-file`, two-file
+sentence `tibetan-sentence--scaffold`) via the shared
+`tibetan-analysis--defer-mt-rewrite-placeholders` when
+`--defer-mt-p`.  KEY DESIGN: the text keeps the `[Awaiting` prefix,
+which every placeholder recognizer already treats as
+needs-request — zero recognizer surgery; an ERT recognizer-lock
+test pins the prefix contract.  Plus messages at the two
+interactive moments: opening a defer-MT segment (`C-c u A`) and the
+`C-c u R` decline (the guarded fire returns `deferred` silently —
+it looked like a no-op failure).
+
+**★-gloss loss on headless regenerate (ca20688)**: the V3 refresh
+of the 8 deb files dropped ALL curated ★ wordlist glosses —
+`tibetan-cascade--scaffold` ran its renderer calls with the
+CALLER's `default-directory`, and `tibetan-find-resources-folder`'s
+headless fallback IS `default-directory` (the 2026-06-03
+corpus-wipe lesson).  Fix: `--scaffold` pins `default-directory` to
+the source's directory.  Refresh re-run: ★ back at snapshot parity
+(35), user slots byte-identical, defer text 8/8.
+
+**Batch-deadlock root cause FOUND + FIXED (d89cc47)**: both Rgyan
+hangs (the 29 h big-bang AND the sequential driver at §171) wedged
+on the interactive supersession prompt (`…has changed since
+visited or saved.  Save anyway?`) — blocking on stdin in batch.
+Mechanism: mixed writer families on the same sent file — direct
+disk writers (cascade span writer via `write-region`) crossing
+buffer writers (DM + Claude landings via `find-file-noselect` +
+`save-buffer`); the `(or (find-buffer-visiting …)
+(find-file-noselect …))` pattern returns the stale buffer with no
+modtime handling.  Fix: `tibetan-fresh-file-buffer`
+(core/tibetan-utils.el) — visiting-buffer-first (find-file-noselect
+has its own "Reread from disk?" prompt), silent revert when stale
+AND unmodified, never touches unsaved edits; applied at the five
+landing write sites (DM nested/toplevel, `--insert-claude-sections`,
+`--restore-claude-sections`, failure stub).  The sequential
+per-section driver remains the operational pattern for corpus-wide
+fires; a big-bang batch may be re-validated now that the cause is
+fixed, but do it on a small corpus first.
+
 ## 6. Open work (prioritised)
 
 ### P0 — Verify Detailed Dictionary on a real segment ✓ DONE 2026-04-15
