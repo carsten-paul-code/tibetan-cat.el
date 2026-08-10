@@ -788,6 +788,14 @@ their rationale."
       ;; `** Provided Translations' block.  No-op when the block is
       ;; absent.
       (tibetan-sentence--inject-sentence-l3-entries (current-buffer))
+      ;; DEFER-MT VISIBILITY (2026-07-30): defer-MT documents get the
+      ;; explanatory placeholder instead of the generic ones (same
+      ;; `[Awaiting' prefix — recognizers unaffected).
+      (when (and source-file
+                 (fboundp 'tibetan-analysis--defer-mt-p)
+                 (fboundp 'tibetan-analysis--defer-mt-rewrite-placeholders)
+                 (tibetan-analysis--defer-mt-p source-file))
+        (tibetan-analysis--defer-mt-rewrite-placeholders))
       (buffer-string))))
 
 (defun tibetan-sentence--create-file (sent-num seg-nums tibetan-text source-file)

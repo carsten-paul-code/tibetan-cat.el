@@ -23,6 +23,13 @@
   (require 'org))
 (require 'md5)
 
+;; The full (require 'tibetan-analysis-claude) sits mid-file (§ order);
+;; `tibetan-analysis-create-file' above it calls these two for the
+;; defer-MT placeholder rewrite (fboundp-guarded at runtime).
+(declare-function tibetan-analysis--defer-mt-p "tibetan-analysis-claude")
+(declare-function tibetan-analysis--defer-mt-rewrite-placeholders
+                  "tibetan-analysis-claude")
+
 ;; Require modules for verb analysis (soft load - main loading via tibetan-cat.el)
 (require 'tibetan-verb-classifier nil t)
 (require 'tibetan-enhanced-display nil t)
@@ -1245,6 +1252,13 @@ matching, the skip-check in
       (insert auto-content)
       (insert "\n\n")
       (insert "* Footnotes\n\n")
+      ;; DEFER-MT VISIBILITY (2026-07-30): on a defer-MT document the
+      ;; generic MT placeholders read as a failure — replace them with
+      ;; the explanatory defer text (same `[Awaiting' prefix, so the
+      ;; needs-request recognizers still fire once the header is gone).
+      (when (and (fboundp 'tibetan-analysis--defer-mt-p)
+                 (tibetan-analysis--defer-mt-p source-file))
+        (tibetan-analysis--defer-mt-rewrite-placeholders))
       ;; Export safety (2026-05-18):  strip Interlinear→DD dangling
       ;; term-* links from the freshly-built file so `org-export'
       ;; doesn't abort on the first broken anchor.  See

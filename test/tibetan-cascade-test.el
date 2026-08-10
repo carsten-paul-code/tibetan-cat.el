@@ -21,6 +21,8 @@
 
 (require 'tibetan-analysis-claude)
 (require 'tibetan-cascade)
+;; The defer-MT visibility tests assert the DM recognizer too.
+(require 'tibetan-dharmamitra-translation)
 
 ;; ============================================================================
 ;; Fixture
@@ -1170,6 +1172,58 @@ never per-sentence fires."
       ;; The 2-sentence fixture has no Sections → ONE implicit chunk.
       (should (= 1 chunk-fires))
       (should (= 0 sentence-fires)))))
+
+;; ============================================================================
+;; V1+V2 (2026-07-30) — defer-MT visibility
+;; ============================================================================
+;; Live Portfolio confusion: the generic placeholders read as a
+;; FAILURE when #+TIBETAN_DEFER_MT was doing its job.  The scaffold
+;; must SAY why nothing fired — and the explanatory placeholder must
+;; still count as needs-request everywhere (it starts with
+;; "[Awaiting", so every §5.8/§5.29 recognizer accepts it; these
+;; tests lock that so future prefix drift cannot break it).
+
+(ert-deftest tibetan-cascade-defer-mt-placeholders-explain ()
+  "A defer-MT document's cascade files carry the explanatory
+placeholder in Translation, DM, and Rendering slots — and all three
+still register as needing a request."
+  (tibetan-cascade-test--with-stub-renderer
+    (let* ((dir (make-temp-file "defer-vis-" t))
+           (src (expand-file-name "doc.org" dir)))
+      (unwind-protect
+          (progn
+            (with-temp-file src
+              (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n"
+                      "#+TIBETAN_DEFER_MT: t\n\n"
+                      "* Tibetan Text\n*** Sentence 4\n"
+                      "**** Segment 105\nབདག\n\n"))
+            (let ((f (tibetan-cascade--create-file
+                      4 '((105 . "བདག")) src)))
+              (let ((s (with-temp-buffer (insert-file-contents f)
+                                         (buffer-string))))
+                ;; The explanation is present, the generic texts gone.
+                (should (string-match-p "MT deferred" s))
+                (should (string-match-p "TIBETAN_DEFER_MT" s))
+                (should-not (string-match-p
+                             (regexp-quote "[Requesting translation...]")
+                             s))
+                (should-not (string-match-p
+                             (regexp-quote "[Awaiting DharmaMitra…]") s)))
+              ;; Recognizer lock: everything still needs a request.
+              (should (tibetan-analysis--claude-needs-request-p f))
+              (should (tibetan-dharmamitra-translation-needs-request-p
+                       f "Tibetan"))
+              (should (tibetan-cascade--subsegment-rendering-needs-request-p
+                       f 105))))
+        (delete-directory dir t)))))
+
+(ert-deftest tibetan-cascade-no-defer-keeps-generic-placeholders ()
+  "Without the defer header the scaffold is unchanged."
+  (tibetan-cascade-test--with-cascade-file
+    (should (string-match-p
+             (regexp-quote "[Awaiting DharmaMitra…]")
+             (with-temp-buffer (insert-file-contents cascade-file)
+                               (buffer-string))))))
 
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here

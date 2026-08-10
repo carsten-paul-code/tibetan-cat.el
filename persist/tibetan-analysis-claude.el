@@ -586,6 +586,43 @@ signals; returns nil for nil / unresolvable input."
                            :layout)))))
       (error nil))))
 
+(defconst tibetan-analysis-defer-mt-placeholder
+  "[Awaiting your own draft — MT deferred: this document carries #+TIBETAN_DEFER_MT (portfolio mode).  Machine translation fires only after your translation is frozen; then remove the header and re-fire (C-c u R).]"
+  "Placeholder emitted instead of the generic MT placeholders on
+defer-MT documents (DEFER-MT VISIBILITY, 2026-07-30).
+
+Live-Portfolio lesson: Carsten read `[Requesting translation...]' /
+`[Awaiting DharmaMitra…]' as a FAILURE when his own
+`#+TIBETAN_DEFER_MT: t' protocol was working exactly as designed —
+the placeholders never said WHY they were empty.  This text does.
+
+MUST keep the `[Awaiting' prefix: every placeholder recognizer
+\(`tibetan-analysis--read-claude-section-body' filter,
+`--claude-l2-has-real-content-p', the DharmaMitra
+`needs-request-p', and the cascade
+`--subsegment-rendering-needs-request-p') already treats
+`\\=`\\[Awaiting' as still-needing-request, so the deferred slots
+fill normally once the header is removed — with zero recognizer
+changes.  Locked by ERT in test/tibetan-cascade-test.el.")
+
+(defun tibetan-analysis--defer-mt-rewrite-placeholders ()
+  "Rewrite generic MT placeholders in the current buffer to the
+defer-MT explanation (`tibetan-analysis-defer-mt-placeholder').
+Called by scaffold builders AFTER assembling a new analysis file
+for a document where `tibetan-analysis--defer-mt-p' is true —
+never on existing files (landed MT content contains none of the
+literal placeholder strings).  Returns the replacement count."
+  (let ((count 0))
+    (dolist (old '("[Requesting translation...]"
+                   "[Awaiting Claude…]"
+                   "[Awaiting DharmaMitra…]"
+                   "[Awaiting sentence translation…]"))
+      (goto-char (point-min))
+      (while (search-forward old nil t)
+        (replace-match tibetan-analysis-defer-mt-placeholder t t)
+        (cl-incf count)))
+    count))
+
 ;;;###autoload
 (defun tibetan-analysis-set-source-target-lang (source-file lang)
   "Set `#+TIBETAN_TARGET_LANG:' to LANG on SOURCE-FILE.

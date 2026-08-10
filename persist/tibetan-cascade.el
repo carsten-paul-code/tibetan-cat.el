@@ -229,6 +229,15 @@ marks the file for every reader (§2.8: explicit, never sniffed)."
           (insert (tibetan-cascade--subsegment-block
                    (car seg) ordinal (cdr seg)))))
       (insert "* Footnotes\n\n")
+      ;; DEFER-MT VISIBILITY (2026-07-30): on a defer-MT document the
+      ;; generic placeholders read as a failure — say WHY they are
+      ;; empty.  The defer text keeps the `[Awaiting' prefix, so every
+      ;; needs-request recognizer still fires once the header is gone.
+      (when (and source-file
+                 (fboundp 'tibetan-analysis--defer-mt-p)
+                 (fboundp 'tibetan-analysis--defer-mt-rewrite-placeholders)
+                 (tibetan-analysis--defer-mt-p source-file))
+        (tibetan-analysis--defer-mt-rewrite-placeholders))
       (buffer-string))))
 
 (defun tibetan-cascade--create-file (sent-num segs source-file)
