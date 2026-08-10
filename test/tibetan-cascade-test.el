@@ -21,8 +21,10 @@
 
 (require 'tibetan-analysis-claude)
 (require 'tibetan-cascade)
-;; The defer-MT visibility tests assert the DM recognizer too.
+;; The defer-MT visibility tests assert the DM recognizer too; the
+;; open-message test resolves the sentence through the §5.40 walker.
 (require 'tibetan-dharmamitra-translation)
+(require 'tibetan-sentence-persist)
 
 ;; ============================================================================
 ;; Fixture
@@ -1224,6 +1226,34 @@ still register as needing a request."
              (regexp-quote "[Awaiting DharmaMitra…]")
              (with-temp-buffer (insert-file-contents cascade-file)
                                (buffer-string))))))
+
+(ert-deftest tibetan-cascade-open-mentions-defer ()
+  "Opening a defer-MT document's segment says WHY nothing fires."
+  (tibetan-cascade-test--with-stub-renderer
+    (let* ((dir (make-temp-file "defer-msg-" t))
+           (src (expand-file-name "doc.org" dir))
+           (messages '()))
+      (unwind-protect
+          (progn
+            (with-temp-file src
+              (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n"
+                      "#+TIBETAN_DEFER_MT: t\n\n"
+                      "* Tibetan Text\n*** Sentence 4\n"
+                      "**** Segment 105\nབདག\n\n"))
+            (cl-letf (((symbol-function 'display-buffer-in-side-window)
+                       (lambda (buf &rest _) (get-buffer-window buf t)))
+                      ((symbol-function 'message)
+                       (lambda (fmt &rest args)
+                         (push (apply #'format fmt args) messages)
+                         nil)))
+              (let ((buf (tibetan-cascade-open-for-segment 105 src)))
+                (when (buffer-live-p buf)
+                  (with-current-buffer buf (set-buffer-modified-p nil))
+                  (kill-buffer buf))))
+            (should (cl-some (lambda (m)
+                               (string-match-p "TIBETAN_DEFER_MT" m))
+                             messages)))
+        (delete-directory dir t)))))
 
 (provide 'tibetan-cascade-test)
 ;;; tibetan-cascade-test.el ends here

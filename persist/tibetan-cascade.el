@@ -1114,6 +1114,15 @@ is what counts."
                     buf '((side . right) (window-width . 0.5)))))
           (when (windowp win)
             (set-window-point win (with-current-buffer buf (point)))))
+        ;; DEFER-MT VISIBILITY (2026-07-30): say on open WHY the MT
+        ;; slots are placeholders — the file alone looked like a
+        ;; failed request in the live Portfolio session.
+        (when (and (fboundp 'tibetan-analysis--defer-mt-p)
+                   (tibetan-analysis--defer-mt-p source-file))
+          (message (concat "MT deferred for this document "
+                           "(#+TIBETAN_DEFER_MT, portfolio mode) — "
+                           "draft your own translation first; remove "
+                           "the header and re-fire when frozen")))
         buf))))
 
 ;; ============================================================================
@@ -1162,12 +1171,20 @@ still defers under #+TIBETAN_DEFER_MT.  Returns
                        (or (not (fboundp 'tibetan-analysis--should-fire-claude-p))
                            (tibetan-analysis--should-fire-claude-p
                             re-request-claude filepath)))
-              (tibetan-cascade--fire-sentence
-               (list :sent-num sent-id
-                     :seg-nums (mapcar #'car segs)
-                     :tibetan-text (mapconcat #'cdr segs ""))
-               src (file-name-directory (expand-file-name filepath))
-               (eq re-request-claude t)))
+              ;; DEFER-MT VISIBILITY (2026-07-30): the guarded fire
+              ;; returns `deferred' silently — C-c u R then LOOKED
+              ;; like a no-op failure.  Tell the user what happened.
+              (when (eq (tibetan-cascade--fire-sentence
+                         (list :sent-num sent-id
+                               :seg-nums (mapcar #'car segs)
+                               :tibetan-text (mapconcat #'cdr segs ""))
+                         src (file-name-directory
+                              (expand-file-name filepath))
+                         (eq re-request-claude t))
+                        'deferred)
+                (message (concat "MT request NOT fired: #+TIBETAN_DEFER_MT "
+                                 "is active (portfolio mode) — remove the "
+                                 "header once your draft is frozen"))))
             (list :file filepath :sent-id sent-id :ok t))
         (error (list :file filepath :sent-id sent-id :ok nil
                      :error (error-message-string err))))))))
