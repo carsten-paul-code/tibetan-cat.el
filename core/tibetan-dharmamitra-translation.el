@@ -24,6 +24,7 @@
 ;;; Code:
 
 (require 'tibetan-dharmamitra-api)
+(require 'tibetan-utils)                 ; tibetan-fresh-file-buffer
 (require 'tibetan-sanskrit-parallel nil t)
 
 ;; ----------------------------------------------------------------------------
@@ -73,7 +74,10 @@ Returns t on success, nil otherwise."
              (file-writable-p analysis-file)
              (stringp translation)
              (not (string-empty-p translation)))
-    (let ((buf (find-file-noselect analysis-file)))
+    ;; Fresh, not merely visiting: a cascade write-region writer may
+    ;; have moved the file behind a live buffer — the save below must
+    ;; not hit the supersession prompt (batch-deadlock class).
+    (let ((buf (tibetan-fresh-file-buffer analysis-file)))
       (with-current-buffer buf
         (org-mode)
         (save-excursion
@@ -194,7 +198,7 @@ and as a fallback for Tibetan in legacy files without a
 Creates or replaces the section.  Body is TRANSLATION;  property
 drawer carries `:LAST_TRANSLATED:' for freshness tracking."
   (let ((buf (if (bufferp buffer-or-file) buffer-or-file
-               (find-file-noselect buffer-or-file)))
+               (tibetan-fresh-file-buffer buffer-or-file)))
         (heading (format "* DharmaMitra Translation (%s)" source-lang))
         (heading-re (format "^\\* DharmaMitra Translation (%s)[ \t]*$"
                             (regexp-quote source-lang))))

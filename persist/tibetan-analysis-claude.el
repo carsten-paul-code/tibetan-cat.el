@@ -62,6 +62,7 @@
 
 (require 'cl-lib)
 (require 'md5)
+(require 'tibetan-utils)                 ; tibetan-fresh-file-buffer
 (require 'tibetan-claude-queue nil t)
 (require 'gptel nil t)
 ;; Phase 4 of zettel-in-translation-workflow (2026-04-24) — soft-require
@@ -1732,8 +1733,10 @@ user can see at a glance which segments still need a real Claude pass."
                 (string-empty-p trimmed)
                 (string-prefix-p "[Claude" trimmed)
                 (string-prefix-p "[Requesting translation" trimmed))
-        (let ((buf (or (find-buffer-visiting analysis-file)
-                       (find-file-noselect analysis-file))))
+        ;; Fresh, not merely visiting — a write-region writer may
+        ;; have moved the file behind a live buffer (batch-deadlock
+        ;; class; see `tibetan-fresh-file-buffer').
+        (let ((buf (tibetan-fresh-file-buffer analysis-file)))
           (with-current-buffer buf
             (when (fboundp 'tibetan-analysis--ensure-claude-headings)
               (tibetan-analysis--ensure-claude-headings buf))
@@ -2983,8 +2986,10 @@ land inline under each particle without requiring a manual
 reanalyse."
   (when (and response (file-exists-p analysis-file))
     (let* ((sections (tibetan-analysis--parse-claude-sections response))
-           (buf (or (find-buffer-visiting analysis-file)
-                    (find-file-noselect analysis-file))))
+           ;; Fresh, not merely visiting — the cascade span writer
+           ;; (write-region) may have crossed this landing's buffer
+           ;; (batch-deadlock class; see `tibetan-fresh-file-buffer').
+           (buf (tibetan-fresh-file-buffer analysis-file)))
       (with-current-buffer buf
         ;; 2026-05-21:  suppress before/after-change-functions during
         ;; the regex-driven write loop.  Org-mode's incremental
@@ -3291,7 +3296,7 @@ slot.  Heading promoted from `*** Claude Context' (L3) to
 `** Concept Notes' (L2) for segment layout;  sentence layout keeps
 L3 (via the else branch of `--claude-effective-section-order')."
   (when (and sections (file-exists-p filepath))
-    (let ((buf (find-file-noselect filepath)))
+    (let ((buf (tibetan-fresh-file-buffer filepath)))
       (with-current-buffer buf
         (tibetan-analysis--ensure-claude-headings buf)
         (let ((inhibit-modification-hooks t))

@@ -762,5 +762,40 @@ NOTHING (preserve pattern)."
          "བདག་གིས་ལས་བྱས།" 5 '(5) (list analysis-file) nil t)
         (should (equal "german" captured))))))
 
+(ert-deftest tibetan-dharmamitra-writer-survives-stale-buffer ()
+  "The nested-Tibetan DM writer lands cleanly when the analysis file
+changed on disk behind a live visiting buffer (the write-region /
+find-file-noselect crossing that wedged the Rgyan batch drivers on
+the supersession prompt) — and the disk writer's content survives."
+  (let* ((file (make-temp-file "dm-stale-" nil ".org"))
+         (buf nil))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "#+TITLE: T\n\n* Tibetan Analysis\n"
+                    "** DharmaMitra Translation\n[Awaiting DharmaMitra…]\n\n"))
+          (setq buf (find-file-noselect file))
+          ;; A direct disk writer (cascade subsegment pattern) crosses.
+          (sleep-for 0.01)
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-max))
+            (insert "* Subsegments\n** Segment 1\n*** Rendering\nspan\n")
+            (write-region (point-min) (point-max) file nil 'silent))
+          (cl-letf (((symbol-function 'yes-or-no-p)
+                     (lambda (&rest _)
+                       (error "supersession prompt reached"))))
+            (should (tibetan-dharmamitra-translation--write-section
+                     file "Die Übersetzung." "Tibetan")))
+          (let ((s (with-temp-buffer (insert-file-contents file)
+                                     (buffer-string))))
+            (should (string-match-p "Die Übersetzung\\." s))
+            ;; The crossing writer's content was NOT clobbered.
+            (should (string-match-p "\\*\\*\\* Rendering" s))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf))
+      (delete-file file))))
+
 (provide 'tibetan-dharmamitra-translation-test)
 ;;; tibetan-dharmamitra-translation-test.el ends here

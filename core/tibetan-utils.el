@@ -209,5 +209,42 @@ Returns the window."
   "Insert a visual separator line."
   (insert "───────────────────────────────────────────────────────────────\n"))
 
+;; ============================================================================
+;; FILE-BUFFER FRESHNESS (2026-08-10, from the Rgyan batch deadlock)
+;; ============================================================================
+
+(defun tibetan-fresh-file-buffer (file)
+  "Return a buffer visiting FILE whose content is synced with disk.
+
+The analysis pipeline has two writer families: buffer writers
+\(`find-file-noselect' + `save-buffer' — the Claude section landing,
+the DharmaMitra writers) and direct disk writers (`write-region' /
+`with-temp-file' — the cascade subsegment writer, create paths).
+When a disk writer touches a file behind a live visiting buffer,
+the next buffer writer's `save-buffer' hits the interactive
+supersession prompt (\"changed since visited...  Save anyway?\") —
+harmless-looking in a live session, a HARD DEADLOCK in batch
+drivers (the 29 h Rgyan big-bang hang, and again at §171 in the
+sequential driver, both wedged on exactly this prompt).
+
+Fix at the read side: an existing visiting buffer that is UNMODIFIED
+but stale is silently reverted to disk before use, so the eventual
+save never prompts and never clobbers the other writer's content.
+A buffer with unsaved modifications is returned as-is — user edits
+are never discarded (the prompt is then correct behavior).
+
+Checks `find-buffer-visiting' BEFORE `find-file-noselect': the
+latter has its own interactive \"Reread from disk?\" prompt for a
+stale existing buffer, which would just move the batch deadlock
+from save time to open time."
+  (let ((buf (find-buffer-visiting file)))
+    (if buf
+        (with-current-buffer buf
+          (when (and (not (buffer-modified-p))
+                     (not (verify-visited-file-modtime (current-buffer))))
+            (revert-buffer :ignore-auto :noconfirm)))
+      (setq buf (find-file-noselect file)))
+    buf))
+
 (provide 'tibetan-utils)
 ;;; tibetan-utils.el ends here

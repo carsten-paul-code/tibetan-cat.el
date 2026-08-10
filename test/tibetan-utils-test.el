@@ -279,5 +279,61 @@
       (should result)
       (should (string-match-p "Line" (car result))))))
 
+;; ============================================================================
+;; tibetan-fresh-file-buffer (2026-08-10, Rgyan batch deadlock)
+;; ============================================================================
+
+(ert-deftest tibetan-fresh-file-buffer-reverts-stale-unmodified ()
+  "A visiting buffer left behind by an earlier writer is silently
+synced when the file changed on disk (write-region crossing
+find-file-noselect) — the later `save-buffer' must not hit the
+supersession prompt, which deadlocks batch drivers."
+  (let* ((file (make-temp-file "fresh-" nil ".org" "original\n"))
+         (buf (find-file-noselect file)))
+    (unwind-protect
+        (progn
+          ;; Disk moves behind the live buffer.
+          (sleep-for 0.01)
+          (write-region "disk-writer-content\n" nil file nil 'silent)
+          (let ((fresh (tibetan-fresh-file-buffer file)))
+            (should (eq fresh buf))
+            (with-current-buffer fresh
+              (should (equal "disk-writer-content\n" (buffer-string)))
+              ;; The save must go through WITHOUT the prompt.
+              (cl-letf (((symbol-function 'yes-or-no-p)
+                         (lambda (&rest _)
+                           (error "supersession prompt reached"))))
+                (insert "landed\n")
+                (save-buffer))))
+          (should (string-match-p
+                   "landed"
+                   (with-temp-buffer (insert-file-contents file)
+                                     (buffer-string)))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf))
+      (delete-file file))))
+
+(ert-deftest tibetan-fresh-file-buffer-keeps-unsaved-modifications ()
+  "A buffer with unsaved edits is returned untouched — user work is
+never discarded, even when the file also changed on disk."
+  (let* ((file (make-temp-file "fresh-" nil ".org" "original\n"))
+         (buf (find-file-noselect file)))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (goto-char (point-max))
+            (insert "user-edit\n"))
+          (sleep-for 0.01)
+          (write-region "disk-writer-content\n" nil file nil 'silent)
+          (with-current-buffer (tibetan-fresh-file-buffer file)
+            (should (string-match-p "user-edit" (buffer-string)))
+            (should-not (string-match-p "disk-writer-content"
+                                        (buffer-string)))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf (set-buffer-modified-p nil))
+        (kill-buffer buf))
+      (delete-file file))))
+
 (provide 'tibetan-utils-test)
 ;;; tibetan-utils-test.el ends here
