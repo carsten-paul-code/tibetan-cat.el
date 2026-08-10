@@ -170,6 +170,17 @@ rendered through the compressed sentence renderer when available),
 marks the file for every reader (§2.8: explicit, never sniffed)."
   (let* ((source-name (and source-file
                            (file-name-nondirectory source-file)))
+         ;; Renderer calls below (generate-content per subsegment, the
+         ;; sentence auto-renderer) resolve the curated Resources
+         ;; wordlist through `tibetan-find-resources-folder', which
+         ;; falls back to `default-directory' in headless runs
+         ;; (2026-06-03 corpus-wipe lesson).  Pin it to the SOURCE's
+         ;; directory so a batch caller's alien cwd cannot silently
+         ;; drop every ★ gloss (V3 refresh regression, 2026-08-10).
+         (default-directory (if source-file
+                                (file-name-directory
+                                 (expand-file-name source-file))
+                              default-directory))
          (date (format-time-string "%Y-%m-%d"))
          (tibetan-text (mapconcat #'cdr segs ""))
          (hash (and (fboundp 'tibetan-sentence--compute-hash)

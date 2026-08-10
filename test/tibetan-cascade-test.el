@@ -1227,6 +1227,38 @@ still register as needing a request."
              (with-temp-buffer (insert-file-contents cascade-file)
                                (buffer-string))))))
 
+(ert-deftest tibetan-cascade-scaffold-binds-source-directory ()
+  "The scaffold's renderer calls run with `default-directory' at the
+SOURCE's directory — the Resources/wordlist resolution
+\(`tibetan-find-resources-folder') falls back to `default-directory'
+in headless runs (2026-06-03 corpus-wipe lesson), so a batch caller's
+alien cwd must not decide whether ★ glosses appear (V3 refresh
+2026-08-10: all 8 Portfolio files lost their wordlist glosses this
+way)."
+  (let* ((dir (make-temp-file "cascade-cwd-" t))
+         (alien (make-temp-file "alien-cwd-" t))
+         (src (expand-file-name "doc.org" dir))
+         (seen-dirs '()))
+    (unwind-protect
+        (progn
+          (with-temp-file src
+            (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                    "* Tibetan Text\n*** Sentence 1\n"
+                    "**** Segment 1\nབདག\n\n"))
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (lambda (_text &rest _)
+                       (push (file-truename default-directory) seen-dirs)
+                       "** Wylie Transliteration\nW\n\n")))
+            (let ((default-directory (file-name-as-directory alien)))
+              (tibetan-cascade--scaffold 1 '((1 . "བདག")) src)))
+          (should seen-dirs)
+          (should (cl-every
+                   (lambda (d)
+                     (equal d (file-truename (file-name-as-directory dir))))
+                   seen-dirs)))
+      (delete-directory dir t)
+      (delete-directory alien t))))
+
 (ert-deftest tibetan-cascade-open-mentions-defer ()
   "Opening a defer-MT document's segment says WHY nothing fires."
   (tibetan-cascade-test--with-stub-renderer
