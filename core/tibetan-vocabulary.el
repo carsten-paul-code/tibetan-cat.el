@@ -640,6 +640,49 @@ Priority: TXT > ORG > PDF (PDF requires pdftotext)."
               (when pdf-files
                 (message "⚠ No vocabulary loaded from Resources. Create a wordlist.txt or install pdftotext.")))))))))
 
+(defun tibetan-vocab--curated-exact-entry (term)
+  "Exact-key probe of TERM in the user-curated sources ONLY
+\(Resources + Custom).  Tries the term as given and its
+deterministic Wylie form (`tibetan-to-wylie-fixed') — the wordlist
+parsers store Wylie keys, and the Wylie→Tibetan key branch of
+`tibetan--store-vocab-entry' never ran (`tibetan-wylie-to-tibetan'
+is not fbound), so Tibetan-script compounds only reach curated
+entries through this Wylie mapping.
+
+STRICT: no `tibetan-strip-particles' fallback anywhere — this probe
+licenses MWU GROUPING, and a strip fallback would re-introduce the
+seg-049 false-MWU class (see `tibetan-vocab--mwu-exists-p').
+Deliberately separate from `tibetan-lookup-word-in-resources-vocab',
+which strips (it's a GLOSS lookup, where stripping is safe)."
+  (when (and term (stringp term) (not (string-empty-p (string-trim term))))
+    (let ((c (string-trim term))
+          (res (and (boundp 'tibetan-current-resources-vocab)
+                    tibetan-current-resources-vocab))
+          (cus (and (boundp 'tibetan-current-custom-vocab)
+                    tibetan-current-custom-vocab)))
+      (when (or res cus)
+        (or (and res (gethash c res))
+            (and cus (gethash c cus))
+            (let ((wylie (and (fboundp 'tibetan-to-wylie-fixed)
+                              (ignore-errors (tibetan-to-wylie-fixed c)))))
+              (and wylie
+                   (or (and res (gethash wylie res))
+                       (and cus (gethash wylie cus))))))))))
+
+(defun tibetan-vocab--curated-starts-inside-p (words start end)
+  "Non-nil when a curated entry STARTS at any index in [START, END)
+of WORDS (a list of syllables).  Candidate lengths 1–4; used by the
+generic MWU pass so a greedy generic compound never swallows the
+beginning of a curated wordlist term (the sems-chos-nyid /
+chos-nyid shadowing class, W1 2026-08-10)."
+  (let ((n (length words)))
+    (cl-loop for j from start below (min end n)
+             thereis (cl-loop for len from (min 4 (- n j)) downto 1
+                              thereis (tibetan-vocab--curated-exact-entry
+                                       (mapconcat #'identity
+                                                  (cl-subseq words j (+ j len))
+                                                  "་"))))))
+
 (defun tibetan-lookup-word-in-resources-vocab (word)
   "Look up WORD in current Resources vocabulary.
 Returns meaning if found, nil otherwise."
@@ -1096,10 +1139,37 @@ populates the final `(word . meaning)' cell."
             ;; See `tibetan-vocab--mwu-exists-p' for the seg-049
             ;; root-cause context.
             ;;
+            ;; W1 CURATED-FIRST (2026-08-10): the class wordlist is
+            ;; the authority for its corpus (F3).  If ANY curated
+            ;; entry (Resources/Custom, exact key incl. Wylie form)
+            ;; starts at this position, take the LONGEST curated one
+            ;; and skip generic probing entirely — a curated match is
+            ;; exempt from the particle/verb guards (explicit user
+            ;; curation: kog gis, ma khad nas), and a SHORTER curated
+            ;; term beats a longer generic compound at the same start
+            ;; (snang ba vs snang ba 'gyur ba — the Portfolio audit's
+            ;; shadowing class).  Documents without curated vocab hit
+            ;; the empty-hash short-circuit: zero behavior change.
+            (unless found
+              (cl-loop for compound-len from 4 downto 1
+                       until found
+                       when (<= (+ i compound-len) num-words)
+                       do
+                       (let* ((syls-raw (cl-loop for j from i below (+ i compound-len)
+                                                 collect (string-trim (nth j words))))
+                              (compound-raw (mapconcat #'identity syls-raw "་")))
+                         (when (tibetan-vocab--curated-exact-entry compound-raw)
+                           (push (cons compound-raw
+                                       (or (tibetan-lookup-word compound-raw)
+                                           "[look up]"))
+                                 vocab)
+                           (setq found t)
+                           (setq matched-len compound-len)))))
+
             ;; User-curated compounds with particle tails (uncommon
             ;; but possible — e.g. a Resources entry for a lexicalised
-            ;; idiom) should be added to the Resources vocab file,
-            ;; which takes priority in the strict lookup.
+            ;; idiom) are handled by the curated-first pass above,
+            ;; which takes priority over this generic pass.
             (unless found
               (cl-loop for compound-len from 4 downto 2
                        until found
@@ -1112,6 +1182,12 @@ populates the final `(word . meaning)' cell."
                                        compound-raw)
                                      (tibetan-extract-vocab--head-is-particle-p
                                       compound-raw)
+                                     ;; W1 no-swallow guard: a generic
+                                     ;; span must not consume the START
+                                     ;; of a curated wordlist term
+                                     ;; (sems chos nyid vs chos nyid).
+                                     (tibetan-vocab--curated-starts-inside-p
+                                      words (1+ i) (+ i compound-len))
                                      ;; Verb-tail guard: reject an
                                      ;; auto-sourced phrasal entry that
                                      ;; ends in a finite verb, so the

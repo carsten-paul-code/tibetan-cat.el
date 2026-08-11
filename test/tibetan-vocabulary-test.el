@@ -14,6 +14,9 @@
   (add-to-list 'load-path (expand-file-name "../core" base-dir)))
 
 (require 'tibetan-vocabulary)
+;; W1 curated-first grouping maps Tibetan compounds onto the
+;; wordlist's Wylie keys via `tibetan-to-wylie-fixed'.
+(require 'tibetan-wylie)
 
 ;; Declare variables that may not be loaded during tests
 ;; (tibetan-skip-external-glossaries prevents loading bundled glossaries)
@@ -1216,6 +1219,102 @@ hits were cached, so every miss re-queried on each call."
                  (tibetan-split-into-syllables "འཁྲུལ།གཉིས")))
   (should (equal '("ལས" "བྱས" "ཆོས")
                  (tibetan-split-into-syllables "ལས་བྱས། ཆོས"))))
+
+;; ============================================================================
+;; W1 (2026-08-10) — curated-first MWU grouping
+;; ============================================================================
+;; Portfolio wordlist audit: 24 of 66 in-passage wordlist terms never
+;; surfaced.  Three mechanism gaps, each locked here: (a) the wordlist
+;; parser stores Wylie keys but the MWU probe only tried the Tibetan
+;; key (tibetan-wylie-to-tibetan is not fbound, so the store's
+;; Tibetan-key branch never ran); (b) greedy-longest grouping let a
+;; longer generic-source compound swallow a curated term (same start
+;; or mid-span); (c) the particle-tail guard rejected curated idioms
+;; (kog gis, ma khad nas) before the probe ran — despite the
+;; docstring's promise that curated compounds take priority.
+
+(defmacro tibetan-vocab-test--with-curated (resources generic &rest body)
+  "Controlled grouping environment: RESOURCES and GENERIC are alists
+loaded into the Resources hash and one generic source; every other
+source is empty and the disk loaders are inert."
+  (declare (indent 2))
+  `(let ((tibetan-current-resources-vocab (make-hash-table :test 'equal))
+         (tibetan-current-custom-vocab nil)
+         (tibetan-comprehensive-vocabulary (make-hash-table :test 'equal))
+         (tibetan-rangjung-yeshe-vocabulary nil))
+     (dolist (e ,resources)
+       (puthash (car e) (cdr e) tibetan-current-resources-vocab))
+     (dolist (e ,generic)
+       (puthash (car e) (cdr e) tibetan-comprehensive-vocabulary))
+     (cl-letf (((symbol-function 'tibetan-load-resources-vocab)
+                (lambda () nil))
+               ((symbol-function 'tibetan-load-custom-vocab)
+                (lambda () nil))
+               ((symbol-function 'tibetan-rangjung-yeshe-load)
+                (lambda () nil))
+               ;; The historical naming split (D4): a second loader
+               ;; name exists — stub BOTH so the real 162k-entry RY
+               ;; dictionary never enters this controlled fixture.
+               ((symbol-function 'tibetan-load-rangjung-yeshe)
+                (lambda (&rest _) nil))
+               ((symbol-function 'tibetan-steinert-available-p)
+                (lambda () nil))
+               ((symbol-function 'tibetan-thesaurus-lookup)
+                (lambda (_) nil)))
+       ,@body)))
+
+(ert-deftest tibetan-vocab-curated-wylie-key-mwu-groups ()
+  "A Resources-only MWU stored under its WYLIE key groups — the
+class wordlist's place names (rta nag phug) exist in no generic
+dictionary and were never grouped before."
+  (tibetan-vocab-test--with-curated
+      '(("rta nag phug" . "Ortsbezeichnung // place name"))
+      '()
+    (let ((vocab (tibetan-extract-vocabulary "རྟ་ནག་ཕུག")))
+      (should (assoc "རྟ་ནག་ཕུག" vocab))
+      (should (= 1 (length vocab))))))
+
+(ert-deftest tibetan-vocab-curated-beats-longer-generic-same-start ()
+  "A curated term wins over a LONGER generic compound at the same
+start: snang ba (wordlist) vs snang ba 'gyur ba (JimValby)."
+  (tibetan-vocab-test--with-curated
+      '(("snang ba" . "Erscheinungen // appearances"))
+      '(("སྣང་བ་འགྱུར་བ" . "change hearts"))
+    (let ((vocab (tibetan-extract-vocabulary "སྣང་བ་འགྱུར་བ")))
+      (should (assoc "སྣང་བ" vocab))
+      (should-not (assoc "སྣང་བ་འགྱུར་བ" vocab)))))
+
+(ert-deftest tibetan-vocab-generic-must-not-swallow-curated-start ()
+  "A generic compound must not swallow the START of a curated term
+mid-span: sems chos nyid (RangjungYeshe) vs chos nyid (wordlist)."
+  (tibetan-vocab-test--with-curated
+      '(("chos nyid" . "wahre Natur der Gegebenheiten // dharmatā"))
+      '(("སེམས་ཆོས་ཉིད" . "the dharmata of mind")
+        ("སེམས" . "mind"))
+    (let ((vocab (tibetan-extract-vocabulary "སེམས་ཆོས་ཉིད")))
+      (should (assoc "སེམས" vocab))
+      (should (assoc "ཆོས་ཉིད" vocab))
+      (should-not (assoc "སེམས་ཆོས་ཉིད" vocab)))))
+
+(ert-deftest tibetan-vocab-curated-particle-tail-idiom-groups ()
+  "A curated idiom with a particle tail (kog gis) groups — explicit
+user curation is exempt from the particle guards, as the grouping
+docstring has promised since seg-049."
+  (tibetan-vocab-test--with-curated
+      '(("kog gis" . "schnell, plötzlich // quickly, suddenly"))
+      '()
+    (let ((vocab (tibetan-extract-vocabulary "ཀོག་གིས")))
+      (should (assoc "ཀོག་གིས" vocab)))))
+
+(ert-deftest tibetan-vocab-generic-grouping-unchanged-without-curated ()
+  "Regression guard: with no curated sources the generic greedy
+grouping behaves exactly as before."
+  (tibetan-vocab-test--with-curated
+      '()
+      '(("རྗེ་བཙུན" . "venerable"))
+    (let ((vocab (tibetan-extract-vocabulary "རྗེ་བཙུན")))
+      (should (assoc "རྗེ་བཙུན" vocab))
+      (should (= 1 (length vocab))))))
 
 (provide 'tibetan-vocabulary-test)
 ;;; tibetan-vocabulary-test.el ends here
