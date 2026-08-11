@@ -237,6 +237,47 @@ list — each layer one line per shad unit, shads rendered as `/'."
             (tibetan-cascade--renderings-list-body segs)
             "\n\n")))
 
+(declare-function tibetan-segment-text "tibetan-enhanced-parser" (text))
+(declare-function tibetan-extract-verbs-compound-aware
+                  "tibetan-enhanced-display" (text words mwus))
+(declare-function tibetan-analysis--render-sentence-tree
+                  "tibetan-analysis-persist" (words verbs mwus))
+
+(defun tibetan-cascade--sentence-structure-body (segs)
+  "Per-shad-unit verb-first trees for the `** Sentence Structure'
+section (R10): each unit of SEGS ((GLOBAL-NUM . TEXT)…) is parsed
+SEPARATELY under a `Unit K — Segment N' header — parsing the joined
+sentence produced fused tokens across shads and hallucinated main
+verbs (the live sent-001 evidence behind R1).  Returns nil when the
+tree machinery is unavailable or no unit parses (the caller keeps
+the whole-sentence fallback body)."
+  (when (and (fboundp 'tibetan-segment-text)
+             (fboundp 'tibetan-extract-verbs-compound-aware)
+             (fboundp 'tibetan-analysis--render-sentence-tree))
+    (let ((ordinal 0) blocks)
+      (dolist (seg segs)
+        (cl-incf ordinal)
+        (condition-case nil
+            (let* ((text (cdr seg))
+                   (words (tibetan-segment-text text))
+                   (verbs (and words
+                               (tibetan-extract-verbs-compound-aware
+                                text words nil)))
+                   (tree (and words verbs
+                              (tibetan-analysis--render-sentence-tree
+                               words verbs nil))))
+              (when (and tree
+                         (not (string-empty-p (string-trim tree)))
+                         (not (string-prefix-p "[No clause"
+                                               (string-trim tree))))
+                (push (format "Unit %d — Segment %d\n%s"
+                              ordinal (car seg)
+                              (string-trim-right tree))
+                      blocks)))
+          (error nil)))
+      (when blocks
+        (mapconcat #'identity (nreverse blocks) "\n\n")))))
+
 (defun tibetan-cascade--scaffold (sent-num segs source-file)
   "Return the full cascade sent-file body for SENT-NUM (a string).
 SEGS is an ordered list of (GLOBAL-SEG-NUM . TEXT) conses — the
@@ -332,7 +373,18 @@ marks the file for every reader (§2.8: explicit, never sniffed)."
                   (goto-char (point-min))
                   (re-search-forward "^\\*\\* DharmaMitra Translation$"
                                      nil t))
-          (insert "** DharmaMitra Translation\n[Awaiting DharmaMitra…]\n\n")))
+          (insert "** DharmaMitra Translation\n[Awaiting DharmaMitra…]\n\n"))
+        ;; R10: replace the auto renderer's whole-sentence Sentence
+        ;; Structure (fused across shads) with the per-unit trees;
+        ;; keep the fallback body when no unit parses.
+        (let ((per-unit (tibetan-cascade--sentence-structure-body segs)))
+          (when per-unit
+            (if (save-excursion
+                  (goto-char (point-min))
+                  (re-search-forward "^\\*\\* Sentence Structure$" nil t))
+                (tibetan-cascade--set-body-in-buffer
+                 2 "Sentence Structure" per-unit)
+              (insert "** Sentence Structure\n" per-unit "\n\n")))))
       ;; R8: `* Subsegments' retired — the Reading section above
       ;; carries the per-unit layers; `--subsegment-block' remains
       ;; only for legacy readers until the live migration completes.

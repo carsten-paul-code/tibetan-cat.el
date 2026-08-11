@@ -1440,6 +1440,46 @@ unknown L1 sections preserved, the retired Subsegments tree DROPPED
         (should (equal first (funcall strip)))))))
 
 ;; ============================================================================
+;; R10 (2026-08-12) — per-unit Sentence Structure
+;; ============================================================================
+
+(ert-deftest tibetan-cascade-sentence-structure-per-unit ()
+  "The cascade Sentence Structure body parses EACH shad unit
+separately (one verb-first tree per unit, in order) — never the
+joined sentence (the fused-token / hallucinated-main-verb class the
+live sent-001 showed)."
+  (let (parsed-units)
+    (cl-letf (((symbol-function 'tibetan-extract-verbs-compound-aware)
+               (lambda (_text words _mwus)
+                 (list `((lemma . ,(car words)) (source . hill)))))
+              ((symbol-function 'tibetan-analysis--render-sentence-tree)
+               (lambda (words _verbs _mwus)
+                 (push (car words) parsed-units)
+                 (format "TREE(%s)" (car words)))))
+      (let ((body (tibetan-cascade--sentence-structure-body
+                   '((105 . "བདག་གིས་ལས་བྱས།") (106 . "ཆོས་ཟབ་མོ་ཡིན།")))))
+        (should body)
+        ;; One tree per unit, labeled, in order.
+        (should (string-match-p "^Unit 1 — Segment 105$" body))
+        (should (string-match-p "^Unit 2 — Segment 106$" body))
+        (should (string-match-p "TREE(བདག)" body))
+        (should (string-match-p "TREE(ཆོས)" body))
+        (should (< (string-match "Unit 1" body)
+                   (string-match "Unit 2" body)))
+        ;; Each parse saw ONLY its unit's tokens (no cross-shad glue).
+        (should (equal '("བདག" "ཆོས") (nreverse parsed-units)))))))
+
+(ert-deftest tibetan-cascade-scaffold-uses-per-unit-structure ()
+  "The scaffold's ** Sentence Structure carries the per-unit body."
+  (tibetan-cascade-test--with-stub-renderer
+    (cl-letf (((symbol-function 'tibetan-cascade--sentence-structure-body)
+               (lambda (_segs) "Unit 1 — Segment 105\nPERUNIT-TREE")))
+      (let ((s (tibetan-cascade--scaffold
+                4 '((105 . "བདག།")) "/tmp/doc.org")))
+        (should (string-match-p "^\\*\\* Sentence Structure$" s))
+        (should (string-match-p "PERUNIT-TREE" s))))))
+
+;; ============================================================================
 ;; R5 (2026-08-12) — dual-format rendering I/O
 ;; The `- ⟦N⟧ body' line under * Reading/** Renderings is the new
 ;; format; every primitive falls back to the legacy `** Segment N /
