@@ -108,25 +108,6 @@ markdown-bold body lines never truncate the section."
   "Non-nil when UNIT-TEXT carries a trailing shad run."
   (and unit-text (string-match-p "[།༎༏༐༑༔]\\s-*$" unit-text)))
 
-(defun tibetan-cascade--interlinear-unit-line (unit-text)
-  "One Interlinear Gloss line for UNIT-TEXT (a shad unit).
-Runs the segment renderer once, extracts the Interlinear body,
-collapses internal newlines to spaces, and appends ` /' when the
-unit carries a trailing shad — so the Reading view's Interlinear
-layer reads as the whole sentence, one line per unit."
-  (let* ((content (and (fboundp 'tibetan-analysis-generate-content)
-                       (condition-case nil
-                           (tibetan-analysis-generate-content unit-text)
-                         (error nil))))
-         (body (or (tibetan-cascade--extract-l2-body
-                    content "Interlinear Gloss")
-                   "[Interlinear not available]"))
-         (line (replace-regexp-in-string "[ \t]*\n[ \t]*" " "
-                                         (string-trim body))))
-    (if (tibetan-cascade--unit-has-shad-p unit-text)
-        (concat line " /")
-      line)))
-
 (defun tibetan-cascade--renderings-list-body (segs)
   "The `** Renderings' list body for SEGS ((GLOBAL-NUM . TEXT)…):
 one `- ⟦N⟧ placeholder' line per unit.  The ⟦N⟧ marker is the
@@ -140,33 +121,36 @@ the defer-MT rewriter replaces in place when active."
 
 (defun tibetan-cascade--reading-section (segs)
   "The full `* Reading' section string for SEGS ((GLOBAL-NUM . TEXT)…).
-Per-layer arrangement (Carsten's decision 2026-08-12): decorated
-Wylie lines, then Interlinear Gloss lines, then the ⟦N⟧ Renderings
-list — each layer one line per shad unit, shads rendered as `/'."
+COMBINED arrangement (Carsten's decision 2026-08-12, second
+iteration): ONE `** Interlinear' layer — decorated Wylie + ★ +
+glosses per token, one line per shad unit (the skeleton and the
+trot are the same tokens; two layers doubled every line) — followed
+by the ⟦N⟧ Renderings list.  Shads render as `/'."
   (let* ((units (mapcar #'cdr segs))
-         (wylie-lines
-          (if (fboundp 'tibetan-reading-decorated-lines)
-              (condition-case nil
-                  (tibetan-reading-decorated-lines units)
-                (error nil))
-            nil))
-         (wylie-lines
-          (or wylie-lines
-              ;; Degraded: plain per-unit Wylie, still one line each.
+         (lines
+          (or (and (fboundp 'tibetan-reading-decorated-lines)
+                   (condition-case nil
+                       (tibetan-reading-decorated-lines units)
+                     (error nil)))
+              ;; Degraded: plain per-unit Wylie, still one line each,
+              ;; shad normalized to the same ` /' the combined lines
+              ;; carry.
               (mapcar (lambda (u)
-                        (let ((w (or (and (fboundp 'tibetan-to-wylie-fixed)
-                                          (condition-case nil
-                                              (tibetan-to-wylie-fixed u)
-                                            (error nil)))
-                                     "[Wylie not available]")))
-                          (string-trim w)))
+                        (let* ((w (or (and (fboundp 'tibetan-to-wylie-fixed)
+                                           (condition-case nil
+                                               (tibetan-to-wylie-fixed u)
+                                             (error nil)))
+                                      "[Wylie not available]"))
+                               (w (string-trim
+                                   (replace-regexp-in-string
+                                    "\\s-*/+\\s-*\\'" "" (string-trim w)))))
+                          (if (tibetan-cascade--unit-has-shad-p u)
+                              (concat w " /")
+                            w)))
                       units))))
     (concat "* Reading\n"
-            "** Wylie\n"
-            (string-join wylie-lines "\n") "\n\n"
             "** Interlinear\n"
-            (mapconcat #'tibetan-cascade--interlinear-unit-line units "\n")
-            "\n\n"
+            (string-join lines "\n") "\n\n"
             "** Renderings\n"
             (tibetan-cascade--renderings-list-body segs)
             "\n\n")))
@@ -966,8 +950,14 @@ grounding).  nil when the file or every gloss is unavailable."
                     (lambda (n)
                       (let ((gloss (tibetan-cascade--read-interlinear-for-unit
                                     file n)))
+                        ;; Placeholder filter: `[Interlinear not
+                        ;; available]' etc. — but a combined Reading
+                        ;; line may legitimately BEGIN with an org
+                        ;; link (`[[https://…'), so require a
+                        ;; non-bracket after the opening bracket.
                         (when (and gloss
-                                   (not (string-match-p "\\`\\[" gloss)))
+                                   (not (string-match-p "\\`\\[[^[]"
+                                                        gloss)))
                           (format "=== Segment %d ===\n%s" n gloss))))
                     (plist-get sentence :seg-nums)))))
         (when blocks

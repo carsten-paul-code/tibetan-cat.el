@@ -202,20 +202,24 @@ Phonetics, and top/bottom user-slot ordering."
             (foot  (string-match "^\\* Footnotes$" s)))
         (should (and notes wt tt rd ta foot))
         (should (< notes wt tt rd ta foot)))
-      ;; Reading layers, in order, one line per unit.
-      (let ((wy (string-match "^\\*\\* Wylie$" s))
-            (il (string-match "^\\*\\* Interlinear$" s))
+      ;; Reading layers (combined): ** Interlinear then Renderings.
+      (let ((il (string-match "^\\*\\* Interlinear$" s))
             (re (string-match "^\\*\\* Renderings$" s)))
-        (should (and wy il re))
-        (should (< wy il re)))
+        (should (and il re))
+        (should (< il re)))
+      (should-not (string-match-p "^\\*\\* Wylie$" s))
       (should (string-match-p "^- ⟦105⟧ " s))
       (should (string-match-p "^- ⟦106⟧ " s))
       (should (string-match-p "\\[Awaiting sentence translation…\\]" s))
-      ;; Interlinear lines carry the per-unit renderer content, with
-      ;; the shad rendered ` /'.
-      (should (string-match-p
-               (concat "^" (regexp-quote "GLOSS(བདག་གིས་ལས་བྱས། )") " /$")
-               s))
+      ;; Two combined lines, one per unit, each shad rendered ` /'.
+      (let* ((il-start (string-match "^\\*\\* Interlinear$" s))
+             (il-end (string-match "^\\*\\* Renderings$" s))
+             (body (substring s il-start il-end))
+             (lines (cl-remove-if #'string-empty-p
+                                  (cdr (split-string body "\n")))))
+        (should (= 2 (length lines)))
+        (should (cl-every (lambda (l) (string-suffix-p " /" l))
+                          lines)))
       ;; The Subsegments tree and Phonetics are RETIRED.
       (should-not (string-match-p "^\\* Subsegments$" s))
       (should-not (string-match-p "^\\*+ Phonetics$" s))
@@ -601,8 +605,9 @@ subsegment Interlinear sections (there are no child seg files)."
               (file-name-directory cascade-file))))
       (should g)
       (should (string-match-p "=== Segment 105 ===" g))
-      (should (string-match-p
-               (regexp-quote "GLOSS(བདག་གིས་ལས་བྱས། )") g))
+      (should (string-match-p "=== Segment 106 ===" g))
+      ;; Each block carries that unit's (non-empty) Reading line.
+      (should (string-match-p "=== Segment 105 ===\n[^=\n]" g))
       (should (string-match-p "do NOT invent meanings" g)))))
 
 (ert-deftest tibetan-cascade-fire-end-to-end ()
@@ -1340,18 +1345,6 @@ curated German glosses rendered English-only (W2, 2026-08-11)."
 ;; R4 (2026-08-12) — Reading-section assembler
 ;; ============================================================================
 
-(ert-deftest tibetan-cascade-interlinear-unit-line-collapses ()
-  "One interlinear line per unit: the segment renderer's Interlinear
-body with internal newlines collapsed, ` /' appended for a shad."
-  (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
-             (lambda (text &rest _)
-               (format "** Interlinear Gloss\nAAA(%s)\nBBB\n\n** Grammar\nX\n"
-                       text))))
-    (should (equal "AAA(བདག།) BBB /"
-                   (tibetan-cascade--interlinear-unit-line "བདག།")))
-    (should (equal "AAA(ཆོས) BBB"
-                   (tibetan-cascade--interlinear-unit-line "ཆོས")))))
-
 (ert-deftest tibetan-cascade-renderings-list-body-shape ()
   "The Renderings list: one `- ⟦N⟧ placeholder' line per unit, keyed
 by GLOBAL segment number."
@@ -1363,24 +1356,22 @@ by GLOBAL segment number."
                    body))))
 
 (ert-deftest tibetan-cascade-reading-section-structure ()
-  "The assembled * Reading section: Wylie lines, Interlinear lines,
-Renderings list — per layer, one line per unit."
-  (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
-             (lambda (text &rest _)
-               (format "** Interlinear Gloss\nGLOSS(%s)\n\n" text)))
-            ((symbol-function 'tibetan-reading-decorated-lines)
+  "The assembled * Reading section (COMBINED, 2nd iteration): one
+`** Interlinear' layer of combined lines, then the Renderings list."
+  (cl-letf (((symbol-function 'tibetan-reading-decorated-lines)
              (lambda (units)
-               (mapcar (lambda (u) (format "WYLIE(%s)" u)) units))))
+               (mapcar (lambda (u) (format "LINE(%s)" u)) units))))
     (let ((s (tibetan-cascade--reading-section
               '((105 . "བདག།") (106 . "ཆོས།")))))
       (should (string-match-p "^\\* Reading$" s))
-      (let ((wy (string-match "^\\*\\* Wylie$" s))
-            (il (string-match "^\\*\\* Interlinear$" s))
+      (let ((il (string-match "^\\*\\* Interlinear$" s))
             (re (string-match "^\\*\\* Renderings$" s)))
-        (should (and wy il re))
-        (should (< wy il re)))
-      (should (string-match-p "^WYLIE(བདག།)$" s))
-      (should (string-match-p "^GLOSS(བདག།) /$" s))
+        (should (and il re))
+        (should (< il re)))
+      ;; The retired separate Wylie layer is gone.
+      (should-not (string-match-p "^\\*\\* Wylie$" s))
+      (should (string-match-p "^LINE(བདག།)$" s))
+      (should (string-match-p "^LINE(ཆོས།)$" s))
       (should (string-match-p "^- ⟦105⟧ \\[Awaiting" s))
       (should (string-match-p "^- ⟦106⟧ \\[Awaiting" s)))))
 
@@ -1502,7 +1493,6 @@ live sent-001 showed)."
                      "* My Notes\n\n\n"
                      "* Tibetan Text\nབདག།ཆོས།\n\n"
                      "* Reading\n"
-                     "** Wylie\nbdag /\nchos /\n\n"
                      "** Interlinear\nbdag [I] /\nchos [dharma] /\n\n"
                      "** Renderings\n"
                      "- ⟦105⟧ [Awaiting sentence translation…]\n"
@@ -1595,11 +1585,11 @@ subtree fallback."
     (should (equal "chos [dharma] /"
                    (tibetan-cascade--read-interlinear-for-unit
                     newfile 106))))
-  (tibetan-cascade-test--with-cascade-file
+  (tibetan-cascade-test--with-legacy-cascade-file
     (should (string-match-p
              "GLOSS"
              (or (tibetan-cascade--read-interlinear-for-unit
-                  cascade-file 105)
+                  legacy-file 105)
                  "")))))
 
 ;; ============================================================================

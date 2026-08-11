@@ -108,10 +108,22 @@ stream.  Curated whole tokens are never split (W4b authority rule)."
                                     tibetan-reading--postverb-converbs)))))
     (if converb-p (format "~%s~" wylie) (format "=%s=" wylie))))
 
+(declare-function tibetan-interlinear--prefer-target-lang
+                  "tibetan-interlinear" (meaning))
+(declare-function tibetan-interlinear--truncate-gloss
+                  "tibetan-interlinear" (gloss budget))
+(declare-function tibetan-interlinear--sanitize-gloss
+                  "tibetan-interlinear" (gloss))
+(declare-function tibetan-steinert-available-p "tibetan-steinert" ())
+(declare-function tibetan-steinert-url "tibetan-steinert" (wylie))
+
 (defun tibetan-reading--unit-tokens (unit-text)
   "Classified token plists for one shad unit, in order.
 Each: (:tibetan S :wylie W :kind particle|verb|word :label L
-:curated-p BOOL :clitic (CL-WYLIE . CL-LABEL)|nil)."
+:meaning M :curated-p BOOL :clitic (CL-WYLIE . CL-LABEL)|nil).
+:meaning is the ranked-lookup gloss the token cell carried
+\(curated-first after W1) — the combined Reading line renders it
+inline, so the layer IS the interlinear trot."
   (let ((cells (and (fboundp 'tibetan-extract-vocabulary)
                     (condition-case nil
                         (tibetan-extract-vocabulary unit-text)
@@ -131,6 +143,7 @@ Each: (:tibetan S :wylie W :kind particle|verb|word :label L
                     :wylie (tibetan-reading--wylie stem)
                     :kind kind
                     :label label
+                    :meaning (cdr cell)
                     :prev-verb-p prev-verb-p
                     :curated-p (tibetan-reading--curated-p tib)
                     :clitic (when clitic
@@ -141,30 +154,102 @@ Each: (:tibetan S :wylie W :kind particle|verb|word :label L
         (setq prev-verb-p (eq kind 'verb))))
     (nreverse out)))
 
+(defvar tibetan-analysis--target-lang)
+
+(defun tibetan-reading--gloss (tok)
+  "The display gloss for TOK, or nil: target-lang half selected,
+budgeted (60 chars curated / 30 generic — the interlinear budgets),
+sanitized.  nil for empty / whitespace meanings.
+
+Language forms handled: `DE // EN' (the wordlist convention, via
+the Pass-5c selector) AND `EN (DE: …)' — the shape
+`tibetan-lookup-word' assembles from bilingual collection; without
+the second branch a de-target document's combined Reading lines
+would regress to English."
+  (let ((m (plist-get tok :meaning)))
+    (when (and m (stringp m) (not (string-empty-p (string-trim m))))
+      (let* ((lang (and (boundp 'tibetan-analysis--target-lang)
+                        tibetan-analysis--target-lang))
+             (half (cond
+                    ((and (equal lang "de")
+                          (string-match "(DE: \\(.*\\))\\s-*\\'" m))
+                     (match-string 1 m))
+                    ((fboundp 'tibetan-interlinear--prefer-target-lang)
+                     (tibetan-interlinear--prefer-target-lang m))
+                    (t m)))
+             (cut (if (fboundp 'tibetan-interlinear--truncate-gloss)
+                      (tibetan-interlinear--truncate-gloss
+                       half (if (plist-get tok :curated-p) 60 30))
+                    half)))
+        (if (fboundp 'tibetan-interlinear--sanitize-gloss)
+            (tibetan-interlinear--sanitize-gloss cut)
+          cut)))))
+
+(defun tibetan-reading--linkify (wylie tok)
+  "Wrap WYLIE in a Steinert web link for dictionary-worthy tokens
+\(words and verbs; particles stay plain) when the Steinert module is
+live — one-click lookup, same as the retired per-segment
+interlinears."
+  (if (and (memq (plist-get tok :kind) '(word verb))
+           (fboundp 'tibetan-steinert-available-p)
+           (condition-case nil (tibetan-steinert-available-p) (error nil))
+           (fboundp 'tibetan-steinert-url))
+      (let ((url (condition-case nil (tibetan-steinert-url wylie)
+                   (error nil))))
+        (if url (format "[[%s][%s]]" url wylie) wylie))
+    wylie))
+
 (defun tibetan-reading--render-token (tok &optional main-verb-p)
-  "Render one classified TOK plist into its decorated Wylie string."
+  "Render TOK as its COMBINED form: decorated Wylie + ★ + gloss.
+
+  word:      wylie ★ [gloss]          (Steinert-linked when live)
+  verb:      !wylie! ★ [gloss]        (*wylie* for the main verb)
+  particle:  =wylie= [LABEL]          (~wylie~ converbs; curated
+             homograph → [LABEL ‖ ★ gloss], the W3 convention)
+
+The gloss carries the POS signal into exports, where the marker
+colors vanish."
   (let* ((wylie (plist-get tok :wylie))
          (kind (plist-get tok :kind))
-         (star (if (plist-get tok :curated-p) "★" ""))
+         (curated-p (plist-get tok :curated-p))
+         (gloss (tibetan-reading--gloss tok))
+         (clitic (plist-get tok :clitic))
+         (linked (tibetan-reading--linkify wylie tok))
          (base (pcase kind
                  ('particle (tibetan-reading--decorate-particle
-                             wylie (plist-get tok :label)
+                             linked (plist-get tok :label)
                              (plist-get tok :prev-verb-p)
                              (plist-get tok :tibetan)))
                  ('verb (if main-verb-p
-                            (format "*%s*" wylie)
-                          (format "!%s!" wylie)))
-                 (_ wylie)))
-         (clitic (plist-get tok :clitic)))
-    (concat base
-            (when clitic (format "=%s=" (car clitic)))
-            star)))
+                            (format "*%s*" linked)
+                          (format "!%s!" linked)))
+                 (_ linked))))
+    (concat
+     base
+     (when clitic (format "=%s=" (car clitic)))
+     (pcase kind
+       ('particle
+        (let ((label (or (plist-get tok :label)
+                         (and clitic (cdr clitic)))))
+          (cond ((and label curated-p gloss)
+                 (format " [%s ‖ ★ %s]" label gloss))
+                (label (format " [%s]" label))
+                (t ""))))
+       (_ (concat (if curated-p " ★" "")
+                  (if gloss (format " [%s]" gloss) ""))))
+     ;; A non-particle token with a trailing clitic still shows the
+     ;; clitic's label after its gloss (tri='i= [GEN] shape).
+     (if (and clitic (not (eq kind 'particle)))
+         (format " [%s]" (cdr clitic))
+       ""))))
 
 (defun tibetan-reading-decorated-unit-line (unit-text &optional last-unit-p)
-  "One decorated Wylie line for UNIT-TEXT (a shad unit, shads kept).
-When LAST-UNIT-P, the unit's FINAL verb token is the sentence's main
-verb (`*x*'); every other verb wears `!x!'.  The line ends ` /' when
-the unit carries a trailing shad run."
+  "One COMBINED Reading line for UNIT-TEXT (a shad unit, shads kept):
+decorated Wylie + ★ + glosses per token (Carsten's 2026-08-12
+decision — the Wylie skeleton and the interlinear trot are one
+layer).  When LAST-UNIT-P, the unit's FINAL verb token is the
+sentence's main verb (`*x*'); every other verb wears `!x!'.  The
+line ends ` /' when the unit carries a trailing shad run."
   (let* ((toks (tibetan-reading--unit-tokens unit-text))
          (last-verb (when last-unit-p
                       (cl-find-if (lambda (tk) (eq (plist-get tk :kind)
@@ -180,7 +265,7 @@ the unit carries a trailing shad run."
     line))
 
 (defun tibetan-reading-decorated-lines (units)
-  "Decorated Wylie lines for UNITS (ordered shad-unit strings).
+  "Combined Reading lines for UNITS (ordered shad-unit strings).
 The main verb is marked in the LAST unit only."
   (let ((n (length units)) (i 0) out)
     (dolist (u units)

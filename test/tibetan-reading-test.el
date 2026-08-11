@@ -25,6 +25,7 @@
 (defvar tibetan-rangjung-yeshe-vocabulary nil)
 (defvar tibetan-current-resources-vocab nil)
 (defvar tibetan-current-custom-vocab nil)
+(defvar tibetan-analysis--target-lang nil)
 
 (defmacro tibetan-reading-test--with-env (resources &rest body)
   "Controlled environment: RESOURCES alist into the Resources hash,
@@ -37,6 +38,12 @@ fixture set སྒྲིགས ཡོད བྱུང བཞུགས."
          (tibetan-rangjung-yeshe-vocabulary nil))
      (dolist (e ,resources)
        (puthash (car e) (cdr e) tibetan-current-resources-vocab))
+     (dolist (e '(("ལུས" . "body") ("སྒྲིགས" . "arrange")
+                  ("ཡོད" . "to have") ("ཁྱེར" . "carry")
+                  ("བཞུགས" . "to reside") ("ཆོས" . "dharma")
+                  ("བྱུང" . "arise") ("ཏྲིའི" . "of Tri")
+                  ("དེར" . "there")))
+       (puthash (car e) (cdr e) tibetan-comprehensive-vocabulary))
      (cl-letf (((symbol-function 'tibetan-load-resources-vocab)
                 (lambda () nil))
                ((symbol-function 'tibetan-load-custom-vocab)
@@ -60,7 +67,8 @@ fixture set སྒྲིགས ཡོད བྱུང བཞུགས."
   "Case particle after a noun (=la=), converb reading of ནས after a
 verb (~nas~), every verb !x!, trailing shad → ` /'."
   (tibetan-reading-test--with-env '()
-    (should (equal "lus =la= !sgrigs! ~nas~ !yod! /"
+    (should (equal (concat "lus [body] =la= [DAT] !sgrigs! [arrange] "
+                          "~nas~ [ABL/CONV:nas] !yod! [to have] /")
                    (tibetan-reading-decorated-unit-line
                     "ལུས་ལ་སྒྲིགས་ནས་ཡོད།")))))
 
@@ -68,7 +76,7 @@ verb (~nas~), every verb !x!, trailing shad → ` /'."
   "ན after a NON-verb decorates as case (=na=), and the unit's verbs
 still wear !x! when the unit is not the last."
   (tibetan-reading-test--with-env '()
-    (should (equal "khyer =na= !bzhugs! /"
+    (should (equal "khyer [carry] =na= [LOC] !bzhugs! [to reside] /"
                    (tibetan-reading-decorated-unit-line
                     "ཁྱེར་ན་བཞུགས།")))))
 
@@ -77,21 +85,35 @@ still wear !x! when the unit is not the last."
   (tibetan-reading-test--with-env '()
     (let ((lines (tibetan-reading-decorated-lines
                   '("ཁྱེར་ན་བཞུགས།" "ཆོས་བྱུང།"))))
-      (should (equal "khyer =na= !bzhugs! /" (nth 0 lines)))
-      (should (equal "chos *byung* /" (nth 1 lines))))))
+      (should (equal "khyer [carry] =na= [LOC] !bzhugs! [to reside] /"
+                     (nth 0 lines)))
+      (should (equal "chos [dharma] *byung* [arise] /" (nth 1 lines))))))
 
 (ert-deftest tibetan-reading-curated-star-and-mwu ()
   "A curated wordlist MWU groups (W1) and wears ★ after its Wylie."
   (tibetan-reading-test--with-env
       '(("snang ba" . "Erscheinungen // appearances"))
-    (should (equal "snang ba★ !byung! /"
-                   (tibetan-reading-decorated-unit-line
-                    "སྣང་བ་བྱུང།")))))
+    (let ((line (tibetan-reading-decorated-unit-line "སྣང་བ་བྱུང།")))
+      ;; Curated MWU: grouped, starred, wordlist gloss inline (the
+      ;; bilingual `EN (DE: …)' assembly is the lookup's own shape).
+      (should (string-match-p "\\`snang ba ★ \\[appearances" line))
+      (should (string-match-p "!byung! \\[arise\\] /\\'" line)))))
+
+(ert-deftest tibetan-reading-gloss-german-half-for-de-target ()
+  "With target-lang de, the `EN (DE: …)' lookup shape yields the
+GERMAN half in the combined line — no English regression on the
+Portfolio (W2 parity for the Reading layer)."
+  (tibetan-reading-test--with-env
+      '(("snang ba" . "Erscheinungen // appearances"))
+    (let ((tibetan-analysis--target-lang "de"))
+      (let ((line (tibetan-reading-decorated-unit-line "སྣང་བ་བྱུང།")))
+        (should (string-match-p "Erscheinungen" line))
+        (should-not (string-match-p "appearances" line))))))
 
 (ert-deftest tibetan-reading-merged-clitic-decorates-inline ()
   "A merged genitive clitic renders embedded: tri='i='."
   (tibetan-reading-test--with-env '()
-    (should (equal "tri='i= chos"
+    (should (equal "tri='i= [of Tri] [GEN] chos [dharma]"
                    (tibetan-reading-decorated-unit-line
                     "ཏྲིའི་ཆོས")))))
 
@@ -100,7 +122,7 @@ still wear !x! when the unit is not the last."
 without tag confirmation the builder must never split it — a missed
 =r= beats a torn syllable."
   (tibetan-reading-test--with-env '()
-    (should (equal "der chos"
+    (should (equal "der [there] chos [dharma]"
                    (tibetan-reading-decorated-unit-line "དེར་ཆོས")))))
 
 (ert-deftest tibetan-reading-line-initial-main-verb-is-org-safe ()
@@ -108,7 +130,7 @@ without tag confirmation the builder must never split it — a missed
 headline or list item (the C1 line-leading-star lesson)."
   (tibetan-reading-test--with-env '()
     (let ((line (tibetan-reading-decorated-unit-line "བྱུང།" t)))
-      (should (equal "*byung* /" line))
+      (should (equal "*byung* [arise] /" line))
       (should-not (string-match-p "^\\*+ " line)))))
 
 (provide 'tibetan-reading-test)

@@ -462,15 +462,15 @@ converb chain resolves to gets this red so the sentence's anchor is
 spottable at a glance."
   :group 'tibetan-cat)
 
-(defun tibetan-analysis--in-reading-wylie-section-p ()
-  "Return non-nil when point's line sits inside `** Wylie' under
-`* Reading' (the cascade Reading view) — and not under any later
-heading.  Two-file documents use `** Wylie Transliteration', which
-deliberately does NOT match."
+(defun tibetan-analysis--in-reading-interlinear-section-p ()
+  "Return non-nil when point's line sits inside `** Interlinear'
+under `* Reading' (the cascade Reading view's combined layer) — and
+not under any later heading.  The two-file `** Interlinear Gloss'
+heading deliberately does NOT match."
   (save-excursion
     (goto-char (line-beginning-position))
     (when (re-search-backward "^\\*+ " nil t)
-      (when (looking-at-p "^\\*\\* Wylie[ \t]*$")
+      (when (looking-at-p "^\\*\\* Interlinear[ \t]*$")
         (when (re-search-backward "^\\* " nil t)
           (looking-at-p "^\\* Reading[ \t]*$"))))))
 
@@ -484,7 +484,7 @@ with org bold everywhere else — user notes must never turn red.
                 (re-search-forward "\\(\\*\\)\\([^*\n]+\\)\\(\\*\\)"
                                    limit t))
       (when (save-match-data
-              (tibetan-analysis--in-reading-wylie-section-p))
+              (tibetan-analysis--in-reading-interlinear-section-p))
         (setq found t)))
     found))
 
@@ -513,7 +513,8 @@ plain 3-group keyword like the `=x=' / `~x~' particle markers
 char, which decorated Wylie doesn't provide).
 `*x*' → the sentence-final main verb
 \(`tibetan-analysis-main-verb-face', red) — a SECTION-GATED function
-matcher because `*…*' IS org bold everywhere else in the file.
+matcher (gate: `** Interlinear' under `* Reading') because `*…*'
+IS org bold everywhere else in the file.
 Delimiters share the `tibetan-analysis-particle-marker' invisibility
 symbol already in the buffer-invisibility-spec.")
 

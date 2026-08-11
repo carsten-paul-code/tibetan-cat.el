@@ -3639,10 +3639,10 @@ two-file `** Wylie Transliteration' bodies)."
     (insert "* My Notes\n"
             "this is *important* to me\n"
             "* Reading\n"
-            "** Wylie\n"
+            "** Interlinear\n"
             "zhal !mthong! ba tsam =gyis= snang ba *byung* /\n"
-            "** Interlinear Gloss\n"
-            "zhal [face] ... *not-a-verb* here\n"
+            "** Renderings\n"
+            "- ⟦1⟧ *not-a-verb* here\n"
             "* Tibetan Analysis\n"
             "** Wylie Transliteration\n"
             "also *not this* one\n")
@@ -3656,7 +3656,7 @@ two-file `** Wylie Transliteration' bodies)."
   "Progress guarantee (§5.38-H3 class): no match → returns nil,
 never loops — including on a final line without trailing newline."
   (with-temp-buffer
-    (insert "* Reading\n** Wylie\nno markers here")
+    (insert "* Reading\n** Interlinear\nno markers here")
     (goto-char (point-min))
     (should-not (tibetan-analysis--main-verb-matcher (point-max)))))
 
