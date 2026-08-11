@@ -1259,6 +1259,33 @@ way)."
       (delete-directory dir t)
       (delete-directory alien t))))
 
+(ert-deftest tibetan-cascade-scaffold-binds-target-lang ()
+  "The scaffold's renderer calls see `tibetan-analysis--target-lang'
+from the SOURCE's #+TIBETAN_TARGET_LANG header — the bilingual
+`DE // EN' gloss selection (Pass 5c) reads that dynamic var, and the
+cascade temp-buffer context never bound it, so the Portfolio's
+curated German glosses rendered English-only (W2, 2026-08-11)."
+  (let* ((dir (make-temp-file "cascade-lang-" t))
+         (src (expand-file-name "doc.org" dir))
+         (seen '()))
+    (unwind-protect
+        (progn
+          (with-temp-file src
+            (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n"
+                    "#+TIBETAN_TARGET_LANG: de\n\n"
+                    "* Tibetan Text\n*** Sentence 1\n"
+                    "**** Segment 1\nབདག\n\n"))
+          (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+                     (lambda (_text &rest _)
+                       (push (and (boundp 'tibetan-analysis--target-lang)
+                                  tibetan-analysis--target-lang)
+                             seen)
+                       "** Wylie Transliteration\nW\n\n")))
+            (tibetan-cascade--scaffold 1 '((1 . "བདག")) src))
+          (should seen)
+          (should (cl-every (lambda (l) (equal l "de")) seen)))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-cascade-open-mentions-defer ()
   "Opening a defer-MT document's segment says WHY nothing fires."
   (tibetan-cascade-test--with-stub-renderer

@@ -35,6 +35,12 @@
 
 ;;; Code:
 
+;; Declared SPECIAL here (defined in tibetan-analysis-persist.el):
+;; `tibetan-cascade--scaffold' let-binds it for its renderer calls.
+;; Without this declaration the let would create an invisible LEXICAL
+;; shadow under lexical-binding — the `features'-shadow lesson.
+(defvar tibetan-analysis--target-lang)
+
 (defun tibetan-cascade-split-shad-units (text)
   "Split TEXT into its shad-terminated units.
 
@@ -181,6 +187,22 @@ marks the file for every reader (§2.8: explicit, never sniffed)."
                                 (file-name-directory
                                  (expand-file-name source-file))
                               default-directory))
+         ;; W2 (2026-08-11): the bilingual `DE // EN' gloss selection
+         ;; (Pass 5c) reads the dynamic `tibetan-analysis--target-lang';
+         ;; generate-content derives it from the CURRENT BUFFER's
+         ;; source, which a temp-buffer scaffold doesn't have — bind it
+         ;; from the source header here, or the Portfolio's curated
+         ;; German glosses render English-only.
+         (tibetan-analysis--target-lang
+          (or (and source-file
+                   (fboundp 'tibetan-analysis--read-source-metadata)
+                   (condition-case nil
+                       (plist-get (tibetan-analysis--read-source-metadata
+                                   source-file)
+                                  :target-lang)
+                     (error nil)))
+              (and (boundp 'tibetan-analysis--target-lang)
+                   tibetan-analysis--target-lang)))
          (date (format-time-string "%Y-%m-%d"))
          (tibetan-text (mapconcat #'cdr segs ""))
          (hash (and (fboundp 'tibetan-sentence--compute-hash)
