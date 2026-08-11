@@ -1457,6 +1457,36 @@ subtree fallback."
                   cascade-file 105)
                  "")))))
 
+;; ============================================================================
+;; R7 (2026-08-12) — regenerate preserves renderings ACROSS formats
+;; ============================================================================
+
+(ert-deftest tibetan-cascade-regenerate-preserves-new-format-renderings ()
+  "Preserve-mode regenerate of a NEW-layout file keeps its landed
+⟦N⟧ renderings — restored through the dual-format writer into
+whatever layout the scaffold currently emits."
+  (tibetan-cascade-test--with-new-format-file
+    (let ((src (expand-file-name "doc.org"
+                                 (file-name-directory newfile))))
+      (with-temp-file src
+        (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                "* Tibetan Text\n*** Sentence 4\n"
+                "**** Segment 105\nབདག།\n\n"
+                "**** Segment 106\nཆོས།\n\n"))
+      (tibetan-cascade-test--with-stub-renderer
+        (tibetan-cascade--regenerate newfile 4
+                                     '((105 . "བདག།") (106 . "ཆོས།"))
+                                     src))
+      ;; The landed rendering survived the rebuild — RESTORED through
+      ;; the dual writer into the scaffold's current layout (today
+      ;; the legacy subtree), not merely carried along verbatim as an
+      ;; unknown L1 section.
+      (should (equal "the profound dharma"
+                     (tibetan-cascade--read-subsegment-section
+                      newfile 106 "Rendering")))
+      ;; The placeholder unit regenerated as needing a request.
+      (should (tibetan-cascade--rendering-needs-request-p newfile 105)))))
+
 (ert-deftest tibetan-cascade-open-mentions-defer ()
   "Opening a defer-MT document's segment says WHY nothing fires."
   (tibetan-cascade-test--with-stub-renderer

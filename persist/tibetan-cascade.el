@@ -611,13 +611,15 @@ Returns FILEPATH."
                        "Provided Translations")))))
          (claude-grammar (tibetan-cascade--read-l3-body
                           filepath "Claude Grammar"))
+         ;; R7: dual-format preserve — new-layout ⟦N⟧ lines or legacy
+         ;; subtrees, whichever the file carries.
          (renderings
-          (cl-loop for n in (tibetan-cascade--subsegment-numbers filepath)
+          (cl-loop for n in (tibetan-cascade--rendering-numbers filepath)
                    when (and (assq n segs)
-                             (not (tibetan-cascade--subsegment-rendering-needs-request-p
+                             (not (tibetan-cascade--rendering-needs-request-p
                                    filepath n)))
-                   collect (cons n (tibetan-cascade--read-subsegment-section
-                                    filepath n "Rendering"))))
+                   collect (cons n (tibetan-cascade--read-rendering
+                                    filepath n))))
          (unknown (tibetan-cascade--collect-unknown-l1-sections filepath)))
     (with-temp-buffer
       (insert (tibetan-cascade--scaffold sent-num segs source-file))
@@ -630,8 +632,10 @@ Returns FILEPATH."
                                              claude-grammar))
       (dolist (r renderings)
         (when (cdr r)
-          (tibetan-cascade--write-subsegment-section-in-buffer
-           (car r) "Rendering" (cdr r))))
+          ;; R7: dual-format restore into whatever layout the
+          ;; scaffold just emitted.
+          (tibetan-cascade--write-rendering-in-buffer
+           (car r) (cdr r))))
       (dolist (u unknown)
         (goto-char (point-max))
         (unless (bolp) (insert "\n"))
