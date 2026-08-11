@@ -3569,6 +3569,51 @@ NOTE: Milarepa / Khu-dbon / MA Reading also carry Resources
 wordlists — their tokenization follows the same curated-first rules
 on NEXT regenerate (MA Reading batch regen stays prohibited, §5.36).
 
+### 5.51 READING VIEW — cascade layout redesign (done, 2026-08-12)
+
+Commits `126791c`…`1dff40f` + cleanup (corpus `8627b91`).  Carsten's
+verdict on the per-segment sections: fragmenting.  Approved design
+(AskUserQuestion): per-LAYER Reading view, ⟦N⟧ renderings inside it,
+POS marking = verbs + main verb, Phonetics/per-segment sections
+dropped.  Cascade files now read:
+
+    * Tibetan Text (shads intact) → * Reading (** Wylie decorated,
+    one line per shad unit / ** Interlinear / ** Renderings
+    `- ⟦N⟧ …') → * Tibetan Analysis (Sentence Structure PER UNIT)
+
+Key pieces: R1 `tibetan-segment-text' shads→tsheg (the missed
+Phase-2b site — fused tokens + hallucinated main verbs in every
+multi-clause tree); R2 `!x!' verb (blue) + `*x*' main-verb (red)
+font-lock, the `*x*' matcher SECTION-GATED to ** Wylie under
+* Reading (org-bold collision); R3 `analysis/tibetan-reading.el' —
+token-wise decorated lines (curated-first streams; bare `ར' clitic
+NEVER split — graphically ambiguous vs root-final ར, only འ-initial
+clitics attach letter-wise); R5 dual-format rendering I/O (⟦N⟧ line
+first, legacy `** Segment N' subtree fallback — the dual format IS
+the migration); R6/R7 landing + grounding + regenerate on the dual
+primitives; R8 scaffold flip with "Subsegments" kept in
+--known-l1-sections as OWNED-LEGACY (dropped on regen, never
+re-appended); R9 open-for-segment → the ⟦N⟧ line; R10 per-unit
+Sentence Structure.  LESSON: the Reading gloss layer is
+`** Interlinear' (not "Interlinear Gloss") — the Claude-machinery
+anchors (ensure-claude-headings) key on bare L2 heading names
+file-wide, and a colliding name pulled ** Claude Vocabulary into
+* Reading.
+
+MIGRATION (live, 2026-08-12): preserve-mode reanalyze of all 64
+files (8 deb + 56 rgyan) after a scratchpad dry-run — 173/173
+landed renderings verbatim on their ⟦N⟧ lines, user slots
+byte-identical, defer texts intact, idempotent second pass, deb ★
+88 → 175 (new layers carry their own stars).  Legacy READ
+primitives kept (quarantines hold old-layout files);
+--subsegment-block/--extract-particles-body retired.
+
+Known display nuances (data, not machinery): Hill-DB gaps leave
+some verbs unmarked (sgrigs → nas shows =nas= not ~nas~); wordlist
+key coverage decides MWU grouping ('bre ston / mar pa render
+per-syllable until curated).  Extending the class wordlist tunes
+both.
+
 ## 6. Open work (prioritised)
 
 ### P0 — Verify Detailed Dictionary on a real segment ✓ DONE 2026-04-15

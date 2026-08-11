@@ -104,72 +104,6 @@ markdown-bold body lines never truncate the section."
                       (buffer-substring-no-properties start end))))
           (unless (string-empty-p body) body))))))
 
-(defun tibetan-cascade--extract-particles-body (content)
-  "Body of the `*** Particles' subsection in CONTENT, or nil."
-  (when content
-    (with-temp-buffer
-      (insert content)
-      (goto-char (point-min))
-      (when (re-search-forward "^\\*\\*\\* Particles$" nil t)
-        (forward-line 1)
-        (let* ((start (point))
-               (end (if (re-search-forward "^\\*\\{1,3\\} " nil t)
-                        (line-beginning-position)
-                      (point-max)))
-               (body (string-trim
-                      (buffer-substring-no-properties start end))))
-          (unless (string-empty-p body) body))))))
-
-(defun tibetan-cascade--subsegment-block (seg-num ordinal text)
-  "The `** Segment SEG-NUM' subtree for one shad unit (a string).
-ORDINAL is the 1-based position inside the sentence — display /
-bookkeeping only, never a file key (the GLOBAL segment number is the
-key).  The four deterministic sections are extracted from one
-segment-renderer pass over TEXT (★ Resources glosses, Steinert web
-links, and Bialek particle bullets come along for free); when the
-renderer is unavailable the Wylie/Phonetics fall back to the pure
-converters and the rest degrade to visible markers."
-  (let* ((content (and (fboundp 'tibetan-analysis-generate-content)
-                       (condition-case nil
-                           (tibetan-analysis-generate-content text)
-                         (error nil))))
-         (wylie (or (tibetan-cascade--extract-l2-body
-                     content "Wylie Transliteration")
-                    (and (fboundp 'tibetan-to-wylie-fixed)
-                         (condition-case nil
-                             (tibetan-to-wylie-fixed text)
-                           (error nil)))
-                    "[Wylie not available]"))
-         (phonetics (or (tibetan-cascade--extract-l2-body
-                         content "Phonetics")
-                        (and (fboundp 'tibetan-to-phonetics)
-                             (condition-case nil
-                                 (tibetan-to-phonetics text)
-                               (error nil)))
-                        "[Phonetics not available]"))
-         (gloss (or (tibetan-cascade--extract-l2-body
-                     content "Interlinear Gloss")
-                    "[Interlinear not available]"))
-         (particles (or (tibetan-cascade--extract-particles-body content)
-                        "[Particles not available]")))
-    (concat (format "** Segment %d\n" seg-num)
-            ":PROPERTIES:\n"
-            (format ":SUBSEG: %d\n" ordinal)
-            ":END:\n\n"
-            (string-trim text) "\n\n"
-            "*** Rendering\n" tibetan-cascade-rendering-placeholder "\n\n"
-            "*** Wylie\n" (string-trim wylie) "\n\n"
-            "*** Phonetics\n" (string-trim phonetics) "\n\n"
-            "*** Interlinear Gloss\n" (string-trim gloss) "\n\n"
-            "*** Particles\n" (string-trim particles) "\n\n")))
-
-;; ----------------------------------------------------------------------------
-;; R4 — the * Reading section (READING VIEW redesign, 2026-08-12)
-;; ----------------------------------------------------------------------------
-
-(declare-function tibetan-reading-decorated-lines "tibetan-reading" (units))
-(declare-function tibetan-to-wylie-fixed "tibetan-wylie" (text))
-
 (defun tibetan-cascade--unit-has-shad-p (unit-text)
   "Non-nil when UNIT-TEXT carries a trailing shad run."
   (and unit-text (string-match-p "[།༎༏༐༑༔]\\s-*$" unit-text)))
@@ -386,8 +320,8 @@ marks the file for every reader (§2.8: explicit, never sniffed)."
                  2 "Sentence Structure" per-unit)
               (insert "** Sentence Structure\n" per-unit "\n\n")))))
       ;; R8: `* Subsegments' retired — the Reading section above
-      ;; carries the per-unit layers; `--subsegment-block' remains
-      ;; only for legacy readers until the live migration completes.
+      ;; carries the per-unit layers.  Legacy READ primitives remain
+      ;; (quarantine folders still hold old-layout files).
       (insert "* Footnotes\n\n")
       ;; DEFER-MT VISIBILITY (2026-07-30): on a defer-MT document the
       ;; generic placeholders read as a failure — say WHY they are
