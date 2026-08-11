@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-08-11T17:22:36
+#+DATE: 2026-08-11T17:27:03
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  72 modules  ·  1365 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  73 modules  ·  1379 forms
 
 Regenerated automatically by:
 
@@ -22,6 +22,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#analysis/tibetan-interlinear.el][analysis/tibetan-interlinear.el]]  (22)
   - [[#analysis/tibetan-mitra-translation.el][analysis/tibetan-mitra-translation.el]]  (24)
   - [[#analysis/tibetan-particles-bialek.el][analysis/tibetan-particles-bialek.el]]  (8)
+  - [[#analysis/tibetan-reading.el][analysis/tibetan-reading.el]]  (14)
   - [[#analysis/tibetan-sentence-tree.el][analysis/tibetan-sentence-tree.el]]  (10)
   - [[#analysis/tibetan-translation-engine.el][analysis/tibetan-translation-engine.el]]  (10)
   - [[#analysis/tibetan-translation-suggest.el][analysis/tibetan-translation-suggest.el]]  (2)
@@ -1858,6 +1859,149 @@ Returns list of all grammatical features detected.
 :PROPERTIES:
 :KIND: defconst
 :LINE: 38
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+
+* analysis/tibetan-reading.el
+:PROPERTIES:
+:CUSTOM_ID: analysis/tibetan-reading.el
+:SOURCE_PATH: /Users/cp/tibetan-cat.el/analysis/tibetan-reading.el
+:END:
+
+** ~tibetan-reading--particle-label~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 47
+:SIGNATURE: (tibetan-reading--particle-label tibetan)
+:END:
+
+The `tibetan-interlinear--particle-patterns' label for TIBETAN
+when the whole token is a known particle form, else nil.
+
+** ~tibetan-reading--verb-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 53
+:SIGNATURE: (tibetan-reading--verb-p tibetan)
+:END:
+
+Non-nil when TIBETAN resolves in the Hill verb DB.
+
+** ~tibetan-reading--curated-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 59
+:SIGNATURE: (tibetan-reading--curated-p tibetan)
+:END:
+
+Non-nil when TIBETAN is an exact curated wordlist key.
+
+** ~tibetan-reading--wylie~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 67
+:SIGNATURE: (tibetan-reading--wylie tibetan)
+:END:
+
+Deterministic Wylie of TIBETAN (fallback: the input verbatim).
+
+** ~tibetan-reading--split-merged-clitic~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 85
+:SIGNATURE: (tibetan-reading--split-merged-clitic tibetan)
+:END:
+
+Split a trailing merged clitic off TIBETAN:
+(STEM . (CLITIC . LABEL)) or nil.  Only the graphically unambiguous
+འ-initial clitics (`tibetan-reading--merged-clitics'); syllabic
+particles are their own tokens in the `tibetan-extract-vocabulary'
+stream.  Curated whole tokens are never split (W4b authority rule).
+
+** ~tibetan-reading--decorate-particle~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 102
+:SIGNATURE: (tibetan-reading--decorate-particle wylie label prev-verb-p tibetan)
+:END:
+
+Wrap WYLIE in `=…=' or `~…~' according to LABEL and context.
+
+** ~tibetan-reading--unit-tokens~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 111
+:SIGNATURE: (tibetan-reading--unit-tokens unit-text)
+:END:
+
+Classified token plists for one shad unit, in order.
+Each: (:tibetan S :wylie W :kind particle|verb|word :label L
+:curated-p BOOL :clitic (CL-WYLIE . CL-LABEL)|nil).
+
+** ~tibetan-reading--render-token~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 144
+:SIGNATURE: (tibetan-reading--render-token tok &optional main-verb-p)
+:END:
+
+Render one classified TOK plist into its decorated Wylie string.
+
+** ~tibetan-reading-decorated-unit-line~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 163
+:SIGNATURE: (tibetan-reading-decorated-unit-line unit-text &optional last-unit-p)
+:END:
+
+One decorated Wylie line for UNIT-TEXT (a shad unit, shads kept).
+When LAST-UNIT-P, the unit's FINAL verb token is the sentence's main
+verb (`*x*'); every other verb wears `!x!'.  The line ends ` /' when
+the unit carries a trailing shad run.
+
+** ~tibetan-reading-decorated-lines~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 182
+:SIGNATURE: (tibetan-reading-decorated-lines units)
+:END:
+
+Decorated Wylie lines for UNITS (ordered shad-unit strings).
+The main verb is marked in the LAST unit only.
+
+** ~tibetan-interlinear--particle-patterns~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 34
+:END:
+
+/(no docstring)/
+
+** ~tibetan-reading--converb-labels~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 36
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+** ~tibetan-reading--postverb-converbs~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 43
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+** ~tibetan-reading--merged-clitics~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 76
 :DEFAULT: '
 :END:
 
@@ -19110,7 +19254,7 @@ Holds the result of the WHEN clause for use in THEN assertions.
 ** ~tibetan-cat-setup~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 292
+:LINE: 293
 :SIGNATURE: (tibetan-cat-setup)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -19122,7 +19266,7 @@ Loads glossaries and prepares the system for use.
 ** ~tibetan-cat-version~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 378
+:LINE: 379
 :SIGNATURE: (tibetan-cat-version)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -19133,7 +19277,7 @@ Display Tibetan CAT version and feature summary.
 ** ~tibetan-cat--server-socket-path~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 421
+:LINE: 422
 :SIGNATURE: (tibetan-cat--server-socket-path server-name)
 :END:
 
@@ -19145,7 +19289,7 @@ removed when the server is stopped).
 ** ~tibetan-cat-open-zettel-for-word-at-point~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 432
+:LINE: 433
 :SIGNATURE: (tibetan-cat-open-zettel-for-word-at-point &optional arg)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -19178,7 +19322,7 @@ in the appropriate instance.
 ** ~tibetan-cat-zettel-target-server~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 401
+:LINE: 402
 :TYPE: 'string
 :GROUP: tibetan-cat
 :DEFAULT: "research-emacs"
@@ -19200,7 +19344,7 @@ Empty string disables remote routing entirely.
 ** ~tibetan-cat-version~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 289
+:LINE: 290
 :END:
 
 /(no docstring)/
@@ -19208,7 +19352,7 @@ Empty string disables remote routing entirely.
 ** ~tibetan-cat-version~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 374
+:LINE: 375
 :DEFAULT: "2.1.0"
 :END:
 
@@ -19217,7 +19361,7 @@ Version of Tibetan CAT system.
 ** ~server-socket-dir~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 419
+:LINE: 420
 :END:
 
 /(no docstring)/

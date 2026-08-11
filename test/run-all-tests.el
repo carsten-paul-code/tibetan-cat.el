@@ -167,6 +167,9 @@
 ;; Interlinear gloss + particle overview
 (condition-case nil (require 'tibetan-interlinear-test) (error nil))
 
+;; R3: Reading-view decorated Wylie lines (cascade layout redesign)
+(condition-case nil (require 'tibetan-reading-test) (error nil))
+
 ;; Throttled Claude request queue (concurrency cap + 429 retry)
 (condition-case nil (require 'tibetan-claude-queue-test) (error nil))
 
