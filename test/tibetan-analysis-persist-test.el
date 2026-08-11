@@ -3620,5 +3620,52 @@ line; the face exists."
       (when (file-directory-p tmp-dir)
         (delete-directory tmp-dir t)))))
 
+;; ============================================================================
+;; R2 (2026-08-12) — Reading-view verb markers
+;;
+;; The cascade Reading view decorates its per-unit Wylie lines with
+;; `!x!' (every verb) and `*x*' (sentence-final main verb).  `!x!'
+;; is a plain 3-group keyword like `=x=' / `~x~'; `*x*' collides
+;; with org bold, so it is a SECTION-GATED function matcher (§5.35
+;; pattern) active only inside `** Wylie' under `* Reading'.
+;; Direct matcher tests — batch font-lock is unreliable (§5.31).
+;; ============================================================================
+
+(ert-deftest tibetan-analysis-main-verb-matcher-fires-only-in-reading-wylie ()
+  "The `*x*' matcher captures the marked verb inside * Reading /
+** Wylie and ignores identical text elsewhere (org bold in notes,
+two-file `** Wylie Transliteration' bodies)."
+  (with-temp-buffer
+    (insert "* My Notes\n"
+            "this is *important* to me\n"
+            "* Reading\n"
+            "** Wylie\n"
+            "zhal !mthong! ba tsam =gyis= snang ba *byung* /\n"
+            "** Interlinear Gloss\n"
+            "zhal [face] ... *not-a-verb* here\n"
+            "* Tibetan Analysis\n"
+            "** Wylie Transliteration\n"
+            "also *not this* one\n")
+    (goto-char (point-min))
+    (let (hits)
+      (while (tibetan-analysis--main-verb-matcher (point-max))
+        (push (match-string 2) hits))
+      (should (equal '("byung") hits)))))
+
+(ert-deftest tibetan-analysis-main-verb-matcher-terminates-without-match ()
+  "Progress guarantee (§5.38-H3 class): no match → returns nil,
+never loops — including on a final line without trailing newline."
+  (with-temp-buffer
+    (insert "* Reading\n** Wylie\nno markers here")
+    (goto-char (point-min))
+    (should-not (tibetan-analysis--main-verb-matcher (point-max)))))
+
+(ert-deftest tibetan-analysis-reading-verb-keyword-shape ()
+  "The `!x!' keyword entry carries the 3-group face+invisible shape
+of the particle-map keywords, and the main-verb face exists."
+  (should (facep 'tibetan-analysis-main-verb-face))
+  (let ((kw (car tibetan-analysis--reading-verb-font-lock-keywords)))
+    (should (equal "\\(!\\)\\([^!\n]+\\)\\(!\\)" (car kw)))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here

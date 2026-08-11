@@ -451,6 +451,72 @@ org-verbatim / org-code the emphasis parser DID add for clean
 word-boundary tokens, so rendering stays uniform across both
 forms.")
 
+(defface tibetan-analysis-main-verb-face
+  '((((class color) (background light)) :foreground "red3" :weight bold)
+    (((class color) (background dark))  :foreground "tomato" :weight bold)
+    (t :weight bold))
+  "Face for the sentence-final MAIN VERB marker `*x*' in the cascade
+Reading view's `** Wylie' lines (R2, 2026-08-12).  Every verb wears
+`!x!' (`tibetan-analysis-verb-face', blue); the finite verb the
+converb chain resolves to gets this red so the sentence's anchor is
+spottable at a glance."
+  :group 'tibetan-cat)
+
+(defun tibetan-analysis--in-reading-wylie-section-p ()
+  "Return non-nil when point's line sits inside `** Wylie' under
+`* Reading' (the cascade Reading view) — and not under any later
+heading.  Two-file documents use `** Wylie Transliteration', which
+deliberately does NOT match."
+  (save-excursion
+    (goto-char (line-beginning-position))
+    (when (re-search-backward "^\\*+ " nil t)
+      (when (looking-at-p "^\\*\\* Wylie[ \t]*$")
+        (when (re-search-backward "^\\* " nil t)
+          (looking-at-p "^\\* Reading[ \t]*$"))))))
+
+(defun tibetan-analysis--main-verb-matcher (limit)
+  "Font-lock matcher for the `*x*' main-verb marker, gated to the
+Reading view's `** Wylie' section (§5.35 pattern).  `*…*' collides
+with org bold everywhere else — user notes must never turn red.
+`re-search-forward' guarantees progress (§5.38-H3 class)."
+  (let (found)
+    (while (and (not found)
+                (re-search-forward "\\(\\*\\)\\([^*\n]+\\)\\(\\*\\)"
+                                   limit t))
+      (when (save-match-data
+              (tibetan-analysis--in-reading-wylie-section-p))
+        (setq found t)))
+    found))
+
+(defconst tibetan-analysis--reading-verb-font-lock-keywords
+  '(("\\(!\\)\\([^!\n]+\\)\\(!\\)"
+     (1 '(face tibetan-analysis-verb-face
+          invisible tibetan-analysis-particle-marker)
+        prepend)
+     (2 'tibetan-analysis-verb-face prepend)
+     (3 '(face tibetan-analysis-verb-face
+          invisible tibetan-analysis-particle-marker)
+        prepend))
+    (tibetan-analysis--main-verb-matcher
+     (1 '(face tibetan-analysis-main-verb-face
+          invisible tibetan-analysis-particle-marker)
+        prepend)
+     (2 'tibetan-analysis-main-verb-face prepend)
+     (3 '(face tibetan-analysis-main-verb-face
+          invisible tibetan-analysis-particle-marker)
+        prepend)))
+  "Font-lock keywords for the Reading view's verb markers (R2).
+
+`!x!' → every verb form (`tibetan-analysis-verb-face', blue) — a
+plain 3-group keyword like the `=x=' / `~x~' particle markers
+\(same rationale: org's emphasis parser needs a word-boundary PRE
+char, which decorated Wylie doesn't provide).
+`*x*' → the sentence-final main verb
+\(`tibetan-analysis-main-verb-face', red) — a SECTION-GATED function
+matcher because `*…*' IS org bold everywhere else in the file.
+Delimiters share the `tibetan-analysis-particle-marker' invisibility
+symbol already in the buffer-invisibility-spec.")
+
 (defconst tibetan-analysis--interlinear-gloss-font-lock-keywords
   ;; Match the gloss that follows each Wylie link in the Interlinear.
   ;; Pattern produced by `tibetan-interlinear--format-gloss-entry':
@@ -838,6 +904,10 @@ parser which doesn't fire for compound-embedded markers like
     ;; §5.42: own-segment span inside the whole-sentence translation.
     (font-lock-add-keywords
      nil tibetan-analysis--segment-span-font-lock-keywords 'append)
+    ;; R2: Reading-view verb markers — `!x!' blue everywhere it
+    ;; appears, `*x*' red via the section-gated main-verb matcher.
+    (font-lock-add-keywords
+     nil tibetan-analysis--reading-verb-font-lock-keywords 'append)
     (when (fboundp 'font-lock-flush)
       (font-lock-flush))
 
