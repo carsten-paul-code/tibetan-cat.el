@@ -102,6 +102,26 @@
     (dolist (word result)
       (should-not (string-match-p "[།༎༏༐༑༔]" word)))))
 
+(ert-deftest tibetan-segment-text-shad-is-hard-boundary ()
+  "A shad run is a token boundary, never glue (R1, 2026-08-12).
+Deleting shads fused tokens across clause boundaries — the live
+sent-001-deb Sentence Structure tree showed `བཞུགསརྟེན' (bzhugs +
+rten joined across `།') and a hallucinated main verb.  Phase-2b
+pattern: shads convert to tsheg, exactly like
+`tibetan-split-into-syllables' (core/tibetan-utils.el)."
+  ;; Plain shad between clauses — no space, no tsheg.
+  (should (equal '("བཞུགས" "རྟེན")
+                 (tibetan-segment-text "བཞུགས།རྟེན")))
+  ;; Double shad + pecha-style spaced shad.
+  (should (equal '("བྱུང" "ཞལ")
+                 (tibetan-segment-text "བྱུང།། ཞལ")))
+  ;; Trailing shad produces no empty token.
+  (should (equal '("བཞུགས")
+                 (tibetan-segment-text "བཞུགས།")))
+  ;; པ༔-style tsheg-less join via gter-shad.
+  (should (equal '("པ" "བདག")
+                 (tibetan-segment-text "པ༔བདག"))))
+
 (ert-deftest tibetan-segment-text-single-word ()
   "Test segmentation of single word."
   (let ((result (tibetan-segment-text "བོད")))

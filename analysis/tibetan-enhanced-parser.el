@@ -88,8 +88,16 @@ Creates empty hash tables if files don't exist or tibetan-cat-data-dir is unset.
 
 (defun tibetan-segment-text (text)
   "Segment TEXT into tsheg-delimited units.
-Returns list of word strings."
-  (let ((cleaned (replace-regexp-in-string "[།༎༏༐༑༔]" "" text)))
+Returns list of word strings.
+
+R1 (2026-08-12): a shad run is a HARD boundary — converted to tsheg,
+never deleted.  Deletion glued the syllables around a clause-final
+shad into one ghost token (`བཞུགས།རྟེན' → `བཞུགསརྟེན'), which fed
+fused words and hallucinated verbs into every Sentence Structure
+tree parsed over multi-clause text.  Same Phase-2b pattern as
+`tibetan-split-into-syllables' (core/tibetan-utils.el)."
+  (let ((cleaned (replace-regexp-in-string
+                  "[ \t\n]*[།༎༏༐༑༔]+[ \t\n]*" "་" text)))
     (split-string cleaned "་" t)))
 
 (defconst tibetan-enhanced-parser--case-particle-tails
