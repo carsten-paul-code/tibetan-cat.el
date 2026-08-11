@@ -3526,6 +3526,49 @@ per-section driver remains the operational pattern for corpus-wide
 fires; a big-bang batch may be re-validated now that the cause is
 fixed, but do it on a small corpus first.
 
+### 5.50 Wordlist authority — curated-first tokenization (2026-08-11)
+
+Commits `828e803` `24b1055` `2985e67` `e7b0428` (corpus `9d03c15`).
+Trigger: Carsten asked whether the analysis respects the provided
+vocabulary list.  Audit answer: only 42 of 66 in-passage wordlist
+terms surfaced, and ★ glosses showed English-only on a de-target
+document.  Root causes and fixes, all RED-first:
+
+- **W1 curated-first MWU grouping (`828e803`)**: the wordlist
+  parsers store WYLIE keys (the Tibetan-key store branch is dead —
+  `tibetan-wylie-to-tibetan` is not fbound), so the exact-Tibetan-key
+  MWU probe could never license Resources-only compounds; greedy-
+  longest grouping let generic compounds shadow curated terms
+  (sprod pa "supply" over the class's sprod); the particle-tail
+  guard rejected curated idioms (kog gis) before probing.  New
+  strict `tibetan-vocab--curated-exact-entry` (Resources+Custom,
+  exact Tibetan + exact Wylie key, NO stripping — seg-049 contract)
+  + CURATED-FIRST pass (longest curated 4→1 wins at each position,
+  guard-exempt) + no-swallow guard on the generic pass.  Empty-hash
+  short-circuit ⇒ zero change for uncurated documents.
+- **W2 cascade binds target-lang (`24b1055`)**: Pass-5c's DE//EN
+  half selection reads dynamic `tibetan-analysis--target-lang`,
+  which the cascade temp-buffer scaffold never bound (same
+  missing-context class as the ★-loss cwd bug) — bound in
+  `--scaffold` from source metadata; declared special in
+  tibetan-cascade.el (the `features`-shadow lesson).
+- **W3 particle homograph alternatives (`2985e67`)**: particle
+  tokens whose Wylie is an exact curated key render
+  `gyis [ERG ‖ ★ Imp. von bgyid…]` — the class's homograph reading
+  was invisible behind the Bialek tag.
+- **W4b splitter syllable-boundary + curated-whole guards
+  (`e7b0428`)**: `--split-word-particle` split MID-SYLLABLE
+  (བསྒྲུབས → བསྒྲུ + བས [CONV:pas]); syllabic particles now require a
+  preceding tsheg (new `tibetan-interlinear--merged-clitics` འི འིས
+  འང ར are the only letter-wise attachers), and exact curated keys
+  (ltar = "als ob") are never split.
+
+Portfolio regen result: **66/66** in-passage wordlist terms honored
+(was 42), ★ 53 → 88, German halves shown, user slots byte-identical.
+NOTE: Milarepa / Khu-dbon / MA Reading also carry Resources
+wordlists — their tokenization follows the same curated-first rules
+on NEXT regenerate (MA Reading batch regen stays prohibited, §5.36).
+
 ## 6. Open work (prioritised)
 
 ### P0 — Verify Detailed Dictionary on a real segment ✓ DONE 2026-04-15
