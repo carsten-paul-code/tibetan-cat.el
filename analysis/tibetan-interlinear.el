@@ -286,6 +286,15 @@ Returns an alist suitable for `tibetan-interlinear--portfolio-cache'."
   "Alist of (TIBETAN-SUFFIX . SHORT-LABEL) for known particles.
 Ordered longest-first within each group to avoid partial matches.")
 
+(defvar tibetan-interlinear--merged-clitics '("འི" "འིས" "འང" "ར")
+  "The particle forms that attach LETTER-WISE to the preceding
+syllable (postvocalic merged clitics: དེ + ར = དེར, པ + འི = པའི).
+Every other entry of `tibetan-interlinear--particle-patterns' is a
+full syllable of its own and must be preceded by a tsheg — the
+suffix matcher used to ignore this and split བསྒྲུབས (one syllable,
+pf. of sgrub) into བསྒྲུ + བས [CONV:pas] (W4b, Portfolio audit
+2026-08-11).")
+
 (defun tibetan-interlinear--split-word-particle (tibetan-word bialek-tag)
   "Split TIBETAN-WORD into (STEM . PARTICLE-INFO) using BIALEK-TAG.
 BIALEK-TAG is the grammatical role string from the Word/Particle List,
@@ -303,7 +312,12 @@ emits these as a compact `nas [ABL]' — no dictionary gloss, no
 jump link — matching how stem-final particles are rendered."
   (if (or (null bialek-tag)
           (member bialek-tag '("Noun" "?" "Unknown" "N" "Verb"
-                               "Transitive verb" "Intransitive verb")))
+                               "Transitive verb" "Intransitive verb"))
+          ;; W4b: a token the user curated as a UNIT is never split —
+          ;; the class wordlist glosses ltar ("als ob") whole, which
+          ;; overrides the lta + r [TERM] analysis for its corpus.
+          (and (fboundp 'tibetan-vocab--curated-exact-entry)
+               (tibetan-vocab--curated-exact-entry tibetan-word)))
       ;; No particle — whole word is lexical
       (cons tibetan-word nil)
     ;; 1) First try matching a true suffix (strict: word longer than
@@ -315,7 +329,17 @@ jump link — matching how stem-final particles are rendered."
               (label (cdr pattern)))
           (when (and (not result)
                      (string-suffix-p suffix tibetan-word)
-                     (> (length tibetan-word) (length suffix)))
+                     (> (length tibetan-word) (length suffix))
+                     ;; W4b syllable-boundary guard: a syllabic
+                     ;; particle is its own syllable — it only splits
+                     ;; off ACROSS a tsheg.  Merged clitics (འི ར …)
+                     ;; attach letter-wise and are exempt.
+                     (or (member suffix
+                                 tibetan-interlinear--merged-clitics)
+                         (eq (aref tibetan-word
+                                   (- (length tibetan-word)
+                                      (length suffix) 1))
+                             ?་)))
             (let ((stem (substring tibetan-word 0
                                    (- (length tibetan-word)
                                       (length suffix)))))

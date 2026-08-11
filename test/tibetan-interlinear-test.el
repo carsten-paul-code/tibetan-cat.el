@@ -22,6 +22,7 @@
 ;; dynamic vars must be SPECIAL in this file for the let-bindings in
 ;; the tests to be seen (the `features'-shadow lesson).
 (require 'tibetan-vocabulary)
+(require 'tibetan-wylie)   ; curated probes map Tibetan → Wylie keys
 (defvar tibetan-analysis--target-lang)
 (defvar tibetan-current-resources-vocab)
 (defvar tibetan-current-custom-vocab)
@@ -691,6 +692,55 @@ selection like every other gloss (Pass 5c)."
                    nil nil nil "gyis" "ERG")))
       (should (string-match-p "Imp\\. von bgyid" result))
       (should-not (string-match-p "imp\\. of bgyid" result)))))
+
+;; ============================================================================
+;; W4b (2026-08-11) — splitter respects syllables and curation
+;; ============================================================================
+;; Portfolio audit: བསྒྲུབས (one syllable, pf. of sgrub) was split
+;; MID-SYLLABLE into བསྒྲུ + བས [CONV:pas] — the suffix matcher had no
+;; syllable-boundary awareness.  A syllabic particle (pas/bas, nas,
+;; kyis…) is always its own syllable: it must be preceded by a tsheg.
+;; Only the true merged clitics (འི འིས འང ར) may attach letter-wise.
+;; And a token the user curated as a UNIT (ltar = "als ob") must not
+;; be split at all.
+
+(ert-deftest tibetan-interlinear-split-no-mid-syllable-particle ()
+  "A syllabic particle only splits off after a tsheg — never from
+inside a syllable (the bsgrubs → bsgru + bas class)."
+  (let ((tibetan-current-resources-vocab nil)
+        (tibetan-current-custom-vocab nil))
+    (should (equal (cons "བསྒྲུབས" nil)
+                   (tibetan-interlinear--split-word-particle
+                    "བསྒྲུབས" "CONVERBIAL: CAUSAL CONVERB")))))
+
+(ert-deftest tibetan-interlinear-split-syllabic-after-tsheg-still-works ()
+  "Control: the legitimate V + converb split across a tsheg stays."
+  (let ((tibetan-current-resources-vocab nil)
+        (tibetan-current-custom-vocab nil))
+    (let ((r (tibetan-interlinear--split-word-particle
+              "བསླབས་ནས" "ABLATIVE")))
+      (should (equal "བསླབས" (car r)))
+      (should (equal "ནས" (cadr r))))))
+
+(ert-deftest tibetan-interlinear-split-merged-clitic-still-works ()
+  "Control: true merged clitics (ར TERM) still attach letter-wise."
+  (let ((tibetan-current-resources-vocab nil)
+        (tibetan-current-custom-vocab nil))
+    (let ((r (tibetan-interlinear--split-word-particle
+              "དེར" "TERMINATIVE (ALL)")))
+      (should (equal "དེ" (car r)))
+      (should (equal "ར" (cadr r))))))
+
+(ert-deftest tibetan-interlinear-split-curated-token-stays-whole ()
+  "A token that is an exact curated wordlist key is never split —
+the class curates ltar as a unit (\"als ob\"), overriding the
+lta + r analysis."
+  (let ((tibetan-current-resources-vocab (make-hash-table :test 'equal))
+        (tibetan-current-custom-vocab nil))
+    (puthash "ltar" "als ob // as if" tibetan-current-resources-vocab)
+    (should (equal (cons "ལྟར" nil)
+                   (tibetan-interlinear--split-word-particle
+                    "ལྟར" "TERMINATIVE (ALL)")))))
 
 (provide 'tibetan-interlinear-test)
 ;;; tibetan-interlinear-test.el ends here
