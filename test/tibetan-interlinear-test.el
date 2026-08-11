@@ -18,6 +18,13 @@
   (add-to-list 'load-path (expand-file-name "../analysis" base-dir)))
 
 (require 'tibetan-interlinear)
+;; W3: the particle branch consults the curated vocab probe; the
+;; dynamic vars must be SPECIAL in this file for the let-bindings in
+;; the tests to be seen (the `features'-shadow lesson).
+(require 'tibetan-vocabulary)
+(defvar tibetan-analysis--target-lang)
+(defvar tibetan-current-resources-vocab)
+(defvar tibetan-current-custom-vocab)
 
 ;; ============================================================================
 ;; WORD/PARTICLE SPLITTING
@@ -643,6 +650,47 @@ filled in yet)."
     (should (string-match-p "\\[\\[id:20260424T111111\\]\\[bdag\\]\\]"
                             result))
     (should (string-match-p "♦" result))))
+
+;; ============================================================================
+;; W3 (2026-08-11) — particle homographs show the curated alternative
+;; ============================================================================
+
+(ert-deftest tibetan-interlinear-particle-with-curated-alternative ()
+  "A particle token whose Wylie is ALSO a curated wordlist key gets
+the curated reading appended after its label — the class wordlist
+glosses gyis as the imperative of bgyid, which the [ERG] tag alone
+hides completely (Portfolio audit, 2026-08-11)."
+  (let ((tibetan-current-resources-vocab (make-hash-table :test 'equal))
+        (tibetan-current-custom-vocab nil))
+    (puthash "gyis" "Imp. von bgyid, tr. // imp. of bgyid, tr."
+             tibetan-current-resources-vocab)
+    (let ((result (tibetan-interlinear--format-gloss-entry
+                   nil nil nil "gyis" "ERG")))
+      (should (string-match-p "gyis \\[ERG" result))
+      (should (string-match-p "★" result))
+      (should (string-match-p "bgyid" result)))))
+
+(ert-deftest tibetan-interlinear-particle-without-curated-unchanged ()
+  "Particles with no curated entry render exactly as before."
+  (let ((tibetan-current-resources-vocab nil)
+        (tibetan-current-custom-vocab nil))
+    (let ((result (tibetan-interlinear--format-gloss-entry
+                   nil nil nil "kyi" "GEN")))
+      (should (string-match-p "kyi \\[GEN\\]" result))
+      (should-not (string-match-p "★" result)))))
+
+(ert-deftest tibetan-interlinear-particle-curated-alt-prefers-target-lang ()
+  "The appended curated alternative honors the DE // EN half
+selection like every other gloss (Pass 5c)."
+  (let ((tibetan-current-resources-vocab (make-hash-table :test 'equal))
+        (tibetan-current-custom-vocab nil)
+        (tibetan-analysis--target-lang "de"))
+    (puthash "gyis" "Imp. von bgyid // imp. of bgyid"
+             tibetan-current-resources-vocab)
+    (let ((result (tibetan-interlinear--format-gloss-entry
+                   nil nil nil "gyis" "ERG")))
+      (should (string-match-p "Imp\\. von bgyid" result))
+      (should-not (string-match-p "imp\\. of bgyid" result)))))
 
 (provide 'tibetan-interlinear-test)
 ;;; tibetan-interlinear-test.el ends here

@@ -28,6 +28,11 @@
 
 ;;; Code:
 
+;; W3 (2026-08-11): the particle branch of the gloss-entry formatter
+;; probes the user-curated vocabulary for homograph alternatives.
+(declare-function tibetan-vocab--curated-exact-entry
+                  "tibetan-vocabulary" (term))
+
 (require 'cl-lib)
 
 ;; Phase 2 of zettel-in-translation-workflow (2026-04-24) — soft-require
@@ -461,10 +466,32 @@ Returns something like:
     ;; canonical target to point at.  Plain text is safer and doesn't
     ;; lose any information — the label is what the reader cares about.
     (when (and particle-wylie particle-label)
-      (push (format "%s [%s]"
-                    particle-wylie
-                    (tibetan-interlinear--sanitize-gloss particle-label))
-            parts))
+      ;; W3 (2026-08-11): homograph visibility.  When the particle's
+      ;; Wylie is ALSO an exact key of the user-curated wordlist
+      ;; (Portfolio: gyis = imp. of bgyid, ltar = "als ob"), append
+      ;; the curated reading after the label — the bare Bialek tag
+      ;; hides the class's chosen reading entirely.  Exact-key probe
+      ;; only (no stripping), so ubiquitous pure particles (dang, la,
+      ;; kyi…) are untouched unless the user curated them.
+      (let* ((curated-alt
+              (and (fboundp 'tibetan-vocab--curated-exact-entry)
+                   (tibetan-vocab--curated-exact-entry particle-wylie)))
+             (alt (and curated-alt
+                       (tibetan-interlinear--truncate-gloss
+                        (tibetan-interlinear--prefer-target-lang
+                         curated-alt)
+                        60))))
+        (push (if alt
+                  (format "%s [%s ‖ ★ %s]"
+                          particle-wylie
+                          (tibetan-interlinear--sanitize-gloss
+                           particle-label)
+                          (tibetan-interlinear--sanitize-gloss alt))
+                (format "%s [%s]"
+                        particle-wylie
+                        (tibetan-interlinear--sanitize-gloss
+                         particle-label)))
+              parts)))
 
     (mapconcat #'identity (nreverse parts) " ")))
 
