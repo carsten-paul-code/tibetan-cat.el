@@ -756,6 +756,58 @@ New-format ⟦N⟧ lines first; legacy subtree numbers fallback."
               (nreverse nums))))
         (tibetan-cascade--subsegment-numbers file))))
 
+(defun tibetan-cascade--read-interlinear-for-unit (file seg-num)
+  "SEG-NUM's Interlinear Gloss line/body in FILE, or nil.
+New layout: the `** Interlinear Gloss' layer under `* Reading' is
+POSITIONAL — the Kth non-empty line belongs to the Kth ⟦N⟧ key of
+the Renderings list (the regenerable layers share the unit order;
+only renderings are ⟦N⟧-keyed).  Legacy layout: the `** Segment N'
+subtree's own `*** Interlinear Gloss' section."
+  (when (and file (stringp file) (file-exists-p file) seg-num)
+    (or (with-temp-buffer
+          (insert-file-contents file)
+          (let ((nums (save-excursion
+                        (let ((region (tibetan-cascade--renderings-region))
+                              ns)
+                          (when region
+                            (goto-char (car region))
+                            (while (re-search-forward
+                                    "^- ⟦\\([0-9]+\\)⟧ " (cdr region) t)
+                              (push (string-to-number (match-string 1))
+                                    ns))
+                            (nreverse ns))))))
+            (when nums
+              (let ((idx (cl-position seg-num nums)))
+                (when idx
+                  (goto-char (point-min))
+                  (when (re-search-forward "^\\* Reading[ \t]*$" nil t)
+                    (let ((reading-end
+                           (save-excursion
+                             (if (re-search-forward "^\\* " nil t)
+                                 (line-beginning-position)
+                               (point-max)))))
+                      (when (re-search-forward
+                             "^\\*\\* Interlinear Gloss[ \t]*$"
+                             reading-end t)
+                        (forward-line 1)
+                        (let ((end (save-excursion
+                                     (if (re-search-forward
+                                          "^\\*\\{1,2\\} " reading-end t)
+                                         (line-beginning-position)
+                                       reading-end)))
+                              (lines '()))
+                          (while (< (point) end)
+                            (let ((l (string-trim
+                                      (buffer-substring-no-properties
+                                       (line-beginning-position)
+                                       (line-end-position)))))
+                              (unless (string-empty-p l)
+                                (push l lines)))
+                            (forward-line 1))
+                          (nth idx (nreverse lines)))))))))))
+        (tibetan-cascade--read-subsegment-section
+         file seg-num "Interlinear Gloss"))))
+
 (defun tibetan-cascade--rendering-needs-request-p (file seg-num)
   "Non-nil when SEG-NUM's rendering still needs the sentence fire.
 Missing body, the creation placeholder, or a failure/missing stub
@@ -871,13 +923,15 @@ touched."
                        (tibetan-analysis--claude-needs-request-p file)))
           (tibetan-analysis--insert-claude-sections md file)))
       ;; Subsegment renderings — span or visible stub, per-unit gated.
+      ;; R6: dual-format writer — ⟦N⟧ line in new-layout files,
+      ;; legacy subtree otherwise.
       (dolist (n seg-nums)
         (when (or force
                   (tibetan-cascade--rendering-needs-request-p
                    file n))
           (let ((span (tibetan-cascade--extract-span whole n)))
-            (tibetan-cascade--write-subsegment-section
-             file n "Rendering"
+            (tibetan-cascade--write-rendering
+             file n
              (if span
                  ;; §5.38-C1b: neutralise line-leading `*' runs.
                  (replace-regexp-in-string "^\\(\\*+\\)" " \\1" span)
@@ -911,8 +965,8 @@ grounding).  nil when the file or every gloss is unavailable."
              (delq nil
                    (mapcar
                     (lambda (n)
-                      (let ((gloss (tibetan-cascade--read-subsegment-section
-                                    file n "Interlinear Gloss")))
+                      (let ((gloss (tibetan-cascade--read-interlinear-for-unit
+                                    file n)))
                         (when (and gloss
                                    (not (string-match-p "\\`\\[" gloss)))
                           (format "=== Segment %d ===\n%s" n gloss))))
@@ -1170,14 +1224,14 @@ landing-gated per file (§5.38-M7)."
               (sent-num (plist-get s :sent-num))
               (seg-nums (plist-get s :seg-nums)))
           (when (and file (file-exists-p file))
-            ;; Subsegment renderings.
+            ;; Subsegment renderings (R6: dual-format writer).
             (dolist (n seg-nums)
               (when (or force
                         (tibetan-cascade--rendering-needs-request-p
                          file n))
                 (let ((span (tibetan-cascade--extract-span whole n)))
-                  (tibetan-cascade--write-subsegment-section
-                   file n "Rendering"
+                  (tibetan-cascade--write-rendering
+                   file n
                    (if span
                        (replace-regexp-in-string "^\\(\\*+\\)" " \\1"
                                                  span)

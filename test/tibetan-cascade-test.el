@@ -1416,6 +1416,47 @@ never mistaken for rendering lines — writes stay inside
       (should (string-match-p "^- ⟦105⟧ real span$" s))
       (should (string-match-p "^- ⟦105⟧ decoy line$" s)))))
 
+;; ============================================================================
+;; R6 (2026-08-12) — landing + grounding on the new format
+;; ============================================================================
+
+(ert-deftest tibetan-cascade-land-response-new-format-lines ()
+  "Landing into a NEW-layout file updates the ⟦N⟧ rendering lines:
+the placeholder line gets its span, a populated line survives
+non-FORCE, and no legacy subtree is created."
+  (tibetan-cascade-test--with-new-format-file
+    (tibetan-cascade--land-response
+     tibetan-cascade-test--response
+     (list :sent-num 4 :seg-nums '(105 106)
+           :sent-file newfile :cascade t :force nil))
+    (should (equal "The lama went to rNgog's place"
+                   (tibetan-cascade--read-rendering newfile 105)))
+    ;; 106 was already populated — non-FORCE keeps it.
+    (should (equal "the profound dharma"
+                   (tibetan-cascade--read-rendering newfile 106)))
+    (should-not (string-match-p
+                 "^\\*\\* Segment "
+                 (with-temp-buffer (insert-file-contents newfile)
+                                   (buffer-string))))))
+
+(ert-deftest tibetan-cascade-read-interlinear-for-unit-dual ()
+  "The grounding's per-unit interlinear read serves the new format
+positionally (Nth line ↔ Nth ⟦N⟧ key) and legacy files via the
+subtree fallback."
+  (tibetan-cascade-test--with-new-format-file
+    (should (equal "bdag [I] /"
+                   (tibetan-cascade--read-interlinear-for-unit
+                    newfile 105)))
+    (should (equal "chos [dharma] /"
+                   (tibetan-cascade--read-interlinear-for-unit
+                    newfile 106))))
+  (tibetan-cascade-test--with-cascade-file
+    (should (string-match-p
+             "GLOSS"
+             (or (tibetan-cascade--read-interlinear-for-unit
+                  cascade-file 105)
+                 "")))))
+
 (ert-deftest tibetan-cascade-open-mentions-defer ()
   "Opening a defer-MT document's segment says WHY nothing fires."
   (tibetan-cascade-test--with-stub-renderer

@@ -261,8 +261,10 @@ that silent no-op cost a debugging round)."
               (list :fired-1 (car fire-1) :statuses (cdr fire-1)
                     :fired-2 (car fire-2)
                     :content content
-                    :rendering-105 (tibetan-cascade--read-subsegment-section
-                                    cascade-file 105 "Rendering")
+                    ;; R6: dual-format reader — serves the legacy
+                    ;; subtree today and the ⟦N⟧ line after R8.
+                    :rendering-105 (tibetan-cascade--read-rendering
+                                    cascade-file 105)
                     :seg-files (directory-files
                                 (file-name-directory cascade-file)
                                 nil "\\`seg-"))))
