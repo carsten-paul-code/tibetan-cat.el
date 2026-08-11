@@ -653,6 +653,122 @@ so only the known machine prefixes gate."
         (string-match-p "\\`\\[Requesting" body))))
 
 ;; ============================================================================
+;; R5 — dual-format rendering I/O (READING VIEW redesign, 2026-08-12)
+;;
+;; New format: `- ⟦N⟧ body' lines inside `* Reading' / `** Renderings'.
+;; Every primitive tries the new format FIRST and falls back to the
+;; legacy `** Segment N' / `*** Rendering' subtree — old and new files
+;; are equally servable, which is the whole migration mechanism: the
+;; landing/regenerate layers switch to these primitives while the
+;; scaffold still emits the old layout (R8 flips it last).
+;; ============================================================================
+
+(defun tibetan-cascade--renderings-region ()
+  "Bounds (START . END) of the `** Renderings' body under
+`* Reading' in the current buffer, or nil.  Anchored to the Reading
+section so ⟦N⟧ markers elsewhere (an unstripped Translation span,
+user notes) can never be mistaken for rendering lines."
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward "^\\* Reading[ \t]*$" nil t)
+      (let ((reading-end (save-excursion
+                           (if (re-search-forward "^\\* " nil t)
+                               (line-beginning-position)
+                             (point-max)))))
+        (when (re-search-forward "^\\*\\* Renderings[ \t]*$"
+                                 reading-end t)
+          (forward-line 1)
+          (let ((start (point))
+                (end (if (re-search-forward "^\\*\\{1,2\\} "
+                                            reading-end t)
+                         (line-beginning-position)
+                       reading-end)))
+            (cons start end)))))))
+
+(defun tibetan-cascade--rendering-line-re (seg-num)
+  "Anchored regex for SEG-NUM's rendering line; body in group 1."
+  (format "^- ⟦%d⟧ \\(.*\\)$" seg-num))
+
+(defun tibetan-cascade--read-rendering (file seg-num)
+  "SEG-NUM's rendering body in FILE, or nil.
+New `- ⟦N⟧' line first; legacy `*** Rendering' subtree fallback."
+  (when (and file (stringp file) (file-exists-p file) seg-num)
+    (or (with-temp-buffer
+          (insert-file-contents file)
+          (let ((region (tibetan-cascade--renderings-region)))
+            (when region
+              (goto-char (car region))
+              (when (re-search-forward
+                     (tibetan-cascade--rendering-line-re seg-num)
+                     (cdr region) t)
+                (let ((body (string-trim (match-string 1))))
+                  (unless (string-empty-p body) body))))))
+        (tibetan-cascade--read-subsegment-section file seg-num
+                                                  "Rendering"))))
+
+(defun tibetan-cascade--write-rendering-in-buffer (seg-num body)
+  "Replace SEG-NUM's rendering in the CURRENT buffer with BODY.
+BODY is normalized to a single line (the ⟦N⟧ list format is
+one physical line per unit).  New format first, legacy subtree
+fallback.  Returns t when written."
+  (let ((clean (string-trim
+                (replace-regexp-in-string "[ \t]*\n[ \t]*" " "
+                                          (or body "")))))
+    (or (let ((region (tibetan-cascade--renderings-region)))
+          (when region
+            (save-excursion
+              (goto-char (car region))
+              (when (re-search-forward
+                     (tibetan-cascade--rendering-line-re seg-num)
+                     (cdr region) t)
+                (replace-match (format "- ⟦%d⟧ %s" seg-num clean)
+                               t t)
+                t))))
+        (tibetan-cascade--write-subsegment-section-in-buffer
+         seg-num "Rendering" clean))))
+
+(defun tibetan-cascade--write-rendering (file seg-num body)
+  "Replace SEG-NUM's rendering in FILE with BODY; t on success.
+Same dual-format resolution as the buffer variant; nil (file
+untouched) when neither format carries the unit."
+  (when (and file (stringp file) (file-exists-p file) seg-num body)
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents file)
+          (when (tibetan-cascade--write-rendering-in-buffer seg-num body)
+            (write-region (point-min) (point-max) file nil 'silent)
+            t))
+      (error nil))))
+
+(defun tibetan-cascade--rendering-numbers (file)
+  "Ordered global segment numbers of FILE's rendering units.
+New-format ⟦N⟧ lines first; legacy subtree numbers fallback."
+  (when (and file (stringp file) (file-exists-p file))
+    (or (with-temp-buffer
+          (insert-file-contents file)
+          (let ((region (tibetan-cascade--renderings-region))
+                nums)
+            (when region
+              (goto-char (car region))
+              (while (re-search-forward "^- ⟦\\([0-9]+\\)⟧ "
+                                        (cdr region) t)
+                (push (string-to-number (match-string 1)) nums))
+              (nreverse nums))))
+        (tibetan-cascade--subsegment-numbers file))))
+
+(defun tibetan-cascade--rendering-needs-request-p (file seg-num)
+  "Non-nil when SEG-NUM's rendering still needs the sentence fire.
+Missing body, the creation placeholder, or a failure/missing stub
+all count — same machine prefixes as the legacy predicate (NOT
+`['-anchored wholesale: a real span may open with an editorial
+bracket, the §5.40 lesson)."
+  (let ((body (tibetan-cascade--read-rendering file seg-num)))
+    (or (null body)
+        (string-match-p "\\`\\[Awaiting" body)
+        (string-match-p "\\`\\[Claude" body)
+        (string-match-p "\\`\\[Requesting" body))))
+
+;; ============================================================================
 ;; C3.1 — span extraction + response landing
 ;; ============================================================================
 
@@ -757,7 +873,7 @@ touched."
       ;; Subsegment renderings — span or visible stub, per-unit gated.
       (dolist (n seg-nums)
         (when (or force
-                  (tibetan-cascade--subsegment-rendering-needs-request-p
+                  (tibetan-cascade--rendering-needs-request-p
                    file n))
           (let ((span (tibetan-cascade--extract-span whole n)))
             (tibetan-cascade--write-subsegment-section
@@ -843,7 +959,7 @@ nested slot.  Returns `fired' / `dedup-hit' / nil (does not apply)."
                      (tibetan-analysis--claude-needs-request-p file))
                 (cl-some
                  (lambda (n)
-                   (tibetan-cascade--subsegment-rendering-needs-request-p
+                   (tibetan-cascade--rendering-needs-request-p
                     file n))
                  seg-nums))
         (let ((label (format "sent-%03d (cascade)" sent-num)))
@@ -1057,7 +1173,7 @@ landing-gated per file (§5.38-M7)."
             ;; Subsegment renderings.
             (dolist (n seg-nums)
               (when (or force
-                        (tibetan-cascade--subsegment-rendering-needs-request-p
+                        (tibetan-cascade--rendering-needs-request-p
                          file n))
                 (let ((span (tibetan-cascade--extract-span whole n)))
                   (tibetan-cascade--write-subsegment-section
@@ -1720,7 +1836,7 @@ flavor); DM rides the same claim at SECTION granularity.  Returns
                                  file))
                            (cl-some
                             (lambda (n)
-                              (tibetan-cascade--subsegment-rendering-needs-request-p
+                              (tibetan-cascade--rendering-needs-request-p
                                file n))
                             (plist-get s :seg-nums)))))
                    sentences))

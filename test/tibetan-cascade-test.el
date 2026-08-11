@@ -1334,6 +1334,88 @@ Renderings list — per layer, one line per unit."
       (should (string-match-p "^- ⟦105⟧ \\[Awaiting" s))
       (should (string-match-p "^- ⟦106⟧ \\[Awaiting" s)))))
 
+;; ============================================================================
+;; R5 (2026-08-12) — dual-format rendering I/O
+;; The `- ⟦N⟧ body' line under * Reading/** Renderings is the new
+;; format; every primitive falls back to the legacy `** Segment N /
+;; *** Rendering' subtree, so old and new files are equally servable
+;; while the scaffold still emits the old layout (the migration IS
+;; the dual format).
+;; ============================================================================
+
+(defmacro tibetan-cascade-test--with-new-format-file (&rest body)
+  "Write a NEW-layout cascade file; bind NEWFILE."
+  (declare (indent 0))
+  `(let* ((dir (make-temp-file "cascade-new-" t))
+          (newfile (expand-file-name "sent-004-doc.org" dir)))
+     (unwind-protect
+         (progn
+           (with-temp-file newfile
+             (insert "#+TITLE: Sentence 4 Analysis\n"
+                     "#+TIBETAN_LAYOUT: cascade\n"
+                     "#+SEGMENTS: 105, 106\n\n"
+                     "* My Notes\n\n\n"
+                     "* Tibetan Text\nབདག།ཆོས།\n\n"
+                     "* Reading\n"
+                     "** Wylie\nbdag /\nchos /\n\n"
+                     "** Interlinear Gloss\nbdag [I] /\nchos [dharma] /\n\n"
+                     "** Renderings\n"
+                     "- ⟦105⟧ [Awaiting sentence translation…]\n"
+                     "- ⟦106⟧ the profound dharma\n\n"
+                     "* Tibetan Analysis\n** Translation\nX\n\n"
+                     "* Footnotes\n\n"))
+           ,@body)
+       (delete-directory dir t))))
+
+(ert-deftest tibetan-cascade-rendering-io-new-format ()
+  "Read/write/numbers/needs-request against the ⟦N⟧ line format."
+  (tibetan-cascade-test--with-new-format-file
+    (should (equal '(105 106) (tibetan-cascade--rendering-numbers newfile)))
+    (should (equal "the profound dharma"
+                   (tibetan-cascade--read-rendering newfile 106)))
+    (should (tibetan-cascade--rendering-needs-request-p newfile 105))
+    (should-not (tibetan-cascade--rendering-needs-request-p newfile 106))
+    ;; Write normalizes to a single line and replaces in place.
+    (should (tibetan-cascade--write-rendering newfile 105 "he\nbowed"))
+    (should (equal "he bowed"
+                   (tibetan-cascade--read-rendering newfile 105)))
+    (should-not (tibetan-cascade--rendering-needs-request-p newfile 105))
+    ;; The file still has exactly two rendering lines.
+    (should (= 2 (with-temp-buffer
+                   (insert-file-contents newfile)
+                   (count-matches "^- ⟦" (point-min) (point-max)))))))
+
+(ert-deftest tibetan-cascade-rendering-io-legacy-fallback ()
+  "The same primitives serve a LEGACY subtree file unchanged."
+  (tibetan-cascade-test--with-cascade-file
+    (should (equal '(105 106)
+                   (tibetan-cascade--rendering-numbers cascade-file)))
+    (should (tibetan-cascade--rendering-needs-request-p cascade-file 105))
+    (should (tibetan-cascade--write-rendering cascade-file 105 "a span"))
+    (should (equal "a span"
+                   (tibetan-cascade--read-rendering cascade-file 105)))
+    ;; The write landed in the legacy subtree, not on a ⟦N⟧ line.
+    (should-not (string-match-p
+                 "^- ⟦"
+                 (with-temp-buffer (insert-file-contents cascade-file)
+                                   (buffer-string))))))
+
+(ert-deftest tibetan-cascade-rendering-write-ignores-translation-spans ()
+  "⟦N⟧ markers inside other sections (an unstripped Translation) are
+never mistaken for rendering lines — writes stay inside
+* Reading/** Renderings."
+  (tibetan-cascade-test--with-new-format-file
+    (with-temp-buffer
+      (insert-file-contents newfile)
+      (goto-char (point-max))
+      (insert "* Notes with markers\n- ⟦105⟧ decoy line\n")
+      (write-region (point-min) (point-max) newfile nil 'silent))
+    (tibetan-cascade--write-rendering newfile 105 "real span")
+    (let ((s (with-temp-buffer (insert-file-contents newfile)
+                               (buffer-string))))
+      (should (string-match-p "^- ⟦105⟧ real span$" s))
+      (should (string-match-p "^- ⟦105⟧ decoy line$" s)))))
+
 (ert-deftest tibetan-cascade-open-mentions-defer ()
   "Opening a defer-MT document's segment says WHY nothing fires."
   (tibetan-cascade-test--with-stub-renderer
