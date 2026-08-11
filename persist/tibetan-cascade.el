@@ -163,6 +163,80 @@ converters and the rest degrade to visible markers."
             "*** Interlinear Gloss\n" (string-trim gloss) "\n\n"
             "*** Particles\n" (string-trim particles) "\n\n")))
 
+;; ----------------------------------------------------------------------------
+;; R4 — the * Reading section (READING VIEW redesign, 2026-08-12)
+;; ----------------------------------------------------------------------------
+
+(declare-function tibetan-reading-decorated-lines "tibetan-reading" (units))
+(declare-function tibetan-to-wylie-fixed "tibetan-wylie" (text))
+
+(defun tibetan-cascade--unit-has-shad-p (unit-text)
+  "Non-nil when UNIT-TEXT carries a trailing shad run."
+  (and unit-text (string-match-p "[།༎༏༐༑༔]\\s-*$" unit-text)))
+
+(defun tibetan-cascade--interlinear-unit-line (unit-text)
+  "One Interlinear Gloss line for UNIT-TEXT (a shad unit).
+Runs the segment renderer once, extracts the Interlinear body,
+collapses internal newlines to spaces, and appends ` /' when the
+unit carries a trailing shad — so the Reading view's Interlinear
+layer reads as the whole sentence, one line per unit."
+  (let* ((content (and (fboundp 'tibetan-analysis-generate-content)
+                       (condition-case nil
+                           (tibetan-analysis-generate-content unit-text)
+                         (error nil))))
+         (body (or (tibetan-cascade--extract-l2-body
+                    content "Interlinear Gloss")
+                   "[Interlinear not available]"))
+         (line (replace-regexp-in-string "[ \t]*\n[ \t]*" " "
+                                         (string-trim body))))
+    (if (tibetan-cascade--unit-has-shad-p unit-text)
+        (concat line " /")
+      line)))
+
+(defun tibetan-cascade--renderings-list-body (segs)
+  "The `** Renderings' list body for SEGS ((GLOBAL-NUM . TEXT)…):
+one `- ⟦N⟧ placeholder' line per unit.  The ⟦N⟧ marker is the
+machine key (`tibetan-cascade--write-rendering' replaces the line
+body); the placeholder is the standard rendering placeholder, which
+the defer-MT rewriter replaces in place when active."
+  (mapconcat (lambda (seg)
+               (format "- ⟦%d⟧ %s" (car seg)
+                       tibetan-cascade-rendering-placeholder))
+             segs "\n"))
+
+(defun tibetan-cascade--reading-section (segs)
+  "The full `* Reading' section string for SEGS ((GLOBAL-NUM . TEXT)…).
+Per-layer arrangement (Carsten's decision 2026-08-12): decorated
+Wylie lines, then Interlinear Gloss lines, then the ⟦N⟧ Renderings
+list — each layer one line per shad unit, shads rendered as `/'."
+  (let* ((units (mapcar #'cdr segs))
+         (wylie-lines
+          (if (fboundp 'tibetan-reading-decorated-lines)
+              (condition-case nil
+                  (tibetan-reading-decorated-lines units)
+                (error nil))
+            nil))
+         (wylie-lines
+          (or wylie-lines
+              ;; Degraded: plain per-unit Wylie, still one line each.
+              (mapcar (lambda (u)
+                        (let ((w (or (and (fboundp 'tibetan-to-wylie-fixed)
+                                          (condition-case nil
+                                              (tibetan-to-wylie-fixed u)
+                                            (error nil)))
+                                     "[Wylie not available]")))
+                          (string-trim w)))
+                      units))))
+    (concat "* Reading\n"
+            "** Wylie\n"
+            (string-join wylie-lines "\n") "\n\n"
+            "** Interlinear Gloss\n"
+            (mapconcat #'tibetan-cascade--interlinear-unit-line units "\n")
+            "\n\n"
+            "** Renderings\n"
+            (tibetan-cascade--renderings-list-body segs)
+            "\n\n")))
+
 (defun tibetan-cascade--scaffold (sent-num segs source-file)
   "Return the full cascade sent-file body for SENT-NUM (a string).
 SEGS is an ordered list of (GLOBAL-SEG-NUM . TEXT) conses — the

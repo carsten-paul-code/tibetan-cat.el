@@ -1286,6 +1286,54 @@ curated German glosses rendered English-only (W2, 2026-08-11)."
           (should (cl-every (lambda (l) (equal l "de")) seen)))
       (delete-directory dir t))))
 
+;; ============================================================================
+;; R4 (2026-08-12) — Reading-section assembler
+;; ============================================================================
+
+(ert-deftest tibetan-cascade-interlinear-unit-line-collapses ()
+  "One interlinear line per unit: the segment renderer's Interlinear
+body with internal newlines collapsed, ` /' appended for a shad."
+  (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+             (lambda (text &rest _)
+               (format "** Interlinear Gloss\nAAA(%s)\nBBB\n\n** Grammar\nX\n"
+                       text))))
+    (should (equal "AAA(བདག།) BBB /"
+                   (tibetan-cascade--interlinear-unit-line "བདག།")))
+    (should (equal "AAA(ཆོས) BBB"
+                   (tibetan-cascade--interlinear-unit-line "ཆོས")))))
+
+(ert-deftest tibetan-cascade-renderings-list-body-shape ()
+  "The Renderings list: one `- ⟦N⟧ placeholder' line per unit, keyed
+by GLOBAL segment number."
+  (let ((body (tibetan-cascade--renderings-list-body
+               '((105 . "བདག།") (106 . "ཆོས།")))))
+    (should (equal (concat "- ⟦105⟧ " tibetan-cascade-rendering-placeholder
+                           "\n"
+                           "- ⟦106⟧ " tibetan-cascade-rendering-placeholder)
+                   body))))
+
+(ert-deftest tibetan-cascade-reading-section-structure ()
+  "The assembled * Reading section: Wylie lines, Interlinear lines,
+Renderings list — per layer, one line per unit."
+  (cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+             (lambda (text &rest _)
+               (format "** Interlinear Gloss\nGLOSS(%s)\n\n" text)))
+            ((symbol-function 'tibetan-reading-decorated-lines)
+             (lambda (units)
+               (mapcar (lambda (u) (format "WYLIE(%s)" u)) units))))
+    (let ((s (tibetan-cascade--reading-section
+              '((105 . "བདག།") (106 . "ཆོས།")))))
+      (should (string-match-p "^\\* Reading$" s))
+      (let ((wy (string-match "^\\*\\* Wylie$" s))
+            (il (string-match "^\\*\\* Interlinear Gloss$" s))
+            (re (string-match "^\\*\\* Renderings$" s)))
+        (should (and wy il re))
+        (should (< wy il re)))
+      (should (string-match-p "^WYLIE(བདག།)$" s))
+      (should (string-match-p "^GLOSS(བདག།) /$" s))
+      (should (string-match-p "^- ⟦105⟧ \\[Awaiting" s))
+      (should (string-match-p "^- ⟦106⟧ \\[Awaiting" s)))))
+
 (ert-deftest tibetan-cascade-open-mentions-defer ()
   "Opening a defer-MT document's segment says WHY nothing fires."
   (tibetan-cascade-test--with-stub-renderer
