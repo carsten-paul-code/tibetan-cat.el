@@ -230,7 +230,7 @@ list — each layer one line per shad unit, shads rendered as `/'."
     (concat "* Reading\n"
             "** Wylie\n"
             (string-join wylie-lines "\n") "\n\n"
-            "** Interlinear Gloss\n"
+            "** Interlinear\n"
             (mapconcat #'tibetan-cascade--interlinear-unit-line units "\n")
             "\n\n"
             "** Renderings\n"
@@ -305,6 +305,11 @@ marks the file for every reader (§2.8: explicit, never sniffed)."
       (insert "* Tibetan Text\n")
       (insert (string-trim-right tibetan-text))
       (insert "\n\n")
+      ;; R8 (READING VIEW redesign, approved 2026-08-12): the compact
+      ;; per-layer reading block — decorated Wylie, Interlinear, ⟦N⟧
+      ;; Renderings, one line per shad unit — replaces the retired
+      ;; `* Subsegments' tree (and with it per-unit Phonetics).
+      (insert (tibetan-cascade--reading-section segs))
       ;; Sentence-level analysis — compressed sentence renderer when
       ;; loaded (Claude Vocabulary / Translation / Grammar / Sentence
       ;; Structure / Concept Notes / Provided Translations), minimal
@@ -328,13 +333,9 @@ marks the file for every reader (§2.8: explicit, never sniffed)."
                   (re-search-forward "^\\*\\* DharmaMitra Translation$"
                                      nil t))
           (insert "** DharmaMitra Translation\n[Awaiting DharmaMitra…]\n\n")))
-      ;; Subsegments — the cascade's replacement for seg files.
-      (insert "* Subsegments\n\n")
-      (let ((ordinal 0))
-        (dolist (seg segs)
-          (cl-incf ordinal)
-          (insert (tibetan-cascade--subsegment-block
-                   (car seg) ordinal (cdr seg)))))
+      ;; R8: `* Subsegments' retired — the Reading section above
+      ;; carries the per-unit layers; `--subsegment-block' remains
+      ;; only for legacy readers until the live migration completes.
       (insert "* Footnotes\n\n")
       ;; DEFER-MT VISIBILITY (2026-07-30): on a defer-MT document the
       ;; generic placeholders read as a failure — say WHY they are
@@ -488,11 +489,19 @@ calling this primitive."
 ;; ============================================================================
 
 (defconst tibetan-cascade--known-l1-sections
-  '("My Notes" "Working Translation" "Tibetan Text" "Tibetan Analysis"
-    "Subsegments" "Footnotes")
+  '("My Notes" "Working Translation" "Tibetan Text" "Reading"
+    "Tibetan Analysis" "Subsegments" "Footnotes")
   "The L1 headings the cascade scaffold owns.  Anything else found in
 an existing file is preserved verbatim across regenerate
-\(§5.38-H2: preserve-by-default, never a whitelist wipe).")
+\(§5.38-H2: preserve-by-default, never a whitelist wipe).
+
+R8: \"Reading\" is the new owned section; \"Subsegments\" STAYS
+listed although the scaffold no longer emits it — it is
+OWNED-LEGACY, so regenerating an old file DROPS the retired tree
+\(its renderings having been preserved through the dual-format
+primitives) instead of re-appending it verbatim as an unknown
+section.  Preserve-mode reanalyze of an old file is thereby the
+migration.")
 
 (defun tibetan-cascade--read-l1-body (file heading)
   "Trimmed body of `* HEADING' in FILE (bounded at the next L1
@@ -791,7 +800,7 @@ subtree's own `*** Interlinear Gloss' section."
                                  (line-beginning-position)
                                (point-max)))))
                       (when (re-search-forward
-                             "^\\*\\* Interlinear Gloss[ \t]*$"
+                             "^\\*\\* Interlinear[ \t]*$"
                              reading-end t)
                         (forward-line 1)
                         (let ((end (save-excursion
@@ -1388,9 +1397,18 @@ is what counts."
           (when (fboundp 'tibetan-analysis-setup-faces)
             (tibetan-analysis-setup-faces))
           (goto-char (point-min))
-          (when (re-search-forward
-                 (format "^\\*\\* Segment %d$" seg-id) nil t)
-            (beginning-of-line)))
+          ;; R9: land on the unit's ⟦N⟧ rendering line in the Reading
+          ;; view; legacy `** Segment N' heading for unmigrated
+          ;; files; `* Reading' as the final anchor.
+          (cond
+           ((re-search-forward
+             (format "^- ⟦%d⟧ " seg-id) nil t)
+            (beginning-of-line))
+           ((re-search-forward
+             (format "^\\*\\* Segment %d$" seg-id) nil t)
+            (beginning-of-line))
+           ((re-search-forward "^\\* Reading[ \t]*$" nil t)
+            (beginning-of-line))))
         (let ((win (display-buffer-in-side-window
                     buf '((side . right) (window-width . 0.5)))))
           (when (windowp win)

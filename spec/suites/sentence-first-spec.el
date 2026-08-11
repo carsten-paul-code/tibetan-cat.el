@@ -261,6 +261,7 @@ that silent no-op cost a debugging round)."
               (list :fired-1 (car fire-1) :statuses (cdr fire-1)
                     :fired-2 (car fire-2)
                     :content content
+                    :c105-file cascade-file
                     ;; R6: dual-format reader — serves the legacy
                     ;; subtree today and the ⟦N⟧ line after R8.
                     :rendering-105 (tibetan-cascade--read-rendering
@@ -277,7 +278,14 @@ that silent no-op cost a debugging round)."
             (plist-get result :content)
             "The lama went to rNgog's place and requested the dharma."
             "Cascade file should carry the whole-sentence translation")
-           (should-not (string-match-p "⟦" (plist-get result :content)))
+           ;; R8: the Reading view's `- ⟦N⟧' keys legitimately carry
+           ;; span markers — only the TRANSLATION body must be clean.
+           (should-not
+            (string-match-p
+             "⟦"
+             (or (tibetan-sentence--read-l2-body
+                  (plist-get result :c105-file) "Translation")
+                 "")))
            ;; Subsegment rendering = the extracted span only.
            (should (equal "The lama went to rNgog's place"
                           (plist-get result :rendering-105)))

@@ -183,8 +183,9 @@ checks, no dictionary machinery)."
      ,@body))
 
 (ert-deftest tibetan-cascade-scaffold-structure ()
-  "C2.1: layout, header marker, global-number keys, ordinal props,
-per-unit sections, and top/bottom user-slot ordering."
+  "R8: layout, header marker, per-layer Reading section with one
+line per shad unit, ⟦N⟧ rendering keys, no Subsegments tree, no
+Phonetics, and top/bottom user-slot ordering."
   (tibetan-cascade-test--with-stub-renderer
     (let ((s (tibetan-cascade--scaffold
               4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
@@ -192,35 +193,33 @@ per-unit sections, and top/bottom user-slot ordering."
       ;; Header marker + segments line.
       (should (string-match-p "^#\\+TIBETAN_LAYOUT: cascade$" s))
       (should (string-match-p "^#\\+SEGMENTS: 105, 106$" s))
-      ;; Top-level ordering.
+      ;; Top-level ordering — Reading directly after Tibetan Text.
       (let ((notes (string-match "^\\* My Notes$" s))
             (wt    (string-match "^\\* Working Translation$" s))
             (tt    (string-match "^\\* Tibetan Text$" s))
+            (rd    (string-match "^\\* Reading$" s))
             (ta    (string-match "^\\* Tibetan Analysis$" s))
-            (subs  (string-match "^\\* Subsegments$" s))
             (foot  (string-match "^\\* Footnotes$" s)))
-        (should (and notes wt tt ta subs foot))
-        (should (< notes wt tt ta subs foot)))
-      ;; Subsegments keyed by GLOBAL segment number, ordinal as prop.
-      (should (string-match-p "^\\*\\* Segment 105$" s))
-      (should (string-match-p "^\\*\\* Segment 106$" s))
-      (should (string-match-p "^:SUBSEG: 1$" s))
-      (should (string-match-p "^:SUBSEG: 2$" s))
-      ;; Every unit: Rendering stub + the four deterministic sections
-      ;; demoted to L3, with UNIT-scoped content.  Counted within the
-      ;; * Subsegments region only — the sentence-level Grammar
-      ;; legitimately carries its own *** Particles.
-      (let ((region (substring s
-                               (string-match "^\\* Subsegments$" s)
-                               (string-match "^\\* Footnotes$" s))))
-        (dolist (h '("Rendering" "Wylie" "Phonetics" "Interlinear Gloss"
-                     "Particles"))
-          (should (= 2 (cl-count-if
-                        (lambda (line) (equal line (concat "*** " h)))
-                        (split-string region "\n"))))))
+        (should (and notes wt tt rd ta foot))
+        (should (< notes wt tt rd ta foot)))
+      ;; Reading layers, in order, one line per unit.
+      (let ((wy (string-match "^\\*\\* Wylie$" s))
+            (il (string-match "^\\*\\* Interlinear$" s))
+            (re (string-match "^\\*\\* Renderings$" s)))
+        (should (and wy il re))
+        (should (< wy il re)))
+      (should (string-match-p "^- ⟦105⟧ " s))
+      (should (string-match-p "^- ⟦106⟧ " s))
       (should (string-match-p "\\[Awaiting sentence translation…\\]" s))
-      (should (string-match-p (regexp-quote "GLOSS(བདག་གིས་ལས་བྱས། )") s))
-      (should (string-match-p (regexp-quote "PART(ཆོས་ཟབ་མོ་ཡིན།)") s))
+      ;; Interlinear lines carry the per-unit renderer content, with
+      ;; the shad rendered ` /'.
+      (should (string-match-p
+               (concat "^" (regexp-quote "GLOSS(བདག་གིས་ལས་བྱས། )") " /$")
+               s))
+      ;; The Subsegments tree and Phonetics are RETIRED.
+      (should-not (string-match-p "^\\* Subsegments$" s))
+      (should-not (string-match-p "^\\*+ Phonetics$" s))
+      (should-not (string-match-p "^\\*\\* Segment 105$" s))
       ;; The full sentence text sits under * Tibetan Text.
       (should (string-match-p
                (regexp-quote "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།") s)))))
@@ -248,7 +247,7 @@ cascade marker + #+SOURCE link and returns the path."
                 (let ((c (buffer-string)))
                   (should (string-match-p "^#\\+TIBETAN_LAYOUT: cascade$" c))
                   (should (string-match-p "^#\\+SOURCE: \\[\\[file:" c))
-                  (should (string-match-p "^\\* Subsegments$" c))))))
+                  (should (string-match-p "^\\* Reading$" c))))))
         (delete-directory dir t)))))
 
 ;; ============================================================================
@@ -256,7 +255,8 @@ cascade marker + #+SOURCE link and returns the path."
 ;; ============================================================================
 
 (defmacro tibetan-cascade-test--with-cascade-file (&rest body)
-  "Create a scaffolded 2-unit cascade file; bind CASCADE-FILE and DIR."
+  "Create a scaffolded 2-unit cascade file (CURRENT layout — since
+R8 that is the Reading layout); bind CASCADE-FILE and DIR."
   (declare (indent 0))
   `(tibetan-cascade-test--with-stub-renderer
      (let* ((dir (make-temp-file "cascade-io-" t))
@@ -274,48 +274,99 @@ cascade marker + #+SOURCE link and returns the path."
                ,@body))
          (delete-directory dir t)))))
 
+(defmacro tibetan-cascade-test--with-legacy-cascade-file (&rest body)
+  "Hand-written OLD-layout (pre-R8 * Subsegments) cascade file;
+bind LEGACY-FILE and DIR.  The legacy READ/WRITE primitives and the
+migration path are exercised against this fixture — the scaffold no
+longer produces it."
+  (declare (indent 0))
+  `(let* ((dir (make-temp-file "cascade-legacy-" t))
+          (src (expand-file-name "doc.org" dir))
+          (legacy-file (expand-file-name "sent-004-doc.org" dir)))
+     (unwind-protect
+         (progn
+           (with-temp-file src
+             (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                     "* Tibetan Text\n*** Sentence 4\n"
+                     "**** Segment 105\nབདག་གིས་ལས་བྱས།\n\n"
+                     "**** Segment 106\nཆོས་ཟབ་མོ་ཡིན།\n\n"))
+           (with-temp-file legacy-file
+             (insert "#+TITLE: Sentence 4 Analysis\n"
+                     "#+TIBETAN_LAYOUT: cascade\n"
+                     "#+SOURCE: [[file:../doc.org::*Sentence 4]"
+                     "[doc.org / Sentence 4]]\n"
+                     "#+SEGMENTS: 105, 106\n\n"
+                     "* My Notes\n\n\n"
+                     "* Working Translation\n\n\n"
+                     "* Tibetan Text\nབདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།\n\n"
+                     "* Tibetan Analysis\n"
+                     ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                     "** Translation\n[Requesting translation...]\n\n"
+                     "** DharmaMitra Translation\n[Awaiting DharmaMitra…]\n\n"
+                     "* Subsegments\n\n"
+                     "** Segment 105\n:PROPERTIES:\n:SUBSEG: 1\n:END:\n\n"
+                     "བདག་གིས་ལས་བྱས།\n\n"
+                     "*** Rendering\n"
+                     tibetan-cascade-rendering-placeholder "\n\n"
+                     "*** Wylie\nWYLIE(བདག་གིས་ལས་བྱས། )\n\n"
+                     "*** Phonetics\nPHON\n\n"
+                     "*** Interlinear Gloss\nGLOSS(བདག་གིས་ལས་བྱས། )\n\n"
+                     "*** Particles\nPART\n\n"
+                     "** Segment 106\n:PROPERTIES:\n:SUBSEG: 2\n:END:\n\n"
+                     "ཆོས་ཟབ་མོ་ཡིན།\n\n"
+                     "*** Rendering\n"
+                     tibetan-cascade-rendering-placeholder "\n\n"
+                     "*** Wylie\nWYLIE(ཆོས་ཟབ་མོ་ཡིན།)\n\n"
+                     "*** Phonetics\nPHON\n\n"
+                     "*** Interlinear Gloss\nGLOSS(ཆོས་ཟབ་མོ་ཡིན།)\n\n"
+                     "*** Particles\nPART\n\n"
+                     "* Footnotes\n\n"))
+           ,@body)
+       (delete-directory dir t))))
+
 (ert-deftest tibetan-cascade-subsegment-numbers ()
-  "The ordered global segment numbers under * Subsegments."
-  (tibetan-cascade-test--with-cascade-file
+  "The ordered global segment numbers under * Subsegments (LEGACY
+layout — the primitives stay readable for unmigrated files)."
+  (tibetan-cascade-test--with-legacy-cascade-file
     (should (equal '(105 106)
-                   (tibetan-cascade--subsegment-numbers cascade-file)))
+                   (tibetan-cascade--subsegment-numbers legacy-file)))
     ;; Degenerate inputs → nil, never signals.
     (should-not (tibetan-cascade--subsegment-numbers nil))
     (should-not (tibetan-cascade--subsegment-numbers
                  "/nonexistent/nowhere.org"))))
 
 (ert-deftest tibetan-cascade-subsegment-section-read ()
-  "Read a subsegment's L3 section body by global number + heading."
-  (tibetan-cascade-test--with-cascade-file
+  "Read a LEGACY subsegment's L3 section body by number + heading."
+  (tibetan-cascade-test--with-legacy-cascade-file
     (should (equal tibetan-cascade-rendering-placeholder
                    (tibetan-cascade--read-subsegment-section
-                    cascade-file 105 "Rendering")))
+                    legacy-file 105 "Rendering")))
     (should (equal "WYLIE(བདག་གིས་ལས་བྱས། )"
                    (tibetan-cascade--read-subsegment-section
-                    cascade-file 105 "Wylie")))
+                    legacy-file 105 "Wylie")))
     (should (equal "GLOSS(ཆོས་ཟབ་མོ་ཡིན།)"
                    (tibetan-cascade--read-subsegment-section
-                    cascade-file 106 "Interlinear Gloss")))
+                    legacy-file 106 "Interlinear Gloss")))
     ;; Absent subsegment / heading → nil.
     (should-not (tibetan-cascade--read-subsegment-section
-                 cascade-file 107 "Rendering"))
+                 legacy-file 107 "Rendering"))
     (should-not (tibetan-cascade--read-subsegment-section
-                 cascade-file 105 "No Such Heading"))))
+                 legacy-file 105 "No Such Heading"))))
 
 (ert-deftest tibetan-cascade-subsegment-section-write ()
-  "Write replaces exactly ONE section body; everything else is
+  "LEGACY write replaces exactly ONE section body; the rest is
 byte-identical.  Re-read returns the new body; the needs-request
 predicate flips."
-  (tibetan-cascade-test--with-cascade-file
+  (tibetan-cascade-test--with-legacy-cascade-file
     (should (tibetan-cascade--subsegment-rendering-needs-request-p
-             cascade-file 105))
+             legacy-file 105))
     (let ((before (with-temp-buffer
-                    (insert-file-contents cascade-file)
+                    (insert-file-contents legacy-file)
                     (buffer-string))))
       (should (tibetan-cascade--write-subsegment-section
-               cascade-file 105 "Rendering" "⟪He went⟫ and asked."))
+               legacy-file 105 "Rendering" "⟪He went⟫ and asked."))
       (let ((after (with-temp-buffer
-                     (insert-file-contents cascade-file)
+                     (insert-file-contents legacy-file)
                      (buffer-string))))
         ;; Only the one body changed: replacing new-body -> placeholder
         ;; reproduces the BEFORE image byte-for-byte.
@@ -326,15 +377,15 @@ predicate flips."
                         after t t))))
       (should (equal "⟪He went⟫ and asked."
                      (tibetan-cascade--read-subsegment-section
-                      cascade-file 105 "Rendering")))
+                      legacy-file 105 "Rendering")))
       (should-not (tibetan-cascade--subsegment-rendering-needs-request-p
-                   cascade-file 105))
+                   legacy-file 105))
       ;; The sibling subsegment still needs its rendering.
       (should (tibetan-cascade--subsegment-rendering-needs-request-p
-               cascade-file 106))
+               legacy-file 106))
       ;; Writing to an absent subsegment fails soft (nil, no file touch).
       (should-not (tibetan-cascade--write-subsegment-section
-                   cascade-file 107 "Rendering" "x")))))
+                   legacy-file 107 "Rendering" "x")))))
 
 ;; ============================================================================
 ;; C2.3 — regenerate with preservation (the §5.26 discipline)
@@ -382,8 +433,8 @@ Placeholders regenerate freshly."
       (goto-char (point-max))
       (insert "* Sanskrit (DharmaMitra)\nUNKNOWN SECTION body.\n\n")
       (write-region (point-min) (point-max) cascade-file nil 'silent))
-    (tibetan-cascade--write-subsegment-section
-     cascade-file 105 "Rendering" "⟪He went⟫ and asked.")
+    (tibetan-cascade--write-rendering cascade-file 105
+                                      "⟪He went⟫ and asked.")
     ;; Regenerate with the same segs.
     (tibetan-cascade--regenerate
      cascade-file 4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
@@ -399,20 +450,20 @@ Placeholders regenerate freshly."
       (should (string-match-p "UNKNOWN SECTION body\\." s))
       ;; Still a well-formed cascade file (marker + both subsegments).
       (should (string-match-p "^#\\+TIBETAN_LAYOUT: cascade$" s))
-      (should (string-match-p "^\\*\\* Segment 105$" s))
-      (should (string-match-p "^\\*\\* Segment 106$" s))
+      (should (string-match-p "^- ⟦105⟧ " s))
+      (should (string-match-p "^- ⟦106⟧ " s))
       ;; The UNPOPULATED sibling rendering is a fresh placeholder.
-      (should (tibetan-cascade--subsegment-rendering-needs-request-p
+      (should (tibetan-cascade--rendering-needs-request-p
                cascade-file 106))
-      (should-not (tibetan-cascade--subsegment-rendering-needs-request-p
+      (should-not (tibetan-cascade--rendering-needs-request-p
                    cascade-file 105)))))
 
 (ert-deftest tibetan-cascade-regenerate-is-idempotent ()
   "A second regenerate with identical inputs is byte-identical
 modulo the LAST_ANALYZED stamp."
   (tibetan-cascade-test--with-cascade-file
-    (tibetan-cascade--write-subsegment-section
-     cascade-file 105 "Rendering" "⟪He went⟫ and asked.")
+    (tibetan-cascade--write-rendering cascade-file 105
+                                      "⟪He went⟫ and asked.")
     (let ((src (expand-file-name "doc.org" dir))
           (segs '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།")))
           (strip (lambda ()
@@ -496,18 +547,19 @@ The per-segment SUB-TRANSLATIONS are DISCARDED by design."
       (should (string-match-p
                "The lama went to rNgog's place and requested the dharma\\."
                s))
-      (should-not (string-match-p "⟦" s))
+      (should-not (string-match-p
+                   "⟦" (or (tibetan-sentence--read-l2-body
+                            cascade-file "Translation")
+                           "")))
       ;; Vocabulary + Grammar landed with per-segment content.
       (should (string-match-p "rngog, proper noun" s))
       (should (string-match-p "two-clause chain" s))
       (should (string-match-p "one of Mar pa's four pillars" s))
       ;; Renderings = extracted spans.
       (should (equal "The lama went to rNgog's place"
-                     (tibetan-cascade--read-subsegment-section
-                      cascade-file 105 "Rendering")))
+                     (tibetan-cascade--read-rendering cascade-file 105)))
       (should (equal "requested the dharma"
-                     (tibetan-cascade--read-subsegment-section
-                      cascade-file 106 "Rendering")))
+                     (tibetan-cascade--read-rendering cascade-file 106)))
       ;; The ### sub-translations are DISCARDED.
       (should-not (string-match-p "Having gone to rNgog's place" s)))))
 
@@ -518,8 +570,7 @@ clobbers an already-populated Rendering."
   (tibetan-cascade-test--with-cascade-file
     ;; Pre-populate 106's rendering; feed a response whose whole
     ;; translation lacks 105's markers and carries DIFFERENT 106 text.
-    (tibetan-cascade--write-subsegment-section
-     cascade-file 106 "Rendering" "KEEP ME.")
+    (tibetan-cascade--write-rendering cascade-file 106 "KEEP ME.")
     (tibetan-cascade--land-response
      "## Translation\nNo markers for one-oh-five ⟦106⟧new text⟦/106⟧.\n"
      (list :sent-num 4 :seg-nums '(105 106)
@@ -527,14 +578,12 @@ clobbers an already-populated Rendering."
     ;; 105 → stub, still needs request.
     (should (string-match-p
              "\\`\\[Claude sentence response missing Segment 105"
-             (tibetan-cascade--read-subsegment-section
-              cascade-file 105 "Rendering")))
-    (should (tibetan-cascade--subsegment-rendering-needs-request-p
+             (tibetan-cascade--read-rendering cascade-file 105)))
+    (should (tibetan-cascade--rendering-needs-request-p
              cascade-file 105))
     ;; 106 was populated → non-FORCE landing left it alone.
     (should (equal "KEEP ME."
-                   (tibetan-cascade--read-subsegment-section
-                    cascade-file 106 "Rendering")))))
+                   (tibetan-cascade--read-rendering cascade-file 106)))))
 
 ;; ============================================================================
 ;; C3.2 — cascade fire (dispatcher branch, claim, request, DM)
@@ -594,8 +643,8 @@ non-FORCE fire finds nothing needing Claude and declines."
                            "བདག" cascade-file src 105 nil)))
               ;; Landed: spans + sentence-level Translation.
               (should (equal "The lama went to rNgog's place"
-                             (tibetan-cascade--read-subsegment-section
-                              cascade-file 105 "Rendering")))
+                             (tibetan-cascade--read-rendering
+                              cascade-file 105)))
               (should-not (tibetan-analysis--claude-needs-request-p
                            cascade-file))
               ;; DM scheduled ONCE, against the cascade file itself.
@@ -648,7 +697,7 @@ and ZERO seg files; a second run skips existing files."
         (should (= 0 (length (directory-files analysis nil "\\`seg-"))))
         (let ((sent4 (car (directory-files analysis t "\\`sent-004"))))
           (should (equal '(105 106)
-                         (tibetan-cascade--subsegment-numbers sent4)))
+                         (tibetan-cascade--rendering-numbers sent4)))
           (should (string-match-p
                    "^#\\+TIBETAN_LAYOUT: cascade$"
                    (with-temp-buffer (insert-file-contents sent4)
@@ -701,7 +750,7 @@ never creates a seg file."
               (should (buffer-live-p buf))
               (with-current-buffer buf
                 (should (string-match-p "sent-004" (buffer-name)))
-                (should (looking-at "\\*\\* Segment 106$")))
+                (should (looking-at "- ⟦106⟧ ")))
               ;; C-c u A from the source buffer at Segment 107 —
               ;; must route to the cascade file, not seg-107.org.
               (goto-char (point-min))
@@ -733,17 +782,16 @@ reshaped into the two-file sentence layout (it would lose the whole
       (tibetan-auto-analyze-document)
       (let* ((analysis (expand-file-name "analysis" dir))
              (sent4 (car (directory-files analysis t "\\`sent-004"))))
-        (tibetan-cascade--write-subsegment-section
-         sent4 105 "Rendering" "KEEP ACROSS BATCH.")
+        (tibetan-cascade--write-rendering sent4 105
+                                          "KEEP ACROSS BATCH.")
         (let ((results (tibetan-sentence-batch-reanalyze
                         :folder analysis :re-request-claude nil)))
           (should results))
         ;; Still a cascade file, subsegments intact, rendering kept.
         (should (equal '(105 106)
-                       (tibetan-cascade--subsegment-numbers sent4)))
+                       (tibetan-cascade--rendering-numbers sent4)))
         (should (equal "KEEP ACROSS BATCH."
-                       (tibetan-cascade--read-subsegment-section
-                        sent4 105 "Rendering")))))))
+                       (tibetan-cascade--read-rendering sent4 105)))))))
 
 (ert-deftest tibetan-cascade-reanalyze-for-segment-routes ()
   "C-c u R at a segment of a cascade source regenerates the owning
@@ -753,14 +801,13 @@ cascade file (preserving content) instead of a seg file."
       (tibetan-auto-analyze-document)
       (let* ((analysis (expand-file-name "analysis" dir))
              (sent4 (car (directory-files analysis t "\\`sent-004"))))
-        (tibetan-cascade--write-subsegment-section
-         sent4 105 "Rendering" "KEEP ACROSS REANALYZE.")
+        (tibetan-cascade--write-rendering sent4 105
+                                          "KEEP ACROSS REANALYZE.")
         (let ((r (tibetan-cascade-reanalyze-for-segment
                   "Sentence 4, Segment 106" src)))
           (should (plist-get r :ok)))
         (should (equal "KEEP ACROSS REANALYZE."
-                       (tibetan-cascade--read-subsegment-section
-                        sent4 105 "Rendering")))
+                       (tibetan-cascade--read-rendering sent4 105)))
         (should (= 0 (length (directory-files analysis nil "\\`seg-"))))))))
 
 ;; ============================================================================
@@ -1037,18 +1084,21 @@ untouched non-FORCE."
            :sentences (list (list :sent-num 4 :seg-nums '(105 106)
                                   :file cascade-file))))
     (should (equal "so he acted"
-                   (tibetan-cascade--read-subsegment-section
-                    cascade-file 105 "Rendering")))
+                   (tibetan-cascade--read-rendering cascade-file 105)))
     (should (equal "The dharma is deep"
-                   (tibetan-cascade--read-subsegment-section
-                    cascade-file 106 "Rendering")))
+                   (tibetan-cascade--read-rendering cascade-file 106)))
     (let ((s (with-temp-buffer (insert-file-contents cascade-file)
                                (buffer-string))))
       ;; Sentence Translation: English order (106 before 105), labeled.
       (should (string-match-p
                "The dharma is deep — so he acted" s))
       (should (string-match-p "Section §167 chunk" s))
-      (should-not (string-match-p "⟦" s)))))
+      ;; Markers stripped from the TRANSLATION body (the Reading
+      ;; view's ⟦N⟧ keys legitimately remain).
+      (should-not (string-match-p
+                   "⟦" (or (tibetan-sentence--read-l2-body
+                            cascade-file "Translation")
+                           ""))))))
 
 ;; ============================================================================
 ;; CH2c — fire-section (claim + queue + landing through §5.40 machinery)
@@ -1089,8 +1139,8 @@ file; ONE DM section schedule; a second non-FORCE fire declines."
                              chunk src
                              (file-name-directory cascade-file))))
                 (should (equal "He acted"
-                               (tibetan-cascade--read-subsegment-section
-                                cascade-file 105 "Rendering")))
+                               (tibetan-cascade--read-rendering
+                                cascade-file 105)))
                 (should (= 1 dm-calls))
                 ;; Everything landed → second non-FORCE fire declines.
                 (tibetan-sentence-claude-clear-inflight)
@@ -1215,7 +1265,7 @@ still register as needing a request."
               (should (tibetan-analysis--claude-needs-request-p f))
               (should (tibetan-dharmamitra-translation-needs-request-p
                        f "Tibetan"))
-              (should (tibetan-cascade--subsegment-rendering-needs-request-p
+              (should (tibetan-cascade--rendering-needs-request-p
                        f 105))))
         (delete-directory dir t)))))
 
@@ -1325,7 +1375,7 @@ Renderings list — per layer, one line per unit."
               '((105 . "བདག།") (106 . "ཆོས།")))))
       (should (string-match-p "^\\* Reading$" s))
       (let ((wy (string-match "^\\*\\* Wylie$" s))
-            (il (string-match "^\\*\\* Interlinear Gloss$" s))
+            (il (string-match "^\\*\\* Interlinear$" s))
             (re (string-match "^\\*\\* Renderings$" s)))
         (should (and wy il re))
         (should (< wy il re)))
@@ -1333,6 +1383,61 @@ Renderings list — per layer, one line per unit."
       (should (string-match-p "^GLOSS(བདག།) /$" s))
       (should (string-match-p "^- ⟦105⟧ \\[Awaiting" s))
       (should (string-match-p "^- ⟦106⟧ \\[Awaiting" s)))))
+
+;; ============================================================================
+;; R8 (2026-08-12) — the migration: preserve-mode regenerate of a
+;; LEGACY file produces the Reading layout with everything carried.
+;; ============================================================================
+
+(ert-deftest tibetan-cascade-regenerate-migrates-legacy-file ()
+  "Regenerating an OLD * Subsegments file yields the new layout:
+landed renderings verbatim on their ⟦N⟧ lines, user notes and
+unknown L1 sections preserved, the retired Subsegments tree DROPPED
+\(owned-legacy — never re-appended as unknown)."
+  (tibetan-cascade-test--with-legacy-cascade-file
+    ;; A landed rendering + a user note + an unknown L1 section.
+    (tibetan-cascade--write-subsegment-section
+     legacy-file 105 "Rendering" "Der Lama ging zu rNgog.")
+    (tibetan-cascade-test--set-l1-body legacy-file "My Notes"
+                                       "MIGRATION NOTE stays.")
+    (with-temp-buffer
+      (insert-file-contents legacy-file)
+      (goto-char (point-max))
+      (insert "* Kolophon\nUNKNOWN survives.\n\n")
+      (write-region (point-min) (point-max) legacy-file nil 'silent))
+    (tibetan-cascade-test--with-stub-renderer
+      (tibetan-cascade--regenerate
+       legacy-file 4
+       '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+       src))
+    (let ((s (with-temp-buffer (insert-file-contents legacy-file)
+                               (buffer-string))))
+      ;; New layout in, old tree out.
+      (should (string-match-p "^\\* Reading$" s))
+      (should-not (string-match-p "^\\* Subsegments$" s))
+      (should-not (string-match-p "^\\*\\* Segment 105$" s))
+      (should-not (string-match-p "^\\*+ Phonetics$" s))
+      ;; Carried: rendering verbatim on its line, user + unknown L1.
+      (should (string-match-p "^- ⟦105⟧ Der Lama ging zu rNgog\\.$" s))
+      (should (string-match-p "MIGRATION NOTE stays\\." s))
+      (should (string-match-p "^\\* Kolophon$" s))
+      (should (string-match-p "UNKNOWN survives\\." s)))
+    ;; The unpopulated unit regenerated as a placeholder line.
+    (should (tibetan-cascade--rendering-needs-request-p legacy-file 106))
+    ;; Idempotent: a second pass changes nothing but the date stamp.
+    (let ((strip (lambda ()
+                   (replace-regexp-in-string
+                    "^#\\+LAST_ANALYZED: .*$" ""
+                    (with-temp-buffer
+                      (insert-file-contents legacy-file)
+                      (buffer-string))))))
+      (let ((first (funcall strip)))
+        (tibetan-cascade-test--with-stub-renderer
+          (tibetan-cascade--regenerate
+           legacy-file 4
+           '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+           src))
+        (should (equal first (funcall strip)))))))
 
 ;; ============================================================================
 ;; R5 (2026-08-12) — dual-format rendering I/O
@@ -1358,7 +1463,7 @@ Renderings list — per layer, one line per unit."
                      "* Tibetan Text\nབདག།ཆོས།\n\n"
                      "* Reading\n"
                      "** Wylie\nbdag /\nchos /\n\n"
-                     "** Interlinear Gloss\nbdag [I] /\nchos [dharma] /\n\n"
+                     "** Interlinear\nbdag [I] /\nchos [dharma] /\n\n"
                      "** Renderings\n"
                      "- ⟦105⟧ [Awaiting sentence translation…]\n"
                      "- ⟦106⟧ the profound dharma\n\n"
@@ -1387,17 +1492,17 @@ Renderings list — per layer, one line per unit."
 
 (ert-deftest tibetan-cascade-rendering-io-legacy-fallback ()
   "The same primitives serve a LEGACY subtree file unchanged."
-  (tibetan-cascade-test--with-cascade-file
+  (tibetan-cascade-test--with-legacy-cascade-file
     (should (equal '(105 106)
-                   (tibetan-cascade--rendering-numbers cascade-file)))
-    (should (tibetan-cascade--rendering-needs-request-p cascade-file 105))
-    (should (tibetan-cascade--write-rendering cascade-file 105 "a span"))
+                   (tibetan-cascade--rendering-numbers legacy-file)))
+    (should (tibetan-cascade--rendering-needs-request-p legacy-file 105))
+    (should (tibetan-cascade--write-rendering legacy-file 105 "a span"))
     (should (equal "a span"
-                   (tibetan-cascade--read-rendering cascade-file 105)))
+                   (tibetan-cascade--read-rendering legacy-file 105)))
     ;; The write landed in the legacy subtree, not on a ⟦N⟧ line.
     (should-not (string-match-p
                  "^- ⟦"
-                 (with-temp-buffer (insert-file-contents cascade-file)
+                 (with-temp-buffer (insert-file-contents legacy-file)
                                    (buffer-string))))))
 
 (ert-deftest tibetan-cascade-rendering-write-ignores-translation-spans ()
@@ -1477,13 +1582,15 @@ whatever layout the scaffold currently emits."
         (tibetan-cascade--regenerate newfile 4
                                      '((105 . "བདག།") (106 . "ཆོས།"))
                                      src))
-      ;; The landed rendering survived the rebuild — RESTORED through
-      ;; the dual writer into the scaffold's current layout (today
-      ;; the legacy subtree), not merely carried along verbatim as an
-      ;; unknown L1 section.
+      ;; The landed rendering survived the rebuild — restored onto
+      ;; the scaffold's ⟦N⟧ line (post-R8 layout), with no legacy
+      ;; subtree resurrected.
       (should (equal "the profound dharma"
-                     (tibetan-cascade--read-subsegment-section
-                      newfile 106 "Rendering")))
+                     (tibetan-cascade--read-rendering newfile 106)))
+      (should-not (string-match-p
+                   "^\\*\\* Segment "
+                   (with-temp-buffer (insert-file-contents newfile)
+                                     (buffer-string))))
       ;; The placeholder unit regenerated as needing a request.
       (should (tibetan-cascade--rendering-needs-request-p newfile 105)))))
 
