@@ -133,5 +133,31 @@ headline or list item (the C1 line-leading-star lesson)."
       (should (equal "*byung* [arise] /" line))
       (should-not (string-match-p "^\\*+ " line)))))
 
+;; ============================================================================
+;; W6 display (2026-08-13) — Sanskrit names in the combined line
+;; ============================================================================
+
+(ert-deftest tibetan-reading-curated-through-clitic-splits-and-stars ()
+  "mai tri'i (curated key `mai tri' + genitive clitic) renders as a
+grouped, starred token with the clitic displayed: mai tri='i= ★ […]
+[GEN]."
+  (tibetan-reading-test--with-env
+      '(("mai tri" . "Personenname // name of a person"))
+    (let ((line (tibetan-reading-decorated-unit-line "མཻ་ཏྲིའི་ཆོས")))
+      (should (string-match-p "\\`mai tri='i= ★ \\[" line))
+      (should (string-match-p "Personenname\\|name of a person" line))
+      (should (string-match-p "\\[GEN\\]" line))
+      ;; The name grouped — no stray mai/tri tokens.
+      (should-not (string-match-p "\\bmai \\[" line))
+      (should (string-match-p "chos \\[dharma\\]\\'" line)))))
+
+(ert-deftest tibetan-reading-sanskrit-syllable-suppresses-lookup-noise ()
+  "Syllables carrying Sanskrit-only signs (ཱ ཻ …) can not be native
+words — an unknown one renders PLAIN, never with a [(look up)]
+bracket."
+  (tibetan-reading-test--with-env '()
+    (should (equal "nA mai"
+                   (tibetan-reading-decorated-unit-line "ནཱ་མཻ")))))
+
 (provide 'tibetan-reading-test)
 ;;; tibetan-reading-test.el ends here

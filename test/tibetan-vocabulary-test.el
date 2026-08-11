@@ -1316,5 +1316,58 @@ grouping behaves exactly as before."
       (should (assoc "རྗེ་བཙུན" vocab))
       (should (= 1 (length vocab))))))
 
+;; ============================================================================
+;; W6 (2026-08-13) — curated key reachability (Portfolio audit #2)
+;; ============================================================================
+;; Live finding: the class wordlist keys 'mar pa lo tsā ba' (IAST ā)
+;; and 'mai tri' (matched by the text token mai tri'i, genitive
+;; clitic attached) never fired — and 5-syllable curated MWUs were
+;; beyond the 4-syllable greedy window.
+
+(ert-deftest tibetan-vocab-store-normalizes-iast-keys ()
+  "Wordlist keys written with IAST vowels (tsā, nā) are ALSO stored
+under their EWTS form (tsA, nA) — the text-side Wylie the probes
+produce."
+  (let ((table (make-hash-table :test 'equal)))
+    (tibetan--store-vocab-entry table "mar pa lo tsā ba"
+                                "Personenname // name of a person")
+    (should (gethash "mar pa lo tsA ba" table))
+    (tibetan--store-vocab-entry table "rje nā ro" "Personenname")
+    (should (gethash "rje nA ro" table))))
+
+(ert-deftest tibetan-vocab-curated-clitic-entry-sees-through-genitive ()
+  "A curated key matches a token that carries a trailing MERGED
+clitic: mai tri'i resolves to the 'mai tri' entry (འ-initial clitics
+only — letter-wise, graphically unambiguous; NOT the seg-049
+syllable-strip class)."
+  (tibetan-vocab-test--with-curated
+      '(("mai tri" . "Personenname // name of a person"))
+      '()
+    (should (tibetan-vocab--curated-clitic-entry "མཻ་ཏྲིའི"))
+    (should-not (tibetan-vocab--curated-clitic-entry "མཻ་ཏྲི"))
+    (let ((vocab (tibetan-extract-vocabulary "མཻ་ཏྲིའི")))
+      (should (assoc "མཻ་ཏྲིའི" vocab))
+      (should (= 1 (length vocab))))))
+
+(ert-deftest tibetan-vocab-curated-five-syllable-mwu-groups ()
+  "Curated MWUs up to SIX syllables group (mar pa lo tsA ba = 5;
+the generic pass stays at 4)."
+  (tibetan-vocab-test--with-curated
+      '(("mar pa lo tsA ba" . "Personenname // the translator Marpa"))
+      '()
+    (let ((vocab (tibetan-extract-vocabulary "མར་པ་ལོ་ཙཱ་བ")))
+      (should (assoc "མར་པ་ལོ་ཙཱ་བ" vocab))
+      (should (= 1 (length vocab))))))
+
+(ert-deftest tibetan-vocab-curated-long-vowel-case-fallback ()
+  "A text token with an EWTS capital vowel (nA ro) matches a curated
+key the class wrote plain (na ro) — deterministic A→a key fallback."
+  (tibetan-vocab-test--with-curated
+      '(("na ro" . "Personenname // name of a person"))
+      '()
+    (let ((vocab (tibetan-extract-vocabulary "ནཱ་རོ")))
+      (should (assoc "ནཱ་རོ" vocab))
+      (should (= 1 (length vocab))))))
+
 (provide 'tibetan-vocabulary-test)
 ;;; tibetan-vocabulary-test.el ends here

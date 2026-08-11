@@ -447,9 +447,27 @@ Returns hash-table with both Wylie and Tibetan keys."
          (message "Warning: Could not parse wordlist PDF %s: %s" pdf-path err))))
     vocab-table))
 
+(defconst tibetan-vocab--iast-to-ewts
+  '(("ā" . "A") ("ī" . "I") ("ū" . "U") ("ṇ" . "N")
+    ("ṭ" . "T") ("ḍ" . "D") ("ṃ" . "M") ("ḥ" . "H"))
+  "IAST → EWTS character mapping for wordlist KEY normalization.
+The class wordlists write Sanskrit names in IAST (mar pa lo tsā ba,
+rje nā ro) while the tool's Wylie side is EWTS (tsA, nA) — without
+this, those curated keys are unreachable (W6, Portfolio audit
+2026-08-13).")
+
+(defun tibetan-vocab--ewts-normalize-key (term)
+  "TERM with IAST characters replaced by their EWTS forms, or nil
+when nothing changed."
+  (let ((out term))
+    (dolist (pair tibetan-vocab--iast-to-ewts)
+      (setq out (replace-regexp-in-string (car pair) (cdr pair) out t t)))
+    (unless (equal out term) out)))
+
 (defun tibetan--store-vocab-entry (vocab-table term def)
   "Store TERM with DEF in VOCAB-TABLE under both Wylie and Tibetan keys.
-Strips folio markers like (12a5) and collapses extra whitespace."
+Strips folio markers like (12a5) and collapses extra whitespace.
+An IAST-written key is ALSO stored under its EWTS form (W6)."
   (let* ((clean-def (string-trim def))
          ;; Remove folio markers: (12a5), (16b), (3a2) etc.
          (clean-def (replace-regexp-in-string "([0-9]+[ab][0-9]*)" "" clean-def))
@@ -457,6 +475,10 @@ Strips folio markers like (12a5) and collapses extra whitespace."
          (clean-def (replace-regexp-in-string "  +" " " (string-trim clean-def))))
     ;; Store under original key
     (puthash term clean-def vocab-table)
+    ;; W6: an IAST-written key (tsā, nā) is unreachable from the
+    ;; EWTS side — store the EWTS form too.
+    (let ((ewts (tibetan-vocab--ewts-normalize-key term)))
+      (when ewts (puthash ewts clean-def vocab-table)))
     ;; If term is Wylie, also store under Tibetan
     (when (string-match-p "^[a-z]" term)
       (when (fboundp 'tibetan-wylie-to-tibetan)
@@ -667,18 +689,53 @@ which strips (it's a GLOSS lookup, where stripping is safe)."
                               (ignore-errors (tibetan-to-wylie-fixed c)))))
               (and wylie
                    (or (and res (gethash wylie res))
-                       (and cus (gethash wylie cus))))))))))
+                       (and cus (gethash wylie cus))
+                       ;; W6: deterministic long-vowel case fallback —
+                       ;; the class writes some Sanskrit-name keys
+                       ;; plain (na ro) where the text's EWTS carries
+                       ;; the length (nA ro).  Key-form only; display
+                       ;; is untouched.
+                       (let ((low (downcase wylie)))
+                         (and (not (equal low wylie))
+                              (or (and res (gethash low res))
+                                  (and cus (gethash low cus)))))))))))))
+
+(defconst tibetan-vocab--merged-clitic-suffixes '("འིས" "འང" "འི")
+  "The letter-wise merged clitics the curated CLITIC probe strips —
+the graphically unambiguous འ-initial forms only (longest first).
+Same set as the Reading builder; NOT the seg-049 syllable-strip
+class.")
+
+(defun tibetan-vocab--curated-clitic-entry (term)
+  "Curated entry for TERM when TERM = curated key + trailing merged
+clitic (mai tri'i → the `mai tri' entry), else nil.  Only fires when
+TERM itself is NOT an exact curated key — the exact probe stays the
+first authority."
+  (when (and term (stringp term)
+             (not (tibetan-vocab--curated-exact-entry term)))
+    (cl-loop for clitic in tibetan-vocab--merged-clitic-suffixes
+             when (and (string-suffix-p clitic term)
+                       (> (length term) (length clitic)))
+             return (tibetan-vocab--curated-exact-entry
+                     (substring term 0 (- (length term)
+                                          (length clitic)))))))
+
+(defun tibetan-vocab--curated-any-entry (term)
+  "Exact curated entry for TERM, or the clitic-stripped one (W6)."
+  (or (tibetan-vocab--curated-exact-entry term)
+      (tibetan-vocab--curated-clitic-entry term)))
 
 (defun tibetan-vocab--curated-starts-inside-p (words start end)
   "Non-nil when a curated entry STARTS at any index in [START, END)
-of WORDS (a list of syllables).  Candidate lengths 1–4; used by the
-generic MWU pass so a greedy generic compound never swallows the
-beginning of a curated wordlist term (the sems-chos-nyid /
-chos-nyid shadowing class, W1 2026-08-10)."
+of WORDS (a list of syllables).  Candidate lengths 1–6 (curated
+MWUs run to five syllables: mar pa lo tsA ba); used by the generic
+MWU pass so a greedy generic compound never swallows the beginning
+of a curated wordlist term (the sems-chos-nyid / chos-nyid
+shadowing class, W1 2026-08-10)."
   (let ((n (length words)))
     (cl-loop for j from start below (min end n)
-             thereis (cl-loop for len from (min 4 (- n j)) downto 1
-                              thereis (tibetan-vocab--curated-exact-entry
+             thereis (cl-loop for len from (min 6 (- n j)) downto 1
+                              thereis (tibetan-vocab--curated-any-entry
                                        (mapconcat #'identity
                                                   (cl-subseq words j (+ j len))
                                                   "་"))))))
@@ -1151,14 +1208,17 @@ populates the final `(word . meaning)' cell."
             ;; shadowing class).  Documents without curated vocab hit
             ;; the empty-hash short-circuit: zero behavior change.
             (unless found
-              (cl-loop for compound-len from 4 downto 1
+              ;; W6: window widened to 6 (curated MWUs run to five
+              ;; syllables) and the probe sees through a trailing
+              ;; merged clitic (mai tri'i → the `mai tri' key).
+              (cl-loop for compound-len from 6 downto 1
                        until found
                        when (<= (+ i compound-len) num-words)
                        do
                        (let* ((syls-raw (cl-loop for j from i below (+ i compound-len)
                                                  collect (string-trim (nth j words))))
                               (compound-raw (mapconcat #'identity syls-raw "་")))
-                         (when (tibetan-vocab--curated-exact-entry compound-raw)
+                         (when (tibetan-vocab--curated-any-entry compound-raw)
                            (push (cons compound-raw
                                        (or (tibetan-lookup-word compound-raw)
                                            "[look up]"))

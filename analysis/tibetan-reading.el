@@ -145,7 +145,14 @@ inline, so the layer IS the interlinear trot."
                     :label label
                     :meaning (cdr cell)
                     :prev-verb-p prev-verb-p
-                    :curated-p (tibetan-reading--curated-p tib)
+                    ;; W6: a token whose clitic-stripped STEM is the
+                    ;; curated key (mai tri'i → mai tri) is curated
+                    ;; too — grouped by the vocabulary side, starred
+                    ;; here, clitic displayed.
+                    :curated-p (or (tibetan-reading--curated-p tib)
+                                   (and clitic
+                                        (tibetan-reading--curated-p
+                                         stem)))
                     :clitic (when clitic
                               (cons (tibetan-reading--wylie
                                      (car (cdr clitic)))
@@ -155,6 +162,19 @@ inline, so the layer IS the interlinear trot."
     (nreverse out)))
 
 (defvar tibetan-analysis--target-lang)
+
+(defconst tibetan-reading--sanskrit-sign-re
+  "[ཱཻཽྲྀཷླྀཹཾཿྃཊཋཌཎཥ]"
+  "Signs that occur only in Sanskrit transliteration (long-vowel
+achung, ai/au ligatures, vocalic r/l, anusvāra, visarga, retroflex
+letters).  A syllable carrying one can not be a native Tibetan word
+— dictionary-lookup noise for it is suppressed (mai [(look up)],
+the W6 Portfolio finding).")
+
+(defun tibetan-reading--sanskrit-token-p (tok)
+  "Non-nil when TOK's Tibetan carries a Sanskrit-only sign."
+  (string-match-p tibetan-reading--sanskrit-sign-re
+                  (or (plist-get tok :tibetan) "")))
 
 (defun tibetan-reading--gloss (tok)
   "The display gloss for TOK, or nil: target-lang half selected,
@@ -167,6 +187,12 @@ the Pass-5c selector) AND `EN (DE: …)' — the shape
 the second branch a de-target document's combined Reading lines
 would regress to English."
   (let ((m (plist-get tok :meaning)))
+    ;; W6: a Sanskrit-transliteration syllable with no real gloss
+    ;; renders PLAIN — `mai [(look up)]' is noise, not information.
+    (when (and m (stringp m)
+               (string-prefix-p "[look up" m)
+               (tibetan-reading--sanskrit-token-p tok))
+      (setq m nil))
     (when (and m (stringp m) (not (string-empty-p (string-trim m))))
       (let* ((lang (and (boundp 'tibetan-analysis--target-lang)
                         tibetan-analysis--target-lang))
