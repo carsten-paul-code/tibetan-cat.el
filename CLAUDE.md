@@ -3614,6 +3614,16 @@ key coverage decides MWU grouping ('bre ston / mar pa render
 per-syllable until curated).  Extending the class wordlist tunes
 both.
 
+**R12 follow-up (same day, `c41d1fc`, corpus `1a578e3`)**: Carsten
+combined the two layers — ONE `** Interlinear' layer now carries
+decorated Wylie + Steinert links + ★ + target-lang glosses per
+token (particles keep their [LABEL] text — the POS signal that
+survives export).  The `*x*' matcher gates on `** Interlinear';
+`EN (DE: …)' lookup shapes yield their German half on de-target
+docs; the grounding's `\\=`\\[' placeholder filter admits lines
+beginning with org links.  All 64 files regenerated: 173/173
+renderings intact.
+
 ## 6. Open work (prioritised)
 
 ### P0 — Verify Detailed Dictionary on a real segment ✓ DONE 2026-04-15
