@@ -42,6 +42,12 @@
 (defvar tibetan-analysis--target-lang)
 (defvar tibetan-analysis--claude-vocabulary-for-render)
 
+;; The §184-handout gloss tables (Masterarbeit three-view plan,
+;; 2026-09-15).  Soft — the emitter is fboundp-guarded and
+;; emit-vs-omit is non-destructive; the require keeps interactive
+;; and batch load-state aligned (the B0 lesson).
+(require 'tibetan-gloss-table nil t)
+
 (defun tibetan-cascade-split-shad-units (text)
   "Split TEXT into its shad-terminated units.
 
@@ -126,7 +132,16 @@ COMBINED arrangement (Carsten's decision 2026-08-12, second
 iteration): ONE `** Interlinear' layer — decorated Wylie + ★ +
 glosses per token, one line per shad unit (the skeleton and the
 trot are the same tokens; two layers doubled every line) — followed
-by the ⟦N⟧ Renderings list.  Shads render as `/'."
+by the ⟦N⟧ Renderings list.  Shads render as `/'.
+
+2026-09-15 (Masterarbeit three-view plan): `** Gloss Tables' is the
+FIRST Reading child — captioned three-row tables per shad unit
+(§184-handout form), placed BEFORE the Interlinear per Carsten's
+decision.  The section carries a :GENERATED_HASH: drawer (sha1 of
+the emitted body) so `tibetan-cascade--regenerate' can distinguish
+a still-generated section (refresh it) from one Carsten has edited
+\(preserve it verbatim — his decision layer).  Omitted entirely
+when nothing renders."
   (let* ((units (mapcar #'cdr segs))
          (lines
           (or (and (fboundp 'tibetan-reading-decorated-lines)
@@ -149,12 +164,28 @@ by the ⟦N⟧ Renderings list.  Shads render as `/'."
                               (concat w " /")
                             w)))
                       units))))
-    (concat "* Reading\n"
-            "** Interlinear\n"
-            (string-join lines "\n") "\n\n"
-            "** Renderings\n"
-            (tibetan-cascade--renderings-list-body segs)
-            "\n\n")))
+    (let ((tables
+           (and (fboundp 'tibetan-gloss-table-render-captioned)
+                (condition-case nil
+                    (tibetan-gloss-table-render-captioned
+                     segs
+                     (and (boundp
+                           'tibetan-analysis--claude-vocabulary-for-render)
+                          tibetan-analysis--claude-vocabulary-for-render))
+                  (error nil)))))
+      (concat "* Reading\n"
+              (if tables
+                  (concat "** Gloss Tables\n"
+                          ":PROPERTIES:\n"
+                          (format ":GENERATED_HASH: %s\n" (sha1 tables))
+                          ":END:\n"
+                          tables "\n\n")
+                "")
+              "** Interlinear\n"
+              (string-join lines "\n") "\n\n"
+              "** Renderings\n"
+              (tibetan-cascade--renderings-list-body segs)
+              "\n\n"))))
 
 (declare-function tibetan-segment-text "tibetan-enhanced-parser" (text))
 (declare-function tibetan-extract-verbs-compound-aware

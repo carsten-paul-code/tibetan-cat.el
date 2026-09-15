@@ -1447,6 +1447,62 @@ by GLOBAL segment number."
       (should (string-match-p "^- ⟦105⟧ \\[Awaiting" s))
       (should (string-match-p "^- ⟦106⟧ \\[Awaiting" s)))))
 
+(ert-deftest tibetan-cascade-reading-section-emits-gloss-tables ()
+  "2026-09-15 (Masterarbeit three-view plan, Carsten's placement
+decision): `** Gloss Tables' is the FIRST Reading child — captioned
+three-row tables per shad unit BEFORE the Interlinear — carrying a
+:GENERATED_HASH: drawer (the edit-protection anchor: hash of the
+emitted body, so a later regenerate can tell generated from
+hand-edited)."
+  (cl-letf (((symbol-function 'tibetan-reading-decorated-lines)
+             (lambda (units)
+               (mapcar (lambda (u) (format "LINE(%s)" u)) units)))
+            ((symbol-function 'tibetan-gloss-table-render-captioned)
+             (lambda (_segs _vocab)
+               "Unit 1 — Segment 105\n| CAPTBL |")))
+    (let ((s (tibetan-cascade--reading-section
+              '((105 . "བདག།") (106 . "ཆོས།")))))
+      (let ((gt (string-match "^\\*\\* Gloss Tables$" s))
+            (il (string-match "^\\*\\* Interlinear$" s))
+            (re (string-match "^\\*\\* Renderings$" s)))
+        (should (and gt il re))
+        (should (< gt il re)))
+      (should (string-match-p "^| CAPTBL |$" s))
+      ;; Edit-protection drawer with the body hash.
+      (should (string-match-p
+               (concat ":GENERATED_HASH: "
+                       (sha1 "Unit 1 — Segment 105\n| CAPTBL |"))
+               s)))))
+
+(ert-deftest tibetan-cascade-reading-section-omits-gloss-tables-when-empty ()
+  "No renderable unit (or the gloss-table module absent) → no
+`** Gloss Tables' heading at all — no empty-section litter, the
+degraded scaffold stays valid."
+  (cl-letf (((symbol-function 'tibetan-reading-decorated-lines)
+             (lambda (units)
+               (mapcar (lambda (u) (format "LINE(%s)" u)) units)))
+            ((symbol-function 'tibetan-gloss-table-render-captioned)
+             (lambda (_segs _vocab) nil)))
+    (let ((s (tibetan-cascade--reading-section '((105 . "བདག།")))))
+      (should-not (string-match-p "^\\*\\* Gloss Tables$" s))
+      (should (string-match-p "^\\*\\* Interlinear$" s)))))
+
+(ert-deftest tibetan-cascade-regenerate-keeps-readers-with-gloss-tables ()
+  "Adjacent lock: on a regenerated file WITH the new `** Gloss
+Tables' section, the Reading readers still resolve — the
+renderings region, a landed ⟦N⟧ body, and the needs-request gate."
+  (tibetan-cascade-test--with-cascade-file
+    (tibetan-cascade--write-rendering cascade-file 105 "⟪Er ging⟫ los.")
+    (tibetan-cascade--regenerate
+     cascade-file 4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+     (expand-file-name "doc.org" dir))
+    (should (equal "⟪Er ging⟫ los."
+                   (tibetan-cascade--read-rendering cascade-file 105)))
+    (should-not (tibetan-cascade--rendering-needs-request-p
+                 cascade-file 105))
+    (should (tibetan-cascade--rendering-needs-request-p
+             cascade-file 106))))
+
 ;; ============================================================================
 ;; R8 (2026-08-12) — the migration: preserve-mode regenerate of a
 ;; LEGACY file produces the Reading layout with everything carried.
