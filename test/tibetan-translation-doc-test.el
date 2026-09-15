@@ -345,6 +345,32 @@ GENERATED marker present."
       (should (string-match-p "POISON-DM-2" s))
       (should (string-match-p "\\[Satz 3 — noch keine Übersetzung\\]" s)))))
 
+(ert-deftest tibetan-translation-doc-section-view-dual-name-and-drawer ()
+  "The Rgyan cascade files carry the legacy `** Claude Translation'
+heading (dual-name class, §5.18) — the view must find it; and a
+suggestion body's leading :PROPERTIES: drawer (DM's
+LAST_TRANSLATED) must not leak into the sheet."
+  (tibetan-translation-doc-test--with-corpus
+    (let ((f (tibetan-sentence--filepath 2 analysis-dir source-file)))
+      (with-temp-file f
+        (insert "#+TITLE: Sentence 2 Analysis\n#+TIBETAN_LAYOUT: cascade\n\n"
+                "* Working Translation\nMein Satz.\n\n"
+                "* Tibetan Text\nཆོས\n\n"
+                "* Tibetan Analysis\n"
+                "** Claude Translation\nLEGACY-CLAUDE-BODY\n\n"
+                "** DharmaMitra Translation\n"
+                ":PROPERTIES:\n:LAST_TRANSLATED: 2026-08-10\n:END:\n\n"
+                "DM-BODY-OHNE-DRAWER\n\n"
+                "* Footnotes\n")))
+    (let* ((out (tibetan-translation-doc-section-view source-file 167))
+           (s (with-temp-buffer (insert-file-contents out)
+                                (buffer-string))))
+      (should (string-match-p "^\\*\\*\\* Vorschlag Claude$" s))
+      (should (string-match-p "LEGACY-CLAUDE-BODY" s))
+      (should (string-match-p "DM-BODY-OHNE-DRAWER" s))
+      (should-not (string-match-p ":LAST_TRANSLATED:" s))
+      (should-not (string-match-p "^:PROPERTIES:$" s)))))
+
 (ert-deftest tibetan-translation-doc-section-view-locks-references ()
   "Provided Translations (the Lopez/W&M slot) and the Renderings
 never reach the view; footnotes are namespaced and collected."

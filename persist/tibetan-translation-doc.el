@@ -227,6 +227,17 @@ never reach generated documents.  Returns OUTPUT-FILE."
                   "\n"))))
     output-file))
 
+(defun tibetan-translation-doc--strip-leading-drawer (body)
+  "BODY without a leading :PROPERTIES:…:END: drawer (trimmed).
+Suggestion bodies carry write-stamps (DM's LAST_TRANSLATED) that
+are machinery, not content — they must not leak into generated
+sheets."
+  (when body
+    (string-trim
+     (if (string-match "\\`:PROPERTIES:\n\\(?:.*\n\\)*?:END:\n?" body)
+         (substring body (match-end 0))
+       body))))
+
 (defun tibetan-translation-doc-section-view (source-file par
                                                          &optional
                                                          output-file)
@@ -282,12 +293,19 @@ translations (Lopez / W&M) never appear.  Returns the file."
                    (tables (and (fboundp 'tibetan-cascade--read-gloss-tables)
                                 (car (tibetan-cascade--read-gloss-tables
                                       file))))
+                   ;; Dual-name accept (§5.18 class): the Rgyan
+                   ;; cascade files carry the legacy `** Claude
+                   ;; Translation' heading.
                    (claude (and (fboundp 'tibetan-sentence--read-l2-body)
-                                (tibetan-sentence--read-l2-body
-                                 file "Translation")))
+                                (tibetan-translation-doc--strip-leading-drawer
+                                 (or (tibetan-sentence--read-l2-body
+                                      file "Translation")
+                                     (tibetan-sentence--read-l2-body
+                                      file "Claude Translation")))))
                    (dm (and (fboundp 'tibetan-sentence--read-l2-body)
-                            (tibetan-sentence--read-l2-body
-                             file "DharmaMitra Translation")))
+                            (tibetan-translation-doc--strip-leading-drawer
+                             (tibetan-sentence--read-l2-body
+                              file "DharmaMitra Translation"))))
                    (wt (tibetan-translation-doc--working-translation
                         file))
                    (fns (tibetan-translation-doc--footnote-definitions
