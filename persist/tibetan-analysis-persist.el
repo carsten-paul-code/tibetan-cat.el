@@ -4051,8 +4051,8 @@ unused-arg warning without breaking the public API."
             ;; überall raus".  Legacy files lose the section on their
             ;; next reanalyze via the regenerate-auto rebuild, the F1
             ;; Detailed-Dictionary retirement mechanism.  The converter
-            ;; module core/tibetan-phonetics.el is now unwired and goes
-            ;; in a follow-up dead-code commit, mirroring c04542b.)
+            ;; module core/tibetan-phonetics.el was deleted in the
+            ;; follow-up dead-code commit, mirroring c04542b.)
 
             ;; ============================================================
             ;; SECTION 1a: Interlinear Gloss + Particle Overview
