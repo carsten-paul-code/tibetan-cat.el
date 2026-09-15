@@ -2924,6 +2924,15 @@ tails that leak out of user wordlists, e.g. \"dice kha phung la thong\"
           ;; Wylie-distinctive digraphs at start or as whole token.
           (string-match-p "\\`\\(bzh\\|rdz\\|brts\\|bcu\\|bsk\\|bgy\\|mkh\\|'kh\\|sgr\\|rgy\\|brt\\)" lc)))))
 
+(defun tibetan-analysis--strip-leading-sense-number (gloss)
+  "GLOSS without a leading dictionary sense number, if any.
+Covers \"1. \", \"1) \", \"12: \" AND the parenthesized \"(1) \"
+form — the latter was missed by the old inline regex, which is
+why par-184.org rendered `de [(1) that]' (2026-09-15).  Pure;
+non-numbered glosses pass through unchanged."
+  (replace-regexp-in-string
+   "\\`\\(?:([0-9]+)\\|[0-9]+[.):]\\)\\s-*" "" gloss))
+
 (defun tibetan-analysis--strip-wylie-tail (gloss)
   "Remove trailing Wylie-only example tokens from GLOSS.
 Some user wordlists embed compound cross-references directly after
@@ -4261,9 +4270,9 @@ unused-arg warning without breaking the public API."
                                        (not (string-empty-p
                                              (string-trim raw-meaning))))
                               (let ((m (string-trim raw-meaning)))
-                                ;; Strip leading numbering like "1) " or "1. "
-                                (setq m (replace-regexp-in-string
-                                         "^[0-9]+[.):]\\s-*" "" m))
+                                ;; Strip leading numbering — "1) ", "1. "
+                                ;; AND "(1) " (2026-09-15 helper).
+                                (setq m (tibetan-analysis--strip-leading-sense-number m))
                                 ;; For non-curated dictionaries, keep only the
                                 ;; first sense (before ';' — proper sense
                                 ;; separator).  Curated Resources entries are

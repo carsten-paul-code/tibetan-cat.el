@@ -1434,6 +1434,40 @@ fall back to a Steinert/RY single-source pick."
         ;; Must NOT have surfaced the Steinert gloss.
         (should-not (string-match-p "object; place" il))))))
 
+(ert-deftest tibetan-analysis-strip-leading-sense-number-parenthesized ()
+  "\"(1) that\" → \"that\" — the par-184 junk class (2026-09-15): the
+old inline regex ^[0-9]+[.):] missed parenthesized numbering."
+  (should (equal "that"
+                 (tibetan-analysis--strip-leading-sense-number "(1) that"))))
+
+(ert-deftest tibetan-analysis-strip-leading-sense-number-legacy-and-safe ()
+  "Legacy \"1. \"/\"1) \"/\"12: \" keep stripping; unnumbered glosses
+and mid-string digits stay untouched."
+  (should (equal "x" (tibetan-analysis--strip-leading-sense-number "1. x")))
+  (should (equal "x" (tibetan-analysis--strip-leading-sense-number "1) x")))
+  (should (equal "x" (tibetan-analysis--strip-leading-sense-number "12: x")))
+  (should (equal "plain gloss"
+                 (tibetan-analysis--strip-leading-sense-number "plain gloss")))
+  (should (equal "the 3 jewels"
+                 (tibetan-analysis--strip-leading-sense-number "the 3 jewels"))))
+
+(ert-deftest tibetan-analysis-interlinear-strips-parenthesized-sense-number ()
+  "End-to-end lock: a dictionary :primary of \"(1) object; (2) place\"
+must surface as [object] in the generated content — never [(1) object]."
+  (cl-letf (((symbol-function 'tibetan-vocab-multisource-entries)
+             (lambda (word)
+               (when (string= word "ཡུལ")
+                 (list (list :source "Steinert/08-IvesWaldo"
+                             :primary "(1) object; (2) place"
+                             :detailed "(1) object; (2) place"
+                             :sanskrit nil :wylie "yul"))))))
+    (let ((out (condition-case nil
+                    (tibetan-analysis-generate-content "ཡུལ")
+                  (error nil))))
+      (should out)
+      (should (string-match-p "object" out))
+      (should-not (string-match-p "(1)" out)))))
+
 (ert-deftest tibetan-analysis-word-particle-list-section-is-removed ()
   "The Word / Particle List section must NOT be present in the
 generated analysis content.  Regression guard for 2026-04-22 — the
