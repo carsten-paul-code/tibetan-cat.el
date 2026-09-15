@@ -13,9 +13,12 @@
 (require 'cl-lib)
 
 (let ((base-dir (file-name-directory (or load-file-name buffer-file-name))))
-  (add-to-list 'load-path (expand-file-name "../persist" base-dir)))
+  (add-to-list 'load-path (expand-file-name "../persist" base-dir))
+  (add-to-list 'load-path (expand-file-name "../core" base-dir))
+  (add-to-list 'load-path (expand-file-name "../analysis" base-dir)))
 
 (require 'tibetan-translation-doc)
+(require 'tibetan-sentence-persist)
 
 ;; ----------------------------------------------------------------------------
 ;; Fixtures
@@ -149,6 +152,153 @@ without footnotes comes back byte-identical."
     (should (equal plain
                    (tibetan-translation-doc--namespace-footnotes
                     plain "s003-")))))
+
+;; ----------------------------------------------------------------------------
+;; Builder — fixture corpus
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-translation-doc-test--sent-file (n dir source-file
+                                                 wt footnotes)
+  "Write a minimal cascade sent file for sentence N (at the path the
+suffix-aware resolver returns) with WT / FOOTNOTES bodies and
+DISTINCTIVE poison strings in the sections the stitcher must never
+copy (Renderings / DharmaMitra / Provided Translations)."
+  (let ((f (tibetan-sentence--filepath n dir source-file)))
+    (with-temp-file f
+      (insert (format "#+TITLE: Sentence %d Analysis\n" n)
+              "#+TIBETAN_LAYOUT: cascade\n"
+              (format "#+SOURCE: [[file:../%s::*Sentence %d][q]]\n\n"
+                      (file-name-nondirectory source-file) n)
+              "* My Notes\n\n"
+              "* Working Translation\n" (or wt "") "\n\n"
+              "* Tibetan Text\nབདག\n\n"
+              "* Reading\n** Interlinear\nbdag [ich]\n\n"
+              (format "** Renderings\n- ⟦%d⟧ POISON-RENDERING-%d\n\n" n n)
+              "* Tibetan Analysis\n"
+              (format "** Translation\nPOISON-CLAUDE-%d\n\n" n)
+              (format "** DharmaMitra Translation\nPOISON-DM-%d\n\n" n)
+              (format "** Provided Translations\nPOISON-LOPEZ-%d\n\n" n)
+              "* Footnotes\n" (or footnotes "") "\n"))
+    f))
+
+(defmacro tibetan-translation-doc-test--with-corpus (&rest body)
+  "Fixture corpus: the §-grouped source + analysis/ with sentences
+1 (pre-§, filled), 2 (§167, filled + footnote), 3 (§167, EMPTY WT),
+4 (§168, filled + colliding footnote label).  Binds SOURCE-FILE,
+DIR, ANALYSIS-DIR."
+  (declare (indent 0))
+  `(tibetan-translation-doc-test--with-source
+     (let ((analysis-dir (expand-file-name "analysis" dir)))
+       (make-directory analysis-dir)
+       (tibetan-translation-doc-test--sent-file
+        1 analysis-dir source-file "Der Vorspann-Satz." nil)
+       (tibetan-translation-doc-test--sent-file
+        2 analysis-dir source-file
+        "Der Ehrwürdige[fn:x] sprach lange."
+        "[fn:x] Definition aus Satz zwei.")
+       (tibetan-translation-doc-test--sent-file
+        3 analysis-dir source-file nil nil)
+       (tibetan-translation-doc-test--sent-file
+        4 analysis-dir source-file
+        "Und dann ging er.[fn:x]"
+        "[fn:x] Definition aus Satz vier.")
+       ,@body)))
+
+;; ----------------------------------------------------------------------------
+;; Builder
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-translation-doc-build-groups-and-orders ()
+  "The stitched document carries `* §167' before `* §168', bodies
+in source order, a GENERATED marker header, and the pre-§ group."
+  (tibetan-translation-doc-test--with-corpus
+    (let* ((out (expand-file-name "uebersetzung.org" analysis-dir))
+           (ret (tibetan-translation-doc-build source-file out))
+           (s (with-temp-buffer (insert-file-contents out)
+                                (buffer-string))))
+      (should (equal out ret))
+      (should (string-match-p "^# GENERATED" s))
+      (let ((pre (string-match "Der Vorspann-Satz\\." s))
+            (g167 (string-match "^\\* §167$" s))
+            (rje (string-match "Der Ehrwürdige" s))
+            (g168 (string-match "^\\* §168$" s))
+            (ging (string-match "Und dann ging er\\." s)))
+        (should (and pre g167 rje g168 ging))
+        (should (< pre g167 rje g168 ging))))))
+
+(ert-deftest tibetan-translation-doc-build-placeholders ()
+  "An empty Working Translation renders a visible German
+placeholder; a missing sent file its own."
+  (tibetan-translation-doc-test--with-corpus
+    ;; Sentence 4's file removed → missing-file placeholder.
+    (delete-file (tibetan-sentence--filepath 4 analysis-dir source-file))
+    (let* ((out (expand-file-name "uebersetzung.org" analysis-dir))
+           (s (progn (tibetan-translation-doc-build source-file out)
+                     (with-temp-buffer (insert-file-contents out)
+                                       (buffer-string)))))
+      (should (string-match-p "\\[Satz 3 — noch keine Übersetzung\\]" s))
+      (should (string-match-p "\\[Satz 4 — Analysedatei fehlt\\]" s)))))
+
+(ert-deftest tibetan-translation-doc-build-copyright-lock ()
+  "NOTHING but Working Translation + Footnotes reaches the output:
+the poison strings planted in Renderings / Claude Translation /
+DharmaMitra / Provided Translations never appear."
+  (tibetan-translation-doc-test--with-corpus
+    (let* ((out (expand-file-name "uebersetzung.org" analysis-dir))
+           (s (progn (tibetan-translation-doc-build source-file out)
+                     (with-temp-buffer (insert-file-contents out)
+                                       (buffer-string)))))
+      (should-not (string-match-p "POISON-" s)))))
+
+(ert-deftest tibetan-translation-doc-build-namespaces-end-to-end ()
+  "The colliding [fn:x] of sentences 2 and 4 comes out as s002-x /
+s004-x — anchors in the prose, definitions under ONE trailing
+* Footnotes."
+  (tibetan-translation-doc-test--with-corpus
+    (let* ((out (expand-file-name "uebersetzung.org" analysis-dir))
+           (s (progn (tibetan-translation-doc-build source-file out)
+                     (with-temp-buffer (insert-file-contents out)
+                                       (buffer-string)))))
+      (should (string-match-p "Ehrwürdige\\[fn:s002-x\\]" s))
+      (should (string-match-p "ging er\\.\\[fn:s004-x\\]" s))
+      (should (string-match-p "^\\[fn:s002-x\\] Definition aus Satz zwei\\." s))
+      (should (string-match-p "^\\[fn:s004-x\\] Definition aus Satz vier\\." s))
+      ;; Exactly one Footnotes heading, at the end.
+      (should (= 1 (cl-count-if
+                    (lambda (l) (equal l "* Footnotes"))
+                    (split-string s "\n"))))
+      (should-not (string-match-p "\\[fn:x\\]" s)))))
+
+(ert-deftest tibetan-translation-doc-build-range-filter ()
+  "FROM-SEC/TO-SEC restrict to the §-range (the Anhang-A.1 use
+case); the pre-§ group is excluded when a range is given."
+  (tibetan-translation-doc-test--with-corpus
+    (let* ((out (expand-file-name "uebersetzung.org" analysis-dir))
+           (s (progn (tibetan-translation-doc-build source-file out 168 168)
+                     (with-temp-buffer (insert-file-contents out)
+                                       (buffer-string)))))
+      (should (string-match-p "^\\* §168$" s))
+      (should-not (string-match-p "^\\* §167$" s))
+      (should-not (string-match-p "Vorspann-Satz" s))
+      (should (string-match-p "Und dann ging er\\." s)))))
+
+(ert-deftest tibetan-translation-doc-build-overwrite-guard ()
+  "An existing file WITHOUT the GENERATED marker is never
+overwritten (user-error, bytes untouched); the builder's own
+previous output is."
+  (tibetan-translation-doc-test--with-corpus
+    (let ((out (expand-file-name "uebersetzung.org" analysis-dir)))
+      (with-temp-file out (insert "Handgeschriebenes Dokument.\n"))
+      (should-error (tibetan-translation-doc-build source-file out)
+                    :type 'user-error)
+      (should (equal "Handgeschriebenes Dokument.\n"
+                     (with-temp-buffer (insert-file-contents out)
+                                       (buffer-string))))
+      (delete-file out)
+      ;; Twice over its own output: fine.
+      (tibetan-translation-doc-build source-file out)
+      (tibetan-translation-doc-build source-file out)
+      (should (file-exists-p out)))))
 
 (provide 'tibetan-translation-doc-test)
 

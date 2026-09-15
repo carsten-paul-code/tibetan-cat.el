@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-15T16:46:25
+#+DATE: 2026-09-15T16:50:04
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  74 modules  ·  1409 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  74 modules  ·  1416 forms
 
 Regenerated automatically by:
 
@@ -70,7 +70,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-sentence-claude.el][persist/tibetan-sentence-claude.el]]  (26)
   - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (60)
   - [[#persist/tibetan-structure-reorg.el][persist/tibetan-structure-reorg.el]]  (15)
-  - [[#persist/tibetan-translation-doc.el][persist/tibetan-translation-doc.el]]  (4)
+  - [[#persist/tibetan-translation-doc.el][persist/tibetan-translation-doc.el]]  (11)
   - [[#philology/tibetan-bialek-textbook-refs.el][philology/tibetan-bialek-textbook-refs.el]]  (2)
   - [[#philology/tibetan-madhyamaka-terms.el][philology/tibetan-madhyamaka-terms.el]]  (6)
   - [[#philology/tibetan-verse-philology.el][philology/tibetan-verse-philology.el]]  (13)
@@ -2616,7 +2616,7 @@ Keymap for thesaurus commands — prefix `C-c u z'.
 ** ~tibetan-cat-context-menu-map~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 253
+:LINE: 257
 :DEFAULT: (let ((map (make-sparse-keymap "Tibetan")))
     (define-key map [segment-info] '(menu-item "Segment Info" tibetan-segmen
 :END:
@@ -18454,7 +18454,7 @@ If non-nil, automatically create analysis for new segments during reorg.
 ** ~tibetan-translation-doc--source-outline~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 36
+:LINE: 40
 :SIGNATURE: (tibetan-translation-doc--source-outline source-file)
 :END:
 
@@ -18469,7 +18469,7 @@ file has no sentences.
 ** ~tibetan-translation-doc--working-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 77
+:LINE: 81
 :SIGNATURE: (tibetan-translation-doc--working-translation file)
 :END:
 
@@ -18478,7 +18478,7 @@ FILE's `* Working Translation' body (trimmed), nil when empty.
 ** ~tibetan-translation-doc--footnote-definitions~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 82
+:LINE: 86
 :SIGNATURE: (tibetan-translation-doc--footnote-definitions file)
 :END:
 
@@ -18487,7 +18487,7 @@ FILE's `* Footnotes' body verbatim (edge-trimmed), nil when empty.
 ** ~tibetan-translation-doc--namespace-footnotes~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 87
+:LINE: 91
 :SIGNATURE: (tibetan-translation-doc--namespace-footnotes text prefix)
 :END:
 
@@ -18499,6 +18499,95 @@ covers all three, because the label is always followed by `]' or
 untouched.  Namespacing per sentence file (PREFIX like "s012-")
 keeps labels collision-free when many files stitch into one
 document.
+
+** ~tibetan-translation-doc--generated-file-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 118
+:SIGNATURE: (tibetan-translation-doc--generated-file-p file)
+:END:
+
+Non-nil when FILE starts with the GENERATED marker.
+
+** ~tibetan-translation-doc-build~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 126
+:SIGNATURE: (tibetan-translation-doc-build source-file output-file
+                                                  &optional from-sec to-sec)
+:END:
+
+Stitch Carsten's translation out of SOURCE-FILE's sent files.
+Walks the §-outline of the cascade SOURCE-FILE, reads each
+sentence's `* Working Translation' and `* Footnotes' from its
+analysis file (suffix-aware resolution), namespaces the footnotes
+per sentence (s%03d-) and writes OUTPUT-FILE: a GENERATED,
+§-grouped org document — flowing German under `* §NNN' headings,
+one collected `* Footnotes' at the end.  FROM-SEC/TO-SEC restrict
+to a §-range (e.g. 182–186 for thesis appendix A.1); the pre-§
+group is included only without a range.  Empty slots render the
+visible `[Satz N — noch keine Übersetzung]' placeholder, missing
+files `[Satz N — Analysedatei fehlt]'.  Refuses to overwrite an
+existing OUTPUT-FILE that lacks the GENERATED marker.  Contains
+ONLY Carsten's own text — reference translations (Lopez / W&M)
+never reach generated documents.  Returns OUTPUT-FILE.
+
+** ~tibetan-translation-doc--context-source~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 226
+:SIGNATURE: (tibetan-translation-doc--context-source)
+:END:
+
+The cascade source for the current buffer: an analysis buffer
+resolves via its #+SOURCE link, anything else is taken as the
+source itself; no file → prompt.
+
+** ~tibetan-translation-doc~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 241
+:SIGNATURE: (tibetan-translation-doc &optional from-sec to-sec)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+Generate the stitched translation document for this corpus.
+Interactively prompts for an optional §-range (empty = whole
+corpus); works from the source buffer or any sent-analysis
+buffer.  Output lands beside the analysis files as
+`uebersetzung[-FROM-TO].org' and is opened for review; export via
+\[tibetan-export-any-org-to-pdf].
+
+** ~tibetan-translation-doc-generated-marker~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 105
+:DEFAULT: "# GENERATED by tibetan-translation-doc — NICHT VON HAND EDITIEREN"
+:END:
+
+First line of every generated document.  The overwrite guard
+refuses any existing target that lacks this marker, so a
+hand-owned file can never be clobbered by a regeneration.
+
+** ~tibetan-translation-doc-empty-placeholder~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 111
+:DEFAULT: "[Satz %d — noch keine Übersetzung]"
+:END:
+
+Visible placeholder for a sentence whose Working Translation is
+still empty — gaps must be obvious in the stitched document.
+
+** ~tibetan-translation-doc-missing-placeholder~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 115
+:DEFAULT: "[Satz %d — Analysedatei fehlt]"
+:END:
+
+Visible placeholder for a sentence without an analysis file.
 
 
 * philology/tibetan-bialek-textbook-refs.el
@@ -19681,7 +19770,7 @@ Holds the result of the WHEN clause for use in THEN assertions.
 ** ~tibetan-cat-setup~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 293
+:LINE: 294
 :SIGNATURE: (tibetan-cat-setup)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -19693,7 +19782,7 @@ Loads glossaries and prepares the system for use.
 ** ~tibetan-cat-version~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 379
+:LINE: 380
 :SIGNATURE: (tibetan-cat-version)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -19704,7 +19793,7 @@ Display Tibetan CAT version and feature summary.
 ** ~tibetan-cat--server-socket-path~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 422
+:LINE: 423
 :SIGNATURE: (tibetan-cat--server-socket-path server-name)
 :END:
 
@@ -19716,7 +19805,7 @@ removed when the server is stopped).
 ** ~tibetan-cat-open-zettel-for-word-at-point~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 433
+:LINE: 434
 :SIGNATURE: (tibetan-cat-open-zettel-for-word-at-point &optional arg)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -19749,7 +19838,7 @@ in the appropriate instance.
 ** ~tibetan-cat-zettel-target-server~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 402
+:LINE: 403
 :TYPE: 'string
 :GROUP: tibetan-cat
 :DEFAULT: "research-emacs"
@@ -19771,7 +19860,7 @@ Empty string disables remote routing entirely.
 ** ~tibetan-cat-version~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 290
+:LINE: 291
 :END:
 
 /(no docstring)/
@@ -19779,7 +19868,7 @@ Empty string disables remote routing entirely.
 ** ~tibetan-cat-version~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 375
+:LINE: 376
 :DEFAULT: "2.1.0"
 :END:
 
@@ -19788,7 +19877,7 @@ Version of Tibetan CAT system.
 ** ~server-socket-dir~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 420
+:LINE: 421
 :END:
 
 /(no docstring)/

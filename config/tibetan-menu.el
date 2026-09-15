@@ -197,7 +197,11 @@
      ["Mitra AI Translate (C-c u m)" tibetan-mitra-translate-dwim
       :help "Translate using Gemma-2-Mitra-E AI model"]
      ["Check Mitra Status (C-c u M)" tibetan-mitra-check-status
-      :help "Check if Mitra backend is available"])
+      :help "Check if Mitra backend is available"]
+     "---"
+     ["Übersetzungsdokument generieren…" tibetan-translation-doc
+      :active (fboundp 'tibetan-translation-doc)
+      :help "Working Translations + Fußnoten der sent-Dateien zu einem §-gruppierten Dokument stitchen"])
     ("Sentence Structure"
      ["Prepare Sentence Workspace (C-c s w)" tibetan-prepare-sentence
       :help "Create sentence workspace with line-by-line analysis"]
