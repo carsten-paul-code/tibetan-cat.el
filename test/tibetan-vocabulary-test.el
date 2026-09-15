@@ -501,6 +501,33 @@ ordering fix must not cost coverage (adjacent case)."
       nil
     (should (equal (tibetan-lookup-word "ཕྱུགས") "herds, cattle"))))
 
+(ert-deftest tibetan-ry-lookup-local-store-beats-ambient-combined ()
+  "`tibetan-lookup-word-in-rangjung-yeshe' returns the repo store's
+sense even when the user's init defines
+`lookup-combined-dictionary-first' (the interactive-only combined
+store).  The bundled store exists in EVERY environment, so it is the
+deterministic authority; consulting the ambient function first made
+interactive Emacs and emacs -batch return different senses for the
+same word (the 2026-09-15 corpus-landing drift class)."
+  (let ((tibetan-rangjung-yeshe-loaded t)
+        (tibetan-rangjung-yeshe-vocabulary (make-hash-table :test 'equal)))
+    (puthash "བདག" "local-sense" tibetan-rangjung-yeshe-vocabulary)
+    (cl-letf (((symbol-function 'lookup-combined-dictionary-first)
+               (lambda (_) "combined-sense")))
+      (should (equal (tibetan-lookup-word-in-rangjung-yeshe "བདག")
+                     "local-sense")))))
+
+(ert-deftest tibetan-ry-lookup-ambient-combined-still-fallback ()
+  "The ambient combined store still answers when the bundled store
+misses — determinism must not cost interactive coverage (adjacent
+case)."
+  (let ((tibetan-rangjung-yeshe-loaded t)
+        (tibetan-rangjung-yeshe-vocabulary (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'lookup-combined-dictionary-first)
+               (lambda (w) (when (equal w "བདག") "combined-sense"))))
+      (should (equal (tibetan-lookup-word-in-rangjung-yeshe "བདག")
+                     "combined-sense")))))
+
 ;; ============================================================================
 ;; VOCABULARY EXTRACTION TESTS
 ;; ============================================================================

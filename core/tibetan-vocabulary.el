@@ -264,35 +264,41 @@ Stores entries under both Tibetan and Wylie keys for flexible lookup."
             (message "✓ Loaded Rangjung Yeshe dictionary: %d entries" count)))))))
 
 (defun tibetan-lookup-word-in-rangjung-yeshe (word)
-  "Look up WORD in the combined 64-source dictionary or Rangjung Yeshe.
-Tries the combined dictionary first (if loaded from init-tibetan-legacy.el),
-then falls back to the local Rangjung Yeshe copy.
+  "Look up WORD in the bundled Rangjung Yeshe store, then the combined one.
+The bundled lazy-loaded store exists in EVERY environment, so it is
+consulted FIRST — the deterministic authority.  The 64-source
+combined dictionary (`lookup-combined-dictionary-first', defined by
+the user's init, e.g. init-tibetan-legacy.el, so present only in
+interactive sessions) is a fallback for words the bundled store
+misses.  Before 2026-09-15 the ambient store was consulted first,
+so interactive Emacs and emacs -batch could return DIFFERENT senses
+for the same word (the corpus-landing drift class).
 Returns meaning if found, nil otherwise."
   (let* ((root-form (tibetan-strip-particles word))
          (entry nil))
-    ;; 1. Try combined 64-source dictionary (loaded by init-tibetan-legacy.el)
-    (when (fboundp 'lookup-combined-dictionary-first)
-      (setq entry (or (lookup-combined-dictionary-first word)
-                      (lookup-combined-dictionary-first root-form)
-                      ;; Try with/without trailing tsheg
-                      (unless (string-suffix-p "་" word)
-                        (lookup-combined-dictionary-first (concat word "་")))
-                      (unless (string-suffix-p "་" root-form)
-                        (lookup-combined-dictionary-first (concat root-form "་"))))))
-    ;; 2. Fallback to local Rangjung Yeshe copy
+    ;; 1. Bundled Rangjung Yeshe store (lazy-loaded; deterministic).
+    (tibetan-rangjung-yeshe-load)
+    (when tibetan-rangjung-yeshe-vocabulary
+      (setq entry (or (gethash word tibetan-rangjung-yeshe-vocabulary)
+                      (gethash root-form tibetan-rangjung-yeshe-vocabulary)))
+      ;; Try Wylie conversion
+      (unless entry
+        (when (fboundp 'tibetan-to-wylie-fixed)
+          (let* ((wylie (ignore-errors (tibetan-to-wylie-fixed word)))
+                 (wylie-root (ignore-errors (tibetan-to-wylie-fixed root-form))))
+            (setq entry (or
+                         (and wylie (gethash wylie tibetan-rangjung-yeshe-vocabulary))
+                         (and wylie-root (gethash wylie-root tibetan-rangjung-yeshe-vocabulary))))))))
+    ;; 2. Fallback: ambient combined 64-source dictionary (interactive only)
     (unless entry
-      (tibetan-rangjung-yeshe-load)
-      (when tibetan-rangjung-yeshe-vocabulary
-        (setq entry (or (gethash word tibetan-rangjung-yeshe-vocabulary)
-                        (gethash root-form tibetan-rangjung-yeshe-vocabulary)))
-        ;; Try Wylie conversion
-        (unless entry
-          (when (fboundp 'tibetan-to-wylie-fixed)
-            (let* ((wylie (ignore-errors (tibetan-to-wylie-fixed word)))
-                   (wylie-root (ignore-errors (tibetan-to-wylie-fixed root-form))))
-              (setq entry (or
-                           (and wylie (gethash wylie tibetan-rangjung-yeshe-vocabulary))
-                           (and wylie-root (gethash wylie-root tibetan-rangjung-yeshe-vocabulary)))))))))
+      (when (fboundp 'lookup-combined-dictionary-first)
+        (setq entry (or (lookup-combined-dictionary-first word)
+                        (lookup-combined-dictionary-first root-form)
+                        ;; Try with/without trailing tsheg
+                        (unless (string-suffix-p "་" word)
+                          (lookup-combined-dictionary-first (concat word "་")))
+                        (unless (string-suffix-p "་" root-form)
+                          (lookup-combined-dictionary-first (concat root-form "་")))))))
     entry))
 
 (defvar tibetan-current-custom-vocab nil
