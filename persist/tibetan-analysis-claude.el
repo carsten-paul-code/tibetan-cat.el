@@ -2920,12 +2920,37 @@ file.  Non-divergence bodies (no `### ' lines) are unchanged."
             ;; transform, so genuine `### ' sub-headings still become
             ;; org headings while a stray `* line' cannot restructure
             ;; the file or truncate later preserve reads.
+            ;; 2026-09-15 restore-path refinement: runs DEEPER than
+            ;; LEVEL followed by whitespace are this section's own
+            ;; converted sub-headings (`*** Tibetan Divergence') on a
+            ;; REWRITE (restore, auto-regen) and must survive — the
+            ;; blanket escape destroyed them on every second write.
             (insert (format "%s\n\n"
                             (string-trim
                              (tibetan-analysis--claude-body-md-h3-to-org
-                              (replace-regexp-in-string
-                               "^\\(\\*+\\)" " \\1" body)
+                              (tibetan-analysis--sanitize-claude-body-stars
+                               body level)
                               level))))))))))
+
+(defun tibetan-analysis--sanitize-claude-body-stars (body level)
+  "Space-prefix dangerous line-leading `*' runs in BODY.
+A run of MORE than LEVEL stars followed by whitespace is a
+legitimate org sub-heading of a level-LEVEL section (e.g. the
+md-h3-converted `*** Tibetan Divergence' under a level-2
+Translation) and passes through verbatim, so restore/regenerate
+rewrites round-trip (2026-09-15).  Runs of LEVEL or fewer stars
+would restructure the file or truncate preserve reads, and
+no-whitespace runs are org-emphasis noise — both keep the C1b
+space-prefix."
+  (mapconcat
+   (lambda (line)
+     (cond
+      ((not (string-prefix-p "*" line)) line)
+      ((and (string-match "\\`\\(\\*+\\)[ \t]" line)
+            (> (length (match-string 1 line)) level))
+       line)
+      (t (concat " " line))))
+   (split-string body "\n") "\n"))
 
 (defun tibetan-analysis--claude-effective-section-order (buffer)
   "Return the layout-appropriate Claude section-order for BUFFER.

@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-15T12:34:21
+#+DATE: 2026-09-15T12:38:41
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  73 modules  ·  1401 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  73 modules  ·  1402 forms
 
 Regenerated automatically by:
 
@@ -57,7 +57,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#doc-prep/tibetan-segment-migrate.el][doc-prep/tibetan-segment-migrate.el]]  (12)
   - [[#doc-prep/tibetan-sentence-structure.el][doc-prep/tibetan-sentence-structure.el]]  (25)
   - [[#doc-prep/tibetan-wylie-ingest.el][doc-prep/tibetan-wylie-ingest.el]]  (26)
-  - [[#persist/tibetan-analysis-claude.el][persist/tibetan-analysis-claude.el]]  (68)
+  - [[#persist/tibetan-analysis-claude.el][persist/tibetan-analysis-claude.el]]  (69)
   - [[#persist/tibetan-analysis-combine.el][persist/tibetan-analysis-combine.el]]  (14)
   - [[#persist/tibetan-analysis-combined.el][persist/tibetan-analysis-combined.el]]  (15)
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (136)
@@ -11872,10 +11872,27 @@ a real org heading at LEVEL + 1.  This is how Claude's optional
 nested org heading rather than flat markdown text in the analysis
 file.  Non-divergence bodies (no `### ' lines) are unchanged.
 
+** ~tibetan-analysis--sanitize-claude-body-stars~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 2935
+:SIGNATURE: (tibetan-analysis--sanitize-claude-body-stars body level)
+:END:
+
+Space-prefix dangerous line-leading `*' runs in BODY.
+A run of MORE than LEVEL stars followed by whitespace is a
+legitimate org sub-heading of a level-LEVEL section (e.g. the
+md-h3-converted `*** Tibetan Divergence' under a level-2
+Translation) and passes through verbatim, so restore/regenerate
+rewrites round-trip (2026-09-15).  Runs of LEVEL or fewer stars
+would restructure the file or truncate preserve reads, and
+no-whitespace runs are org-emphasis noise — both keep the C1b
+space-prefix.
+
 ** ~tibetan-analysis--claude-effective-section-order~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2930
+:LINE: 2955
 :SIGNATURE: (tibetan-analysis--claude-effective-section-order buffer)
 :END:
 
@@ -11898,7 +11915,7 @@ a single buffer's layout drives heading levels consistently.
 ** ~tibetan-analysis--insert-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2970
+:LINE: 2995
 :SIGNATURE: (tibetan-analysis--insert-claude-sections response analysis-file)
 :END:
 
@@ -11922,7 +11939,7 @@ reanalyse.
 ** ~tibetan-analysis--parse-claude-vocabulary~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3071
+:LINE: 3096
 :SIGNATURE: (tibetan-analysis--parse-claude-vocabulary vocab-text)
 :END:
 
@@ -11935,7 +11952,7 @@ with `---' are skipped.
 ** ~tibetan-analysis--read-claude-section-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3096
+:LINE: 3121
 :SIGNATURE: (tibetan-analysis--read-claude-section-body filepath heading &optional level)
 :END:
 
@@ -11950,7 +11967,7 @@ and known error markers so we don't re-persist dead content.
 ** ~tibetan-analysis--read-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3142
+:LINE: 3167
 :SIGNATURE: (tibetan-analysis--read-claude-sections filepath)
 :END:
 
@@ -11981,7 +11998,7 @@ read / restore helpers in
 ** ~tibetan-analysis--parse-claude-particles~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3222
+:LINE: 3247
 :SIGNATURE: (tibetan-analysis--parse-claude-particles body)
 :END:
 
@@ -11995,7 +12012,7 @@ passages — those shouldn't crash the caller).
 ** ~tibetan-analysis--read-claude-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3243
+:LINE: 3268
 :SIGNATURE: (tibetan-analysis--read-claude-translation filepath)
 :END:
 
@@ -12007,7 +12024,7 @@ migrated yet.
 ** ~tibetan-analysis--claude-needs-request-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3250
+:LINE: 3275
 :SIGNATURE: (tibetan-analysis--claude-needs-request-p filepath)
 :END:
 
@@ -12027,7 +12044,7 @@ on files already populated.
 ** ~tibetan-analysis--should-fire-claude-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3268
+:LINE: 3293
 :SIGNATURE: (tibetan-analysis--should-fire-claude-p re-request-claude filepath)
 :END:
 
@@ -12047,7 +12064,7 @@ Returns non-nil when a request SHOULD be dispatched.
 ** ~tibetan-analysis--restore-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3287
+:LINE: 3312
 :SIGNATURE: (tibetan-analysis--restore-claude-sections filepath sections)
 :END:
 
@@ -12065,7 +12082,7 @@ L3 (via the else branch of `--claude-effective-section-order').
 ** ~tibetan-analysis--restore-claude-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3316
+:LINE: 3341
 :SIGNATURE: (tibetan-analysis--restore-claude-translation filepath translation)
 :END:
 
@@ -12075,7 +12092,7 @@ Legacy wrapper around `tibetan-analysis--restore-claude-sections'.
 ** ~tibetan-analysis-auto-regen-on-claude-arrival~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 2953
+:LINE: 2978
 :TYPE: 'boolean
 :GROUP: tibetan-cat
 :DEFAULT: t

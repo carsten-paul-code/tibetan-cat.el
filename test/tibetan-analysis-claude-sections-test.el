@@ -1100,6 +1100,46 @@ has no Particles block (even with the customvar default on)."
       (when (file-exists-p file) (delete-file file))
       (when (file-exists-p tmp) (delete-directory tmp t)))))
 
+(ert-deftest tibetan-claude-sections-writer-preserves-org-subheading-on-rewrite ()
+  "2026-09-15 restore-path bug: `--replace-claude-section-body' ran
+the C1b star-sanitizer over EVERY line-leading `*' run — including
+the real org sub-heading (`*** Tibetan Divergence') that the
+md-h3 transform itself produced on first insert.  A second write
+of the same body (restore, auto-regen) therefore destroyed the
+heading (` *** …').  Rule now: runs DEEPER than the section level
+followed by whitespace are legitimate children and survive;
+runs at-or-shallower (restructuring threat) and no-space runs
+keep the space-prefix."
+  (tibetan-sections-test--with-analysis
+      (tibetan-sections-test--scaffold "[Requesting translation...]" nil)
+    ;; Simulate the restore path: write a body that ALREADY carries a
+    ;; converted org sub-heading (as after the first insert).
+    (let ((buf (find-file-noselect analysis-file)))
+      (unwind-protect
+          (progn
+            (tibetan-analysis--replace-claude-section-body
+             buf "Claude Translation"
+             (concat "Sanskrit-primary translation.\n\n"
+                     "*** Tibetan Divergence\n"
+                     "Tibetan stod nas: sequential converb.\n\n"
+                     "* stray toplevel line\n"
+                     "** stray l2 line")
+             2)
+            (with-current-buffer buf (save-buffer))
+            (let ((text (with-temp-buffer
+                          (insert-file-contents analysis-file)
+                          (buffer-string))))
+              ;; Legitimate deeper child survives verbatim.
+              (should (string-match-p "^\\*\\*\\* Tibetan Divergence$" text))
+              ;; Restructuring threats stay neutralised.
+              (should-not (string-match-p "^\\* stray toplevel line$" text))
+              (should-not (string-match-p "^\\*\\* stray l2 line$" text))
+              (should (string-match-p "^ \\* stray toplevel line$" text))))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf))))))
+
+
 ;; ============================================================================
 ;; PHASE 4 — `### Tibetan Divergence' sub-heading round-trip
 ;; ============================================================================
