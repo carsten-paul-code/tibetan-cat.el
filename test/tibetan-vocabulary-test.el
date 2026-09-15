@@ -442,6 +442,66 @@ When both glossary and custom exist, result is formatted as 'glossary (DE: custo
     (should (string= (tibetan-lookup-word "བདག") "glossary-meaning"))))
 
 ;; ============================================================================
+;; RANKED SENSE SELECTION — deterministic across environments (2026-09-15)
+;; ============================================================================
+;;
+;; The 2026-09-15 corpus-landing drift: `emacs -batch' regeneration of
+;; the cascade Reading layer picked DIFFERENT dictionary senses for
+;; non-curated tokens than the runs that produced the committed corpus
+;; (buddhist-studies 1a578e3) — raw Rangjung Yeshe first lines (Wylie
+;; example text, cross-references, biographical dates) instead of the
+;; Steinert-ranked senses (01-Hopkins2015 first).  The committed corpus
+;; is byte-for-byte what `tibetan-lookup-word' produces when `steinert'
+;; outranks the raw `rangjung-yeshe' store — the same ordering contract
+;; as the ranked assembler `tibetan-vocab-multisource-entries' (§5.3
+;; rule A).  These tests pin that selection at the lookup level, with
+;; every source stubbed so no load state can leak in.
+
+(defmacro tibetan-vocab-test--with-stubbed-sources (ry steinert &rest body)
+  "Run BODY with every `tibetan--lookup-in-source' backend stubbed.
+RY and STEINERT are the fixed return values of the Rangjung Yeshe
+and Steinert lookups; all other sources return nil.  The default
+`tibetan-dictionary-priority' stays in force — that ordering is the
+behaviour under test."
+  (declare (indent 2))
+  `(with-temp-buffer                    ; no #+TIBETAN_DICT_PRIORITY
+     (cl-letf (((symbol-function 'tibetan-lookup-word-in-resources-vocab)
+                (lambda (_) nil))
+               ((symbol-function 'tibetan-lookup-word-in-custom-vocab)
+                (lambda (_) nil))
+               ((symbol-function 'tibetan-verb-lookup)
+                (lambda (_) nil))
+               ((symbol-function 'tibetan-lookup-word-in-rangjung-yeshe)
+                (lambda (_) ,ry))
+               ((symbol-function 'tibetan-lookup-word-in-steinert)
+                (lambda (_) ,steinert))
+               ((symbol-function 'tibetan-lookup-word-in-local-glossary)
+                (lambda (_) nil))
+               ((symbol-function 'tibetan-lookup-word-in-dharmamitra)
+                (lambda (_) nil)))
+       ,@body)))
+
+(ert-deftest tibetan-lookup-word-selects-steinert-sense-over-raw-ry ()
+  "A non-curated token whose word both stores know gets the
+Steinert-ranked sense (Hopkins first), not the raw Rangjung Yeshe
+line — the sent-004 `gzhung' case: the committed Interlinear reads
+`text; central; government (01-Hopkins2015)', the drifted batch
+regeneration read RY's Wylie example text."
+  (tibetan-vocab-test--with-stubbed-sources
+      "rgyun de nyid skye srid nas 'chi srid kyi bar du 'gyur ba'i cha'o"
+      "text; central; government [01-Hopkins2015]"
+    (should (equal (tibetan-lookup-word "གཞུང")
+                   "text; central; government [01-Hopkins2015]"))))
+
+(ert-deftest tibetan-lookup-word-falls-back-to-ry-when-steinert-misses ()
+  "Rangjung Yeshe still answers when Steinert has no entry — the
+ordering fix must not cost coverage (adjacent case)."
+  (tibetan-vocab-test--with-stubbed-sources
+      "herds, cattle"
+      nil
+    (should (equal (tibetan-lookup-word "ཕྱུགས") "herds, cattle"))))
+
+;; ============================================================================
 ;; VOCABULARY EXTRACTION TESTS
 ;; ============================================================================
 

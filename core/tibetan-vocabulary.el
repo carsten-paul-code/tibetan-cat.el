@@ -50,8 +50,21 @@
 ;; ============================================================================
 
 (defcustom tibetan-dictionary-priority
-  '(resources custom verbs rangjung-yeshe steinert local-glossary dharmamitra)
+  '(resources custom verbs steinert rangjung-yeshe local-glossary dharmamitra)
   "Priority order for dictionary lookup.
+
+ORDERING NOTE (2026-09-15): `steinert' ranks ABOVE the standalone
+`rangjung-yeshe' store — the same relative order as the ranked
+assembler `tibetan-vocab-multisource-entries' (§5.3 rule A).  The
+raw RY file's first lines are frequently Wylie example text,
+cross-references, or biographical dates; with RY first, those
+lines drifted into the cascade `* Reading' Interlinear for every
+non-curated token whenever the RY store happened to be loaded —
+which depends on the ENVIRONMENT (interactive Emacs consults the
+init-defined combined store, batch lazy-loads the bundled file).
+Steinert-first matches the committed corpus state byte-for-byte
+\(buddhist-studies 1a578e3, verified on sent-004-deb 2026-09-15)
+and keeps sense selection deterministic across environments.
 
 CONTRACT NOTE (D1, 2026-07-28): this ordering drives the BILINGUAL
 assembler (`tibetan--collect-bilingual' → `tibetan-lookup-word'),
@@ -86,10 +99,10 @@ Can be overridden per-buffer with an org header:
   #+TIBETAN_DICT_PRIORITY: resources custom verbs rangjung-yeshe steinert
 
 Example configurations:
-  ;; Classroom: text wordlist first, then general
+  ;; Classroom (the default): text wordlist first, then general
   (setq tibetan-dictionary-priority
-        \\='(resources custom verbs rangjung-yeshe
-          steinert local-glossary dharmamitra))
+        \\='(resources custom verbs steinert
+          rangjung-yeshe local-glossary dharmamitra))
   ;; Research: Steinert collection first for breadth
   (setq tibetan-dictionary-priority
         \\='(steinert rangjung-yeshe verbs resources
