@@ -84,6 +84,20 @@ file has no sentences."
   (and (fboundp 'tibetan-cascade--read-l1-body)
        (tibetan-cascade--read-l1-body file "Footnotes")))
 
+(defun tibetan-translation-doc--namespace-footnotes (text prefix)
+  "TEXT with every named org footnote label PREFIXed.
+Rewrites `[fn:LABEL]' anchors, `[fn:LABEL] Definition' labels and
+inline `[fn:LABEL:def]' forms to `[fn:PREFIXLABEL…]' — ONE regex
+covers all three, because the label is always followed by `]' or
+`:'.  Anonymous inline footnotes `[fn::…]' (empty label) stay
+untouched.  Namespacing per sentence file (PREFIX like \"s012-\")
+keeps labels collision-free when many files stitch into one
+document."
+  (replace-regexp-in-string
+   "\\[fn:\\([-_[:alnum:]]+\\)\\([]:]\\)"
+   (concat "[fn:" prefix "\\1\\2")
+   (or text "") t))
+
 (provide 'tibetan-translation-doc)
 
 ;;; tibetan-translation-doc.el ends here

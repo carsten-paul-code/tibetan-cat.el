@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-15T16:45:43
+#+DATE: 2026-09-15T16:46:25
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  74 modules  ·  1408 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  74 modules  ·  1409 forms
 
 Regenerated automatically by:
 
@@ -70,7 +70,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-sentence-claude.el][persist/tibetan-sentence-claude.el]]  (26)
   - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (60)
   - [[#persist/tibetan-structure-reorg.el][persist/tibetan-structure-reorg.el]]  (15)
-  - [[#persist/tibetan-translation-doc.el][persist/tibetan-translation-doc.el]]  (3)
+  - [[#persist/tibetan-translation-doc.el][persist/tibetan-translation-doc.el]]  (4)
   - [[#philology/tibetan-bialek-textbook-refs.el][philology/tibetan-bialek-textbook-refs.el]]  (2)
   - [[#philology/tibetan-madhyamaka-terms.el][philology/tibetan-madhyamaka-terms.el]]  (6)
   - [[#philology/tibetan-verse-philology.el][philology/tibetan-verse-philology.el]]  (13)
@@ -18483,6 +18483,22 @@ FILE's `* Working Translation' body (trimmed), nil when empty.
 :END:
 
 FILE's `* Footnotes' body verbatim (edge-trimmed), nil when empty.
+
+** ~tibetan-translation-doc--namespace-footnotes~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 87
+:SIGNATURE: (tibetan-translation-doc--namespace-footnotes text prefix)
+:END:
+
+TEXT with every named org footnote label PREFIXed.
+Rewrites `[fn:LABEL]' anchors, `[fn:LABEL] Definition' labels and
+inline `[fn:LABEL:def]' forms to `[fn:PREFIXLABEL…]' — ONE regex
+covers all three, because the label is always followed by `]' or
+`:'.  Anonymous inline footnotes `[fn::…]' (empty label) stay
+untouched.  Namespacing per sentence file (PREFIX like "s012-")
+keeps labels collision-free when many files stitch into one
+document.
 
 
 * philology/tibetan-bialek-textbook-refs.el

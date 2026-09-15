@@ -112,6 +112,44 @@ intact (multi-line definitions); nil when empty."
                              "[fn:zwei] Kurz.")
                      (tibetan-translation-doc--footnote-definitions f))))))
 
+;; ----------------------------------------------------------------------------
+;; Footnote namespacing
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-translation-doc-namespace-anchor-and-definition ()
+  "Anchors in the prose AND definition labels in the footnote
+block get the same prefix — org keeps resolving them as pairs."
+  (should (equal "Er sprach.[fn:s012-tha-snyad] Und ging.[fn:s012-rje]"
+                 (tibetan-translation-doc--namespace-footnotes
+                  "Er sprach.[fn:tha-snyad] Und ging.[fn:rje]"
+                  "s012-")))
+  (should (equal "[fn:s012-tha-snyad] Die Definition.\n[fn:s012-rje] Kurz."
+                 (tibetan-translation-doc--namespace-footnotes
+                  "[fn:tha-snyad] Die Definition.\n[fn:rje] Kurz."
+                  "s012-"))))
+
+(ert-deftest tibetan-translation-doc-namespace-inline-and-numeric ()
+  "Inline `[fn:label:def]' and numeric `[fn:1]' labels are
+prefixed too."
+  (should (equal "Text[fn:s003-kurz:eine Inline-Definition] Ende."
+                 (tibetan-translation-doc--namespace-footnotes
+                  "Text[fn:kurz:eine Inline-Definition] Ende."
+                  "s003-")))
+  (should (equal "Text[fn:s003-1] Ende."
+                 (tibetan-translation-doc--namespace-footnotes
+                  "Text[fn:1] Ende." "s003-"))))
+
+(ert-deftest tibetan-translation-doc-namespace-leaves-rest-alone ()
+  "Anonymous inline footnotes `[fn::…]' stay untouched; text
+without footnotes comes back byte-identical."
+  (should (equal "Text[fn::anonym bleibt] Ende."
+                 (tibetan-translation-doc--namespace-footnotes
+                  "Text[fn::anonym bleibt] Ende." "s003-")))
+  (let ((plain "Ein Text ohne Fußnoten, mit [Klammern] und fn: frei."))
+    (should (equal plain
+                   (tibetan-translation-doc--namespace-footnotes
+                    plain "s003-")))))
+
 (provide 'tibetan-translation-doc-test)
 
 ;;; tibetan-translation-doc-test.el ends here
