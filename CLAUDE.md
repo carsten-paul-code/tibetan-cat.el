@@ -3,11 +3,15 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-09-15 (§5.53: batch-vs-interactive
+editing. Last updated 2026-09-15 (§5.54: Masterarbeit-Drei-Sichten —
+`** Gloss Tables` als erstes Reading-Kind mit Edit-Schutz
+(generiert-bis-angefasst, :GENERATED_HASH:), Übersetzungs-Stitcher +
+§-Ansicht-Generator in `persist/tibetan-translation-doc.el`
+(Copyright-Lock testverriegelt), Navigation C-c u j/n/p; ERT 2322 /
+BDD 250.  Previous same day: §5.53: batch-vs-interactive
 sense-selection drift root-caused — steinert now above raw RY in
 `tibetan-dictionary-priority`, bundled RY store authoritative over
-the init-defined combined store; ERT 2291 / BDD 249.  Previous same
-day: §5.52: Phonetics retired, the
+the init-defined combined store.  §5.52: Phonetics retired, the
 §184-handout `** Gloss Table` ships in every analysis file, the
 Claude-gloss tier now beats dictionary first-senses across the
 two-file, paragraph AND cascade render paths, B0 cascade-guard
@@ -3793,6 +3797,82 @@ non-curated tokens — a re-landing decision is Carsten's.
 Suite: ERT 2287 → **2291** (+4: 2 ranked-selection, 2 RY-store
 authority), 0 unexpected, 1 skip; BDD 249; `make compile` clean;
 REFERENCE.org regenerated per commit.
+
+### 5.54 Masterarbeit: Drei Sichten auf den Rgyan-Korpus (done, 2026-09-15)
+
+Carstens Workflow-Design für die MA-Übersetzung (§§167–186), Plan
+`~/.claude/plans/idempotent-pondering-wozniak.md`, alle Commits
+RED-first.  Drei Sichten, Arbeit in EINEM Fenster (dem
+Analyse-Fenster); Original daneben in der Reading Class auf dem
+reMarkable.
+
+**Sicht 1 — Original** (`Rgyan_167-186-cat.org`): bereits
+übersetzungsfrei (Lopez/W&M leben NUR in den Comparative-Docs +
+par-Dateien).  Datenfix buddhist-studies `785c881`: die 20
+`:B2_SEG_START/END:`-Drawer trugen die prä-25.08.-Ankerung (bis 27
+Segmente daneben) → aus `b2-seg-mapping-2026-08-25.csv` gezogen
+(34 Zeilen; Drawer sind rein informativ — sent-Dateien keyen auf
+LOKALE Segmentnummern).
+
+**Sicht 2 — Kaskaden-Analyse mit Glossentabellen** (Commits
+`6e3f851` `6db5c44` `c051b95`):
+- `tibetan-gloss-table-render-captioned` (pur): Kaskaden-Form
+  ((GLOBAL-NUM . TEXT)…), je Einheit Beschriftungszeile `Unit K —
+  Segment N` (KEIN Heading — §5.51-Lektion) + Drei-Zeilen-Tabelle.
+- `** Gloss Tables` = ERSTES Reading-Kind (Carstens Platzierung:
+  VOR dem Interlinear), emittiert vom Scaffold mit
+  `:GENERATED_HASH:`-Drawer (sha1 des Bodys); nichts renderbar →
+  Sektion entfällt.  Null Leser-Chirurgie (alle Reading-Leser
+  L2-begrenzt; Grounding liest nur Interlinear-Zeilen → Tabellen
+  können nie in Prompts lecken).
+- **EDIT-SCHUTZ** (Carstens Bedingung „geschützt, wenn ich editiert
+  habe"): `--gloss-tables-edited-p` = Body ≠ gespeicherter Hash
+  (oder Hash fehlt) → `--regenerate` preserved den Block verbatim
+  (alter Hash bleibt → dauerhaft geschützt; fehlt die Sektion im
+  frischen Scaffold, wird sie als erstes Reading-Kind wieder
+  eingesetzt — eb9b573-Muster).  RESET = Sektion von Hand löschen →
+  nächster Regenerate emittiert frisch.
+
+**Sicht 3 — Übersetzungsdokument + §-Ansicht** (NEUES Modul
+`persist/tibetan-translation-doc.el`, Commits `9076d72` `edb82c6`
+`3b56ed5` `7c8c79c`): Carstens Deutsch entsteht satzweise in
+`* Working Translation` der sent-Dateien, Fußnoten als benannte
+org-Fußnoten (`[fn:name]`-Anker im Text, Definitionen unter
+`* Footnotes` derselben Datei — Handout-Konvention).
+- `tibetan-translation-doc-build (source out &optional from to)` →
+  GENERIERTES §-gruppiertes Dokument (`uebersetzung[-FROM-TO].org`):
+  Fließtext unter `* §NNN`, Fußnoten je Satz genamespaced
+  (`s%03d-`, EIN Regex für Anker/Definition/Inline; anonymes
+  `[fn::…]` unangetastet), EIN `* Footnotes` am Ende.  Sichtbare
+  Lücken (`[Satz N — noch keine Übersetzung]` / `Analysedatei
+  fehlt`); Überschreib-Guard (Ziel ohne GENERATED-Marker →
+  user-error); §-Bereich für Anhang A.1 (182–186).  Interaktiv
+  `tibetan-translation-doc` (Menü „Translation"); Export `C-c e p`.
+- `tibetan-translation-doc-section-view` → `par-NNN-ansicht.org`
+  (kollidiert bewusst NICHT mit hand-eigenen par-NNN-handout):
+  je Satz Tibetisch / Glossentabellen VERBATIM (editierte Tabellen
+  fließen mit) / Vorschlag Claude + DM (Maschinen-Platzhalter
+  prefix-gefiltert, §5.40-Lektion) / Übersetzung CP.  Interaktiv
+  `tibetan-translation-doc-section` mit §-Completion.
+- **COPYRIGHT-LOCK, testverriegelt**: beide Generatoren lesen NUR
+  Working Translation / Footnotes / Gloss Tables / Claude- und
+  DM-Sektionen — Poison-String-Tests stellen sicher, dass
+  Renderings/Provided Translations (der Lopez/W&M-Slot) nie in
+  generierte Dokumente gelangen.
+
+**Navigation** (`workspace/tibetan-analysis-nav.el`, `a2e22b3`
+`92c80cc`): `C-c u j` Rücksprung Analyse→Quelle (#+SOURCE-Link,
+Window-Reuse), `C-c u n`/`C-c u p` Nachbar-Satzdateien
+(suffix-aware; die seit je auskommentierten Slots sind jetzt echt).
+
+**Sanskrit ab Oktober** (Reading Class): nichts gebaut; `* Reading`
+bleibt erweiterbar (alle Leser L2-begrenzt) — ein künftiges
+`** Sanskrit`-Kind braucht keine Leser-Chirurgie.
+
+Suite 2291 → **2322 ERT** (0 unexpected, 1 skip); BDD 249 → **250**
+(+ translation-doc-Szenario); compile clean durchgehend;
+REFERENCE.org je def-Commit.  Korpus-Landung (56 Rgyan-Dateien
+regenerieren, Demo-Stitch, §184-Ansicht) siehe Korpus-Commits.
 
 ## 6. Open work (prioritised)
 
