@@ -170,6 +170,9 @@
 ;; R3: Reading-view decorated Wylie lines (cascade layout redesign)
 (condition-case nil (require 'tibetan-reading-test) (error nil))
 
+;; §184-handout three-row gloss tables (2026-09-15)
+(condition-case nil (require 'tibetan-gloss-table-test) (error nil))
+
 ;; Throttled Claude request queue (concurrency cap + 429 retry)
 (condition-case nil (require 'tibetan-claude-queue-test) (error nil))
 

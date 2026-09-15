@@ -163,6 +163,7 @@
 ;; Interlinear gloss + Particle Overview (Bialek Portfolio integration)
 (require 'tibetan-interlinear nil t)    ; Interlinear Wylie with glosses + particle overview
 (require 'tibetan-reading nil t)        ; R3: decorated Wylie lines (cascade Reading view)
+(require 'tibetan-gloss-table nil t)    ; §184-handout three-row gloss tables
 
 ;; AI Translation (optional - soft load)
 (require 'tibetan-mitra-translation nil t)  ; Gemma-2-Mitra-E integration (Ollama/HuggingFace)
