@@ -171,15 +171,16 @@ canned, text-parameterized segment layout (deterministic extraction
 checks, no dictionary machinery)."
   (declare (indent 0))
   `(cl-letf (((symbol-function 'tibetan-analysis-generate-content)
+              ;; (Phonetics line dropped from the canned layout
+              ;; 2026-09-15 — the real renderer no longer emits it.)
               (lambda (text &rest _)
                 (format (concat "** Wylie Transliteration\nWYLIE(%s)\n\n"
-                                "** Phonetics\nPHON(%s)\n\n"
                                 "** Interlinear Gloss\nGLOSS(%s)\n\n"
                                 "** Translation\n[Requesting translation...]\n\n"
                                 "** Grammar\n*** Particles\nPART(%s)\n\n"
                                 "*** Claude Grammar\n\n"
                                 "** Provided Translations\n\n")
-                        text text text text))))
+                        text text text))))
      ,@body))
 
 (ert-deftest tibetan-cascade-scaffold-structure ()

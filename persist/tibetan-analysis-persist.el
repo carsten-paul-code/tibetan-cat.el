@@ -3643,7 +3643,7 @@ For each Bialek-detected particle in BIALEK-ANALYSIS:
 
 (defconst tibetan-analysis--priority-section-order
   '("** Wylie Transliteration"
-    "** Phonetics"
+    ;; "** Phonetics" retired 2026-09-15 (user request; F1 mechanism).
     "** Interlinear Gloss"
     "** Claude Vocabulary"
     "** Claude Translation"
@@ -4043,24 +4043,13 @@ unused-arg warning without breaking the public API."
             (insert (or wylie-full "[Not available]"))
             (insert "\n\n")
 
-            ;; ============================================================
-            ;; SECTION 1.5: Phonetics (THL Simplified, Lhasa-based)
-            ;; Class-reading aid (2026-05-19):  Wylie alone is unforgiving
-            ;; when the student is vocalising a line.  THL approximates
-            ;; modern Lhasa pronunciation in Wylie-friendly Roman
-            ;; orthography (sh / ch / zh / ng).  Soft-required so
-            ;; segments still generate when the converter is absent.
-            ;; ============================================================
-            (insert "** Phonetics\n")
-            (let ((phon (and (fboundp 'tibetan-to-phonetics)
-                             (ignore-errors
-                               (tibetan-to-phonetics tibetan-text)))))
-              (insert (or (and phon
-                               (stringp phon)
-                               (not (string-empty-p (string-trim phon)))
-                               phon)
-                          "[Phonetics not available]")))
-            (insert "\n\n")
+            ;; (SECTION 1.5 `** Phonetics' RETIRED 2026-09-15 on the
+            ;; user's request — "phonetic brauche ich nicht mehr, kann
+            ;; überall raus".  Legacy files lose the section on their
+            ;; next reanalyze via the regenerate-auto rebuild, the F1
+            ;; Detailed-Dictionary retirement mechanism.  The converter
+            ;; module core/tibetan-phonetics.el is now unwired and goes
+            ;; in a follow-up dead-code commit, mirroring c04542b.)
 
             ;; ============================================================
             ;; SECTION 1a: Interlinear Gloss + Particle Overview

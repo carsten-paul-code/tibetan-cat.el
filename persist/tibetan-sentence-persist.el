@@ -453,7 +453,9 @@ the corresponding heading has real content, not placeholder text)."
 
 (defconst tibetan-sentence--strip-list
   '("** Wylie Transliteration"
-    "** Phonetics"
+    ;; "** Phonetics" removed 2026-09-15 — the generator no longer
+    ;; emits it anywhere, so there is nothing left to strip (mirrors
+    ;; the F1 Detailed-Dictionary line below).
     "** Interlinear Gloss"
     "** DharmaMitra Translation"
     ;; ** Sentence Structure is NO LONGER stripped (2026-06-02):  the

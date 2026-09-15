@@ -398,9 +398,10 @@ Translations'.  My Notes / Working Translation are AT THE TOP
     ;; Only the FULL segment renderer emits `** Concept Notes';  the
     ;; fallback path (used in this test since `/tmp/f.org' isn't a
     ;; real source) emits a minimal `** Wylie' + `** Claude
-    ;; Translation' template only.  Use `** Phonetics' as a probe
-    ;; for "full renderer ran" — it's emitted only by the full path.
-    (when (string-match-p "^\\*\\* Phonetics$" body)
+    ;; Translation' template only.  Use `** Interlinear Gloss' as a
+    ;; probe for "full renderer ran" — it's emitted only by the full
+    ;; path (was `** Phonetics' until its 2026-09-15 retirement).
+    (when (string-match-p "^\\*\\* Interlinear Gloss$" body)
       (should (string-match-p "^\\*\\* Concept Notes$"      body)))
     ;; User sections + Footnotes.
     (should (string-match-p "^\\* Working Translation$"     body))
@@ -1647,11 +1648,12 @@ heading (`^\\*+ ')."
 (ert-deftest tibetan-sentence-segment-claude-sections-strip-list ()
   "§5.22 final (2026-05-21):  sentence files are ALWAYS rendered in
 the compressed in-class layout.  The accessor returns a fixed
-5-entry strip list — no longer flag-conditional.
+4-entry strip list — no longer flag-conditional.
 
-Drops:  Wylie, Phonetics, Interlinear, DharmaMitra Translation,
+Drops:  Wylie, Interlinear, DharmaMitra Translation,
 Verb Classification (Hill 2010).  (Detailed Dictionary left the
-strip list with F1 2026-07-22 — the generator no longer emits it.)
+strip list with F1 2026-07-22; Phonetics with its 2026-09-15
+retirement — the generator no longer emits either.)
 
 Keeps (implicitly, by NOT being in the strip list):
   · ** Claude Vocabulary
@@ -1669,15 +1671,16 @@ reading default;  per-segment seg-NNN.org files keep the full
   (should (fboundp 'tibetan-sentence--segment-claude-sections))
   (let ((strip (tibetan-sentence--segment-claude-sections)))
     (should (listp strip))
-    (should (= 5 (length strip)))
+    (should (= 4 (length strip)))
     (should (member "** Wylie Transliteration" strip))
-    (should (member "** Phonetics" strip))
     (should (member "** Interlinear Gloss" strip))
     (should (member "** DharmaMitra Translation" strip))
     (should (member "** Verb Classification (Hill 2010)" strip))
     ;; F1 (2026-07-22): Detailed Dictionary retired from the generator,
-    ;; hence no longer a strip-list member.
+    ;; hence no longer a strip-list member.  Same for Phonetics
+    ;; (retired 2026-09-15).
     (should-not (member "** Detailed Dictionary" strip))
+    (should-not (member "** Phonetics" strip))
     ;; Sentence Structure is NO LONGER stripped (2026-06-02) — the
     ;; full per-clause subject/object structure stays in sentence files.
     (should-not (member "** Sentence Structure" strip))
@@ -1698,8 +1701,9 @@ the 3 sentence-only L3 extras (Roehrich + Class Translation +
 Claude Context) sit under Provided Translations.
 
 Stubs `tibetan-analysis-generate-content' to return a fixed
-11-section blob so the test doesn't depend on the renderer's
-real output (which varies with vocab DB state)."
+10-section blob (Phonetics retired 2026-09-15) so the test
+doesn't depend on the renderer's real output (which varies
+with vocab DB state)."
   (let* ((dir (make-temp-file "sent-class-" t))
          (source-file (expand-file-name "source.org" dir))
          (analysis-folder (expand-file-name "analysis" dir)))
@@ -1712,7 +1716,6 @@ real output (which varies with vocab DB state)."
                 (lambda (&rest _args)
                   (concat
                    "** Wylie Transliteration\nfoo\n\n"
-                   "** Phonetics\nfu\n\n"
                    "** Interlinear Gloss\nfoo bar\n\n"
                    "** Claude Vocabulary\nfoo = thing\n\n"
                    "** Translation\nThe thing.\n\n"
@@ -1740,7 +1743,10 @@ real output (which varies with vocab DB state)."
             (should (string-match-p "^\\*\\* Translation$" out))
             (should (string-match-p "^\\*\\* Grammar$" out))
             (should (string-match-p "^\\*\\* Provided Translations$" out))
-            ;; Dropped sections absent.
+            ;; Dropped sections absent.  Phonetics is no longer in
+            ;; the stub — the renderer stopped emitting it entirely
+            ;; (retired 2026-09-15), so the strip-list has nothing
+            ;; to drop; absence is still asserted below.
             (should-not (string-match-p "^\\*\\* Wylie Transliteration$" out))
             (should-not (string-match-p "^\\*\\* Phonetics$" out))
             (should-not (string-match-p "^\\*\\* Interlinear Gloss$" out))
@@ -1780,13 +1786,13 @@ against accidental re-introduction."
 
 (ert-deftest tibetan-sentence-strip-compresses-segment-output ()
   "§5.22 final (2026-05-21):  `tibetan-sentence--strip-segment-
-claude-sections' unconditionally drops the 7 reference sections
-from segment-renderer output before embedding in a sentence file.
-No mode flag — sentence files are always class-format."
+claude-sections' unconditionally drops the reference sections
+\(4 since the 2026-09-15 Phonetics retirement) from segment-
+renderer output before embedding in a sentence file.  No mode
+flag — sentence files are always class-format."
   (let ((content
          (concat
           "** Wylie Transliteration\nfoo\n\n"
-          "** Phonetics\nfu\n\n"
           "** Interlinear Gloss\nfoo bar\n\n"
           "** Claude Vocabulary\nfoo = thing\n\n"
           "** Translation\nThe thing.\n\n"
@@ -1803,8 +1809,9 @@ No mode flag — sentence files are always class-format."
       (should (string-match-p "^\\*\\* Provided Translations$" out))
       ;; Sentence Structure is now KEPT (2026-06-02).
       (should (string-match-p "^\\*\\* Sentence Structure$" out))
-      ;; Dropped: 5 reference sections (Detailed Dictionary is no
-      ;; longer generated at all — F1 2026-07-22).
+      ;; Dropped: 4 reference sections (Detailed Dictionary is no
+      ;; longer generated at all — F1 2026-07-22; Phonetics retired
+      ;; from the generator 2026-09-15, absence asserted anyway).
       (should-not (string-match-p "^\\*\\* Wylie Transliteration$" out))
       (should-not (string-match-p "^\\*\\* Phonetics$" out))
       (should-not (string-match-p "^\\*\\* Interlinear Gloss$" out))
@@ -1841,30 +1848,32 @@ still suppresses the strip-list."
 
 (ert-deftest tibetan-sentence-detail-for-render-compressed-keeps-strip-list ()
   "§5.27 Phase 5:  explicit \"compressed\" value preserves the
-§5.22 default 7-entry strip-list (sentence file collapses to the
-4 L2 sections in the in-class compressed layout)."
+§5.22 default strip-list (4 entries since the 2026-09-15
+Phonetics retirement; sentence file collapses to the kept L2
+sections in the in-class compressed layout)."
   (let ((tibetan-sentence--detail-for-render "compressed"))
     (let ((strip (tibetan-sentence--segment-claude-sections)))
-      (should (= 5 (length strip)))
+      (should (= 4 (length strip)))
       (should (member "** Wylie Transliteration" strip))
       ;; F1: Detailed Dictionary retired.
       (should-not (member "** Detailed Dictionary" strip)))))
 
 (ert-deftest tibetan-sentence-detail-for-render-nil-keeps-strip-list ()
   "§5.27 Phase 5:  unbound / nil dynamic var = backwards-compatible
-§5.22 final behaviour — full 7-entry strip-list (compressed
-in-class layout is the default when no header is set)."
+§5.22 final behaviour — the full strip-list (4 entries since the
+2026-09-15 Phonetics retirement; compressed in-class layout is
+the default when no header is set)."
   (let ((tibetan-sentence--detail-for-render nil))
-    (should (= 5 (length (tibetan-sentence--segment-claude-sections))))))
+    (should (= 4 (length (tibetan-sentence--segment-claude-sections))))))
 
 (ert-deftest tibetan-sentence-detail-for-render-garbage-keeps-strip-list ()
   "§5.27 Phase 5:  defensive — any string other than \"detailed\"
 \(case-insensitive) falls through to the compressed strip-list.
 Protects against typos in the per-document header."
   (let ((tibetan-sentence--detail-for-render "verbose"))
-    (should (= 5 (length (tibetan-sentence--segment-claude-sections)))))
+    (should (= 4 (length (tibetan-sentence--segment-claude-sections)))))
   (let ((tibetan-sentence--detail-for-render "full"))
-    (should (= 5 (length (tibetan-sentence--segment-claude-sections))))))
+    (should (= 4 (length (tibetan-sentence--segment-claude-sections))))))
 
 (ert-deftest tibetan-sentence-strip-segment-claude-sections-honours-detailed ()
   "§5.27 Phase 5:  end-to-end through the strip helper — when the
@@ -1874,7 +1883,6 @@ the output."
   (let ((content
          (concat
           "** Wylie Transliteration\nfoo\n\n"
-          "** Phonetics\nfu\n\n"
           "** Interlinear Gloss\nfoo bar\n\n"
           "** Claude Vocabulary\nfoo = thing\n\n"
           "** Translation\nThe thing.\n\n"
@@ -1885,9 +1893,9 @@ the output."
           "** Provided Translations\n\n\n")))
     (let* ((tibetan-sentence--detail-for-render "detailed")
            (out (tibetan-sentence--strip-segment-claude-sections content)))
-      ;; All 10 L2 sections still present (no stripping).
+      ;; All 9 L2 sections still present (no stripping; Phonetics
+      ;; retired from the generator 2026-09-15).
       (should (string-match-p "^\\*\\* Wylie Transliteration$" out))
-      (should (string-match-p "^\\*\\* Phonetics$" out))
       (should (string-match-p "^\\*\\* Interlinear Gloss$" out))
       (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
       (should (string-match-p "^\\*\\* Translation$" out))
@@ -1948,7 +1956,6 @@ are stripped out of the embedded segment-renderer body."
                 (lambda (&rest _args)
                   (concat
                    "** Wylie Transliteration\nfoo\n\n"
-                   "** Phonetics\nfu\n\n"
                    "** Interlinear Gloss\nfoo bar\n\n"
                    "** Claude Vocabulary\nfoo = thing\n\n"
                    "** Translation\nThe thing.\n\n"
@@ -1970,9 +1977,9 @@ are stripped out of the embedded segment-renderer body."
                        (insert-file-contents
                         (expand-file-name "sent-001.org" analysis-folder))
                        (buffer-string))))
-            ;; All 11 L2 sections preserved in the detailed layout.
+            ;; All 10 L2 sections preserved in the detailed layout
+            ;; (Phonetics retired from the generator 2026-09-15).
             (should (string-match-p "^\\*\\* Wylie Transliteration$" out))
-            (should (string-match-p "^\\*\\* Phonetics$" out))
             (should (string-match-p "^\\*\\* Interlinear Gloss$" out))
             (should (string-match-p "^\\*\\* Claude Vocabulary$" out))
             (should (string-match-p "^\\*\\* Translation$" out))
