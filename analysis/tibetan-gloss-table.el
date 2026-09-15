@@ -35,6 +35,9 @@
 ;; Nominaliser inventory — single source of truth lives with the
 ;; clause segmenter (DRY; the two must agree on what nominalises).
 (require 'tibetan-clause-segmenter)
+;; Token stream + gloss selection — the cascade Reading machinery
+;; (dependency-light; every heavy lookup behind fboundp guards).
+(require 'tibetan-reading)
 
 (defun tibetan-gloss-table--claude-pos (wylie vocab-alist)
   "Claude's part-of-speech field for WYLIE from VOCAB-ALIST, or nil.
@@ -127,6 +130,85 @@ A trailing clitic's label is dot-appended (NMLZ.GEN, N.GEN)."
     (if (and clitic (cdr clitic) (not (eq kind 'particle)))
         (concat label "." (cdr clitic))
       label)))
+
+;; ----------------------------------------------------------------------------
+;; org-table renderer (pure)
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-gloss-table--cell (s)
+  "S as a safe org-table cell: whitespace collapsed, `|' escaped
+as the org entity `\\vert' (a literal bar would split the cell)."
+  (let* ((flat (replace-regexp-in-string "[ \t\n]+" " " (or s "")))
+         (safe (replace-regexp-in-string "|" "\\\\vert" flat)))
+    (string-trim safe)))
+
+(defun tibetan-gloss-table--unit-rows (unit-text &optional vocab-alist)
+  "Three cell-string lists (Wylie / gloss / label) for UNIT-TEXT.
+One column per `tibetan-reading--unit-tokens' token: row 1 the
+plain Wylie with a merged clitic re-attached (rje'i), row 2 the
+`tibetan-reading--gloss' display gloss (particle cells stay
+empty — their information is the row-3 label), row 3 the
+`tibetan-gloss-table--token-label' grammar label.  nil when the
+unit yields no tokens."
+  (let ((toks (tibetan-reading--unit-tokens unit-text)))
+    (when toks
+      (let (r1 r2 r3)
+        (dolist (tok toks)
+          (let ((particle-p (eq (plist-get tok :kind) 'particle))
+                (clitic (plist-get tok :clitic)))
+            (push (tibetan-gloss-table--cell
+                   (concat (plist-get tok :wylie) (car clitic)))
+                  r1)
+            (push (tibetan-gloss-table--cell
+                   (if particle-p "" (tibetan-reading--gloss tok)))
+                  r2)
+            (push (tibetan-gloss-table--cell
+                   (tibetan-gloss-table--token-label tok vocab-alist))
+                  r3)))
+        (list (nreverse r1) (nreverse r2) (nreverse r3))))))
+
+(defun tibetan-gloss-table--format-rows (rows)
+  "ROWS (three equal-length cell lists) as one aligned org table.
+Column width = the widest cell of the three rows, space-padded,
+so the table reads aligned in the raw buffer too (the §184
+handout alignment request)."
+  (let* ((ncols (length (car rows)))
+         (widths
+          (cl-loop for i below ncols
+                   collect (cl-loop for row in rows
+                                    maximize (string-width
+                                              (or (nth i row) ""))))))
+    (mapconcat
+     (lambda (row)
+       (concat
+        "| "
+        (mapconcat
+         #'identity
+         (cl-loop for cell in row
+                  for w in widths
+                  collect (concat cell
+                                  (make-string
+                                   (- w (string-width cell)) ?\s)))
+         " | ")
+        " |"))
+     rows "\n")))
+
+(defun tibetan-gloss-table-render (units &optional vocab-alist)
+  "One aligned three-row org table per shad unit in UNITS.
+UNITS is an ordered list of shad-unit strings (shads kept, the
+`tibetan-cascade-split-shad-units' contract).  Tables are joined
+by a blank line; units without tokens are skipped; nil when
+nothing renders.  VOCAB-ALIST feeds the Claude-POS label tier."
+  (let ((tables
+         (delq nil
+               (mapcar (lambda (u)
+                         (let ((rows (tibetan-gloss-table--unit-rows
+                                      u vocab-alist)))
+                           (and rows
+                                (tibetan-gloss-table--format-rows rows))))
+                       units))))
+    (when tables
+      (string-join tables "\n\n"))))
 
 (provide 'tibetan-gloss-table)
 

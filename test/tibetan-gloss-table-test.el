@@ -152,6 +152,114 @@ a Claude-classified noun with 'i → N.GEN."
                     :clitic ("'i" . "GEN"))
                   '(("rje" . "rje, noun, \"lord\", x"))))))
 
+;; ----------------------------------------------------------------------------
+;; org-table renderer
+;; ----------------------------------------------------------------------------
+
+(defconst tibetan-gloss-table-test--toks-a
+  '((:tibetan "རྗེ" :wylie "rje" :kind word :meaning "Ehrwürdiger")
+    (:tibetan "ཡི" :wylie "yi" :kind particle :label "GEN"
+      :meaning "GENITIVE")
+    (:tibetan "མཛད" :wylie "mdzad" :kind verb
+      :meaning "to do, to act (hon.)"))
+  "Canned token stream: word + particle + honorific verb.")
+
+(defconst tibetan-gloss-table-test--toks-b
+  '((:tibetan "པའི" :wylie "pa" :kind word :prev-verb-p t
+      :clitic ("'i" . "GEN") :meaning nil))
+  "Canned token stream: nominaliser with merged genitive clitic.")
+
+(defmacro tibetan-gloss-table-test--with-tokens (streams &rest body)
+  "Stub the reading-layer feeders: `tibetan-reading--unit-tokens'
+pops one canned stream from STREAMS per call (an alist of
+UNIT-TEXT → token list), `tibetan-reading--gloss' returns the
+token's :meaning verbatim.  Keeps the renderer tests pure — no
+dictionaries, no Wylie converter."
+  (declare (indent 1))
+  `(cl-letf (((symbol-function 'tibetan-reading--unit-tokens)
+              (lambda (unit) (cdr (assoc unit ,streams))))
+             ((symbol-function 'tibetan-reading--gloss)
+              (lambda (tok) (plist-get tok :meaning))))
+     ,@body))
+
+(ert-deftest tibetan-gloss-table-render-three-aligned-rows ()
+  "One unit renders ONE org table: exactly three `|'-rows, one
+column per token, all rows the same width (aligned — the §184
+handout request) and the same column count."
+  (tibetan-gloss-table-test--with-tokens
+      `(("U1" . ,tibetan-gloss-table-test--toks-a))
+    (let ((out (tibetan-gloss-table-render '("U1"))))
+      (should out)
+      (let ((lines (split-string out "\n")))
+        (should (= 3 (length lines)))
+        (dolist (l lines)
+          (should (string-prefix-p "| " l))
+          (should (string-suffix-p " |" l))
+          ;; 3 columns → 4 pipes.
+          (should (= 4 (cl-count ?| l))))
+        ;; Aligned: identical rendered width for all three rows.
+        (should (= 1 (length (delete-dups
+                              (mapcar #'string-width lines)))))))))
+
+(ert-deftest tibetan-gloss-table-render-row-contents ()
+  "Row 1 = plain Wylie, row 2 = display gloss with EMPTY particle
+cells, row 3 = grammar labels."
+  (tibetan-gloss-table-test--with-tokens
+      `(("U1" . ,tibetan-gloss-table-test--toks-a))
+    (let* ((out (tibetan-gloss-table-render '("U1")))
+           (lines (split-string out "\n"))
+           (cells (mapcar (lambda (l)
+                            (mapcar #'string-trim
+                                    (butlast (cdr (split-string l "|")))))
+                          lines)))
+      (should (equal '("rje" "yi" "mdzad") (nth 0 cells)))
+      ;; Particle gloss cell EMPTY (its information is the label).
+      (should (equal '("Ehrwürdiger" "" "to do, to act (hon.)")
+                     (nth 1 cells)))
+      (should (equal '("?" "GEN" "V.HON") (nth 2 cells))))))
+
+(ert-deftest tibetan-gloss-table-render-clitic-and-no-markup ()
+  "A merged clitic re-attaches in the Wylie row (pa'i) and no
+cell carries emphasis/link markup."
+  (tibetan-gloss-table-test--with-tokens
+      `(("U1" . ,tibetan-gloss-table-test--toks-b))
+    (let ((out (tibetan-gloss-table-render '("U1"))))
+      (should (string-match-p "| pa'i *|" out))
+      (should (string-match-p "| NMLZ\\.GEN *|" out))
+      (dolist (bad '("=" "~" "!" "\\[\\["))
+        (should-not (string-match-p bad out))))))
+
+(ert-deftest tibetan-gloss-table-render-escapes-pipe ()
+  "A `|' inside a gloss must not split the cell — escaped as the
+org \\vert entity, keeping every row at the unit's column count."
+  (tibetan-gloss-table-test--with-tokens
+      '(("U1" . ((:tibetan "ཚེ" :wylie "tshe" :kind word
+                  :meaning "life | lifespan"))))
+    (let ((out (tibetan-gloss-table-render '("U1"))))
+      (should (string-match-p "\\\\vert" out))
+      (dolist (l (split-string out "\n"))
+        (should (= 2 (cl-count ?| l)))))))
+
+(ert-deftest tibetan-gloss-table-render-two-units-two-tables ()
+  "Two shad units render two SEPARATE tables, blank-line joined;
+a tokenless unit is skipped."
+  (tibetan-gloss-table-test--with-tokens
+      `(("U1" . ,tibetan-gloss-table-test--toks-a)
+        ("U2" . nil)
+        ("U3" . ,tibetan-gloss-table-test--toks-b))
+    (let ((out (tibetan-gloss-table-render '("U1" "U2" "U3"))))
+      (should (string-match-p "\n\n" out))
+      (should (= 6 (length (seq-filter
+                            (lambda (l) (string-prefix-p "|" l))
+                            (split-string out "\n"))))))))
+
+(ert-deftest tibetan-gloss-table-render-nothing-renders-nil ()
+  "All units tokenless → nil (the emitter then skips the section
+body entirely)."
+  (tibetan-gloss-table-test--with-tokens '(("U1" . nil))
+    (should-not (tibetan-gloss-table-render '("U1")))
+    (should-not (tibetan-gloss-table-render nil))))
+
 (provide 'tibetan-gloss-table-test)
 
 ;;; tibetan-gloss-table-test.el ends here
