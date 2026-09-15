@@ -84,6 +84,16 @@
      ["Open/Create Sentence Analysis (C-c s A)" tibetan-sentence-open-analysis
       :help "Open or create persistent analysis file for the sentence at point"
       :active (fboundp 'tibetan-sentence-open-analysis)]
+     ["Zur Quelle springen (C-c u j)" tibetan-analysis-jump-to-source
+      :help "Aus dem Analyse-Buffer zum #+SOURCE-Heading der Quelle"
+      :active (fboundp 'tibetan-analysis-jump-to-source)]
+     ["Nächster Satz (C-c u n)" tibetan-analysis-next-sentence
+      :help "Analysedatei des nächsten Satzes öffnen"
+      :active (fboundp 'tibetan-analysis-next-sentence)]
+     ["Voriger Satz (C-c u p)" tibetan-analysis-previous-sentence
+      :help "Analysedatei des vorigen Satzes öffnen"
+      :active (fboundp 'tibetan-analysis-previous-sentence)]
+     "---"
      ["Re-analyze Sentence (C-c s R)" tibetan-sentence-reanalyze
       :help "Regenerate sentence analysis while preserving your notes"
       :active (fboundp 'tibetan-sentence-reanalyze)]

@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-15T16:54:04
+#+DATE: 2026-09-15T16:55:05
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1420 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1423 forms
 
 Regenerated automatically by:
 
@@ -86,7 +86,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#spec/suites/tigress-story-spec.el][spec/suites/tigress-story-spec.el]]  (5)
   - [[#spec/tibetan-bdd.el][spec/tibetan-bdd.el]]  (22)
   - [[#tibetan-cat.el][tibetan-cat.el]]  (8)
-  - [[#workspace/tibetan-analysis-nav.el][workspace/tibetan-analysis-nav.el]]  (2)
+  - [[#workspace/tibetan-analysis-nav.el][workspace/tibetan-analysis-nav.el]]  (5)
   - [[#workspace/tibetan-sentence-workspace.el][workspace/tibetan-sentence-workspace.el]]  (16)
 
 * INIT-EXAMPLE.el
@@ -2617,7 +2617,7 @@ Keymap for thesaurus commands — prefix `C-c u z'.
 ** ~tibetan-cat-context-menu-map~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 260
+:LINE: 270
 :DEFAULT: (let ((map (make-sparse-keymap "Tibetan")))
     (define-key map [segment-info] '(menu-item "Segment Info" tibetan-segmen
 :END:
@@ -19952,6 +19952,41 @@ Jump from this analysis buffer to its source heading.
 Follows the `#+SOURCE:' link (sent / seg / par files alike),
 reusing the source's window when it is already visible — the
 single-screen workflow's back-pointer.
+
+** ~tibetan-analysis-nav--sibling-sentence~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 72
+:SIGNATURE: (tibetan-analysis-nav--sibling-sentence delta)
+:END:
+
+Visit the sentence file DELTA steps from the current one.
+Resolves through the suffix-aware `tibetan-sentence--filepath'
+with the file's own #+SOURCE, so bare and suffixed corpora both
+work.  user-error (buffer unchanged) when the neighbour has no
+analysis file.
+
+** ~tibetan-analysis-next-sentence~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 99
+:SIGNATURE: (tibetan-analysis-next-sentence)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+Open the NEXT sentence's analysis file (C-c u n).
+
+** ~tibetan-analysis-previous-sentence~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 105
+:SIGNATURE: (tibetan-analysis-previous-sentence)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+Open the PREVIOUS sentence's analysis file (C-c u p).
 
 
 * workspace/tibetan-sentence-workspace.el

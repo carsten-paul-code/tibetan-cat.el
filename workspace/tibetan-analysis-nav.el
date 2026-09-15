@@ -69,6 +69,44 @@ single-screen workflow's back-pointer."
           (when (fboundp 'org-reveal)
             (ignore-errors (org-reveal))))))))
 
+(defun tibetan-analysis-nav--sibling-sentence (delta)
+  "Visit the sentence file DELTA steps from the current one.
+Resolves through the suffix-aware `tibetan-sentence--filepath'
+with the file's own #+SOURCE, so bare and suffixed corpora both
+work.  user-error (buffer unchanged) when the neighbour has no
+analysis file."
+  (let ((f (buffer-file-name)))
+    (unless (and f
+                 (string-match-p "\\`sent-[0-9]"
+                                 (file-name-nondirectory f)))
+      (user-error "Kein sent-NNN-Analysebuffer"))
+    (let* ((n (and (fboundp 'tibetan-sentence--sent-id-from-filename)
+                   (tibetan-sentence--sent-id-from-filename f)))
+           (src (and (fboundp 'tibetan-sentence--source-file-from-analysis)
+                     (tibetan-sentence--source-file-from-analysis f)))
+           (target (and n
+                        (fboundp 'tibetan-sentence--filepath)
+                        (tibetan-sentence--filepath
+                         (+ n delta) (file-name-directory f) src))))
+      (unless n
+        (user-error "Keine Satznummer in %s erkennbar"
+                    (file-name-nondirectory f)))
+      (unless (and target (file-exists-p target))
+        (user-error "Satz %d hat keine Analysedatei" (+ n delta)))
+      (find-file target))))
+
+;;;###autoload
+(defun tibetan-analysis-next-sentence ()
+  "Open the NEXT sentence's analysis file (C-c u n)."
+  (interactive)
+  (tibetan-analysis-nav--sibling-sentence 1))
+
+;;;###autoload
+(defun tibetan-analysis-previous-sentence ()
+  "Open the PREVIOUS sentence's analysis file (C-c u p)."
+  (interactive)
+  (tibetan-analysis-nav--sibling-sentence -1))
+
 (provide 'tibetan-analysis-nav)
 
 ;;; tibetan-analysis-nav.el ends here

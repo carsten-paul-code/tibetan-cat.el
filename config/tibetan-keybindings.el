@@ -549,9 +549,11 @@
 ;; FUTURE KEYBINDINGS (commented out - not yet implemented in modular system)
 ;; ============================================================================
 
-;; Navigation
-;; (global-set-key (kbd "C-c u n") 'tibetan-next-segment)
-;; (global-set-key (kbd "C-c u p") 'tibetan-previous-segment)
+;; Navigation between sentence analysis files (Masterarbeit
+;; single-screen workflow, 2026-09-15 — took over the long-
+;; commented C-c u n / C-c u p slots).
+(global-set-key (kbd "C-c u n") 'tibetan-analysis-next-sentence)
+(global-set-key (kbd "C-c u p") 'tibetan-analysis-previous-sentence)
 
 ;; Segment manipulation
 ;; (global-set-key (kbd "C-c u d") 'tibetan-split-segment)

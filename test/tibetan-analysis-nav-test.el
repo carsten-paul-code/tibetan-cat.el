@@ -83,6 +83,41 @@ with point on the `*** Sentence 2' heading."
         (when-let ((b (find-buffer-visiting plain)))
           (kill-buffer b))))))
 
+;; ----------------------------------------------------------------------------
+;; Next / previous sentence file
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-analysis-nav-next-and-previous-sentence ()
+  "From sent 1, next visits sent 2 (suffix-aware resolution); from
+sent 2, previous goes back to sent 1."
+  (tibetan-analysis-nav-test--with-fixture
+    (with-current-buffer (find-file-noselect f1)
+      (tibetan-analysis-next-sentence)
+      (should (equal (expand-file-name f2) (buffer-file-name))))
+    (with-current-buffer (find-file-noselect f2)
+      (tibetan-analysis-previous-sentence)
+      (should (equal (expand-file-name f1) (buffer-file-name))))))
+
+(ert-deftest tibetan-analysis-nav-sibling-refuses-at-edges ()
+  "Past the last (or before the first) sentence: user-error, the
+current buffer stays put."
+  (tibetan-analysis-nav-test--with-fixture
+    (with-current-buffer (find-file-noselect f2)
+      (should-error (tibetan-analysis-next-sentence)
+                    :type 'user-error)
+      (should (equal (expand-file-name f2) (buffer-file-name))))
+    (with-current-buffer (find-file-noselect f1)
+      (should-error (tibetan-analysis-previous-sentence)
+                    :type 'user-error)
+      (should (equal (expand-file-name f1) (buffer-file-name))))))
+
+(ert-deftest tibetan-analysis-nav-sibling-refuses-non-sent-buffer ()
+  "A buffer whose filename is not sent-NNN gets a user-error."
+  (tibetan-analysis-nav-test--with-fixture
+    (with-current-buffer (find-file-noselect source-file)
+      (should-error (tibetan-analysis-next-sentence)
+                    :type 'user-error))))
+
 (provide 'tibetan-analysis-nav-test)
 
 ;;; tibetan-analysis-nav-test.el ends here
