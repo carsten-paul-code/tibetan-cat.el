@@ -1539,6 +1539,25 @@ called with a prefix argument."
                           "Sentence Sanskrit/Combined fire skipped: %s"
                           (error-message-string e2))))))))))))
 
+(defun tibetan-sentence--cascade-layout-p (filepath)
+  "Non-nil when FILEPATH itself declares `#+TIBETAN_LAYOUT: cascade'.
+Deliberately a self-contained textual probe with ZERO module
+dependencies: the B0 guard (2026-09-15).  The previous dispatch
+gated cascade routing on `fboundp' alone, so a headless driver
+that never loaded tibetan-cascade silently fell through to the
+DESTRUCTIVE two-file regenerate — that destroyed the * Reading
+layer of sent-047/048-rgyan.org on 2026-09-12 (buddhist-studies
+d7ff7ec).  `tibetan-cascade-file-p' is the module-side twin; this
+one must stay dependency-free so the refusal works precisely when
+the module is missing."
+  (when (and filepath (stringp filepath) (file-readable-p filepath))
+    (with-temp-buffer
+      (insert-file-contents filepath nil 0 4096)
+      (goto-char (point-min))
+      (and (re-search-forward
+            "^#\\+TIBETAN_LAYOUT:[ \t]*cascade[ \t]*$" nil t)
+           t))))
+
 (cl-defun tibetan-sentence-reanalyze-file
     (filepath &key source-file re-request-claude dry-run)
   "Headless single-file re-analysis of a sent-NNN.org FILEPATH.
@@ -1554,17 +1573,41 @@ Returns plist:
 
 C4.3 (2026-07-28): a cascade file (`#+TIBETAN_LAYOUT: cascade' in
 the FILE itself) routes to `tibetan-cascade-reanalyze-file' — the
-two-file sentence regenerate would destroy its * Subsegments tree."
-  (if (and (fboundp 'tibetan-cascade-file-p)
-           (fboundp 'tibetan-cascade-reanalyze-file)
-           (tibetan-cascade-file-p filepath))
-      (if dry-run
-          (list :file filepath :ok t :dry-run t :cascade t)
-        (tibetan-cascade-reanalyze-file
-         filepath :source-file source-file
-         :re-request-claude re-request-claude))
+two-file sentence regenerate would destroy its * Subsegments /
+* Reading tree.  B0 (2026-09-15): the cascade check is now a
+textual probe (`tibetan-sentence--cascade-layout-p'), and when the
+cascade handlers cannot be loaded the function REFUSES with
+:ok nil instead of falling through destructively."
+  (cond
+   ((tibetan-sentence--cascade-layout-p filepath)
+    ;; Self-heal for headless drivers that forgot the require.
+    (require 'tibetan-cascade nil t)
+    (cond
+     ((not (and (fboundp 'tibetan-cascade-file-p)
+                (fboundp 'tibetan-cascade-reanalyze-file)))
+      (list :file filepath :ok nil
+            :error (concat "cascade file, but tibetan-cascade is "
+                           "unavailable — refusing the two-file "
+                           "regenerate (B0 guard)")))
+     (dry-run
+      (list :file filepath :ok t :dry-run t :cascade t))
+     (t
+      (tibetan-cascade-reanalyze-file
+       filepath :source-file source-file
+       :re-request-claude re-request-claude))))
+   ;; Belt-and-braces: module loaded and its own (metadata-based)
+   ;; classifier says cascade even where the textual probe missed.
+   ((and (fboundp 'tibetan-cascade-file-p)
+         (fboundp 'tibetan-cascade-reanalyze-file)
+         (tibetan-cascade-file-p filepath))
+    (if dry-run
+        (list :file filepath :ok t :dry-run t :cascade t)
+      (tibetan-cascade-reanalyze-file
+       filepath :source-file source-file
+       :re-request-claude re-request-claude)))
+   (t
     (tibetan-sentence--reanalyze-file-two-file
-     filepath source-file re-request-claude dry-run)))
+     filepath source-file re-request-claude dry-run))))
 
 (defun tibetan-sentence--reanalyze-file-two-file
     (filepath source-file re-request-claude dry-run)

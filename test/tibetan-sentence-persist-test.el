@@ -1254,6 +1254,47 @@ We capture the message via `current-message' after the call."
           (should (stringp (plist-get r :error))))
       (when (file-exists-p tmp) (delete-file tmp)))))
 
+(ert-deftest tibetan-sentence-reanalyze-refuses-cascade-without-module ()
+  "B0 guard (2026-09-15): a `#+TIBETAN_LAYOUT: cascade' file must NEVER
+fall through to the destructive two-file regenerate — even when the
+tibetan-cascade handlers are unavailable (fmakunbound here).  This is
+the d7ff7ec data-loss class: a headless driver without (require
+'tibetan-cascade) silently rebuilt sent-047/048-rgyan.org as two-file
+and destroyed their * Reading layer.  Expected: :ok nil with a
+cascade-naming :error, file bytes untouched."
+  (tibetan-sentence-test--with-source-buffer
+   tibetan-sentence-test--section-wrap-buffer
+   (let* ((analysis-dir (expand-file-name "analysis" tmp-dir))
+          (path (progn (make-directory analysis-dir t)
+                       (expand-file-name "sent-001-src.org" analysis-dir)))
+          (content (concat "#+TITLE: Sentence 1 Analysis\n"
+                           "#+TIBETAN_LAYOUT: cascade\n"
+                           (format "#+SOURCE: [[file:%s]]\n\n" src-file)
+                           "* Reading\n** Interlinear\ndecorated line\n\n"
+                           "* Tibetan Analysis\n** Translation\nkept\n")))
+     (with-temp-file path (insert content))
+     (let ((orig-file-p (symbol-function 'tibetan-cascade-file-p))
+           (orig-reana  (symbol-function 'tibetan-cascade-reanalyze-file)))
+       (unwind-protect
+           (progn
+             (fmakunbound 'tibetan-cascade-file-p)
+             (fmakunbound 'tibetan-cascade-reanalyze-file)
+             (let ((r (tibetan-sentence-reanalyze-file
+                       path :source-file src-file)))
+               (should (null (plist-get r :ok)))
+               (should (stringp (plist-get r :error)))
+               (should (string-match-p "cascade" (plist-get r :error)))))
+         (fset 'tibetan-cascade-file-p orig-file-p)
+         (fset 'tibetan-cascade-reanalyze-file orig-reana)
+         (let ((buf (get-file-buffer path)))
+           (when buf
+             (with-current-buffer buf (set-buffer-modified-p nil))
+             (kill-buffer buf))))
+       (should (equal content
+                      (with-temp-buffer
+                        (insert-file-contents path)
+                        (buffer-string))))))))
+
 ;; ============================================================================
 ;; RE-SEGMENTATION WORKFLOW TESTS
 ;; ============================================================================

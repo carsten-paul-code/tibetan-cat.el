@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-08-11T18:19:56
+#+DATE: 2026-09-15T12:30:04
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  73 modules  ·  1399 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  73 modules  ·  1400 forms
 
 Regenerated automatically by:
 
@@ -68,7 +68,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
   - [[#persist/tibetan-sentence-claude.el][persist/tibetan-sentence-claude.el]]  (26)
-  - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (59)
+  - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (60)
   - [[#persist/tibetan-structure-reorg.el][persist/tibetan-structure-reorg.el]]  (15)
   - [[#philology/tibetan-bialek-textbook-refs.el][philology/tibetan-bialek-textbook-refs.el]]  (2)
   - [[#philology/tibetan-madhyamaka-terms.el][philology/tibetan-madhyamaka-terms.el]]  (6)
@@ -17872,10 +17872,28 @@ Working Translation, Footnotes, Roehrich, Class Translation, and
 the three Claude sections.  Re-issues the Claude request only when
 called with a prefix argument.
 
+** ~tibetan-sentence--cascade-layout-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 1542
+:SIGNATURE: (tibetan-sentence--cascade-layout-p filepath)
+:END:
+
+Non-nil when FILEPATH itself declares `#+TIBETAN_LAYOUT: cascade'.
+Deliberately a self-contained textual probe with ZERO module
+dependencies: the B0 guard (2026-09-15).  The previous dispatch
+gated cascade routing on `fboundp' alone, so a headless driver
+that never loaded tibetan-cascade silently fell through to the
+DESTRUCTIVE two-file regenerate — that destroyed the * Reading
+layer of sent-047/048-rgyan.org on 2026-09-12 (buddhist-studies
+d7ff7ec).  `tibetan-cascade-file-p' is the module-side twin; this
+one must stay dependency-free so the refusal works precisely when
+the module is missing.
+
 ** ~tibetan-sentence-reanalyze-file~  /function (cl)/
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 1542
+:LINE: 1561
 :SIGNATURE: (tibetan-sentence-reanalyze-file filepath &key source-file re-request-claude dry-run)
 :END:
 
@@ -17892,12 +17910,16 @@ Returns plist:
 
 C4.3 (2026-07-28): a cascade file (`#+TIBETAN_LAYOUT: cascade' in
 the FILE itself) routes to `tibetan-cascade-reanalyze-file' — the
-two-file sentence regenerate would destroy its * Subsegments tree.
+two-file sentence regenerate would destroy its * Subsegments /
+​* Reading tree.  B0 (2026-09-15): the cascade check is now a
+textual probe (`tibetan-sentence--cascade-layout-p'), and when the
+cascade handlers cannot be loaded the function REFUSES with
+:ok nil instead of falling through destructively.
 
 ** ~tibetan-sentence--reanalyze-file-two-file~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1569
+:LINE: 1612
 :SIGNATURE: (tibetan-sentence--reanalyze-file-two-file filepath source-file re-request-claude dry-run)
 :END:
 
@@ -17906,7 +17928,7 @@ Two-file body of `tibetan-sentence-reanalyze-file'.
 ** ~tibetan-sentence--folder-sentence-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1641
+:LINE: 1684
 :SIGNATURE: (tibetan-sentence--folder-sentence-files folder)
 :END:
 
@@ -17915,7 +17937,7 @@ Return sent-NNN*.org files in FOLDER, sorted by sentence id.
 ** ~tibetan-sentence-batch-reanalyze~  /function (cl)/  ⚡  ↗
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 1652
+:LINE: 1695
 :SIGNATURE: (tibetan-sentence-batch-reanalyze &key folder source-file re-request-claude dry-run)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -17934,7 +17956,7 @@ Returns plist:
 ** ~tibetan-sentence--analysis-folder~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1718
+:LINE: 1761
 :SIGNATURE: (tibetan-sentence--analysis-folder)
 :END:
 
@@ -17944,7 +17966,7 @@ Falls back to `<cwd>/analysis/' when not in a source buffer.
 ** ~tibetan-sentence-archive-analysis-folder~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1727
+:LINE: 1770
 :SIGNATURE: (tibetan-sentence-archive-analysis-folder &optional folder)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -17967,7 +17989,7 @@ generated sent files afterwards.
 ** ~tibetan-sentence-create-all~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1775
+:LINE: 1818
 :SIGNATURE: (tibetan-sentence-create-all)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -17992,7 +18014,7 @@ sentence, no seg files.
 ** ~tibetan-sentence--create-all-two-file~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1800
+:LINE: 1843
 :SIGNATURE: (tibetan-sentence--create-all-two-file)
 :END:
 
@@ -18001,7 +18023,7 @@ Two-file body of `tibetan-sentence-create-all'.
 ** ~tibetan-sentence--fire-claude-on-new-files~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1886
+:LINE: 1929
 :SIGNATURE: (tibetan-sentence--fire-claude-on-new-files plists source-file)
 :END:
 
@@ -18016,7 +18038,7 @@ failures are swallowed to `message'.
 ** ~tibetan-sentence-resegment~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 1941
+:LINE: 1984
 :SIGNATURE: (tibetan-sentence-resegment)
 :INTERACTIVE: t
 :AUTOLOAD: t
