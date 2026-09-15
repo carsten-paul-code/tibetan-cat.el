@@ -2392,11 +2392,45 @@ Milarepa Segment 110: dict gloss \"mane\" for `རྔོག' → Claude's
     (should (string= (tibetan-analysis--apply-claude-vocab-override
                       "རྔོག" "mane" vocab)
                      "rNgog")))
-  ;; Claude says common noun → dict gloss kept (no spurious override).
+  ;; RETARGETED 2026-09-15 (override-gate widening): Claude's
+  ;; context-aware gloss now beats the NON-curated dictionary gloss
+  ;; even for common nouns — the old "keep dict" expectation encoded
+  ;; the narrow proper-noun-only gate.
   (let ((vocab '(("khang" . "khang, noun, \"house\", dwelling"))))
     (should (string= (tibetan-analysis--apply-claude-vocab-override
                       "ཁང" "house, building" vocab)
-                     "house, building"))))
+                     "house"))))
+
+(ert-deftest tibetan-analysis-claude-vocab-override-general-gate ()
+  "2026-09-15 gate widening — precedence quartet:
+(a) Claude's exact-key gloss beats a non-curated dictionary
+    first-sense (the par-184 `par [to print]' class);
+(b) a curated ★ gloss still wins over Claude;
+(c) a `<term>'-tagged 84000 canonical gloss still wins;
+(d) a bare token never inherits an MWU key's gloss (exact match
+    only on the general path — M2's `mar' / `mar pas' lesson)."
+  (let ((vocab '(("par" . "par, terminative particle, \"as, into\", direction"))))
+    ;; (a) non-curated junk loses to Claude's contextual gloss.
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "པར" "to print" vocab)
+                     "as, into"))
+    ;; (a') even a nil dict gloss yields the Claude gloss.
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "པར" nil vocab)
+                     "as, into"))
+    ;; (b) curated wins.
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "པར" "Druck // print" vocab t)
+                     "Druck // print"))
+    ;; (c) <term> wins.
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "པར" "<term> xylograph print" vocab)
+                     "<term> xylograph print")))
+  ;; (d) no MWU inheritance on the general path.
+  (let ((vocab '(("mar pas" . "mar pas, proper noun, \"Mar pa (ERG)\", the teacher"))))
+    (should (string= (tibetan-analysis--apply-claude-vocab-override
+                      "མར" "butter" vocab)
+                     "butter"))))
 
 ;; ============================================================================
 ;; U4 — Claude Grammar nested under ** Grammar (2026-04-24)

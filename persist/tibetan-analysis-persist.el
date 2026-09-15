@@ -177,7 +177,8 @@ is nil / empty, returns nil — the caller keeps its current gloss."
                (label label)
                (t nil)))))))))
 
-(defun tibetan-analysis--claude-vocab-gloss-for-token (word vocab-alist)
+(defun tibetan-analysis--claude-vocab-gloss-for-token
+    (word vocab-alist &optional exact)
   "Return the Claude-provided gloss for WORD from VOCAB-ALIST, or nil.
 WORD is a Tibetan token.  VOCAB-ALIST is the parsed Claude
 Vocabulary alist returned by `tibetan-analysis--parse-claude-vocabulary'
@@ -187,20 +188,24 @@ by Claude's system prompt is
     wylie-key, part-of-speech, \"gloss\", commentary
 
 so the helper extracts the first double-quoted substring as the
-short gloss.  Matches the token's Wylie as either equal to the
-key or a space-bounded prefix of the key (so a stem-only token
+short gloss.  By default the token's Wylie matches either equal to
+the key or as a space-bounded prefix of the key (a stem-only token
 matches a stem+particle MWU entry — `blo sbyangs' matches
-`blo sbyangs na').  Returns nil when no match or no quoted gloss
-field present."
+`blo sbyangs na'); with EXACT non-nil only an equal key matches —
+the general override path uses this so a bare token never inherits
+an unrelated MWU's gloss (M2's `mar' / `mar pas' lesson).  Returns
+nil when no match or no quoted gloss field present."
   (when (and vocab-alist (listp vocab-alist))
     (let ((wylie (tibetan-analysis--token-wylie word)))
       (when wylie
-        (let ((hit (cl-find-if
-                    (lambda (pair)
-                      (let ((key (car pair)))
-                        (or (string= key wylie)
-                            (string-prefix-p (concat wylie " ") key))))
-                    vocab-alist)))
+        (let ((hit (if exact
+                       (assoc wylie vocab-alist)
+                     (cl-find-if
+                      (lambda (pair)
+                        (let ((key (car pair)))
+                          (or (string= key wylie)
+                              (string-prefix-p (concat wylie " ") key))))
+                      vocab-alist))))
           (when hit
             (let ((line (cdr hit)))
               (when (string-match "\"\\([^\"]+\\)\"" line)
@@ -243,27 +248,31 @@ POS field."
                   (match-string 1 line))))))))))
 
 (defun tibetan-analysis--apply-claude-vocab-override (word dict-gloss vocab-alist &optional curated)
-  "Override a proper-noun DICT-GLOSS with Claude's reading.
+  "Override DICT-GLOSS with Claude's context-aware reading.
 
-Two override paths, both gated on Claude Vocabulary having an entry
-for WORD:
+Precedence (2026-09-15 gate widening — before, only proper nouns
+could win):
 
 1. DICT-GLOSS begins with `<person>' or `<place>' — the Steinert
-   84000Dict proper-noun tag markers — → prefer Claude's gloss.
-   The 84000 data indexes buddha-names and place-names under short
-   Tibetan phrases that double as common words (`blo sbyangs' =
-   \"trained mind\" but also the 547th buddha); Claude, which sees
-   full-clause context, recovers the lexical reading.
+   84000Dict proper-noun tag markers — → prefer Claude's gloss
+   (prefix key match allowed here by design: the tagged entry IS
+   about this token).
+2. CURATED (hand-written Resources/Custom, §2.9) or a `<term>'-
+   tagged 84000 canonical gloss → DICT-GLOSS is authoritative,
+   Claude never overrides (M2 guards, unchanged).
+3. General path: Claude Vocabulary's EXACT-key gloss beats the
+   non-curated dictionary first-sense — Claude saw the full clause,
+   the dictionary saw the isolated headword (the par-184
+   `par [to print]' / `de [(1) that]' junk class).  Exact key only:
+   a bare token must not inherit an unrelated MWU entry's gloss
+   (M2's `mar' / `mar pas' lesson).  Dictionary remains the
+   fallback when Claude has no entry.
 
-2. DICT-GLOSS is an UNTAGGED common-noun reading but Claude
-   classifies WORD as a proper noun → prefer Claude's name.  This
-   catches homographs whose dictionary entry carries no tag — e.g.
-   `rngog' glossed \"mane\" by Rangjung-Yeshe but named rNgog
-   (Mar pa's disciple) in context (Milarepa Segment 110).
-
-Otherwise DICT-GLOSS is returned unchanged.  The `<term>' tag
-(84000's canonical-term marker) is left intact — it IS the right
-gloss when present."
+Grounding-cycle note: the Interlinear glosses feed the Vocabulary
+PROMPT (`--read-interlinear-glosses', \"do NOT invent\").  After
+this change Claude's own prior context glosses can flow back as
+grounding — strictly better grounding than a wrong first-sense;
+accepted and documented."
   (let ((trimmed (and (stringp dict-gloss) (string-trim dict-gloss))))
     (cond
      ;; Path 1: Steinert proper-noun tag.
@@ -272,15 +281,14 @@ gloss when present."
                (string-prefix-p "<place>" trimmed)))
       (or (tibetan-analysis--claude-vocab-gloss-for-token word vocab-alist)
           dict-gloss))
-     ;; Path 2: untagged common-noun gloss masking a Claude proper noun.
-     ;; M2 guards (Fable-5 audit): NEVER rewrite a hand-curated
-     ;; Resources/Custom gloss (§2.9) nor a `<term>'-tagged 84000
-     ;; canonical gloss — both are authoritative over Claude here.
+     ;; Path 2: authoritative sources — never overridden.
      ((or curated
           (and trimmed (string-prefix-p "<term>" trimmed)))
       dict-gloss)
+     ;; Path 3: general — exact-key Claude gloss, else dictionary.
      (t
-      (or (tibetan-analysis--claude-vocab-proper-noun-p word vocab-alist)
+      (or (tibetan-analysis--claude-vocab-gloss-for-token
+           word vocab-alist t)
           dict-gloss)))))
 
 (defvar tibetan-analysis--claude-vocabulary-for-render nil
