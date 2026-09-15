@@ -1487,6 +1487,94 @@ degraded scaffold stays valid."
       (should-not (string-match-p "^\\*\\* Gloss Tables$" s))
       (should (string-match-p "^\\*\\* Interlinear$" s)))))
 
+(defun tibetan-cascade-test--edit-gloss-tables (file marker)
+  "Append MARKER as an extra line to FILE's `** Gloss Tables' body,
+WITHOUT touching the :GENERATED_HASH: drawer — simulating a hand
+edit (the hash now mismatches the body)."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (goto-char (point-min))
+    (re-search-forward "^\\*\\* Gloss Tables$")
+    (let ((end (if (re-search-forward "^\\*\\{1,2\\} " nil t)
+                   (match-beginning 0)
+                 (point-max))))
+      (goto-char end)
+      (skip-chars-backward "\n")
+      (insert "\n" marker))
+    (write-region (point-min) (point-max) file nil 'silent)))
+
+(ert-deftest tibetan-cascade-regenerate-refreshes-unedited-gloss-tables ()
+  "Invariant guard: an UNTOUCHED (hash-matching) `** Gloss Tables'
+section is regenerated fresh — new content, new hash."
+  (tibetan-cascade-test--with-cascade-file
+    (cl-letf (((symbol-function 'tibetan-gloss-table-render-captioned)
+               (lambda (_segs _vocab) "Unit 1 — Segment 105\n| NEU |")))
+      (tibetan-cascade--regenerate
+       cascade-file 4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+       (expand-file-name "doc.org" dir)))
+    (let ((s (with-temp-buffer
+               (insert-file-contents cascade-file) (buffer-string))))
+      (should (string-match-p "^| NEU |$" s))
+      (should (string-match-p
+               (concat ":GENERATED_HASH: "
+                       (sha1 "Unit 1 — Segment 105\n| NEU |"))
+               s)))))
+
+(ert-deftest tibetan-cascade-regenerate-preserves-edited-gloss-tables ()
+  "Carsten's edit-protection decision (2026-09-15): once he has
+EDITED the tables (body no longer matches the stored hash), a
+regenerate preserves the section byte-for-byte — his decision
+layer, like the handout's hand-tuned tables."
+  (tibetan-cascade-test--with-cascade-file
+    (tibetan-cascade-test--edit-gloss-tables cascade-file
+                                             "EDITIERT-VON-CARSTEN")
+    (cl-letf (((symbol-function 'tibetan-gloss-table-render-captioned)
+               (lambda (_segs _vocab) "Unit 1 — Segment 105\n| NEU |")))
+      (tibetan-cascade--regenerate
+       cascade-file 4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+       (expand-file-name "doc.org" dir)))
+    (let ((s (with-temp-buffer
+               (insert-file-contents cascade-file) (buffer-string))))
+      ;; The edit survives; the fresh render did NOT land.
+      (should (string-match-p "^EDITIERT-VON-CARSTEN$" s))
+      (should-not (string-match-p "^| NEU |$" s))
+      ;; Still the first Reading child.
+      (let ((gt (string-match "^\\*\\* Gloss Tables$" s))
+            (il (string-match "^\\*\\* Interlinear$" s)))
+        (should (and gt il (< gt il)))))
+    ;; Second regenerate: still byte-stable (modulo LAST_ANALYZED).
+    (let ((before (with-temp-buffer
+                    (insert-file-contents cascade-file) (buffer-string))))
+      (cl-letf (((symbol-function 'tibetan-gloss-table-render-captioned)
+                 (lambda (_segs _vocab) "Unit 1 — Segment 105\n| NEU |")))
+        (tibetan-cascade--regenerate
+         cascade-file 4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+         (expand-file-name "doc.org" dir)))
+      (let ((after (with-temp-buffer
+                     (insert-file-contents cascade-file) (buffer-string)))
+            (strip (lambda (x) (replace-regexp-in-string
+                                "^#\\+LAST_ANALYZED:.*$" "" x))))
+        (should (equal (funcall strip before) (funcall strip after)))))))
+
+(ert-deftest tibetan-cascade-regenerate-edited-survives-scaffold-skip ()
+  "Edited tables survive even when the fresh scaffold would OMIT
+the section (renderer yields nothing): the preserved block is
+re-inserted as the first Reading child (eb9b573 pattern)."
+  (tibetan-cascade-test--with-cascade-file
+    (tibetan-cascade-test--edit-gloss-tables cascade-file
+                                             "EDITIERT-VON-CARSTEN")
+    (cl-letf (((symbol-function 'tibetan-gloss-table-render-captioned)
+               (lambda (_segs _vocab) nil)))
+      (tibetan-cascade--regenerate
+       cascade-file 4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+       (expand-file-name "doc.org" dir)))
+    (let ((s (with-temp-buffer
+               (insert-file-contents cascade-file) (buffer-string))))
+      (should (string-match-p "^EDITIERT-VON-CARSTEN$" s))
+      (let ((gt (string-match "^\\*\\* Gloss Tables$" s))
+            (il (string-match "^\\*\\* Interlinear$" s)))
+        (should (and gt il (< gt il)))))))
+
 (ert-deftest tibetan-cascade-regenerate-keeps-readers-with-gloss-tables ()
   "Adjacent lock: on a regenerated file WITH the new `** Gloss
 Tables' section, the Reading readers still resolve — the

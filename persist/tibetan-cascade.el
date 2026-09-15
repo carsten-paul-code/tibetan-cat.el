@@ -193,6 +193,98 @@ when nothing renders."
 (declare-function tibetan-analysis--render-sentence-tree
                   "tibetan-analysis-persist" (words verbs mwus))
 
+(defun tibetan-cascade--read-gloss-tables (file)
+  "FILE's `** Gloss Tables' state: (BODY . STORED-HASH), or nil.
+BODY is the section body WITHOUT the :PROPERTIES: drawer, edge
+newlines stripped (the hash canonicalization — the emitter hashes
+the rendered string before appending its blank line); STORED-HASH
+is the :GENERATED_HASH: value, nil for a legacy or hand-created
+section.  nil when the file carries no `** Gloss Tables' under
+`* Reading'."
+  (when (and file (stringp file) (file-exists-p file))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (when (re-search-forward "^\\* Reading[ \t]*$" nil t)
+        (let ((reading-end (save-excursion
+                             (if (re-search-forward "^\\* " nil t)
+                                 (line-beginning-position)
+                               (point-max)))))
+          (when (re-search-forward "^\\*\\* Gloss Tables[ \t]*$"
+                                   reading-end t)
+            (forward-line 1)
+            (let (hash)
+              (when (looking-at "^:PROPERTIES:$")
+                (let ((drawer-end (save-excursion
+                                    (re-search-forward "^:END:$"
+                                                       reading-end t))))
+                  (when drawer-end
+                    (when (re-search-forward
+                           "^:GENERATED_HASH: \\(.+\\)$" drawer-end t)
+                      (setq hash (match-string 1)))
+                    (goto-char drawer-end)
+                    (forward-line 1))))
+              (let* ((start (point))
+                     (end (if (re-search-forward "^\\*\\{1,2\\} " nil t)
+                              (line-beginning-position)
+                            (point-max)))
+                     (body (string-trim
+                            (buffer-substring start end)
+                            "\n+" "\n+")))
+                (cons body hash)))))))))
+
+(defun tibetan-cascade--gloss-tables-edited-p (state)
+  "Non-nil when STATE ((BODY . STORED-HASH), from
+`tibetan-cascade--read-gloss-tables') is a HAND-EDITED section:
+non-empty body whose hash no longer matches the stored one — or a
+section without any stored hash (legacy / hand-created counts as
+edited; protection errs on the preserving side)."
+  (and state
+       (not (string-empty-p (car state)))
+       (or (null (cdr state))
+           (not (equal (sha1 (car state)) (cdr state))))))
+
+(defun tibetan-cascade--restore-gloss-tables-in-buffer (state)
+  "Replace or insert the `** Gloss Tables' section from STATE in
+the current buffer — the edit-protection restore: Carsten's edited
+tables win over the fresh render.  The stored hash (or its
+absence) is re-emitted unchanged, so the mismatch persists and the
+section stays protected on every later regenerate.  Reset story:
+delete the whole section by hand → the next regenerate emits a
+fresh generated one."
+  (let ((block (concat "** Gloss Tables\n"
+                       (when (cdr state)
+                         (concat ":PROPERTIES:\n"
+                                 ":GENERATED_HASH: " (cdr state) "\n"
+                                 ":END:\n"))
+                       (car state) "\n\n")))
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward "^\\* Reading[ \t]*$" nil t)
+        (forward-line 1)
+        (let ((reading-start (point))
+              (reading-end (save-excursion
+                             (if (re-search-forward "^\\* " nil t)
+                                 (line-beginning-position)
+                               (point-max)))))
+          (if (re-search-forward "^\\*\\* Gloss Tables[ \t]*$"
+                                 reading-end t)
+              (let ((start (line-beginning-position))
+                    (end (progn
+                           (forward-line 1)
+                           (if (re-search-forward "^\\*\\{1,2\\} "
+                                                  reading-end t)
+                               (line-beginning-position)
+                             reading-end))))
+                (delete-region start end)
+                (goto-char start)
+                (insert block))
+            ;; Scaffold omitted the section (nothing rendered) —
+            ;; the edited block still goes in as the FIRST Reading
+            ;; child (the eb9b573 create-missing pattern).
+            (goto-char reading-start)
+            (insert block)))))))
+
 (defun tibetan-cascade--sentence-structure-body (segs)
   "Per-shad-unit verb-first trees for the `** Sentence Structure'
 section (R10): each unit of SEGS ((GLOBAL-NUM . TEXT)…) is parsed
@@ -631,6 +723,14 @@ Returns FILEPATH."
                                    filepath n)))
                    collect (cons n (tibetan-cascade--read-rendering
                                     filepath n))))
+         ;; Edit protection (Carsten's 2026-09-15 decision): a
+         ;; `** Gloss Tables' section he has EDITED (body no longer
+         ;; matches its :GENERATED_HASH:) is preserved verbatim —
+         ;; his decision layer; only a still-generated section is
+         ;; refreshed by the scaffold.
+         (edited-gloss-tables
+          (let ((state (tibetan-cascade--read-gloss-tables filepath)))
+            (and (tibetan-cascade--gloss-tables-edited-p state) state)))
          (unknown (tibetan-cascade--collect-unknown-l1-sections filepath)))
     (with-temp-buffer
       ;; C-für-Cascade (2026-09-15): render the Reading lines with
@@ -647,6 +747,9 @@ Returns FILEPATH."
                           (cdr (assoc "Claude Vocabulary" keep-l2))))
                    :vocabulary))))
         (insert (tibetan-cascade--scaffold sent-num segs source-file)))
+      (when edited-gloss-tables
+        (tibetan-cascade--restore-gloss-tables-in-buffer
+         edited-gloss-tables))
       (dolist (kv keep-l1)
         (tibetan-cascade--set-body-in-buffer 1 (car kv) (cdr kv)))
       (dolist (kv keep-l2)
