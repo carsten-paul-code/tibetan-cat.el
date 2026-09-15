@@ -1139,6 +1139,40 @@ keep the space-prefix."
           (with-current-buffer buf (set-buffer-modified-p nil))
           (kill-buffer buf))))))
 
+(ert-deftest tibetan-claude-sections-auto-regen-on-vocabulary-arrival ()
+  "2026-09-15: a response whose render-relevant payload is
+`## Vocabulary' (no Particles) must ALSO trigger the non-refiring
+auto-regen — the Interlinear's Claude-gloss override reads the
+dynamic vocabulary var at render time, so without a rebuild fresh
+vocab-only glosses never reached the file."
+  (let* ((tmp (make-temp-file "tibetan-auto-regen-v-" t))
+         (file (expand-file-name "seg-011.org" tmp))
+         (regen-calls '()))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "#+TITLE: Seg 11\n\n* Tibetan Text\nfoo\n\n"
+                    "* Auto-Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nfoo /\n\n"
+                    "** Provided Translations\n"
+                    "*** DharmaMitra\n[stub]\n\n"
+                    "*** Claude Vocabulary\n\n\n"
+                    "* Footnotes\n"))
+          (cl-letf (((symbol-function 'tibetan-analysis-reanalyze-file)
+                     (lambda (fp &rest args)
+                       (push (cons fp args) regen-calls)
+                       `(:file ,fp :ok t))))
+            (let ((tibetan-analysis-auto-regen-on-claude-arrival t)
+                  (response (concat
+                             "## Translation\nX.\n\n"
+                             "## Vocabulary\n"
+                             "bla ma, noun, \"lama\", the teacher\n")))
+              (tibetan-analysis--insert-claude-sections response file))
+            (should (= 1 (length regen-calls)))
+            (let ((args (cdr (car regen-calls))))
+              (should (equal (plist-get args :re-request-claude) nil)))))
+      (when (file-exists-p file) (delete-file file))
+      (when (file-exists-p tmp) (delete-directory tmp t)))))
 
 ;; ============================================================================
 ;; PHASE 4 — `### Tibetan Divergence' sub-heading round-trip

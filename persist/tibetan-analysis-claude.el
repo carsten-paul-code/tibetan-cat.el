@@ -3077,9 +3077,14 @@ reanalyse."
       ;; non-Claude-refiring reanalyse so the Grammar section picks
       ;; them up via the dynamic `claude-particles-for-render' var
       ;; and emits `§ X.Y Portfolio-title' + snippet per occurrence.
+      ;; 2026-09-15: Vocabulary arrival triggers the same rebuild —
+      ;; the Interlinear's Claude-gloss override renders from
+      ;; `claude-vocabulary-for-render', so a vocab-only response
+      ;; would otherwise never reach the rendered file.
       ;; Guarded by a customvar so power users can opt out.
       (when (and tibetan-analysis-auto-regen-on-claude-arrival
-                 (plist-get sections :particles)
+                 (or (plist-get sections :particles)
+                     (plist-get sections :vocabulary))
                  (fboundp 'tibetan-analysis-reanalyze-file))
         (condition-case err
             (tibetan-analysis-reanalyze-file analysis-file
