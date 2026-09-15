@@ -1100,6 +1100,43 @@ has no Particles block (even with the customvar default on)."
       (when (file-exists-p file) (delete-file file))
       (when (file-exists-p tmp) (delete-directory tmp t)))))
 
+(ert-deftest tibetan-claude-sections-auto-regen-routes-par-files ()
+  "2026-09-15: the post-landing auto-regen must route par-NNN.org
+files to `tibetan-analysis-reanalyze-paragraph-file' — the segment
+reanalyze aborts on them (\"Could not extract seg-id\"), so par
+files never picked up freshly landed vocab/particles."
+  (let* ((tmp (make-temp-file "tibetan-auto-regen-par-" t))
+         (file (expand-file-name "par-184.org" tmp))
+         (par-calls '())
+         (seg-calls '()))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "#+TITLE: Par 184\n\n* Tibetan Text\nfoo\n\n"
+                    "* Auto-Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nfoo /\n\n"
+                    "** Provided Translations\n"
+                    "*** Claude Vocabulary\n\n\n"
+                    "* Footnotes\n"))
+          (cl-letf (((symbol-function 'tibetan-analysis-reanalyze-paragraph-file)
+                     (lambda (fp &rest args)
+                       (push (cons fp args) par-calls)
+                       `(:file ,fp :ok t)))
+                    ((symbol-function 'tibetan-analysis-reanalyze-file)
+                     (lambda (fp &rest args)
+                       (push (cons fp args) seg-calls)
+                       `(:file ,fp :ok t))))
+            (let ((tibetan-analysis-auto-regen-on-claude-arrival t)
+                  (response (concat
+                             "## Translation\nX.\n\n"
+                             "## Vocabulary\n"
+                             "bla ma, noun, \"lama\", the teacher\n")))
+              (tibetan-analysis--insert-claude-sections response file))
+            (should (= 1 (length par-calls)))
+            (should (zerop (length seg-calls)))))
+      (when (file-exists-p file) (delete-file file))
+      (when (file-exists-p tmp) (delete-directory tmp t)))))
+
 (ert-deftest tibetan-claude-sections-writer-preserves-org-subheading-on-rewrite ()
   "2026-09-15 restore-path bug: `--replace-claude-section-body' ran
 the C1b star-sanitizer over EVERY line-leading `*' run — including

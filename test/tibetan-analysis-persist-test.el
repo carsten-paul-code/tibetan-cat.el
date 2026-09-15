@@ -1497,6 +1497,54 @@ the old path silently wiped them and masked the wipe by refiring."
           (kill-buffer abuf)))
       (delete-directory dir t))))
 
+(ert-deftest tibetan-analysis-reanalyze-paragraph-file-headless ()
+  "2026-09-15: headless par-file reanalysis — par-id from the
+filename, source resolved via the file's #+SOURCE link, preserve/
+bind/restore parity with the segment path, :missing-only honoured
+for the fire gate.  Before this command existed, the auto-regen
+after a Claude landing ERRORED on par files (\"Could not extract
+seg-id\")."
+  (let* ((dir (make-temp-file "tibetan-par-headless-" t))
+         (src (expand-file-name "quelle.org" dir))
+         (analysis-dir (expand-file-name "analysis" dir))
+         (par-file (expand-file-name "par-184.org" analysis-dir)))
+    (unwind-protect
+        (progn
+          (make-directory analysis-dir t)
+          (with-temp-file src
+            (insert "#+TITLE: Quelle\n\n* Text\n** §184\n"
+                    "*** Tibetisch\nབཀྲ་ཤིས།\n"))
+          (with-temp-file par-file
+            (insert "#+TITLE: Paragraph 184 Analysis\n"
+                    "#+SOURCE: [[file:../quelle.org::*§184][Quelle / §184]]\n\n"
+                    "* Tibetan Text\nབཀྲ་ཤིས།\n\n"
+                    "* Tibetan Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nbkra shis /\n\n"
+                    "** Claude Vocabulary\n"
+                    "bkra shis, noun, \"auspiciousness\", greeting\n\n"
+                    "* Footnotes\n"))
+          (let ((r (tibetan-analysis-reanalyze-paragraph-file
+                    par-file :re-request-claude nil)))
+            (should (plist-get r :ok))
+            (should (= 184 (plist-get r :par-id)))
+            (should (plist-get r :claude-preserved)))
+          (let ((text (with-temp-buffer
+                        (insert-file-contents par-file)
+                        (buffer-string))))
+            ;; Preserved Claude body survives; fresh auto content present.
+            (should (string-match-p "auspiciousness" text))
+            (should (string-match-p "\\*\\* Wylie Transliteration" text)))
+          ;; Bad filename → :ok nil, no error signal.
+          (let ((r2 (tibetan-analysis-reanalyze-paragraph-file
+                     (expand-file-name "not-a-par.org" analysis-dir))))
+            (should (null (plist-get r2 :ok)))
+            (should (stringp (plist-get r2 :error)))))
+      (let ((abuf (get-file-buffer par-file)))
+        (when abuf
+          (with-current-buffer abuf (set-buffer-modified-p nil))
+          (kill-buffer abuf)))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-analysis-strip-leading-sense-number-parenthesized ()
   "\"(1) that\" → \"that\" — the par-184 junk class (2026-09-15): the
 old inline regex ^[0-9]+[.):] missed parenthesized numbering."

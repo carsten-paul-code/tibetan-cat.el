@@ -5143,40 +5143,50 @@ the segment-level `tibetan-reanalyze-segment' contract."
         (error "No paragraph analysis file exists.  Use C-c p A first"))
       (when (yes-or-no-p
              "Re-analyze paragraph? (Auto section regenerated, notes preserved) ")
-        ;; 2026-09-15 parity with `tibetan-analysis-reanalyze-file':
-        ;; read the file's Claude sections FIRST, bind the render vars
-        ;; (par files were the one regenerate path with no Claude
-        ;; override at all) plus default-directory (§5.34 headless-
-        ;; Resources lesson), and RESTORE the preserved bodies after
-        ;; the rebuild — the old path silently wiped them and masked
-        ;; the wipe with the unconditional refire below.
-        (let* ((existing-sections
-                (tibetan-analysis--read-claude-sections filepath))
-               (has-any-section
-                (tibetan-analysis--claude-sections-populated-p
-                 existing-sections))
-               (render-vars
-                (tibetan-analysis--claude-render-vars existing-sections))
-               (default-directory (file-name-directory
-                                   (expand-file-name filepath)))
-               (tibetan-analysis--claude-particles-for-render
-                (plist-get render-vars :particles))
-               (tibetan-analysis--claude-vocabulary-for-render
-                (plist-get render-vars :vocabulary))
-               (auto-content (tibetan-analysis-generate-content
-                              tibetan-text (format "§%d" par-id) source-text)))
-          (tibetan-analysis-regenerate-auto filepath tibetan-text auto-content)
-          (when has-any-section
-            (tibetan-analysis--restore-claude-sections
-             filepath existing-sections))
-          (let ((buf (get-file-buffer filepath)))
-            (when buf
-              (with-current-buffer buf
-                (revert-buffer t t))))
-          (condition-case err
-              (tibetan-analysis--request-claude-translation tibetan-text filepath)
-            (error (message "Claude translation skipped: %s"
-                            (error-message-string err)))))))))
+        ;; 2026-09-15 parity with `tibetan-analysis-reanalyze-file'
+        ;; via the shared paragraph core (preserve → bind → generate
+        ;; → regenerate → restore).
+        (tibetan-analysis--regenerate-paragraph-with-context
+         filepath tibetan-text (format "§%d" par-id) source-text)
+        (let ((buf (get-file-buffer filepath)))
+          (when buf
+            (with-current-buffer buf
+              (revert-buffer t t))))
+        (condition-case err
+            (tibetan-analysis--request-claude-translation tibetan-text filepath)
+          (error (message "Claude translation skipped: %s"
+                          (error-message-string err))))))))
+
+(defun tibetan-analysis--regenerate-paragraph-with-context
+    (filepath tibetan-text par-label source-text)
+  "Preserve → bind → generate → regenerate → restore for a par file.
+Reads FILEPATH's Claude sections first, binds the render vars (the
+par path had no Claude override at all before 2026-09-15) plus
+`default-directory' (§5.34 headless-Resources lesson) around
+`tibetan-analysis-generate-content', rebuilds via
+`tibetan-analysis-regenerate-auto', and restores the preserved
+bodies — the old path silently wiped them.  Returns non-nil when
+populated Claude sections were preserved."
+  (let* ((existing-sections
+          (tibetan-analysis--read-claude-sections filepath))
+         (has-any-section
+          (tibetan-analysis--claude-sections-populated-p
+           existing-sections))
+         (render-vars
+          (tibetan-analysis--claude-render-vars existing-sections))
+         (default-directory (file-name-directory
+                             (expand-file-name filepath)))
+         (tibetan-analysis--claude-particles-for-render
+          (plist-get render-vars :particles))
+         (tibetan-analysis--claude-vocabulary-for-render
+          (plist-get render-vars :vocabulary))
+         (auto-content (tibetan-analysis-generate-content
+                        tibetan-text par-label source-text)))
+    (tibetan-analysis-regenerate-auto filepath tibetan-text auto-content)
+    (when has-any-section
+      (tibetan-analysis--restore-claude-sections
+       filepath existing-sections))
+    has-any-section))
 
 ;; ============================================================================
 ;; BATCH RE-ANALYSIS
@@ -5526,6 +5536,89 @@ without touching the file.  Otherwise return a plist:
                     :claude-preserved ,(and has-any-section t)))
         (error
          `(:file ,filepath :seg-id ,seg-id :ok nil
+                 :error ,(error-message-string err))))))))
+
+(defun tibetan-analysis--par-id-from-filename (filepath)
+  "Extract numeric paragraph id from FILEPATH's basename, or nil.
+Matches only the par- prefix (`par-184.org', `par-184-foo.org')."
+  (let ((base (file-name-nondirectory filepath)))
+    (when (string-match "\\`par-\\([0-9]+\\)" base)
+      (string-to-number (match-string 1 base)))))
+
+(defun tibetan-analysis--source-file-from-par (analysis-file)
+  "Absolute source file referenced by par-NNN.org ANALYSIS-FILE.
+Reads the `#+SOURCE: [[file:…]]' header link.  Twin of
+`tibetan-sentence--source-file-from-analysis' (module boundary:
+this file must not require the sentence module)."
+  (when (and analysis-file (file-exists-p analysis-file))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents analysis-file)
+          (goto-char (point-min))
+          (when (re-search-forward
+                 "^#\\+SOURCE:[ \t]*\\[\\[file:\\([^]:]+\\)" nil t)
+            (expand-file-name (match-string 1)
+                              (file-name-directory analysis-file))))
+      (error nil))))
+
+(cl-defun tibetan-analysis-reanalyze-paragraph-file
+    (filepath &key source-file re-request-claude dry-run)
+  "Headless single-file re-analysis of a par-NNN.org FILEPATH.
+The paragraph id comes from the filename; the Tibetan text is
+freshly derived from SOURCE-FILE (or the file's `#+SOURCE:' link)
+by re-scanning the source for the `** §N' subtree.  Preserve /
+render-var / restore semantics match the segment path (shared
+paragraph core, 2026-09-15).  RE-REQUEST-CLAUDE governs firing
+via `tibetan-analysis--should-fire-claude-p' (nil = never).
+
+Returns plist (:file F :par-id ID :ok BOOL :error STR …)."
+  (let* ((par-id (tibetan-analysis--par-id-from-filename filepath))
+         (src (or source-file
+                  (tibetan-analysis--source-file-from-par filepath)))
+         (data (when (and par-id src (file-readable-p src))
+                 (with-temp-buffer
+                   (insert-file-contents src)
+                   (let ((buffer-file-name src))
+                     (org-mode)
+                     (goto-char (point-min))
+                     (when (re-search-forward
+                            (format "^\\*\\* §%d\\b" par-id) nil t)
+                       (let ((tib (tibetan-org-get-paragraph-text))
+                             (all (buffer-substring-no-properties
+                                   (point-min) (point-max))))
+                         (when (and tib (not (string-empty-p tib)))
+                           (list :tibetan tib :source-text all)))))))))
+    (cond
+     ((null par-id)
+      `(:file ,filepath :ok nil
+              :error "Could not extract par-id from filename"))
+     ((null src)
+      `(:file ,filepath :par-id ,par-id :ok nil
+              :error "Could not resolve source file"))
+     ((null data)
+      `(:file ,filepath :par-id ,par-id :ok nil
+              :error ,(format "§%d not found in source (or empty Tibetisch)"
+                              par-id)))
+     (dry-run
+      `(:file ,filepath :par-id ,par-id :ok t :dry-run t))
+     (t
+      (condition-case err
+          (let ((has-any
+                 (tibetan-analysis--regenerate-paragraph-with-context
+                  filepath (plist-get data :tibetan)
+                  (format "§%d" par-id) (plist-get data :source-text))))
+            (when (tibetan-analysis--should-fire-claude-p
+                   re-request-claude filepath)
+              (condition-case e2
+                  (tibetan-analysis--request-claude-translation
+                   (plist-get data :tibetan) filepath)
+                (error (message "Claude re-request failed for %s: %s"
+                                (file-name-nondirectory filepath)
+                                (error-message-string e2)))))
+            `(:file ,filepath :par-id ,par-id :ok t
+                    :claude-preserved ,(and has-any t)))
+        (error
+         `(:file ,filepath :par-id ,par-id :ok nil
                  :error ,(error-message-string err))))))))
 
 (defun tibetan-analysis--claude-render-vars (existing-sections)

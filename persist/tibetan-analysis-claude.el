@@ -3086,13 +3086,23 @@ reanalyse."
                  (or (plist-get sections :particles)
                      (plist-get sections :vocabulary))
                  (fboundp 'tibetan-analysis-reanalyze-file))
-        (condition-case err
-            (tibetan-analysis-reanalyze-file analysis-file
-                                             :re-request-claude nil)
-          (error
-           (message "Claude auto-regen skipped for %s: %s"
-                    (file-name-nondirectory analysis-file)
-                    (error-message-string err))))))))
+        ;; 2026-09-15 routing: par-NNN.org files go to the paragraph
+        ;; reanalyzer — the segment one aborts on them ("Could not
+        ;; extract seg-id"), so par files never picked up freshly
+        ;; landed vocabulary/particles.
+        (let ((regen-fn
+               (if (and (string-match-p
+                         "\\`par-[0-9]+"
+                         (file-name-nondirectory analysis-file))
+                        (fboundp 'tibetan-analysis-reanalyze-paragraph-file))
+                   #'tibetan-analysis-reanalyze-paragraph-file
+                 #'tibetan-analysis-reanalyze-file)))
+          (condition-case err
+              (funcall regen-fn analysis-file :re-request-claude nil)
+            (error
+             (message "Claude auto-regen skipped for %s: %s"
+                      (file-name-nondirectory analysis-file)
+                      (error-message-string err)))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Claude Vocabulary → Word / Particle List merge
