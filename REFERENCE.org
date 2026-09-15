@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-15T16:50:04
+#+DATE: 2026-09-15T16:51:33
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  74 modules  ·  1416 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  74 modules  ·  1418 forms
 
 Regenerated automatically by:
 
@@ -70,7 +70,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-sentence-claude.el][persist/tibetan-sentence-claude.el]]  (26)
   - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (60)
   - [[#persist/tibetan-structure-reorg.el][persist/tibetan-structure-reorg.el]]  (15)
-  - [[#persist/tibetan-translation-doc.el][persist/tibetan-translation-doc.el]]  (11)
+  - [[#persist/tibetan-translation-doc.el][persist/tibetan-translation-doc.el]]  (13)
   - [[#philology/tibetan-bialek-textbook-refs.el][philology/tibetan-bialek-textbook-refs.el]]  (2)
   - [[#philology/tibetan-madhyamaka-terms.el][philology/tibetan-madhyamaka-terms.el]]  (6)
   - [[#philology/tibetan-verse-philology.el][philology/tibetan-verse-philology.el]]  (13)
@@ -18454,7 +18454,7 @@ If non-nil, automatically create analysis for new segments during reorg.
 ** ~tibetan-translation-doc--source-outline~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 40
+:LINE: 44
 :SIGNATURE: (tibetan-translation-doc--source-outline source-file)
 :END:
 
@@ -18469,7 +18469,7 @@ file has no sentences.
 ** ~tibetan-translation-doc--working-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 81
+:LINE: 85
 :SIGNATURE: (tibetan-translation-doc--working-translation file)
 :END:
 
@@ -18478,7 +18478,7 @@ FILE's `* Working Translation' body (trimmed), nil when empty.
 ** ~tibetan-translation-doc--footnote-definitions~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 86
+:LINE: 90
 :SIGNATURE: (tibetan-translation-doc--footnote-definitions file)
 :END:
 
@@ -18487,7 +18487,7 @@ FILE's `* Footnotes' body verbatim (edge-trimmed), nil when empty.
 ** ~tibetan-translation-doc--namespace-footnotes~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 91
+:LINE: 95
 :SIGNATURE: (tibetan-translation-doc--namespace-footnotes text prefix)
 :END:
 
@@ -18503,7 +18503,7 @@ document.
 ** ~tibetan-translation-doc--generated-file-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 118
+:LINE: 122
 :SIGNATURE: (tibetan-translation-doc--generated-file-p file)
 :END:
 
@@ -18512,7 +18512,7 @@ Non-nil when FILE starts with the GENERATED marker.
 ** ~tibetan-translation-doc-build~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 126
+:LINE: 130
 :SIGNATURE: (tibetan-translation-doc-build source-file output-file
                                                   &optional from-sec to-sec)
 :END:
@@ -18532,10 +18532,47 @@ existing OUTPUT-FILE that lacks the GENERATED marker.  Contains
 ONLY Carsten's own text — reference translations (Lopez / W&M)
 never reach generated documents.  Returns OUTPUT-FILE.
 
+** ~tibetan-translation-doc-section-view~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 230
+:SIGNATURE: (tibetan-translation-doc-section-view source-file par
+                                                         &optional
+                                                         output-file)
+:END:
+
+Compile the generated §-view for Lopez-§ PAR of SOURCE-FILE.
+The consultation/reading-class sheet (par-184-handout spirit, but
+GENERATED): one `* §PAR' with, per sentence, `** Satz N' carrying
+`*** Tibetisch' (the sent file's Tibetan), `*** Glossentabellen'
+(the file's CURRENT `** Gloss Tables' body verbatim — Carsten's
+edited tables flow into the view), `*** Vorschlag Claude' /
+`*** Vorschlag DharmaMitra' (the suggestion bodies, omitted when
+absent) and `*** Übersetzung CP' (his Working Translation, the
+visible placeholder when empty).  Sentence footnotes are
+namespaced and collected under one trailing `* Footnotes' so the
+sheet exports cleanly.  Writes OUTPUT-FILE (default
+`par-NNN-ansicht.org' beside the sent files — deliberately NOT
+colliding with hand-owned par-NNN-handout files), guarded by the
+GENERATED marker like `tibetan-translation-doc-build'.  Reference
+translations (Lopez / W&M) never appear.  Returns the file.
+
+** ~tibetan-translation-doc-section~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 344
+:SIGNATURE: (tibetan-translation-doc-section par)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+Generate the §-view sheet for Lopez-§ PAR (with completion) and
+open it — the consultation / reading-class artifact.
+
 ** ~tibetan-translation-doc--context-source~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 226
+:LINE: 363
 :SIGNATURE: (tibetan-translation-doc--context-source)
 :END:
 
@@ -18546,7 +18583,7 @@ source itself; no file → prompt.
 ** ~tibetan-translation-doc~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 241
+:LINE: 378
 :SIGNATURE: (tibetan-translation-doc &optional from-sec to-sec)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -18562,7 +18599,7 @@ buffer.  Output lands beside the analysis files as
 ** ~tibetan-translation-doc-generated-marker~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 105
+:LINE: 109
 :DEFAULT: "# GENERATED by tibetan-translation-doc — NICHT VON HAND EDITIEREN"
 :END:
 
@@ -18573,7 +18610,7 @@ hand-owned file can never be clobbered by a regeneration.
 ** ~tibetan-translation-doc-empty-placeholder~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 111
+:LINE: 115
 :DEFAULT: "[Satz %d — noch keine Übersetzung]"
 :END:
 
@@ -18583,7 +18620,7 @@ still empty — gaps must be obvious in the stitched document.
 ** ~tibetan-translation-doc-missing-placeholder~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 115
+:LINE: 119
 :DEFAULT: "[Satz %d — Analysedatei fehlt]"
 :END:
 

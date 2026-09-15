@@ -300,6 +300,78 @@ previous output is."
       (tibetan-translation-doc-build source-file out)
       (should (file-exists-p out)))))
 
+;; ----------------------------------------------------------------------------
+;; §-Ansicht generator
+;; ----------------------------------------------------------------------------
+
+(defun tibetan-translation-doc-test--add-gloss-tables (file body)
+  "Insert a `** Gloss Tables' section with BODY into FILE's Reading."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (goto-char (point-min))
+    (re-search-forward "^\\*\\* Interlinear$")
+    (beginning-of-line)
+    (insert "** Gloss Tables\n" body "\n\n")
+    (write-region (point-min) (point-max) file nil 'silent)))
+
+(ert-deftest tibetan-translation-doc-section-view-structure ()
+  "The §167 view: `* §167', then `** Satz 2' with Tibetisch /
+Glossentabellen (VERBATIM, incl. Carsten's edits) / Claude and DM
+suggestions / his translation; `** Satz 3' shows the placeholder.
+GENERATED marker present."
+  (tibetan-translation-doc-test--with-corpus
+    (tibetan-translation-doc-test--add-gloss-tables
+     (tibetan-sentence--filepath 2 analysis-dir source-file)
+     "Unit 1 — Segment 2\n| EDITIERTE-TABELLE |")
+    (let* ((out (tibetan-translation-doc-section-view
+                 source-file 167))
+           (s (with-temp-buffer (insert-file-contents out)
+                                (buffer-string))))
+      (should (string-match-p "par-167-ansicht\\.org\\'" out))
+      (should (string-prefix-p "# GENERATED" s))
+      (let ((g (string-match "^\\* §167$" s))
+            (s2 (string-match "^\\*\\* Satz 2$" s))
+            (tib (string-match "^\\*\\*\\* Tibetisch$" s))
+            (tbl (string-match "^| EDITIERTE-TABELLE |$" s))
+            (cl (string-match "^\\*\\*\\* Vorschlag Claude$" s))
+            (dm (string-match "^\\*\\*\\* Vorschlag DharmaMitra$" s))
+            (cp (string-match "^\\*\\*\\* Übersetzung CP$" s))
+            (s3 (string-match "^\\*\\* Satz 3$" s)))
+        (should (and g s2 tib tbl cl dm cp s3))
+        (should (< g s2 tib tbl cl dm cp s3)))
+      ;; Suggestion bodies present (the fixture's poison markers are
+      ;; the Claude/DM section bodies — HERE they are wanted).
+      (should (string-match-p "POISON-CLAUDE-2" s))
+      (should (string-match-p "POISON-DM-2" s))
+      (should (string-match-p "\\[Satz 3 — noch keine Übersetzung\\]" s)))))
+
+(ert-deftest tibetan-translation-doc-section-view-locks-references ()
+  "Provided Translations (the Lopez/W&M slot) and the Renderings
+never reach the view; footnotes are namespaced and collected."
+  (tibetan-translation-doc-test--with-corpus
+    (let* ((out (tibetan-translation-doc-section-view source-file 167))
+           (s (with-temp-buffer (insert-file-contents out)
+                                (buffer-string))))
+      (should-not (string-match-p "POISON-LOPEZ" s))
+      (should-not (string-match-p "POISON-RENDERING" s))
+      (should (string-match-p "Ehrwürdige\\[fn:s002-x\\]" s))
+      (should (string-match-p "^\\[fn:s002-x\\] Definition aus Satz zwei\\." s)))))
+
+(ert-deftest tibetan-translation-doc-section-view-guard-and-unknown-par ()
+  "A hand-owned file at the target path is never overwritten; an
+unknown § signals user-error."
+  (tibetan-translation-doc-test--with-corpus
+    (let ((out (expand-file-name "par-167-ansicht.org" analysis-dir)))
+      (with-temp-file out (insert "Handgeschrieben.\n"))
+      (should-error (tibetan-translation-doc-section-view
+                     source-file 167)
+                    :type 'user-error)
+      (should (equal "Handgeschrieben.\n"
+                     (with-temp-buffer (insert-file-contents out)
+                                       (buffer-string)))))
+    (should-error (tibetan-translation-doc-section-view source-file 999)
+                  :type 'user-error)))
+
 (provide 'tibetan-translation-doc-test)
 
 ;;; tibetan-translation-doc-test.el ends here

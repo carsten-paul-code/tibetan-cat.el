@@ -36,6 +36,10 @@
                   (sent-num &optional folder source-file))
 (declare-function tibetan-sentence--source-file-from-analysis
                   "tibetan-sentence-persist" (filepath))
+(declare-function tibetan-sentence--read-l2-body "tibetan-sentence-persist"
+                  (file heading))
+(declare-function tibetan-cascade--read-gloss-tables "tibetan-cascade"
+                  (file))
 
 (defun tibetan-translation-doc--source-outline (source-file)
   "Ordered §-outline of the cascade SOURCE-FILE.
@@ -222,6 +226,139 @@ never reach generated documents.  Returns OUTPUT-FILE."
                   (string-join (nreverse fn-blocks) "\n\n")
                   "\n"))))
     output-file))
+
+(defun tibetan-translation-doc-section-view (source-file par
+                                                         &optional
+                                                         output-file)
+  "Compile the generated §-view for Lopez-§ PAR of SOURCE-FILE.
+The consultation/reading-class sheet (par-184-handout spirit, but
+GENERATED): one `* §PAR' with, per sentence, `** Satz N' carrying
+`*** Tibetisch' (the sent file's Tibetan), `*** Glossentabellen'
+\(the file's CURRENT `** Gloss Tables' body verbatim — Carsten's
+edited tables flow into the view), `*** Vorschlag Claude' /
+`*** Vorschlag DharmaMitra' (the suggestion bodies, omitted when
+absent) and `*** Übersetzung CP' (his Working Translation, the
+visible placeholder when empty).  Sentence footnotes are
+namespaced and collected under one trailing `* Footnotes' so the
+sheet exports cleanly.  Writes OUTPUT-FILE (default
+`par-NNN-ansicht.org' beside the sent files — deliberately NOT
+colliding with hand-owned par-NNN-handout files), guarded by the
+GENERATED marker like `tibetan-translation-doc-build'.  Reference
+translations (Lopez / W&M) never appear.  Returns the file."
+  (let* ((outline (tibetan-translation-doc--source-outline source-file))
+         (group (cl-find par outline
+                         :key (lambda (g) (plist-get g :lopez))))
+         (folder (expand-file-name "analysis"
+                                   (file-name-directory source-file)))
+         (out (or output-file
+                  (expand-file-name (format "par-%03d-ansicht.org" par)
+                                    folder))))
+    (unless group
+      (user-error "§%s hat keine Sätze in %s" par
+                  (file-name-nondirectory source-file)))
+    (when (and (file-exists-p out)
+               (not (tibetan-translation-doc--generated-file-p out)))
+      (user-error
+       "%s existiert und trägt keinen GENERATED-Marker — nicht überschrieben"
+       (file-name-nondirectory out)))
+    (let ((machine-body-re "\\`\\[\\(?:Requesting\\|Awaiting\\)")
+          (parts nil)
+          (fn-blocks nil))
+      (dolist (n (plist-get group :sent-nums))
+        (let* ((prefix (format "s%03d-" n))
+               (file (and (fboundp 'tibetan-sentence--filepath)
+                          (tibetan-sentence--filepath
+                           n folder source-file))))
+          (push (format "** Satz %d\n" n) parts)
+          (if (or (null file) (not (file-exists-p file)))
+              (push (concat (format
+                             tibetan-translation-doc-missing-placeholder
+                             n)
+                            "\n\n")
+                    parts)
+            (let* ((tib (and (fboundp 'tibetan-cascade--read-l1-body)
+                             (tibetan-cascade--read-l1-body
+                              file "Tibetan Text")))
+                   (tables (and (fboundp 'tibetan-cascade--read-gloss-tables)
+                                (car (tibetan-cascade--read-gloss-tables
+                                      file))))
+                   (claude (and (fboundp 'tibetan-sentence--read-l2-body)
+                                (tibetan-sentence--read-l2-body
+                                 file "Translation")))
+                   (dm (and (fboundp 'tibetan-sentence--read-l2-body)
+                            (tibetan-sentence--read-l2-body
+                             file "DharmaMitra Translation")))
+                   (wt (tibetan-translation-doc--working-translation
+                        file))
+                   (fns (tibetan-translation-doc--footnote-definitions
+                         file)))
+              (when tib
+                (push (concat "*** Tibetisch\n" tib "\n\n") parts))
+              (when (and tables (not (string-empty-p tables)))
+                (push (concat "*** Glossentabellen\n" tables "\n\n")
+                      parts))
+              ;; Suggestions: only real content — the machine
+              ;; placeholders ([Requesting…]/[Awaiting…]) are noise
+              ;; on a consultation sheet.  Prefix-gated only (a real
+              ;; rendering may open with an editorial bracket — the
+              ;; §5.40 lesson).
+              (when (and claude
+                         (not (string-match-p machine-body-re claude)))
+                (push (concat "*** Vorschlag Claude\n" claude "\n\n")
+                      parts))
+              (when (and dm (not (string-match-p machine-body-re dm)))
+                (push (concat "*** Vorschlag DharmaMitra\n" dm "\n\n")
+                      parts))
+              (push (concat "*** Übersetzung CP\n"
+                            (if wt
+                                (tibetan-translation-doc--namespace-footnotes
+                                 wt prefix)
+                              (format
+                               tibetan-translation-doc-empty-placeholder
+                               n))
+                            "\n\n")
+                    parts)
+              (when fns
+                (push (tibetan-translation-doc--namespace-footnotes
+                       fns prefix)
+                      fn-blocks))))))
+      (with-temp-file out
+        (insert tibetan-translation-doc-generated-marker "\n"
+                (format "# Quelle: %s · regenerieren: M-x tibetan-translation-doc-section\n"
+                        (file-name-nondirectory source-file))
+                (format "# Generiert: %s\n"
+                        (format-time-string "%Y-%m-%d"))
+                (format "#+TITLE: §%d — Ansicht\n" par)
+                "#+LANGUAGE: de\n"
+                "#+OPTIONS: toc:nil num:nil\n\n"
+                (format "* §%d\n" par))
+        (dolist (p (nreverse parts))
+          (insert p))
+        (when fn-blocks
+          (insert "* Footnotes\n\n"
+                  (string-join (nreverse fn-blocks) "\n\n")
+                  "\n"))))
+    out))
+
+;;;###autoload
+(defun tibetan-translation-doc-section (par)
+  "Generate the §-view sheet for Lopez-§ PAR (with completion) and
+open it — the consultation / reading-class artifact."
+  (interactive
+   (let* ((source (tibetan-translation-doc--context-source))
+          (outline (tibetan-translation-doc--source-outline source))
+          (pars (delq nil (mapcar (lambda (g) (plist-get g :lopez))
+                                  outline))))
+     (unless pars
+       (user-error "Keine §§ in %s" (file-name-nondirectory source)))
+     (list (string-to-number
+            (completing-read "§: " (mapcar #'number-to-string pars)
+                             nil t)))))
+  (let ((out (tibetan-translation-doc-section-view
+              (tibetan-translation-doc--context-source) par)))
+    (find-file out)
+    (message "§-Ansicht generiert: %s" (file-name-nondirectory out))
+    out))
 
 (defun tibetan-translation-doc--context-source ()
   "The cascade source for the current buffer: an analysis buffer

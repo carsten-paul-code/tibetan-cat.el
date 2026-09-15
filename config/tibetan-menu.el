@@ -201,7 +201,10 @@
      "---"
      ["Übersetzungsdokument generieren…" tibetan-translation-doc
       :active (fboundp 'tibetan-translation-doc)
-      :help "Working Translations + Fußnoten der sent-Dateien zu einem §-gruppierten Dokument stitchen"])
+      :help "Working Translations + Fußnoten der sent-Dateien zu einem §-gruppierten Dokument stitchen"]
+     ["§-Ansicht generieren…" tibetan-translation-doc-section
+      :active (fboundp 'tibetan-translation-doc-section)
+      :help "Kompilierte §-Sicht: Tibetisch + Glossentabellen + Claude/DM-Vorschläge + Übersetzung CP"])
     ("Sentence Structure"
      ["Prepare Sentence Workspace (C-c s w)" tibetan-prepare-sentence
       :help "Create sentence workspace with line-by-line analysis"]
