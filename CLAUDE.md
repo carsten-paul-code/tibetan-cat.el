@@ -3,7 +3,11 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-09-15 (§5.52: Phonetics retired, the
+editing. Last updated 2026-09-15 (§5.53: batch-vs-interactive
+sense-selection drift root-caused — steinert now above raw RY in
+`tibetan-dictionary-priority`, bundled RY store authoritative over
+the init-defined combined store; ERT 2291 / BDD 249.  Previous same
+day: §5.52: Phonetics retired, the
 §184-handout `** Gloss Table` ships in every analysis file, the
 Claude-gloss tier now beats dictionary first-senses across the
 two-file, paragraph AND cascade render paths, B0 cascade-guard
@@ -3734,6 +3738,62 @@ Milarepa/Tibetisch IV; 2. Portfolio (defer-MT, render-only safe);
 regenerated: MA Readings (§5.36), MA-Rgyan cascade beyond the two
 B0 files, Khu-dbon.
 
+### 5.53 Sense-selection drift batch vs interactive — root-caused, fixed (2026-09-15)
+
+Commits `e2d16b5` `50d6dfc`.  Symptom (found during the §5.52 corpus
+landing): `emacs -batch` regeneration of cascade files picked
+DIFFERENT dictionary senses for NON-curated tokens than the runs
+that produced the committed corpus — raw Rangjung Yeshe first lines
+in `* Reading ** Interlinear`: Wylie example text (`gzhung [rgyun de
+nyid skye srid nas]`), cross-references, biographical dates.
+★-curated glosses were stable; only the ranked fallback drifted.
+Reproducer: `tibetan-cascade-reanalyze-file` on a scratch copy of
+Portfolio `analysis/sent-004-deb.org`, diff `** Interlinear` vs
+buddhist-studies HEAD.
+
+**Root cause — environmental, no commit is guilty.**  Batch output
+is byte-identical at `c41d1fc` (the commit the corpus was generated
+at) and at pre-fix HEAD, so W6 `eb6cd9e` is exonerated (the earlier
+worktree bisect was itself skewed: `steinert.db` is gitignored, so
+every worktree ran with Steinert silently disabled).  The
+Reading/Gloss-Table cell gloss comes from `tibetan-lookup-word`'s
+first-hit-wins walk over `tibetan-dictionary-priority`, which ranked
+`rangjung-yeshe` above `steinert`; and the RY branch consulted
+`lookup-combined-dictionary-first` — defined only in Carsten's
+`init-tibetan-legacy.el`, i.e. only in interactive sessions — before
+the bundled store.  Which store answered therefore depended on the
+ENVIRONMENT.  The committed corpus is byte-for-byte what the walk
+produces with steinert first (verified: all 8 deb files regenerate
+byte-identical modulo `#+CREATED`/`#+LAST_ANALYZED`, idempotent
+second run) — the same relative order the ranked assembler
+`tibetan-vocab-multisource-entries` has always used (§5.3 rule A).
+Smoking gun: the SAME seg file from the 15.09 Milarepa landing shows
+the clean Hopkins sense in `** Interlinear Gloss` (multisource path)
+and RY junk in `** Gloss Table` row 2 (lookup-word path).
+
+**Fixes** (RED-first, one per commit):
+- `e2d16b5` default `tibetan-dictionary-priority` now `(resources
+  custom verbs steinert rangjung-yeshe local-glossary dharmamitra)`.
+- `50d6dfc` `tibetan-lookup-word-in-rangjung-yeshe` consults the
+  bundled lazy-loaded store FIRST; the ambient combined store is a
+  fallback for bundled-store misses.  Same lesson as B0
+  (`3389277`): an fboundp probe is a LOAD-STATE probe and must
+  never select between divergent behaviours.
+
+Known residual (data, not machinery): sent-005's `dkon bartsegs`
+groups as an RY-only MWU with a real gloss in batch where the
+committed file has per-syllable tokens + `[(look up)]` — the
+corpus-producing environment's RY store was evidently empty, so the
+MWU-existence probe denied the compound.  Predates the fix; the
+grouped form is arguably better.  NOTE: the 15.09 Milarepa landing
+(buddhist-studies `0b022dd`) was generated PRE-fix, so its
+`** Gloss Table` row 2 / seg-level glosses carry raw-RY senses for
+non-curated tokens — a re-landing decision is Carsten's.
+
+Suite: ERT 2287 → **2291** (+4: 2 ranked-selection, 2 RY-store
+authority), 0 unexpected, 1 skip; BDD 249; `make compile` clean;
+REFERENCE.org regenerated per commit.
+
 ## 6. Open work (prioritised)
 
 ### P0 — Verify Detailed Dictionary on a real segment ✓ DONE 2026-04-15
@@ -3821,6 +3881,17 @@ folio alongside the text so the caller can thread it through.
 - **Steinert DB may be absent**: tests that need it should check
   `(tibetan-steinert-available-p)` and `skip-unless`. Several already
   do this.
+- **Worktrees have no steinert.db**: the DB is gitignored (built via
+  `make build-steinert`), so a `git worktree` checkout silently runs
+  with the Steinert source DISABLED — sense selection changes and a
+  bisect there chases ghosts (§5.53).  Symlink the main checkout's
+  `data/dictionaries/steinert.db` into any worktree before comparing
+  dictionary-dependent output.
+- **Ambient init functions**: repo code must never let an
+  `fboundp` probe on a function defined in Carsten's init (e.g.
+  `lookup-combined-dictionary-first`) decide which data source
+  answers — that makes interactive and batch runs diverge (§5.53;
+  same lesson class as the B0 fboundp guard, §5.52).
 - **Placeholder translations**: `[Requesting translation...]`,
   `[Claude unavailable`, `[Translation not available` — these are NOT
   real translations. Any "preserve existing Claude translation" logic
