@@ -260,6 +260,59 @@ body entirely)."
     (should-not (tibetan-gloss-table-render '("U1")))
     (should-not (tibetan-gloss-table-render nil))))
 
+;; ----------------------------------------------------------------------------
+;; Captioned renderer (cascade Reading layer, 2026-09-15)
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-gloss-table-render-captioned-captions-per-unit ()
+  "Cascade shape ((GLOBAL-NUM . TEXT)…): each unit's table is
+preceded by a plain `Unit K — Segment N' caption line (matching
+the ⟦N⟧ rendering keys), blocks blank-line separated."
+  (tibetan-gloss-table-test--with-tokens
+      `(("U1" . ,tibetan-gloss-table-test--toks-a)
+        ("U2" . ,tibetan-gloss-table-test--toks-b))
+    (let ((out (tibetan-gloss-table-render-captioned
+                '((105 . "U1") (106 . "U2")))))
+      (should out)
+      (should (string-match-p "^Unit 1 — Segment 105$" out))
+      (should (string-match-p "^Unit 2 — Segment 106$" out))
+      ;; Caption directly above its table.
+      (should (string-match-p "^Unit 1 — Segment 105\n| " out))
+      (should (string-match-p "^Unit 2 — Segment 106\n| " out))
+      ;; No headings — plain lines only (§5.51 collision lesson).
+      (should-not (string-match-p "^\\*" out)))))
+
+(ert-deftest tibetan-gloss-table-render-captioned-skips-tokenless ()
+  "A token-less unit drops caption AND table together; the ordinal
+keeps counting the RENDERED units, the segment number stays the
+global key."
+  (tibetan-gloss-table-test--with-tokens
+      `(("U1" . ,tibetan-gloss-table-test--toks-a)
+        ("U2" . nil)
+        ("U3" . ,tibetan-gloss-table-test--toks-b))
+    (let ((out (tibetan-gloss-table-render-captioned
+                '((105 . "U1") (106 . "U2") (107 . "U3")))))
+      (should (string-match-p "Segment 105$" out))
+      (should-not (string-match-p "Segment 106" out))
+      (should (string-match-p "Segment 107$" out))))
+  ;; All units token-less → nil (the emitter then omits the section).
+  (tibetan-gloss-table-test--with-tokens '(("U1" . nil))
+    (should-not (tibetan-gloss-table-render-captioned '((105 . "U1"))))))
+
+(ert-deftest tibetan-gloss-table-render-captioned-forwards-vocab ()
+  "The vocab-alist reaches the per-token label resolver (Claude-POS
+tier) unchanged."
+  (let (seen)
+    (cl-letf (((symbol-function 'tibetan-reading--unit-tokens)
+               (lambda (_u) (list '(:tibetan "ཁ" :wylie "kha" :kind word))))
+              ((symbol-function 'tibetan-reading--gloss)
+               (lambda (_tok) nil))
+              ((symbol-function 'tibetan-gloss-table--token-label)
+               (lambda (_tok vocab) (setq seen vocab) "N")))
+      (tibetan-gloss-table-render-captioned
+       '((105 . "U1")) '(("kha" . "kha, noun, \"mouth\", x")))
+      (should (equal '(("kha" . "kha, noun, \"mouth\", x")) seen)))))
+
 (provide 'tibetan-gloss-table-test)
 
 ;;; tibetan-gloss-table-test.el ends here

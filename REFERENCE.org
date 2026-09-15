@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-15T16:21:37
+#+DATE: 2026-09-15T16:40:01
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  73 modules  ·  1401 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  73 modules  ·  1402 forms
 
 Regenerated automatically by:
 
@@ -19,7 +19,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#analysis/tibetan-clause-segmenter.el][analysis/tibetan-clause-segmenter.el]]  (20)
   - [[#analysis/tibetan-enhanced-display.el][analysis/tibetan-enhanced-display.el]]  (16)
   - [[#analysis/tibetan-enhanced-parser.el][analysis/tibetan-enhanced-parser.el]]  (16)
-  - [[#analysis/tibetan-gloss-table.el][analysis/tibetan-gloss-table.el]]  (7)
+  - [[#analysis/tibetan-gloss-table.el][analysis/tibetan-gloss-table.el]]  (8)
   - [[#analysis/tibetan-interlinear.el][analysis/tibetan-interlinear.el]]  (22)
   - [[#analysis/tibetan-mitra-translation.el][analysis/tibetan-mitra-translation.el]]  (24)
   - [[#analysis/tibetan-particles-bialek.el][analysis/tibetan-particles-bialek.el]]  (8)
@@ -1191,6 +1191,24 @@ UNITS is an ordered list of shad-unit strings (shads kept, the
 `tibetan-cascade-split-shad-units' contract).  Tables are joined
 by a blank line; units without tokens are skipped; nil when
 nothing renders.  VOCAB-ALIST feeds the Claude-POS label tier.
+
+** ~tibetan-gloss-table-render-captioned~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 213
+:SIGNATURE: (tibetan-gloss-table-render-captioned segs &optional vocab-alist)
+:END:
+
+Captioned tables for SEGS, the cascade ((GLOBAL-NUM . TEXT)…) shape.
+Like `tibetan-gloss-table-render', but each table is preceded by a
+plain caption line `Unit K — Segment N' (K = 1-based ordinal, N =
+the global segment number — the same key the Reading section's
+⟦N⟧ rendering lines and the per-unit Sentence Structure headers
+use).  Deliberately NOT a heading: the Claude heading machinery
+probes L2 names file-wide (the §5.51 collision lesson).  A unit
+that yields no tokens drops caption AND table together — captions
+carry the segment number, so skipping cannot misalign anything.
+nil when nothing renders.  VOCAB-ALIST feeds the Claude-POS tier.
 
 
 * analysis/tibetan-interlinear.el
