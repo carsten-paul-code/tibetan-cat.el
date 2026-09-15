@@ -95,6 +95,11 @@
   ;; - Warns if source text changed since last analysis
   ;; - Analysis file has sections for your notes, translation, footnotes
 
+(global-set-key (kbd "C-c u j") 'tibetan-analysis-jump-to-source)
+  ;; Jump from an analysis buffer back to its source heading
+  ;; (follows the #+SOURCE link; sent / seg / par files alike).
+  ;; Masterarbeit single-screen workflow, 2026-09-15.
+
 (global-set-key (kbd "C-c u R") 'tibetan-reanalyze-segment)
   ;; Re-analyze current segment:
   ;; - Regenerates Auto-Analysis section

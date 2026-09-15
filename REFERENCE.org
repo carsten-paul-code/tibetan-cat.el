@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-15T16:51:33
+#+DATE: 2026-09-15T16:54:04
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  74 modules  ·  1418 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1420 forms
 
 Regenerated automatically by:
 
@@ -86,6 +86,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#spec/suites/tigress-story-spec.el][spec/suites/tigress-story-spec.el]]  (5)
   - [[#spec/tibetan-bdd.el][spec/tibetan-bdd.el]]  (22)
   - [[#tibetan-cat.el][tibetan-cat.el]]  (8)
+  - [[#workspace/tibetan-analysis-nav.el][workspace/tibetan-analysis-nav.el]]  (2)
   - [[#workspace/tibetan-sentence-workspace.el][workspace/tibetan-sentence-workspace.el]]  (16)
 
 * INIT-EXAMPLE.el
@@ -2578,7 +2579,7 @@ Hash table of Tibetan verbs with grammatical information.
 ** ~tibetan-increase-text-scale~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 426
+:LINE: 431
 :SIGNATURE: (tibetan-increase-text-scale)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -2589,7 +2590,7 @@ Increase Tibetan text scale by 0.1.
 ** ~tibetan-decrease-text-scale~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 432
+:LINE: 437
 :SIGNATURE: (tibetan-decrease-text-scale)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -2600,7 +2601,7 @@ Decrease Tibetan text scale by 0.1 (minimum 1.0).
 ** ~tibetan-thesaurus-prefix-map~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 265
+:LINE: 270
 :DEFAULT: (make-sparse-keymap)
 :END:
 
@@ -2616,7 +2617,7 @@ Keymap for thesaurus commands — prefix `C-c u z'.
 ** ~tibetan-cat-context-menu-map~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 257
+:LINE: 260
 :DEFAULT: (let ((map (make-sparse-keymap "Tibetan")))
     (define-key map [segment-info] '(menu-item "Segment Info" tibetan-segmen
 :END:
@@ -19807,7 +19808,7 @@ Holds the result of the WHEN clause for use in THEN assertions.
 ** ~tibetan-cat-setup~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 294
+:LINE: 295
 :SIGNATURE: (tibetan-cat-setup)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -19819,7 +19820,7 @@ Loads glossaries and prepares the system for use.
 ** ~tibetan-cat-version~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 380
+:LINE: 381
 :SIGNATURE: (tibetan-cat-version)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -19830,7 +19831,7 @@ Display Tibetan CAT version and feature summary.
 ** ~tibetan-cat--server-socket-path~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 423
+:LINE: 424
 :SIGNATURE: (tibetan-cat--server-socket-path server-name)
 :END:
 
@@ -19842,7 +19843,7 @@ removed when the server is stopped).
 ** ~tibetan-cat-open-zettel-for-word-at-point~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 434
+:LINE: 435
 :SIGNATURE: (tibetan-cat-open-zettel-for-word-at-point &optional arg)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -19875,7 +19876,7 @@ in the appropriate instance.
 ** ~tibetan-cat-zettel-target-server~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 403
+:LINE: 404
 :TYPE: 'string
 :GROUP: tibetan-cat
 :DEFAULT: "research-emacs"
@@ -19897,7 +19898,7 @@ Empty string disables remote routing entirely.
 ** ~tibetan-cat-version~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 291
+:LINE: 292
 :END:
 
 /(no docstring)/
@@ -19905,7 +19906,7 @@ Empty string disables remote routing entirely.
 ** ~tibetan-cat-version~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 376
+:LINE: 377
 :DEFAULT: "2.1.0"
 :END:
 
@@ -19914,10 +19915,43 @@ Version of Tibetan CAT system.
 ** ~server-socket-dir~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 421
+:LINE: 422
 :END:
 
 /(no docstring)/
+
+
+* workspace/tibetan-analysis-nav.el
+:PROPERTIES:
+:CUSTOM_ID: workspace/tibetan-analysis-nav.el
+:SOURCE_PATH: /Users/cp/tibetan-cat.el/workspace/tibetan-analysis-nav.el
+:END:
+
+** ~tibetan-analysis-nav--source-link~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 28
+:SIGNATURE: (tibetan-analysis-nav--source-link file)
+:END:
+
+FILE's `#+SOURCE:' link as (PATH . TARGET), or nil.
+PATH is the absolute source path; TARGET the `::*HEADING' search
+text (nil when the link carries none).  Reads only the header
+region.
+
+** ~tibetan-analysis-jump-to-source~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 45
+:SIGNATURE: (tibetan-analysis-jump-to-source)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+Jump from this analysis buffer to its source heading.
+Follows the `#+SOURCE:' link (sent / seg / par files alike),
+reusing the source's window when it is already visible — the
+single-screen workflow's back-pointer.
 
 
 * workspace/tibetan-sentence-workspace.el

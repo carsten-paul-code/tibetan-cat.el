@@ -112,6 +112,8 @@
 (condition-case nil (require 'tibetan-cascade-test) (error nil))
 ;; Masterarbeit view 3: translation stitcher (2026-09-15)
 (condition-case nil (require 'tibetan-translation-doc-test) (error nil))
+;; Source<->analysis navigation (2026-09-15)
+(condition-case nil (require 'tibetan-analysis-nav-test) (error nil))
 
 ;; Batch reanalysis (preserves user notes + Claude translation)
 (condition-case nil (require 'tibetan-batch-reanalyze-test) (error nil))
