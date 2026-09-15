@@ -40,6 +40,7 @@
 ;; Without this declaration the let would create an invisible LEXICAL
 ;; shadow under lexical-binding — the `features'-shadow lesson.
 (defvar tibetan-analysis--target-lang)
+(defvar tibetan-analysis--claude-vocabulary-for-render)
 
 (defun tibetan-cascade-split-shad-units (text)
   "Split TEXT into its shad-terminated units.
@@ -601,7 +602,20 @@ Returns FILEPATH."
                                     filepath n))))
          (unknown (tibetan-cascade--collect-unknown-l1-sections filepath)))
     (with-temp-buffer
-      (insert (tibetan-cascade--scaffold sent-num segs source-file))
+      ;; C-für-Cascade (2026-09-15): render the Reading lines with
+      ;; the file's own preserved Claude Vocabulary in scope, so
+      ;; `tibetan-reading--gloss' (and the Gloss Table's Claude-POS
+      ;; tier) can prefer the context glosses over dictionary
+      ;; first-senses.  Parsed via the shared render-vars helper;
+      ;; nothing preserved → nil → unchanged dictionary behaviour.
+      (let ((tibetan-analysis--claude-vocabulary-for-render
+             (and (fboundp 'tibetan-analysis--claude-render-vars)
+                  (plist-get
+                   (tibetan-analysis--claude-render-vars
+                    (list :vocabulary
+                          (cdr (assoc "Claude Vocabulary" keep-l2))))
+                   :vocabulary))))
+        (insert (tibetan-cascade--scaffold sent-num segs source-file)))
       (dolist (kv keep-l1)
         (tibetan-cascade--set-body-in-buffer 1 (car kv) (cdr kv)))
       (dolist (kv keep-l2)

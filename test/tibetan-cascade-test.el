@@ -500,6 +500,40 @@ of silently dropping the body."
                           (re-search-forward "^\\* Footnotes" nil t))))
         (should (and vocab foot (< vocab foot)))))))
 
+(ert-deftest tibetan-cascade-regenerate-binds-claude-vocab-for-render ()
+  "Regenerate binds `tibetan-analysis--claude-vocabulary-for-render'
+\(parsed from the file's preserved ** Claude Vocabulary body, via
+the shared `tibetan-analysis--claude-render-vars' helper) around
+the scaffold call — so the Reading lines and Gloss Table row 2
+render with the Claude context glosses (2026-09-15 C-für-Cascade).
+Spy on the scaffold: at call time the var must hold the parsed
+alist keyed by the entry's Wylie."
+  (tibetan-cascade-test--with-cascade-file
+    ;; Land a populated sentence-level Claude Vocabulary body.
+    (with-temp-buffer
+      (insert-file-contents cascade-file)
+      (goto-char (point-min))
+      (re-search-forward "^\\*\\* Translation$")
+      (beginning-of-line)
+      (insert "** Claude Vocabulary\n"
+              "khang pa, noun, \"Haus\", the Claude context reading\n\n")
+      (write-region (point-min) (point-max) cascade-file nil 'silent))
+    (let* ((orig (symbol-function 'tibetan-cascade--scaffold))
+           (captured 'unset))
+      (cl-letf (((symbol-function 'tibetan-cascade--scaffold)
+                 (lambda (&rest args)
+                   (setq captured
+                         (and (boundp
+                               'tibetan-analysis--claude-vocabulary-for-render)
+                              tibetan-analysis--claude-vocabulary-for-render))
+                   (apply orig args))))
+        (tibetan-cascade--regenerate
+         cascade-file 4
+         '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+         (expand-file-name "doc.org" dir)))
+      (should (consp captured))
+      (should (assoc "khang pa" captured)))))
+
 (ert-deftest tibetan-cascade-regenerate-is-idempotent ()
   "A second regenerate with identical inputs is byte-identical
 modulo the LAST_ANALYZED stamp."
