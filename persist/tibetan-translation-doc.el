@@ -227,6 +227,26 @@ never reach generated documents.  Returns OUTPUT-FILE."
                   "\n"))))
     output-file))
 
+(defun tibetan-translation-doc--renderings (file)
+  "FILE's landed ⟦N⟧ rendering lines: ((N . BODY)…), in order.
+Reads the `** Renderings' body (the cascade Reading layer — in
+the Rgyan corpus Claude's per-segment German lives HERE, not in
+the sentence-level Translation body).  Machine placeholders
+\(`[Awaiting…' etc.) are skipped."
+  (let ((body (and (fboundp 'tibetan-sentence--read-l2-body)
+                   (tibetan-sentence--read-l2-body file "Renderings")))
+        out)
+    (when body
+      (dolist (line (split-string body "\n"))
+        (when (and (string-match "\\`- ⟦\\([0-9]+\\)⟧ \\(.*\\)\\'" line)
+                   (not (string-match-p
+                         "\\`\\[\\(?:Awaiting\\|Claude\\|Requesting\\)"
+                         (match-string 2 line))))
+          (push (cons (string-to-number (match-string 1 line))
+                      (match-string 2 line))
+                out))))
+    (nreverse out)))
+
 (defun tibetan-translation-doc--strip-leading-drawer (body)
   "BODY without a leading :PROPERTIES:…:END: drawer (trimmed).
 Suggestion bodies carry write-stamps (DM's LAST_TRANSLATED) that
@@ -320,10 +340,23 @@ translations (Lopez / W&M) never appear.  Returns the file."
               ;; on a consultation sheet.  Prefix-gated only (a real
               ;; rendering may open with an editorial bracket — the
               ;; §5.40 lesson).
-              (when (and claude
-                         (not (string-match-p machine-body-re claude)))
-                (push (concat "*** Vorschlag Claude\n" claude "\n\n")
-                      parts))
+              (let* ((claude-real
+                      (and claude
+                           (not (string-match-p machine-body-re
+                                                claude))
+                           claude))
+                     (rends (tibetan-translation-doc--renderings file))
+                     (rend-lines
+                      (mapconcat (lambda (r)
+                                   (format "- ⟦%d⟧ %s" (car r) (cdr r)))
+                                 rends "\n")))
+                (when (or claude-real rends)
+                  (push (concat "*** Vorschlag Claude\n"
+                                (or claude-real "")
+                                (if (and claude-real rends) "\n\n" "")
+                                (if rends rend-lines "")
+                                "\n\n")
+                        parts)))
               (when (and dm (not (string-match-p machine-body-re dm)))
                 (push (concat "*** Vorschlag DharmaMitra\n" dm "\n\n")
                       parts))

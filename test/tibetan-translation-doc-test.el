@@ -372,16 +372,37 @@ LAST_TRANSLATED) must not leak into the sheet."
       (should-not (string-match-p "^:PROPERTIES:$" s)))))
 
 (ert-deftest tibetan-translation-doc-section-view-locks-references ()
-  "Provided Translations (the Lopez/W&M slot) and the Renderings
-never reach the view; footnotes are namespaced and collected."
+  "Provided Translations (the Lopez/W&M slot) never reaches the
+view; the ⟦N⟧ RENDERINGS — Claude's per-segment German — DO (in
+the Rgyan corpus they carry the actual suggestion; the
+sentence-level body is often just the placeholder).  Footnotes
+namespaced and collected."
   (tibetan-translation-doc-test--with-corpus
     (let* ((out (tibetan-translation-doc-section-view source-file 167))
            (s (with-temp-buffer (insert-file-contents out)
                                 (buffer-string))))
       (should-not (string-match-p "POISON-LOPEZ" s))
-      (should-not (string-match-p "POISON-RENDERING" s))
+      ;; The rendering content of §167's sentences is IN the sheet…
+      (should (string-match-p "⟦2⟧ POISON-RENDERING-2" s))
+      ;; …but no foreign sentence leaks over.
+      (should-not (string-match-p "POISON-RENDERING-4" s))
       (should (string-match-p "Ehrwürdige\\[fn:s002-x\\]" s))
       (should (string-match-p "^\\[fn:s002-x\\] Definition aus Satz zwei\\." s)))))
+
+(ert-deftest tibetan-translation-doc-section-view-skips-placeholder-renderings ()
+  "A still-awaiting rendering line is machine noise — skipped."
+  (tibetan-translation-doc-test--with-corpus
+    (let ((f (tibetan-sentence--filepath 3 analysis-dir source-file)))
+      (with-temp-buffer
+        (insert-file-contents f)
+        (goto-char (point-min))
+        (re-search-forward "^- ⟦3⟧ .*$")
+        (replace-match "- ⟦3⟧ [Awaiting sentence translation…]")
+        (write-region (point-min) (point-max) f nil 'silent)))
+    (let* ((out (tibetan-translation-doc-section-view source-file 167))
+           (s (with-temp-buffer (insert-file-contents out)
+                                (buffer-string))))
+      (should-not (string-match-p "⟦3⟧ \\[Awaiting" s)))))
 
 (ert-deftest tibetan-translation-doc-section-view-guard-and-unknown-par ()
   "A hand-owned file at the target path is never overwritten; an
