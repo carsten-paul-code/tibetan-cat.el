@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-15T16:44:01
+#+DATE: 2026-09-15T16:45:43
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  73 modules  ·  1405 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  74 modules  ·  1408 forms
 
 Regenerated automatically by:
 
@@ -70,6 +70,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-sentence-claude.el][persist/tibetan-sentence-claude.el]]  (26)
   - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (60)
   - [[#persist/tibetan-structure-reorg.el][persist/tibetan-structure-reorg.el]]  (15)
+  - [[#persist/tibetan-translation-doc.el][persist/tibetan-translation-doc.el]]  (3)
   - [[#philology/tibetan-bialek-textbook-refs.el][philology/tibetan-bialek-textbook-refs.el]]  (2)
   - [[#philology/tibetan-madhyamaka-terms.el][philology/tibetan-madhyamaka-terms.el]]  (6)
   - [[#philology/tibetan-verse-philology.el][philology/tibetan-verse-philology.el]]  (13)
@@ -18442,6 +18443,46 @@ Orphans are moved to analysis/.archive/ subdirectory.
 :END:
 
 If non-nil, automatically create analysis for new segments during reorg.
+
+
+* persist/tibetan-translation-doc.el
+:PROPERTIES:
+:CUSTOM_ID: persist/tibetan-translation-doc.el
+:SOURCE_PATH: /Users/cp/tibetan-cat.el/persist/tibetan-translation-doc.el
+:END:
+
+** ~tibetan-translation-doc--source-outline~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 36
+:SIGNATURE: (tibetan-translation-doc--source-outline source-file)
+:END:
+
+Ordered §-outline of the cascade SOURCE-FILE.
+Returns a list of plists (:lopez N :sent-nums (N1 N2 …)) — one per
+`** Section' heading, N from the section drawer's :LOPEZ_SECTION:
+property (nil when the drawer lacks it), sentence numbers from the
+child `*** Sentence N' headings in file order.  Sentences BEFORE
+any Section land in a leading (:lopez nil …) group.  nil when the
+file has no sentences.
+
+** ~tibetan-translation-doc--working-translation~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 77
+:SIGNATURE: (tibetan-translation-doc--working-translation file)
+:END:
+
+FILE's `* Working Translation' body (trimmed), nil when empty.
+
+** ~tibetan-translation-doc--footnote-definitions~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 82
+:SIGNATURE: (tibetan-translation-doc--footnote-definitions file)
+:END:
+
+FILE's `* Footnotes' body verbatim (edge-trimmed), nil when empty.
 
 
 * philology/tibetan-bialek-textbook-refs.el

@@ -110,6 +110,8 @@
 (condition-case nil (require 'tibetan-portfolio-test) (error nil))
 ;; Cascade layout (#+TIBETAN_LAYOUT, predicate, shad-unit splitter)
 (condition-case nil (require 'tibetan-cascade-test) (error nil))
+;; Masterarbeit view 3: translation stitcher (2026-09-15)
+(condition-case nil (require 'tibetan-translation-doc-test) (error nil))
 
 ;; Batch reanalysis (preserves user notes + Claude translation)
 (condition-case nil (require 'tibetan-batch-reanalyze-test) (error nil))
