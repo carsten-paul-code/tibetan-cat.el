@@ -1648,12 +1648,14 @@ heading (`^\\*+ ')."
 (ert-deftest tibetan-sentence-segment-claude-sections-strip-list ()
   "§5.22 final (2026-05-21):  sentence files are ALWAYS rendered in
 the compressed in-class layout.  The accessor returns a fixed
-4-entry strip list — no longer flag-conditional.
+5-entry strip list — no longer flag-conditional.
 
-Drops:  Wylie, Interlinear, DharmaMitra Translation,
-Verb Classification (Hill 2010).  (Detailed Dictionary left the
-strip list with F1 2026-07-22; Phonetics with its 2026-09-15
-retirement — the generator no longer emits either.)
+Drops:  Wylie, Interlinear, Gloss Table (2026-09-15 — a per-unit
+reference table, prep-time not in-class), DharmaMitra
+Translation, Verb Classification (Hill 2010).  (Detailed
+Dictionary left the strip list with F1 2026-07-22; Phonetics
+with its 2026-09-15 retirement — the generator no longer emits
+either.)
 
 Keeps (implicitly, by NOT being in the strip list):
   · ** Claude Vocabulary
@@ -1671,9 +1673,10 @@ reading default;  per-segment seg-NNN.org files keep the full
   (should (fboundp 'tibetan-sentence--segment-claude-sections))
   (let ((strip (tibetan-sentence--segment-claude-sections)))
     (should (listp strip))
-    (should (= 4 (length strip)))
+    (should (= 5 (length strip)))
     (should (member "** Wylie Transliteration" strip))
     (should (member "** Interlinear Gloss" strip))
+    (should (member "** Gloss Table" strip))
     (should (member "** DharmaMitra Translation" strip))
     (should (member "** Verb Classification (Hill 2010)" strip))
     ;; F1 (2026-07-22): Detailed Dictionary retired from the generator,
@@ -1794,6 +1797,7 @@ flag — sentence files are always class-format."
          (concat
           "** Wylie Transliteration\nfoo\n\n"
           "** Interlinear Gloss\nfoo bar\n\n"
+          "** Gloss Table\n| foo |\n| f.  |\n| N   |\n\n"
           "** Claude Vocabulary\nfoo = thing\n\n"
           "** Translation\nThe thing.\n\n"
           "** DharmaMitra Translation\nThe thing (DM).\n\n"
@@ -1809,12 +1813,14 @@ flag — sentence files are always class-format."
       (should (string-match-p "^\\*\\* Provided Translations$" out))
       ;; Sentence Structure is now KEPT (2026-06-02).
       (should (string-match-p "^\\*\\* Sentence Structure$" out))
-      ;; Dropped: 4 reference sections (Detailed Dictionary is no
+      ;; Dropped: 5 reference sections (Detailed Dictionary is no
       ;; longer generated at all — F1 2026-07-22; Phonetics retired
-      ;; from the generator 2026-09-15, absence asserted anyway).
+      ;; from the generator 2026-09-15, absence asserted anyway;
+      ;; Gloss Table joined the strip set the same day).
       (should-not (string-match-p "^\\*\\* Wylie Transliteration$" out))
       (should-not (string-match-p "^\\*\\* Phonetics$" out))
       (should-not (string-match-p "^\\*\\* Interlinear Gloss$" out))
+      (should-not (string-match-p "^\\*\\* Gloss Table$" out))
       (should-not (string-match-p "^\\*\\* DharmaMitra Translation$" out))
       (should-not (string-match-p
                    "^\\*\\* Verb Classification (Hill 2010)$" out))
@@ -1848,32 +1854,32 @@ still suppresses the strip-list."
 
 (ert-deftest tibetan-sentence-detail-for-render-compressed-keeps-strip-list ()
   "§5.27 Phase 5:  explicit \"compressed\" value preserves the
-§5.22 default strip-list (4 entries since the 2026-09-15
-Phonetics retirement; sentence file collapses to the kept L2
+§5.22 default strip-list (5 entries as of 2026-09-15: Phonetics
+left, Gloss Table joined; sentence file collapses to the kept L2
 sections in the in-class compressed layout)."
   (let ((tibetan-sentence--detail-for-render "compressed"))
     (let ((strip (tibetan-sentence--segment-claude-sections)))
-      (should (= 4 (length strip)))
+      (should (= 5 (length strip)))
       (should (member "** Wylie Transliteration" strip))
       ;; F1: Detailed Dictionary retired.
       (should-not (member "** Detailed Dictionary" strip)))))
 
 (ert-deftest tibetan-sentence-detail-for-render-nil-keeps-strip-list ()
   "§5.27 Phase 5:  unbound / nil dynamic var = backwards-compatible
-§5.22 final behaviour — the full strip-list (4 entries since the
-2026-09-15 Phonetics retirement; compressed in-class layout is
-the default when no header is set)."
+§5.22 final behaviour — the full strip-list (5 entries as of
+2026-09-15: Phonetics left, Gloss Table joined; compressed
+in-class layout is the default when no header is set)."
   (let ((tibetan-sentence--detail-for-render nil))
-    (should (= 4 (length (tibetan-sentence--segment-claude-sections))))))
+    (should (= 5 (length (tibetan-sentence--segment-claude-sections))))))
 
 (ert-deftest tibetan-sentence-detail-for-render-garbage-keeps-strip-list ()
   "§5.27 Phase 5:  defensive — any string other than \"detailed\"
 \(case-insensitive) falls through to the compressed strip-list.
 Protects against typos in the per-document header."
   (let ((tibetan-sentence--detail-for-render "verbose"))
-    (should (= 4 (length (tibetan-sentence--segment-claude-sections)))))
+    (should (= 5 (length (tibetan-sentence--segment-claude-sections)))))
   (let ((tibetan-sentence--detail-for-render "full"))
-    (should (= 4 (length (tibetan-sentence--segment-claude-sections))))))
+    (should (= 5 (length (tibetan-sentence--segment-claude-sections))))))
 
 (ert-deftest tibetan-sentence-strip-segment-claude-sections-honours-detailed ()
   "§5.27 Phase 5:  end-to-end through the strip helper — when the

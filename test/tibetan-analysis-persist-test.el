@@ -563,6 +563,31 @@ retirement mechanism)."
     (should-not (string-match-p "^\\*\\* Phonetics$" content))
     (should-not (string-match-p "\\[Phonetics not available\\]" content))))
 
+(ert-deftest tibetan-analysis-generate-content-emits-gloss-table ()
+  "2026-09-15 (§184-handout form): generated content carries a
+`** Gloss Table' section — per shad unit one three-row org table
+\(Wylie / gloss / grammar label) — placed ABOVE `** Claude
+Vocabulary' (reading order: trot → table → per-word annotations),
+and the priority order knows the heading."
+  (skip-unless (and (fboundp 'tibetan-analysis-generate-content)
+                    (fboundp 'tibetan-gloss-table-render)))
+  (let ((content (tibetan-analysis-generate-content "བདག་གིས་ལས་བྱས།")))
+    (should (string-match-p "^\\*\\* Gloss Table$" content))
+    (let ((tbl   (string-match "^\\*\\* Gloss Table$" content))
+          (vocab (string-match "^\\*\\* Claude Vocabulary$" content)))
+      (should (and tbl vocab (< tbl vocab))))
+    ;; Body: one real org table — at least the three `|' rows —
+    ;; before the next L2 heading.
+    (string-match "^\\*\\* Gloss Table$" content)
+    (let* ((rest (substring content (match-end 0)))
+           (next (string-match "^\\*\\* " rest))
+           (body (substring rest 0 next)))
+      (should (>= (cl-count-if (lambda (l) (string-prefix-p "| " l))
+                               (split-string body "\n"))
+                  3))))
+  (should (member "** Gloss Table"
+                  tibetan-analysis--priority-section-order)))
+
 (ert-deftest tibetan-analysis-generate-content-no-detailed-dictionary ()
   "F1 (2026-07-22): the `** Detailed Dictionary' section is retired
 from the analysis layout — the Interlinear's tokens link to the

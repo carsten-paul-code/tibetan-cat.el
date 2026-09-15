@@ -31,6 +31,30 @@
     :example "Segment 25: selling poverty passage"
     :tags (:regression :critical :integration))
 
+  (spec "Analysis content carries a three-row Gloss Table above Claude Vocabulary"
+    ;; 2026-09-15, §184-handout form:  per shad unit one real org
+    ;; table — Wylie row, gloss row, grammar-label row — so a
+    ;; handout-style aligned table ships with every analysis file.
+    :given (setq test-text "བདག་གིས་ལས་བྱས།")
+    :when (when (and (fboundp 'tibetan-analysis-generate-content)
+                     (fboundp 'tibetan-gloss-table-render))
+            (tibetan-analysis-generate-content test-text))
+    :then ((tibetan-bdd-assert-contains result "** Gloss Table"
+            "Gloss Table section emitted")
+           ;; Position invariant: table sits ABOVE the per-word
+           ;; Claude Vocabulary annotations.
+           (should (let ((tbl (string-match "^\\*\\* Gloss Table$" result))
+                         (voc (string-match "^\\*\\* Claude Vocabulary$"
+                                            result)))
+                     (and tbl voc (< tbl voc))))
+           ;; A real org table: at least three `|'-rows in the body.
+           (should (>= (seq-count
+                        (lambda (l) (string-prefix-p "| " l))
+                        (split-string result "\n"))
+                       3)))
+    :example "bdag gis las byas → Wylie/gloss/label table"
+    :tags (:segment :gloss-table :layout))
+
   (spec "Include verb stems in Verb Details"
     :given (setq test-text "འཕགས་བས་ཇི་སྟེ་དབུལ་བ་བཙོང་ན་ཁྱོད་སྔར་ཁྲུས་གྱིས་ལ་འོག་ཏུ་སྦྱིན་པ་ཐོངས་ཤིག་གསུངས།")
     :when (when (fboundp 'tibetan-analysis-generate-content)

@@ -457,6 +457,10 @@ the corresponding heading has real content, not placeholder text)."
     ;; emits it anywhere, so there is nothing left to strip (mirrors
     ;; the F1 Detailed-Dictionary line below).
     "** Interlinear Gloss"
+    ;; §184-handout Gloss Table (2026-09-15): a per-unit reference
+    ;; table — prep-time material like the Interlinear it tabulates,
+    ;; stripped from the in-class compressed sentence layout.
+    "** Gloss Table"
     "** DharmaMitra Translation"
     ;; ** Sentence Structure is NO LONGER stripped (2026-06-02):  the
     ;; full per-clause subject/object structure is the headline class

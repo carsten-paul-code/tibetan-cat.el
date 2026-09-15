@@ -3645,6 +3645,9 @@ For each Bialek-detected particle in BIALEK-ANALYSIS:
   '("** Wylie Transliteration"
     ;; "** Phonetics" retired 2026-09-15 (user request; F1 mechanism).
     "** Interlinear Gloss"
+    ;; §184-handout form (2026-09-15): the three-row per-unit table
+    ;; directly under the flowing trot it tabulates.
+    "** Gloss Table"
     "** Claude Vocabulary"
     "** Claude Translation"
     "** Translation"
@@ -4418,6 +4421,33 @@ unused-arg warning without breaking the public API."
                             enriched-vocab-pairs)
                       (setq idx (1+ idx))))))
             (setq enriched-vocab-pairs (nreverse enriched-vocab-pairs))
+
+            ;; ============================================================
+            ;; SECTION 1a'': Gloss Table (2026-09-15, §184-handout form).
+            ;; Per shad unit ONE aligned three-row org table (Wylie /
+            ;; gloss / grammar label) from the tibetan-reading token
+            ;; stream.  Inserted at the interlinear marker BEFORE the
+            ;; deferred Interlinear pass below — both write at the same
+            ;; position and the LAST writer lands FIRST, so the final
+            ;; order is Interlinear → Gloss Table → Claude Vocabulary
+            ;; (and simply Gloss Table → Claude Vocabulary when the
+            ;; Interlinear has nothing to emit).
+            ;; ============================================================
+            (when (and interlinear-marker
+                       (fboundp 'tibetan-gloss-table-render))
+              (let* ((units (if (fboundp 'tibetan-cascade-split-shad-units)
+                                (tibetan-cascade-split-shad-units
+                                 tibetan-text)
+                              (list tibetan-text)))
+                     (table (condition-case nil
+                                (tibetan-gloss-table-render
+                                 units
+                                 tibetan-analysis--claude-vocabulary-for-render)
+                              (error nil))))
+                (when table
+                  (save-excursion
+                    (goto-char interlinear-marker)
+                    (insert "** Gloss Table\n" table "\n\n")))))
 
             ;; ============================================================
             ;; SECTION 1a (deferred): Interlinear Gloss + Particle Overview
