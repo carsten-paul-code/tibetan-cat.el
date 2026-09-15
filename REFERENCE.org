@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-15T13:05:17
+#+DATE: 2026-09-15T13:07:16
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  74 modules  ·  1415 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  74 modules  ·  1417 forms
 
 Regenerated automatically by:
 
@@ -23,7 +23,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#analysis/tibetan-interlinear.el][analysis/tibetan-interlinear.el]]  (22)
   - [[#analysis/tibetan-mitra-translation.el][analysis/tibetan-mitra-translation.el]]  (24)
   - [[#analysis/tibetan-particles-bialek.el][analysis/tibetan-particles-bialek.el]]  (8)
-  - [[#analysis/tibetan-reading.el][analysis/tibetan-reading.el]]  (19)
+  - [[#analysis/tibetan-reading.el][analysis/tibetan-reading.el]]  (21)
   - [[#analysis/tibetan-sentence-tree.el][analysis/tibetan-sentence-tree.el]]  (10)
   - [[#analysis/tibetan-translation-engine.el][analysis/tibetan-translation-engine.el]]  (10)
   - [[#analysis/tibetan-translation-suggest.el][analysis/tibetan-translation-suggest.el]]  (2)
@@ -2047,10 +2047,27 @@ Each: (:tibetan S :wylie W :kind particle|verb|word :label L
 (curated-first after W1) — the combined Reading line renders it
 inline, so the layer IS the interlinear trot.
 
+** ~tibetan-reading--claude-gloss~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 167
+:SIGNATURE: (tibetan-reading--claude-gloss tok)
+:END:
+
+Claude's context gloss for TOK from the dynamic render var, or nil.
+Consults `tibetan-analysis--claude-vocabulary-for-render' (the
+parsed Claude Vocabulary alist a reanalyze binds from the
+preserved section) with TOK's stem Wylie as an EXACT key — a bare
+token never inherits an MWU entry's gloss (the M2 `mar'/`mar pas'
+lesson).  Curated ★ tokens are excluded up front: the hand-written
+wordlist outranks Claude (kuratiert > Claude > Wörterbuch).
+Returns the first double-quoted field of the matched line
+(`wylie, POS, "gloss", note').
+
 ** ~tibetan-reading--sanskrit-token-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 174
+:LINE: 195
 :SIGNATURE: (tibetan-reading--sanskrit-token-p tok)
 :END:
 
@@ -2059,7 +2076,7 @@ Non-nil when TOK's Tibetan carries a Sanskrit-only sign.
 ** ~tibetan-reading--gloss~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 179
+:LINE: 200
 :SIGNATURE: (tibetan-reading--gloss tok)
 :END:
 
@@ -2073,10 +2090,16 @@ the Pass-5c selector) AND `EN (DE: …)' — the shape
 the second branch a de-target document's combined Reading lines
 would regress to English.
 
+2026-09-15: a NON-curated token first consults the Claude
+Vocabulary render var (`tibetan-reading--claude-gloss') — the
+context-aware reading beats the dictionary first-sense; it gets
+the curated 60-char budget since Claude glosses are already
+short, deliberate, and in the document's target language.
+
 ** ~tibetan-reading--linkify~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 214
+:LINE: 243
 :SIGNATURE: (tibetan-reading--linkify wylie tok)
 :END:
 
@@ -2088,7 +2111,7 @@ interlinears.
 ** ~tibetan-reading--render-token~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 228
+:LINE: 257
 :SIGNATURE: (tibetan-reading--render-token tok &optional main-verb-p)
 :END:
 
@@ -2105,7 +2128,7 @@ colors vanish.
 ** ~tibetan-reading-decorated-unit-line~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 272
+:LINE: 301
 :SIGNATURE: (tibetan-reading-decorated-unit-line unit-text &optional last-unit-p)
 :END:
 
@@ -2119,7 +2142,7 @@ line ends ` /' when the unit carries a trailing shad run.
 ** ~tibetan-reading-decorated-lines~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 293
+:LINE: 322
 :SIGNATURE: (tibetan-reading-decorated-lines units)
 :END:
 
@@ -2169,10 +2192,18 @@ The main verb is marked in the LAST unit only.
 
 /(no docstring)/
 
+** ~tibetan-analysis--claude-vocabulary-for-render~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 165
+:END:
+
+/(no docstring)/
+
 ** ~tibetan-reading--sanskrit-sign-re~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 166
+:LINE: 187
 :DEFAULT: "[ཱཻཽྲྀཷླྀཹཾཿྃཊཋཌཎཥ]"
 :END:
 

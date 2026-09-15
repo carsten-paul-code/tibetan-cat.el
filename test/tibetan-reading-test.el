@@ -159,5 +159,56 @@ bracket."
     (should (equal "nA mai"
                    (tibetan-reading-decorated-unit-line "ནཱ་མཻ")))))
 
+;; ----------------------------------------------------------------------------
+;; Claude-gloss consultation (2026-09-15): non-curated tokens prefer
+;; the exact-key Claude Vocabulary gloss from the dynamic render var
+;; — the same context-aware readings the ** Claude Vocabulary section
+;; carries, now feeding the Reading line + Gloss Table row 2.
+;; ----------------------------------------------------------------------------
+
+(defvar tibetan-analysis--claude-vocabulary-for-render nil)
+
+(ert-deftest tibetan-reading-claude-gloss-overrides-dictionary ()
+  "A NON-curated token with an exact-key Claude Vocabulary entry
+renders Claude's context gloss instead of the dictionary
+first-sense — the Interlinear-quality gate, extended to the
+Reading data stream."
+  (tibetan-reading-test--with-env '()
+    (let ((tibetan-analysis--claude-vocabulary-for-render
+           '(("chos" . "chos, noun, \"die Lehre\", context reading"))))
+      (let ((line (tibetan-reading-decorated-unit-line "ཆོས་བྱུང།")))
+        (should (string-match-p "chos \\[die Lehre\\]" line))
+        (should-not (string-match-p "\\[dharma\\]" line))))))
+
+(ert-deftest tibetan-reading-claude-gloss-curated-still-wins ()
+  "★ curated wordlist glosses OUTRANK the Claude gloss — the
+kuratiert > Claude > Wörterbuch precedence."
+  (tibetan-reading-test--with-env
+      '(("snang ba" . "Erscheinungen // appearances"))
+    (let ((tibetan-analysis--claude-vocabulary-for-render
+           '(("snang ba" . "snang ba, noun, \"Glanz\", x"))))
+      (let ((line (tibetan-reading-decorated-unit-line "སྣང་བ་བྱུང།")))
+        (should (string-match-p "snang ba ★ \\[appearances" line))
+        (should-not (string-match-p "Glanz" line))))))
+
+(ert-deftest tibetan-reading-claude-gloss-exact-key-only ()
+  "A bare token never inherits an MWU entry's Claude gloss (the M2
+`mar'/`mar pas' lesson): prefix matches don't fire."
+  (tibetan-reading-test--with-env '()
+    (let ((tibetan-analysis--claude-vocabulary-for-render
+           '(("chos lugs" . "chos lugs, noun, \"religion\", x"))))
+      (should (string-match-p
+               "chos \\[dharma\\]"
+               (tibetan-reading-decorated-unit-line "ཆོས་བྱུང།"))))))
+
+(ert-deftest tibetan-reading-claude-gloss-unbound-keeps-dictionary ()
+  "Var nil (no preserved Claude Vocabulary in scope) → unchanged
+dictionary behaviour."
+  (tibetan-reading-test--with-env '()
+    (let ((tibetan-analysis--claude-vocabulary-for-render nil))
+      (should (string-match-p
+               "chos \\[dharma\\]"
+               (tibetan-reading-decorated-unit-line "ཆོས་བྱུང།"))))))
+
 (provide 'tibetan-reading-test)
 ;;; tibetan-reading-test.el ends here

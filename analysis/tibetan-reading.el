@@ -162,6 +162,27 @@ inline, so the layer IS the interlinear trot."
     (nreverse out)))
 
 (defvar tibetan-analysis--target-lang)
+(defvar tibetan-analysis--claude-vocabulary-for-render)
+
+(defun tibetan-reading--claude-gloss (tok)
+  "Claude's context gloss for TOK from the dynamic render var, or nil.
+Consults `tibetan-analysis--claude-vocabulary-for-render' (the
+parsed Claude Vocabulary alist a reanalyze binds from the
+preserved section) with TOK's stem Wylie as an EXACT key — a bare
+token never inherits an MWU entry's gloss (the M2 `mar'/`mar pas'
+lesson).  Curated ★ tokens are excluded up front: the hand-written
+wordlist outranks Claude (kuratiert > Claude > Wörterbuch).
+Returns the first double-quoted field of the matched line
+\(`wylie, POS, \"gloss\", note')."
+  (when (and (boundp 'tibetan-analysis--claude-vocabulary-for-render)
+             tibetan-analysis--claude-vocabulary-for-render
+             (not (plist-get tok :curated-p)))
+    (let* ((hit (assoc (plist-get tok :wylie)
+                       tibetan-analysis--claude-vocabulary-for-render))
+           (line (cdr hit)))
+      (when (and (stringp line)
+                 (string-match "\"\\([^\"]+\\)\"" line))
+        (match-string 1 line)))))
 
 (defconst tibetan-reading--sanskrit-sign-re
   "[ཱཻཽྲྀཷླྀཹཾཿྃཊཋཌཎཥ]"
@@ -185,8 +206,15 @@ Language forms handled: `DE // EN' (the wordlist convention, via
 the Pass-5c selector) AND `EN (DE: …)' — the shape
 `tibetan-lookup-word' assembles from bilingual collection; without
 the second branch a de-target document's combined Reading lines
-would regress to English."
-  (let ((m (plist-get tok :meaning)))
+would regress to English.
+
+2026-09-15: a NON-curated token first consults the Claude
+Vocabulary render var (`tibetan-reading--claude-gloss') — the
+context-aware reading beats the dictionary first-sense; it gets
+the curated 60-char budget since Claude glosses are already
+short, deliberate, and in the document's target language."
+  (let* ((claude (tibetan-reading--claude-gloss tok))
+         (m (or claude (plist-get tok :meaning))))
     ;; W6: a Sanskrit-transliteration syllable with no real gloss
     ;; renders PLAIN — `mai [(look up)]' is noise, not information.
     (when (and m (stringp m)
@@ -205,7 +233,8 @@ would regress to English."
                     (t m)))
              (cut (if (fboundp 'tibetan-interlinear--truncate-gloss)
                       (tibetan-interlinear--truncate-gloss
-                       half (if (plist-get tok :curated-p) 60 30))
+                       half (if (or claude (plist-get tok :curated-p))
+                                60 30))
                     half)))
         (if (fboundp 'tibetan-interlinear--sanitize-gloss)
             (tibetan-interlinear--sanitize-gloss cut)
