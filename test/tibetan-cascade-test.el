@@ -463,6 +463,43 @@ Placeholders regenerate freshly."
       (should-not (tibetan-cascade--rendering-needs-request-p
                    cascade-file 105)))))
 
+(ert-deftest tibetan-cascade-regenerate-restores-vocab-without-scaffold-slot ()
+  "§5.26 class (2026-09-15): a preserved L2 body whose heading the
+fresh scaffold does NOT emit (the renderer-error fallback emits
+only Translation + Provided Translations; this fixture's canned
+renderer likewise has no Claude Vocabulary slot) must still be
+RESTORED — the restore loop creates the missing heading instead
+of silently dropping the body."
+  (tibetan-cascade-test--with-cascade-file
+    ;; Land a populated Claude Vocabulary (as --insert-claude-sections
+    ;; would leave it).
+    (with-temp-buffer
+      (insert-file-contents cascade-file)
+      (goto-char (point-min))
+      (re-search-forward "^\\*\\* Translation$")
+      (beginning-of-line)
+      (insert "** Claude Vocabulary\n"
+              "khang pa, noun, \"Haus\", the context reading\n\n")
+      (write-region (point-min) (point-max) cascade-file nil 'silent))
+    (tibetan-cascade--regenerate
+     cascade-file 4
+     '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+     (expand-file-name "doc.org" dir))
+    (let ((body (tibetan-sentence--read-l2-body cascade-file
+                                                "Claude Vocabulary")))
+      (should body)
+      (should (string-match-p "khang pa, noun, \"Haus\"" body)))
+    ;; The created heading must sit INSIDE * Tibetan Analysis (above
+    ;; * Footnotes), not dangle at the file end.
+    (with-temp-buffer
+      (insert-file-contents cascade-file)
+      (let ((vocab (progn (goto-char (point-min))
+                          (re-search-forward
+                           "^\\*\\* Claude Vocabulary$" nil t)))
+            (foot  (progn (goto-char (point-min))
+                          (re-search-forward "^\\* Footnotes" nil t))))
+        (should (and vocab foot (< vocab foot)))))))
+
 (ert-deftest tibetan-cascade-regenerate-is-idempotent ()
   "A second regenerate with identical inputs is byte-identical
 modulo the LAST_ANALYZED stamp."

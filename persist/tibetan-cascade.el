@@ -605,7 +605,22 @@ Returns FILEPATH."
       (dolist (kv keep-l1)
         (tibetan-cascade--set-body-in-buffer 1 (car kv) (cdr kv)))
       (dolist (kv keep-l2)
-        (tibetan-cascade--set-body-in-buffer 2 (car kv) (cdr kv)))
+        (unless (tibetan-cascade--set-body-in-buffer 2 (car kv) (cdr kv))
+          ;; §5.26 class (2026-09-15): the scaffold does not always
+          ;; emit every preserved L2 slot — the renderer-error
+          ;; fallback emits only Translation + Provided Translations,
+          ;; and Claude Vocabulary / Concept Notes arrive only when
+          ;; the segment renderer ran.  A preserved body without a
+          ;; slot was silently DROPPED here.  Create the heading at
+          ;; the end of * Tibetan Analysis (above * Footnotes).
+          (save-excursion
+            (goto-char (point-min))
+            (if (re-search-forward "^\\* Footnotes" nil t)
+                (goto-char (line-beginning-position))
+              (goto-char (point-max))
+              (unless (bolp) (insert "\n")))
+            (insert "** " (car kv) "\n"
+                    (string-trim-right (cdr kv)) "\n\n"))))
       (when claude-grammar
         (tibetan-cascade--set-body-in-buffer 3 "Claude Grammar"
                                              claude-grammar))
