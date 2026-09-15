@@ -353,7 +353,6 @@ manual `tibetan-thesaurus-reload'."
               "** Tibetan\n"
               "- Term: [Tibetan script to be added]\n"
               (format "- Wylie: %s\n" (string-trim wylie))
-              "- Phonetic: [to be added]\n"
               "- Etymology: [to be researched]\n\n"
               "** English\n"
               (format "- Primary translation: %s\n" en)

@@ -46,7 +46,7 @@ must tolerate those gracefully."
             "** Tibetan\n"
             "- Term: [Tibetan script to be added]\n"
             (format "- Wylie: %s\n" (or wylie "test wylie"))
-            "- Phonetic: [to be added]\n\n"
+            "\n"
             "** English\n"
             (format "- Primary translation: %s\n" (or english "test english"))
             "- Alternative translations: [to be researched]\n\n"
@@ -423,7 +423,12 @@ Uses a stubbed `current-time' so the test is deterministic."
               (should (string-match-p "^\\*\\* English" s))
               (should (string-match-p "^\\*\\* German" s))
               ;; Wylie field prefilled.
-              (should (string-match-p "^- Wylie: mthu" s)))))))))
+              (should (string-match-p "^- Wylie: mthu" s))
+              ;; The `- Phonetic:' template line is retired
+              ;; (2026-09-15, with the phonetics feature) — new
+              ;; zettels no longer prompt for a field nothing
+              ;; reads; existing zettel entries stay untouched.
+              (should-not (string-match-p "^- Phonetic:" s)))))))))
 
 (ert-deftest tibetan-thesaurus-new-entry-slugifies-wylie-multi-syllable ()
   "Multi-syllable Wylie (e.g. `rnam par shes pa') is slugified into
