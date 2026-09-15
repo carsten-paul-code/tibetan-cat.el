@@ -5143,9 +5143,32 @@ the segment-level `tibetan-reanalyze-segment' contract."
         (error "No paragraph analysis file exists.  Use C-c p A first"))
       (when (yes-or-no-p
              "Re-analyze paragraph? (Auto section regenerated, notes preserved) ")
-        (let ((auto-content (tibetan-analysis-generate-content
-                             tibetan-text (format "§%d" par-id) source-text)))
+        ;; 2026-09-15 parity with `tibetan-analysis-reanalyze-file':
+        ;; read the file's Claude sections FIRST, bind the render vars
+        ;; (par files were the one regenerate path with no Claude
+        ;; override at all) plus default-directory (§5.34 headless-
+        ;; Resources lesson), and RESTORE the preserved bodies after
+        ;; the rebuild — the old path silently wiped them and masked
+        ;; the wipe with the unconditional refire below.
+        (let* ((existing-sections
+                (tibetan-analysis--read-claude-sections filepath))
+               (has-any-section
+                (tibetan-analysis--claude-sections-populated-p
+                 existing-sections))
+               (render-vars
+                (tibetan-analysis--claude-render-vars existing-sections))
+               (default-directory (file-name-directory
+                                   (expand-file-name filepath)))
+               (tibetan-analysis--claude-particles-for-render
+                (plist-get render-vars :particles))
+               (tibetan-analysis--claude-vocabulary-for-render
+                (plist-get render-vars :vocabulary))
+               (auto-content (tibetan-analysis-generate-content
+                              tibetan-text (format "§%d" par-id) source-text)))
           (tibetan-analysis-regenerate-auto filepath tibetan-text auto-content)
+          (when has-any-section
+            (tibetan-analysis--restore-claude-sections
+             filepath existing-sections))
           (let ((buf (get-file-buffer filepath)))
             (when buf
               (with-current-buffer buf
@@ -5369,12 +5392,8 @@ without touching the file.  Otherwise return a plist:
          (existing-sections
           (tibetan-analysis--read-claude-sections filepath))
          (has-any-section
-          (and existing-sections
-               (or (plist-get existing-sections :translation)
-                   (plist-get existing-sections :grammar)
-                   (plist-get existing-sections :particles)
-                   (plist-get existing-sections :concepts)
-                   (plist-get existing-sections :vocabulary)))))
+          (tibetan-analysis--claude-sections-populated-p
+           existing-sections)))
     (cond
      ((null seg-id)
       `(:file ,filepath :ok nil
@@ -5412,22 +5431,12 @@ without touching the file.  Otherwise return a plist:
                  ;; resolves the document's Resources/ on every path.
                  (default-directory (file-name-directory
                                      (expand-file-name filepath)))
-                 (claude-particles-raw
-                  (and existing-sections
-                       (plist-get existing-sections :particles)))
-                 (claude-vocabulary-raw
-                  (and existing-sections
-                       (plist-get existing-sections :vocabulary)))
+                 (render-vars
+                  (tibetan-analysis--claude-render-vars existing-sections))
                  (tibetan-analysis--claude-particles-for-render
-                  (and claude-particles-raw
-                       (fboundp 'tibetan-analysis--parse-claude-particles)
-                       (tibetan-analysis--parse-claude-particles
-                        claude-particles-raw)))
+                  (plist-get render-vars :particles))
                  (tibetan-analysis--claude-vocabulary-for-render
-                  (and claude-vocabulary-raw
-                       (fboundp 'tibetan-analysis--parse-claude-vocabulary)
-                       (tibetan-analysis--parse-claude-vocabulary
-                        claude-vocabulary-raw)))
+                  (plist-get render-vars :vocabulary))
                  ;; Phase 6 of sanskrit-parallel-workflow (2026-04-27):
                  ;; in parallel-Sanskrit mode, thread the segment's
                  ;; `**** Sanskrit' sibling through to the renderer
@@ -5518,6 +5527,37 @@ without touching the file.  Otherwise return a plist:
         (error
          `(:file ,filepath :seg-id ,seg-id :ok nil
                  :error ,(error-message-string err))))))))
+
+(defun tibetan-analysis--claude-render-vars (existing-sections)
+  "Parse EXISTING-SECTIONS' bodies into render-ready alists.
+Returns (:particles PARSED :vocabulary PARSED) — the values that
+callers bind into `tibetan-analysis--claude-particles-for-render' /
+`--claude-vocabulary-for-render' around `generate-content'.  Shared
+by the segment, paragraph and cascade regenerate paths (2026-09-15;
+before, the paragraph path bound NOTHING, so par-NNN.org files got
+no Claude override at all)."
+  (list :particles
+        (let ((raw (and existing-sections
+                        (plist-get existing-sections :particles))))
+          (and raw
+               (fboundp 'tibetan-analysis--parse-claude-particles)
+               (tibetan-analysis--parse-claude-particles raw)))
+        :vocabulary
+        (let ((raw (and existing-sections
+                        (plist-get existing-sections :vocabulary))))
+          (and raw
+               (fboundp 'tibetan-analysis--parse-claude-vocabulary)
+               (tibetan-analysis--parse-claude-vocabulary raw)))))
+
+(defun tibetan-analysis--claude-sections-populated-p (sections)
+  "Non-nil when SECTIONS carries any populated Claude body."
+  (and sections
+       (or (plist-get sections :translation)
+           (plist-get sections :grammar)
+           (plist-get sections :particles)
+           (plist-get sections :concepts)
+           (plist-get sections :vocabulary))
+       t))
 
 (defun tibetan-analysis--analysis-file-re (prefix)
   "Return the strict regexp matching PREFIX-NNN[-SUFFIX].org basenames.

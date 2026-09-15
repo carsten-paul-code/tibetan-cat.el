@@ -1434,6 +1434,69 @@ fall back to a Steinert/RY single-source pick."
         ;; Must NOT have surfaced the Steinert gloss.
         (should-not (string-match-p "object; place" il))))))
 
+(ert-deftest tibetan-reanalyze-paragraph-binds-and-preserves-claude ()
+  "2026-09-15 par-path parity: `tibetan-reanalyze-paragraph' must
+(1) run generate-content WITH the file's preserved Claude Vocabulary
+bound into `tibetan-analysis--claude-vocabulary-for-render' — par
+files were the one regenerate path with NO Claude override at all —
+and (2) RESTORE the preserved Claude bodies after regenerate-auto;
+the old path silently wiped them and masked the wipe by refiring."
+  (let* ((dir (make-temp-file "tibetan-par-regen-" t))
+         (src (expand-file-name "quelle.org" dir))
+         (analysis-dir (expand-file-name "analysis" dir))
+         (par-file (expand-file-name "par-184.org" analysis-dir))
+         (seen-vocab 'unset))
+    (unwind-protect
+        (progn
+          (make-directory analysis-dir t)
+          (with-temp-file src
+            (insert "#+TITLE: Quelle\n\n* Text\n** §184\n"
+                    "*** Tibetisch\nབཀྲ་ཤིས།\n"))
+          (with-temp-file par-file
+            (insert "#+TITLE: Paragraph 184 Analysis\n\n"
+                    "* Tibetan Text\nབཀྲ་ཤིས།\n\n"
+                    "* Tibetan Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nbkra shis /\n\n"
+                    "** Claude Vocabulary\n"
+                    "bkra shis, noun, \"auspiciousness\", greeting\n\n"
+                    "** Translation\nTailored old translation.\n\n"
+                    "* Footnotes\n"))
+          (let ((buf (find-file-noselect src)))
+            (unwind-protect
+                (with-current-buffer buf
+                  (org-mode)
+                  (goto-char (point-min))
+                  (re-search-forward "Tibetisch")
+                  (cl-letf (((symbol-function 'yes-or-no-p)
+                             (lambda (&rest _) t))
+                            ((symbol-function
+                              'tibetan-analysis--request-claude-translation)
+                             (lambda (&rest _) nil))
+                            ((symbol-function 'tibetan-analysis-generate-content)
+                             (lambda (&rest _)
+                               (setq seen-vocab
+                                     (and (boundp 'tibetan-analysis--claude-vocabulary-for-render)
+                                          tibetan-analysis--claude-vocabulary-for-render))
+                               "** Wylie Transliteration\nbkra shis /\n")))
+                    (tibetan-reanalyze-paragraph)))
+              (when (buffer-live-p buf)
+                (with-current-buffer buf (set-buffer-modified-p nil))
+                (kill-buffer buf))))
+          ;; (1) the render var carried the parsed vocab alist.
+          (should (consp seen-vocab))
+          (should (assoc "bkra shis" seen-vocab))
+          ;; (2) the Claude bodies survived the regenerate.
+          (let ((text (with-temp-buffer
+                        (insert-file-contents par-file)
+                        (buffer-string))))
+            (should (string-match-p "auspiciousness" text))
+            (should (string-match-p "Tailored old translation" text))))
+      (let ((abuf (get-file-buffer par-file)))
+        (when abuf
+          (with-current-buffer abuf (set-buffer-modified-p nil))
+          (kill-buffer abuf)))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-analysis-strip-leading-sense-number-parenthesized ()
   "\"(1) that\" → \"that\" — the par-184 junk class (2026-09-15): the
 old inline regex ^[0-9]+[.):] missed parenthesized numbering."
