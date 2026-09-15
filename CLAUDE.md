@@ -3,13 +3,13 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-07-28 (§5.46: C0 = Part B Phase 0+1
-landed — strict analysis-file glob, DM honors #+TIBETAN_TARGET_LANG,
-sentence-first fire gate includes the sent file, single-segment
-sentences fire sentence-level, BDD end-to-end suite.  ERT 2226 /
-BDD 247.  Khu-dbon backfill + Portfolio P5 freeze+fire UNBLOCKED.
-The CASCADE v2 plan lives at
-`~/.claude/plans/idempotent-pondering-wozniak.md`.  Previous: §5.26 BUG fix — regenerate-
+editing. Last updated 2026-09-15 (§5.52: Phonetics retired, the
+§184-handout `** Gloss Table` ships in every analysis file, the
+Claude-gloss tier now beats dictionary first-senses across the
+two-file, paragraph AND cascade render paths, B0 cascade-guard
+postmortem.  ERT 2287 / BDD 249.  Corpus landing per the §5.52
+recipe is the next operational step.  Previous: §5.46 C0 = Part B
+Phase 0+1; §5.26 BUG fix — regenerate-
 auto preserves Claude content under `:missing-only' too;
 `(not re-request-claude)' was treating `:missing-only' as
 truthy → wipe.  Caused 274 / 287 Milarepa segs to lose Claude
@@ -3623,6 +3623,116 @@ survives export).  The `*x*' matcher gates on `** Interlinear';
 docs; the grounding's `\\=`\\[' placeholder filter admits lines
 beginning with org links.  All 64 files regenerated: 173/173
 renderings intact.
+
+### 5.52 Phonetics retired · Gloss Table · Claude-gloss tier (+ B0 postmortem) (done, 2026-09-15)
+
+Carsten's three requests (2026-09-15): (1) *"phonetic brauche ich
+nicht mehr.  Kann überall raus"*; (2) the analysis should ALSO carry
+the §184-handout three-row table form (Wylie | Glosse |
+Grammatik-Label); (3) *"das interlinear glossary fällt gegen das
+Claude vocabulary deutlich ab — ist da was machbar?"*  Plan:
+`~/.claude/plans/idempotent-pondering-wozniak.md` (superseding the
+CASCADE v2 content there).  Executed bug-first, every commit
+RED-verified.
+
+#### B0 postmortem — silent cascade destruction (fixed FIRST)
+
+The 2026-09-12 regeneration (buddhist-studies `d7ff7ec`) DESTROYED
+`sent-047/048-rgyan.org`'s cascade structure: `tibetan-sentence-
+reanalyze-file`'s dispatch guarded on `(fboundp cascade-handlers)` —
+in a batch where tibetan-cascade wasn't loaded, the guard silently
+took the DESTRUCTIVE two-file branch.  Fix (`3389277`): textual
+detector `tibetan-sentence--cascade-layout-p` (scans the first 4096
+bytes for `#+TIBETAN_LAYOUT: cascade`), then `(require
+'tibetan-cascade nil t)`, else REFUSE with `:error` — never silently
+destructive.  Data repaired from `58c88a6` + 12.09 bodies + a
+corrected-source cascade regenerate (buddhist-studies `5aaa5ea`,
+idempotent, user slots byte-identical).  LESSON: an fboundp guard is
+a LOAD-STATE probe, not a FILE-KIND probe — never let it choose
+between destructive and preserving branches.
+
+#### Interlinear-quality bugs (Claude-gloss tier, part 1 — two-file)
+
+- `797143b` sense-number strip also handles `(1) ` (regex gap: only
+  `1.` / `1)` / `1:` were stripped).
+- `2421809` Claude auto-regen fires on VOCABULARY-only arrival too
+  (was :particles-gated — vocab-only responses never re-rendered).
+- `a40e4c6` C1b star-sanitizer spares the section's own
+  already-converted org sub-headings (`*** Tibetan Divergence` was
+  space-prefixed → destroyed on every rewrite; REAL latent bug the
+  RED suite surfaced).
+- `6582b3c` paragraph reanalyze binds BOTH render vars (par files
+  had NO Claude override at all) + preserves Claude sections (the
+  interactive par command WIPED them every run); shared helper
+  `tibetan-analysis--claude-render-vars`.
+- `4956b3c` headless `tibetan-analysis-reanalyze-paragraph-file`
+  (par-NNN filename + #+SOURCE rescan) + auto-regen routes par-*
+  files there.
+- `2f0d7cf` override gate WIDENED (the C-core): precedence is now
+  kuratiert★/Custom/`<term>` > Claude context gloss > dictionary
+  first-sense — for ALL tokens, not just proper nouns.  Generic path
+  EXACT key only (M2's `mar`/`mar pas`).  Accepted grounding cycle:
+  Claude glosses fed back as grounding are its own earlier context
+  readings.
+
+#### Phonetics retirement (request 1)
+
+`72d1638` layout unplug (emitter block deleted, priority-order +
+sentence strip-list entries out, ~8 test retargets — the §5.19
+feature inverted the same way F1 killed the Detailed Dictionary);
+`0145715` module + 54 tests deleted; `f08ae19` thesaurus template
+line dropped.  Legacy files lose the section on next reanalyze.
+MA Readings keep theirs until the §5.36 wordlist repair (NO batch
+regenerate there — caveat still stands).
+
+#### Gloss Table (request 2)
+
+NEW module `analysis/tibetan-gloss-table.el` (+18 tests, wired):
+- `c662519` pure LABEL RESOLVER on `tibetan-reading--unit-tokens`
+  plists: native first (particle label verbatim; bare nominaliser
+  after verb → NMLZ; verb → V / V.HON on "(hon.)"), then Claude-POS
+  exact key (PN/PRON/N/ADJ/ADV/CONJ/NUM/V, `.HON` suffix), fallback
+  `?`; merged-clitic labels dot-append (bya-ba'i → NMLZ.GEN).
+- `b0f1cda` pure renderer: per shad unit ONE org table, 3 rows ×
+  N token columns, plain cells (`|`→`\vert`, no markup/links),
+  column-width padded so it aligns as RAW TEXT.
+- `96cc13a` layout: `** Gloss Table` between Interlinear and Claude
+  Vocabulary (marker trick: both insert at the interlinear marker,
+  LAST writer lands FIRST); in priority-order; ADDED to the sentence
+  strip-list (4→5 — prep-time material); par files inherit; cascade
+  files untouched (`* Reading` carries the per-unit view).  +1 BDD.
+
+#### Claude-gloss tier, part 2 — Reading/cascade (request 3)
+
+- `42629c0` `tibetan-reading--gloss`: NON-curated tokens prefer the
+  exact-key Claude gloss from `--claude-vocabulary-for-render`
+  (curated 60-char budget); ★ still wins.  Feeds cascade Reading
+  lines AND Gloss Table row 2.
+- `eb9b573` BUG found while wiring: cascade regenerate DROPPED any
+  preserved L2 body whose heading the fresh scaffold didn't emit
+  (renderer-error fallback path; §5.26 class).  Restore now CREATES
+  the missing heading above `* Footnotes`.
+- `e3fa4d3` `tibetan-cascade--regenerate` binds the render var from
+  the file's own preserved Claude Vocabulary (shared helper) around
+  the scaffold — the Rgyan corpus's context glosses reach the layer
+  Carsten reads.
+
+#### Suite
+
+2257 → **2287 ERT** (net: +84 new − 54 deleted phonetics), 0
+unexpected, 1 skip; BDD 248 → **249**; `make compile` clean
+throughout; REFERENCE.org regenerated per def-touching commit.
+
+#### Corpus landing (recipe, NOT yet run at write time)
+
+Per-corpus preserve-mode recipe: ★-parity, user slots
+byte-identical, second run idempotent, NO `** Phonetics`,
+`** Gloss Table` after Interlinear, 5 spot-checks Claude-gloss-
+over-dictionary, no `(1) ` residue.  Order: 1. canary
+Milarepa/Tibetisch IV; 2. Portfolio (defer-MT, render-only safe);
+3. par files individually via the new headless command.  NOT
+regenerated: MA Readings (§5.36), MA-Rgyan cascade beyond the two
+B0 files, Khu-dbon.
 
 ## 6. Open work (prioritised)
 
