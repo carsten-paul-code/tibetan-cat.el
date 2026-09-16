@@ -588,6 +588,84 @@ and the priority order knows the heading."
   (should (member "** Gloss Table"
                   tibetan-analysis--priority-section-order)))
 
+(ert-deftest tibetan-analysis-gloss-table-seg-headings-when-var-bound ()
+  "2026-09-16 (§185 review): with
+`tibetan-analysis--gloss-table-seg-start' bound (the par paths
+bind it from the source §'s :B2_SEG_START: drawer), the Gloss
+Table numbers its shad units as consecutive `*** Segment N'
+headings — the handout form.  Unbound → headingless tables as
+before (seg-file output byte-stable)."
+  (skip-unless (and (fboundp 'tibetan-analysis-generate-content)
+                    (fboundp 'tibetan-gloss-table-render-captioned)))
+  (let* ((tibetan-analysis--gloss-table-seg-start 1718)
+         (content (tibetan-analysis-generate-content
+                   "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།")))
+    (should (string-match-p "^\\*\\*\\* Segment 1718$" content))
+    (should (string-match-p "^\\*\\*\\* Segment 1719$" content)))
+  (let ((content (tibetan-analysis-generate-content
+                  "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།")))
+    (should-not (string-match-p "^\\*\\*\\* Segment " content))))
+
+(ert-deftest tibetan-analysis-par-seg-start-reads-source-drawer ()
+  "`tibetan-analysis--par-seg-start' reads the source §-heading's
+:B2_SEG_START: drawer property; falls back to the
+`:seg_A_to_B:' heading tag; nil when neither exists."
+  (let* ((dir (make-temp-file "tibetan-segstart-" t))
+         (src (expand-file-name "quelle.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file src
+            (insert "#+TITLE: Q\n\n"
+                    "** §184   :seg_1710_to_1717:\n"
+                    "*** Tibetisch\nཀ\n"
+                    "** §185\n"
+                    ":PROPERTIES:\n:SECTION: 185\n"
+                    ":B2_SEG_START: 1718\n:END:\n"
+                    "*** Tibetisch\nཁ\n"
+                    "** §186\n*** Tibetisch\nག\n"))
+          (should (= 1718 (tibetan-analysis--par-seg-start src 185)))
+          ;; Tag fallback (no drawer on §184).
+          (should (= 1710 (tibetan-analysis--par-seg-start src 184)))
+          (should-not (tibetan-analysis--par-seg-start src 186))
+          (should-not (tibetan-analysis--par-seg-start src 999)))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-analysis-reanalyze-paragraph-binds-seg-start ()
+  "The par reanalysis threads the source's segment numbering into
+the Gloss Table: end-to-end, the regenerated par file carries
+`*** Segment 1718' headings."
+  (let* ((dir (make-temp-file "tibetan-par-segstart-" t))
+         (src (expand-file-name "quelle.org" dir))
+         (analysis-dir (expand-file-name "analysis" dir))
+         (par-file (expand-file-name "par-185.org" analysis-dir)))
+    (unwind-protect
+        (progn
+          (make-directory analysis-dir t)
+          (with-temp-file src
+            (insert "#+TITLE: Quelle\n\n* Text\n** §185\n"
+                    ":PROPERTIES:\n:B2_SEG_START: 1718\n:END:\n"
+                    "*** Tibetisch\nབདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།\n"))
+          (with-temp-file par-file
+            (insert "#+TITLE: Paragraph 185 Analysis\n"
+                    "#+SOURCE: [[file:../quelle.org::*§185][Quelle / §185]]\n\n"
+                    "* Tibetan Text\nབདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།\n\n"
+                    "* Tibetan Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nx\n\n"
+                    "* Footnotes\n"))
+          (let ((r (tibetan-analysis-reanalyze-paragraph-file
+                    par-file :re-request-claude nil)))
+            (should (plist-get r :ok)))
+          (let ((text (with-temp-buffer
+                        (insert-file-contents par-file)
+                        (buffer-string))))
+            (should (string-match-p "^\\*\\*\\* Segment 1718$" text))
+            (should (string-match-p "^\\*\\*\\* Segment 1719$" text))))
+      (let ((abuf (get-file-buffer par-file)))
+        (when abuf
+          (with-current-buffer abuf (set-buffer-modified-p nil))
+          (kill-buffer abuf)))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-analysis-generate-content-no-detailed-dictionary ()
   "F1 (2026-07-22): the `** Detailed Dictionary' section is retired
 from the analysis layout — the Interlinear's tokens link to the

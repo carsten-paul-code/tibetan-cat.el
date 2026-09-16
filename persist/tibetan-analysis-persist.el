@@ -4423,7 +4423,9 @@ unused-arg warning without breaking the public API."
             (setq enriched-vocab-pairs (nreverse enriched-vocab-pairs))
 
             ;; ============================================================
-            ;; SECTION 1a'': Gloss Table (2026-09-15, §184-handout form).
+            ;; SECTION 1a'': Gloss Table (2026-09-15, §184-handout form;
+            ;; 2026-09-16: per-segment headings when the par path binds
+            ;; the seg-start var).
             ;; Per shad unit ONE aligned three-row org table (Wylie /
             ;; gloss / grammar label) from the tibetan-reading token
             ;; stream.  Inserted at the interlinear marker BEFORE the
@@ -4439,10 +4441,24 @@ unused-arg warning without breaking the public API."
                                 (tibetan-cascade-split-shad-units
                                  tibetan-text)
                               (list tibetan-text)))
+                     (seg-start
+                      (and (boundp 'tibetan-analysis--gloss-table-seg-start)
+                           tibetan-analysis--gloss-table-seg-start))
                      (table (condition-case nil
-                                (tibetan-gloss-table-render
-                                 units
-                                 tibetan-analysis--claude-vocabulary-for-render)
+                                (if (and seg-start
+                                         (fboundp 'tibetan-gloss-table-render-captioned))
+                                    ;; Par context: consecutive B2
+                                    ;; segment numbers as foldable
+                                    ;; `*** Segment N' headings.
+                                    (tibetan-gloss-table-render-captioned
+                                     (cl-loop for u in units
+                                              for n from seg-start
+                                              collect (cons n u))
+                                     tibetan-analysis--claude-vocabulary-for-render
+                                     3)
+                                  (tibetan-gloss-table-render
+                                   units
+                                   tibetan-analysis--claude-vocabulary-for-render))
                               (error nil))))
                 (when table
                   (save-excursion
@@ -5184,6 +5200,37 @@ the segment-level `tibetan-reanalyze-segment' contract."
           (error (message "Claude translation skipped: %s"
                           (error-message-string err))))))))
 
+(defvar tibetan-analysis--gloss-table-seg-start nil
+  "Dynamic: first B2 segment number of the paragraph being rendered.
+Bound by the par reanalysis paths (from the source §-heading's
+:B2_SEG_START: drawer or its :seg_A_to_B: tag) so the Gloss
+Table can number its shad units as `*** Segment N' headings —
+consecutive by construction within a §.  nil (the default, and
+always for seg/sent files) keeps headingless tables.")
+
+(defun tibetan-analysis--par-seg-start (source-file par-id)
+  "First B2 segment number of §PAR-ID in SOURCE-FILE, or nil.
+Reads the §-heading's :B2_SEG_START: property drawer; falls back
+to the `:seg_A_to_B:' heading tag (both shapes ship in
+Rgyan-comparative.org)."
+  (when (and source-file (file-exists-p source-file))
+    (with-temp-buffer
+      (insert-file-contents source-file)
+      (goto-char (point-min))
+      (when (re-search-forward
+             (format "^\\*\\{1,2\\} §%d\\b\\(.*\\)$" par-id) nil t)
+        (let ((tag-part (match-string 1))
+              (limit (save-excursion
+                       (if (re-search-forward "^\\*\\{1,2\\} " nil t)
+                           (line-beginning-position)
+                         (point-max)))))
+          (or (save-excursion
+                (when (re-search-forward
+                       "^:B2_SEG_START:[ \t]+\\([0-9]+\\)" limit t)
+                  (string-to-number (match-string 1))))
+              (when (string-match ":seg_\\([0-9]+\\)_to_" tag-part)
+                (string-to-number (match-string 1 tag-part)))))))))
+
 (defun tibetan-analysis--regenerate-paragraph-with-context
     (filepath tibetan-text par-label source-text)
   "Preserve → bind → generate → regenerate → restore for a par file.
@@ -5207,6 +5254,14 @@ populated Claude sections were preserved."
           (plist-get render-vars :particles))
          (tibetan-analysis--claude-vocabulary-for-render
           (plist-get render-vars :vocabulary))
+         ;; 2026-09-16: thread the source §'s B2 segment numbering
+         ;; into the Gloss Table (`*** Segment N' headings).
+         (tibetan-analysis--gloss-table-seg-start
+          (let ((par-id (tibetan-analysis--par-id-from-filename
+                         filepath))
+                (src (tibetan-analysis--source-file-from-par filepath)))
+            (and par-id src
+                 (tibetan-analysis--par-seg-start src par-id))))
          (auto-content (tibetan-analysis-generate-content
                         tibetan-text par-label source-text)))
     (tibetan-analysis-regenerate-auto filepath tibetan-text auto-content)
