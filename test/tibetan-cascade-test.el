@@ -1665,6 +1665,18 @@ separately (one verb-first tree per unit, in order) — never the
 joined sentence (the fused-token / hallucinated-main-verb class the
 live sent-001 showed)."
   (let (parsed-units)
+    ;; 2026-09-16: delegates to the shared TABULAR renderer; the
+    ;; legacy tree body stays as the fallback.  Delegation spy +
+    ;; the per-unit no-cross-shad-glue property on the FALLBACK.
+    (cl-letf (((symbol-function 'tibetan-analysis--render-structure-tables)
+               (lambda (segs)
+                 (setq parsed-units (mapcar #'car segs))
+                 "TABULAR-BODY")))
+      (should (equal "TABULAR-BODY"
+                     (tibetan-cascade--sentence-structure-body
+                      '((105 . "བདག་གིས་ལས་བྱས།") (106 . "ཆོས་ཟབ་མོ་ཡིན།")))))
+      (should (equal '(105 106) parsed-units)))
+    (setq parsed-units nil)
     (cl-letf (((symbol-function 'tibetan-extract-verbs-compound-aware)
                (lambda (_text words _mwus)
                  (list `((lemma . ,(car words)) (source . hill)))))
@@ -1672,7 +1684,7 @@ live sent-001 showed)."
                (lambda (words _verbs _mwus)
                  (push (car words) parsed-units)
                  (format "TREE(%s)" (car words)))))
-      (let ((body (tibetan-cascade--sentence-structure-body
+      (let ((body (tibetan-cascade--sentence-structure-body-trees
                    '((105 . "བདག་གིས་ལས་བྱས།") (106 . "ཆོས་ཟབ་མོ་ཡིན།")))))
         (should body)
         ;; One tree per unit, labeled, in order.

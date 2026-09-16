@@ -611,6 +611,78 @@ before (seg-file output byte-stable)."
                   "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།")))
     (should-not (string-match-p "^\\*\\*\\* Segment " content))))
 
+;; ----------------------------------------------------------------------------
+;; Tabular Sentence Structure (2026-09-16, Carsten: "Beides" —
+;; Satz-Übersicht + Detailtabelle je Segment)
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-analysis-structure-tables-overview-and-detail ()
+  "The tabular Sentence Structure: ONE overview table (| Seg |
+Satzphrasen | Verb | Anschluss |, HAUPTVERB on the last unit) +
+per unit a `*** Segment N' heading with the detail table
+(Phrase | Kasus | Funktion; Agens/Objekt rows, VERB row, elided
+slots visible)."
+  (skip-unless (fboundp 'tibetan-analyze-sentence))
+  (let ((out (tibetan-analysis--render-structure-tables
+              '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།")))))
+    (should out)
+    ;; Overview head + rows in order, main verb marked on the LAST.
+    (should (string-match-p "^| Seg " out))
+    (let ((r105 (string-match "^| 105 " out))
+          (r106 (string-match "^| 106 " out)))
+      (should (and r105 r106 (< r105 r106))))
+    (should (string-match-p "^| 105 .*byed" out))
+    (should (string-match-p "^| 106 .*yin.*HAUPTVERB" out))
+    ;; Detail blocks, one per unit, heading form.
+    (let ((d105 (string-match "^\\*\\*\\* Segment 105$" out))
+          (d106 (string-match "^\\*\\*\\* Segment 106$" out)))
+      (should (and d105 d106 (< d105 d106))))
+    ;; German role labels; the byed frame fills bdag as Agens and
+    ;; elides the object visibly; unit 106 is the copula.
+    (should (string-match-p "Agens (ERG)" out))
+    (should (string-match-p "bdag" out))
+    (should (string-match-p "elidiert" out))
+    (should (string-match-p "Subjekt (ABS)" out))
+    ;; VERB rows carry the lemma wylie.
+    (should (string-match-p "| VERB" out))
+    ;; No org-heading leak below L3, no raw MAIN VERB text form.
+    (should-not (string-match-p "^MAIN VERB:" out))))
+
+(ert-deftest tibetan-analysis-structure-tables-connector-column ()
+  "A unit ending in a converb shows it in the Anschluss column
+(~nas~ →); a plain unit shows —."
+  (skip-unless (and (fboundp 'tibetan-analyze-sentence)
+                    (fboundp 'tibetan-reading--unit-tokens)))
+  (let ((out (tibetan-analysis--render-structure-tables
+              '((1 . "ལས་བྱས་ནས། ") (2 . "ཆོས་ཡིན།")))))
+    (should (string-match-p "^| 1 .*~nas~ →" out))
+    (should (string-match-p "^| 2 .*HAUPTVERB" out))))
+
+(ert-deftest tibetan-analysis-structure-tables-unparseable-unit ()
+  "A unit without a detected clause still appears in the overview
+(as a — row) and never breaks the neighbours."
+  (skip-unless (fboundp 'tibetan-analyze-sentence))
+  (let ((out (tibetan-analysis--render-structure-tables
+              '((7 . "ཨ།") (8 . "ཆོས་ཡིན།")))))
+    (should out)
+    (should (string-match-p "^| 8 " out))))
+
+(ert-deftest tibetan-analysis-par-sentence-structure-tabular-when-var-bound ()
+  "Par context (seg-start var bound): generate-content's
+** Sentence Structure is the tabular per-unit form; unbound
+(seg files — Milarepa lock) keeps the old whole-text tree."
+  (skip-unless (fboundp 'tibetan-analysis-generate-content))
+  (let* ((tibetan-analysis--gloss-table-seg-start 1718)
+         (content (tibetan-analysis-generate-content
+                   "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།")))
+    (should (string-match-p "^| Seg " content))
+    (should (string-match-p "^\\*\\*\\* Segment 1718$" content))
+    (should-not (string-match-p "^MAIN VERB:" content)))
+  (let ((content (tibetan-analysis-generate-content
+                  "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།")))
+    (should (string-match-p "^MAIN VERB:" content))
+    (should-not (string-match-p "^| Seg " content))))
+
 (ert-deftest tibetan-analysis-par-reanalyze-never-prompts-on-stale-buffer ()
   "§5.49 class, par path (2026-09-16): a reanalyze after an
 EXTERNAL write to the same file (stale visiting buffer from the

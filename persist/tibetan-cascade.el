@@ -296,6 +296,18 @@ sentence produced fused tokens across shads and hallucinated main
 verbs (the live sent-001 evidence behind R1).  Returns nil when the
 tree machinery is unavailable or no unit parses (the caller keeps
 the whole-sentence fallback body)."
+  ;; 2026-09-16 (Carsten's SS185 review): the tabular form —
+  ;; Übersicht + Detailtabelle je Segment — replaces the flat
+  ;; per-unit trees when the renderer is available.
+  (or (and (fboundp 'tibetan-analysis--render-structure-tables)
+           (condition-case nil
+               (tibetan-analysis--render-structure-tables segs)
+             (error nil)))
+      (tibetan-cascade--sentence-structure-body-trees segs)))
+
+(defun tibetan-cascade--sentence-structure-body-trees (segs)
+  "Legacy per-unit tree text for SEGS — the pre-2026-09-16 form,
+kept as the fallback when the tabular renderer is unavailable."
   (when (and (fboundp 'tibetan-segment-text)
              (fboundp 'tibetan-extract-verbs-compound-aware)
              (fboundp 'tibetan-analysis--render-sentence-tree))

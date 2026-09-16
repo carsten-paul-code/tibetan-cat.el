@@ -2760,6 +2760,258 @@ uddāna fix)."
           "[No clause structure detected]\n"
         (tibetan-analysis--render-tree-node tree 0 "MAIN VERB")))))
 
+;; ============================================================================
+;; Tabular Sentence Structure (2026-09-16, Carsten's SS185 review:
+;; "Beides" — Satz-Übersicht + Detailtabelle je Segment)
+;; ============================================================================
+
+(defconst tibetan-analysis--structure-role-labels-de
+  '((agent      . "Agens (ERG)")
+    (subject    . "Subjekt (ABS)")
+    (patient    . "Objekt (ABS)")
+    (causee     . "Causee (ABS)")
+    (recipient  . "Indir. Objekt (DAT)")
+    (predicate  . "Prädikat (ABS)")
+    (location   . "Lokativ (LOC)")
+    (goal       . "Ziel (TERM)")
+    (source     . "Quelle (ABL)")
+    (complement . "Komplement (TERM/LOC)"))
+  "German role labels for the tabular Sentence Structure — the
+class artifact reads German (target-lang de); the flat tree view
+keeps its English `tibetan-analysis--tree-role-labels'.")
+
+(defun tibetan-analysis--structure-format-table (rows)
+  "ROWS (equal-length cell lists, first row = header) as an
+aligned org table with an hline after the header.  Cells are
+plain; `|' is escaped."
+  (let* ((clean (mapcar (lambda (row)
+                          (mapcar (lambda (c)
+                                    (replace-regexp-in-string
+                                     "|" "\\\\vert"
+                                     (replace-regexp-in-string
+                                      "[ \t\n]+" " " (or c ""))))
+                                  row))
+                        rows))
+         (ncols (length (car clean)))
+         (widths (cl-loop for i below ncols
+                          collect (cl-loop for row in clean
+                                           maximize (string-width
+                                                     (nth i row)))))
+         (fmt-row (lambda (row)
+                    (concat "| "
+                            (mapconcat
+                             (lambda (i)
+                               (let ((c (nth i row)))
+                                 (concat c (make-string
+                                            (- (nth i widths)
+                                               (string-width c))
+                                            ?\s))))
+                             (number-sequence 0 (1- ncols)) " | ")
+                            " |")))
+         (hline (concat "|"
+                        (mapconcat (lambda (w)
+                                     (make-string (+ w 2) ?-))
+                                   widths "+")
+                        "|")))
+    (concat (funcall fmt-row (car clean)) "\n" hline "\n"
+            (mapconcat fmt-row (cdr clean) "\n"))))
+
+(defun tibetan-analysis--structure-unit-tree (text)
+  "The verb-first tree for one shad unit TEXT, or nil.
+Same substrate as the cascade per-unit path (R10): per-unit
+tokenization, vocab-fallback verbs filtered (§5.16)."
+  (when (and (fboundp 'tibetan-segment-text)
+             (fboundp 'tibetan-extract-verbs-compound-aware)
+             (fboundp 'tibetan-analyze-sentence))
+    (condition-case nil
+        (let* ((words (tibetan-segment-text text))
+               (verbs (and words
+                           (cl-remove-if
+                            (lambda (v) (eq (alist-get 'source v)
+                                            'vocab-fallback))
+                            (tibetan-extract-verbs-compound-aware
+                             text words nil)))))
+          (and words verbs
+               (tibetan-analyze-sentence words verbs nil)))
+      (error nil))))
+
+(defun tibetan-analysis--structure-np-wylie (np)
+  "NP's head as plain Wylie (table cell — no script, no links)."
+  (let ((head (alist-get 'head np)))
+    (or (and head (fboundp 'tibetan-to-wylie-fixed)
+             (condition-case nil
+                 (string-trim
+                  (replace-regexp-in-string
+                   "\\s-*/+\\s-*\\'" ""
+                   (tibetan-to-wylie-fixed head)))
+               (error nil)))
+        head "—")))
+
+(defun tibetan-analysis--structure-verb-cell (tree)
+  "TREE's root verb as a short Wylie cell: `byed' / `mdzad (hon.)'."
+  (let* ((verb (plist-get tree :verb))
+         (lemma (alist-get 'lemma verb))
+         (meaning (or (alist-get 'meaning verb) ""))
+         (wylie (or (and lemma (fboundp 'tibetan-to-wylie-fixed)
+                         (condition-case nil
+                             (string-trim (tibetan-to-wylie-fixed lemma))
+                           (error nil)))
+                    lemma "?")))
+    (if (string-match-p "(hon\\.?)" meaning)
+        (concat wylie " (hon.)")
+      wylie)))
+
+(defun tibetan-analysis--structure-detail-rows (tree)
+  "TREE flattened into (PHRASE KASUS FUNKTION) detail rows,
+textual order: converb/complement clauses first (each closed by
+its connector row pointing at the parent verb), then the parent's
+slots/adjuncts and VERB row."
+  (let (rows)
+    (cl-labels
+        ((np-case (np)
+           (let ((c (alist-get 'case np)))
+             (if c (symbol-name c) "—")))
+         (emit-node (node parent-verb)
+           ;; Children first (textual order).
+           (dolist (cv (plist-get node :converbs))
+             (emit-node (plist-get cv :node)
+                        (tibetan-analysis--structure-verb-cell node))
+             (push (list (format "~%s~" (or (plist-get cv :particle) "?"))
+                         "CONV"
+                         (format "→ %s"
+                                 (tibetan-analysis--structure-verb-cell
+                                  node)))
+                   rows))
+           (dolist (cp (plist-get node :complements))
+             (emit-node (plist-get cp :node)
+                        (tibetan-analysis--structure-verb-cell node))
+             (push (list "—"
+                         (format "%s" (or (plist-get cp :complement-case)
+                                          "TERM"))
+                         (format "Komplement → %s"
+                                 (tibetan-analysis--structure-verb-cell
+                                  node)))
+                   rows))
+           ;; Own slots.
+           (dolist (slot (plist-get node :slots))
+             (let* ((role (plist-get slot :role))
+                    (label (or (cdr (assq role
+                                          tibetan-analysis--structure-role-labels-de))
+                               (capitalize (symbol-name role))))
+                    (np (plist-get slot :filler)))
+               (cond
+                (np
+                 (push (list (tibetan-analysis--structure-np-wylie np)
+                             (np-case np) label)
+                       rows)
+                 (dolist (poss (alist-get 'possessors np))
+                   (push (list (tibetan-analysis--structure-np-wylie poss)
+                               "GEN" "Possessor")
+                         rows)))
+                ((plist-get slot :elided)
+                 (push (list "—" "—" (format "%s [elidiert]" label))
+                       rows)))))
+           (dolist (np (plist-get node :adjuncts))
+             (push (list (tibetan-analysis--structure-np-wylie np)
+                         (np-case np) "Adjunkt")
+                   rows))
+           (push (list (tibetan-analysis--structure-verb-cell node)
+                       "—"
+                       (concat "VERB"
+                               (let ((f (plist-get node :frame)))
+                                 (if f (format " (%s)" f) ""))
+                               (if parent-verb
+                                   (format " → %s" parent-verb)
+                                 "")))
+                 rows)))
+      (emit-node tree nil))
+    (nreverse rows)))
+
+(defun tibetan-analysis--structure-unit-connector (text)
+  "TEXT's trailing connector cell: `~nas~ →' for a unit-final
+converb particle, `=la= →' for a case, `—' when the unit ends
+plain.  Uses the reading token stream (fboundp-guarded)."
+  (or (and (fboundp 'tibetan-reading--unit-tokens)
+           (condition-case nil
+               (let* ((toks (tibetan-reading--unit-tokens text))
+                      (last-tok (car (last toks))))
+                 (when (and last-tok
+                            (eq (plist-get last-tok :kind) 'particle))
+                   (let ((w (plist-get last-tok :wylie))
+                         (label (or (plist-get last-tok :label) "")))
+                     (if (string-match-p "CONV" label)
+                         (format "~%s~ →" w)
+                       (format "=%s= →" w)))))
+             (error nil)))
+      "—"))
+
+(defun tibetan-analysis--structure-overview-phrases (tree)
+  "TREE's filled slots + adjuncts as one ` · '-joined Wylie cell."
+  (let (parts)
+    (cl-labels ((collect (node)
+                  (dolist (cv (plist-get node :converbs))
+                    (collect (plist-get cv :node)))
+                  (dolist (cp (plist-get node :complements))
+                    (collect (plist-get cp :node)))
+                  (dolist (slot (plist-get node :slots))
+                    (let ((np (plist-get slot :filler)))
+                      (when np
+                        (push (tibetan-analysis--structure-np-wylie np)
+                              parts))))
+                  (dolist (np (plist-get node :adjuncts))
+                    (push (tibetan-analysis--structure-np-wylie np)
+                          parts))))
+      (collect tree))
+    (if parts (string-join (nreverse parts) " · ") "—")))
+
+(defun tibetan-analysis--render-structure-tables (segs)
+  "The tabular `** Sentence Structure' body for SEGS
+\((GLOBAL-NUM . TEXT)…): ONE overview table (Seg | Satzphrasen |
+Verb | Anschluss — HAUPTVERB marks the last unit, the converb
+chain shows in Anschluss) followed by one `*** Segment N'
+heading + detail table (Phrase | Kasus | Funktion) per parseable
+unit.  nil when no unit parses."
+  (let* ((n (length segs))
+         (i 0)
+         (trees (mapcar (lambda (seg)
+                          (tibetan-analysis--structure-unit-tree
+                           (cdr seg)))
+                        segs))
+         (any (cl-some #'identity trees)))
+    (when any
+      (let ((overview
+             (cons '("Seg" "Satzphrasen" "Verb" "Anschluss")
+                   (cl-loop for seg in segs
+                            for tree in trees
+                            do (cl-incf i)
+                            collect
+                            (list (number-to-string (car seg))
+                                  (if tree
+                                      (tibetan-analysis--structure-overview-phrases
+                                       tree)
+                                    "—")
+                                  (if tree
+                                      (tibetan-analysis--structure-verb-cell
+                                       tree)
+                                    "—")
+                                  (cond ((= i n) "HAUPTVERB")
+                                        (t (tibetan-analysis--structure-unit-connector
+                                            (cdr seg))))))))
+            (details
+             (cl-loop for seg in segs
+                      for tree in trees
+                      when tree
+                      collect
+                      (format "*** Segment %d\n%s"
+                              (car seg)
+                              (tibetan-analysis--structure-format-table
+                               (cons '("Phrase" "Kasus" "Funktion")
+                                     (tibetan-analysis--structure-detail-rows
+                                      tree)))))))
+        (concat (tibetan-analysis--structure-format-table overview)
+                "\n\n"
+                (string-join details "\n\n"))))))
+
 (defun tibetan-analysis--get-grammatical-role (word root-form verb-table)
   "Determine grammatical role description for WORD with ROOT-FORM.
 
@@ -4531,13 +4783,30 @@ unused-arg warning without breaking the public API."
               ;; sentence, render its SLICE of the full-sentence tree;
               ;; otherwise (single-segment sentence, flat layout, any
               ;; lookup failure) the segment-local tree.
-              (let* ((slice (and seg-id resolved-src
+              ;; Par context (2026-09-16, seg-start var bound): the
+              ;; tabular per-unit form — Übersicht + Detailtabelle je
+              ;; Segment (Carsten's "Beides").  Seg/sent files keep
+              ;; the flat tree (Milarepa lock).
+              (let* ((seg-start
+                      (and (boundp 'tibetan-analysis--gloss-table-seg-start)
+                           tibetan-analysis--gloss-table-seg-start))
+                     (tabular
+                      (and seg-start
+                           (fboundp 'tibetan-cascade-split-shad-units)
+                           (condition-case nil
+                               (tibetan-analysis--render-structure-tables
+                                (cl-loop for u in (tibetan-cascade-split-shad-units
+                                                   tibetan-text)
+                                         for n from seg-start
+                                         collect (cons n u)))
+                             (error nil))))
+                     (slice (and (not tabular) seg-id resolved-src
                                  (tibetan-analysis--sentence-tree-for-segment
                                   seg-id resolved-src)))
                      (sliced (and slice
                                   (tibetan-analysis--render-sentence-slice
                                    slice seg-id)))
-                     (rendered (or sliced
+                     (rendered (or tabular sliced
                                    (tibetan-analysis--render-sentence-tree
                                     words verbs multiword-units))))
                 (if (and rendered (not (string-empty-p rendered)))
