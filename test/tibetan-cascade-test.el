@@ -1266,7 +1266,11 @@ now streams SSE with no end url.el can detect (live symptom:
 `200 OK' + EMPTY body from url-retrieve while curl streamed the
 same request fine), which silently broke EVERY DharmaMitra call."
   (skip-unless (executable-find "curl"))
-  (let (captured-args)
+  ;; Transport self-test: past the suite's no-network gate
+  ;; (call-process-region stubbed — offline).
+  (defvar tibetan-test-allow-dm-transport)
+  (let ((tibetan-test-allow-dm-transport t)
+        captured-args)
     (cl-letf (((symbol-function 'call-process-region)
                (lambda (_start _end program &optional _delete buffer
                                _display &rest args)

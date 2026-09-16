@@ -286,8 +286,11 @@ insecure flag.  url.el fallback: `gnutls-verify-error' must be bound
 to t at the moment `url-retrieve-synchronously' contacts the server
 \(Emacs' default nil would send the bearer token over an unverified,
 MITM-able channel)."
-  ;; curl path: no --insecure/-k in the argument list.
-  (let (curl-args)
+  ;; Transport self-test: run the real --http-post body past the
+  ;; suite's no-network gate (primitives stubbed below — offline).
+  (defvar tibetan-test-allow-dm-transport)
+  (let ((tibetan-test-allow-dm-transport t)
+        curl-args)
     (cl-letf (((symbol-function 'call-process-region)
                (lambda (_s _e prog &optional _d buffer _disp &rest args)
                  (setq curl-args (cons prog args))
@@ -300,7 +303,8 @@ MITM-able channel)."
         (should-not (member "-k" curl-args))
         (should-not (member "--insecure" curl-args)))))
   ;; url.el fallback: force it by hiding curl.
-  (let ((captured 'unset)
+  (let ((tibetan-test-allow-dm-transport t)
+        (captured 'unset)
         (gnutls-verify-error nil))        ; hostile default
     (cl-letf (((symbol-function 'executable-find)
                (lambda (_name) nil))

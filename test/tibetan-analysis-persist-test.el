@@ -659,6 +659,68 @@ raw `find-file-noselect')."
           (kill-buffer abuf)))
       (delete-directory dir t))))
 
+(ert-deftest tibetan-analysis-par-reanalyze-fires-dm-when-needed ()
+  "2026-09-16 (Carsten: \"DharmaMitra ist leer\"): the par
+reanalysis fires the DM translation when the nested section is
+empty — gated on needs-request-p (populated section: NO fire,
+§5.29 policy) and on #+TIBETAN_DEFER_MT."
+  (let* ((dir (make-temp-file "tibetan-par-dm-" t))
+         (src (expand-file-name "quelle.org" dir))
+         (analysis-dir (expand-file-name "analysis" dir))
+         (par-file (expand-file-name "par-185.org" analysis-dir))
+         (fired nil))
+    (unwind-protect
+        (cl-letf (((symbol-function
+                    'tibetan-dharmamitra-translation-fire-tibetan)
+                   (lambda (text file) (push (cons text file) fired))))
+          (make-directory analysis-dir t)
+          (with-temp-file src
+            (insert "#+TITLE: Q\n\n* Text\n** §185\n*** Tibetisch\nབདུད།\n"))
+          (with-temp-file par-file
+            (insert "#+TITLE: Paragraph 185 Analysis\n"
+                    "#+SOURCE: [[file:../quelle.org::*§185][Q / §185]]\n\n"
+                    "* Tibetan Text\nབདུད།\n\n"
+                    "* Tibetan Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** DharmaMitra Translation\n\n\n"
+                    "* Footnotes\n"))
+          ;; Empty DM section → fire (with the par's Tibetan + file).
+          (should (plist-get (tibetan-analysis-reanalyze-paragraph-file
+                              par-file :re-request-claude nil)
+                             :ok))
+          (should (= 1 (length fired)))
+          (should (equal par-file (cdar fired)))
+          (should (string-match-p "བདུད" (caar fired)))
+          ;; Populated DM section → NO further fire.
+          (with-temp-buffer
+            (insert-file-contents par-file)
+            (goto-char (point-min))
+            (re-search-forward "^\\*\\* DharmaMitra Translation$")
+            (forward-line 1)
+            (insert "Echte deutsche Übersetzung.\n")
+            (write-region (point-min) (point-max) par-file nil 'silent))
+          (tibetan-analysis-reanalyze-paragraph-file
+           par-file :re-request-claude nil)
+          (should (= 1 (length fired)))
+          ;; defer-MT source → NO fire even when empty.
+          (with-temp-file src
+            (insert "#+TITLE: Q\n#+TIBETAN_DEFER_MT: t\n\n"
+                    "* Text\n** §185\n*** Tibetisch\nབདུད།\n"))
+          (with-temp-buffer
+            (insert-file-contents par-file)
+            (goto-char (point-min))
+            (re-search-forward "^Echte deutsche Übersetzung\\.$")
+            (delete-region (line-beginning-position)
+                           (line-end-position))
+            (write-region (point-min) (point-max) par-file nil 'silent))
+          (tibetan-analysis-reanalyze-paragraph-file
+           par-file :re-request-claude nil)
+          (should (= 1 (length fired))))
+      (let ((abuf (get-file-buffer par-file)))
+        (when abuf
+          (with-current-buffer abuf (set-buffer-modified-p nil))
+          (kill-buffer abuf)))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-analysis-par-reference-translations-at-bottom ()
   "2026-09-16 (Carsten): `* Reference Translations' moves to the
 BOTTOM of the par file — after `* Apparatus', before

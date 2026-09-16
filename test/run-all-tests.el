@@ -52,6 +52,25 @@
                 buf))
             '((name . tibetan-test-no-network)))
 
+;; The DM transport moved to curl (§5.48 — url.el cannot consume the
+;; backend's SSE), so the url-retrieve stub above no longer covers it:
+;; the 2026-09-16 par DM fire hung the whole suite on live
+;; dharmamitra.org requests.  Gate the transport instead of a blanket
+;; override: nil = "HTTP error / empty response", which every caller
+;; treats as a silent no-op (the §5.48 defensive contract).  The two
+;; transport SELF-tests (curl shape, TLS enforcement) bind
+;; `tibetan-test-allow-dm-transport' to run the real body — with
+;; their own primitive stubs, so still no network.
+(defvar tibetan-test-allow-dm-transport nil
+  "Non-nil lets `tibetan-dharmamitra-api--http-post' run its real
+body in the test suite (the transport self-tests only).")
+(with-eval-after-load 'tibetan-dharmamitra-api
+  (advice-add 'tibetan-dharmamitra-api--http-post :around
+              (lambda (orig &rest args)
+                (when tibetan-test-allow-dm-transport
+                  (apply orig args)))
+              '((name . tibetan-test-no-network-curl))))
+
 ;; Load all test files
 (require 'tibetan-utils-test)
 (require 'tibetan-verb-classifier-test)

@@ -5204,7 +5204,29 @@ the segment-level `tibetan-reanalyze-segment' contract."
         (condition-case err
             (tibetan-analysis--request-claude-translation tibetan-text filepath)
           (error (message "Claude translation skipped: %s"
-                          (error-message-string err))))))))
+                          (error-message-string err))))
+        (tibetan-analysis--maybe-fire-dm-for-par filepath tibetan-text)))))
+
+(defun tibetan-analysis--maybe-fire-dm-for-par (filepath tibetan-text)
+  "Fire the DharmaMitra translation for the par file FILEPATH.
+2026-09-16 (Carsten: \"DharmaMitra ist leer\") — the par pipeline
+never fired DM; the handout's DM text came from a manual paste.
+Gates, in order: module present → nested section still a
+placeholder (`tibetan-dharmamitra-translation-needs-request-p',
+the §5.29 populated-stays policy) → NOT #+TIBETAN_DEFER_MT
+(P1 portfolio protocol).  Errors degrade to a message — a DM
+hiccup must never fail the reanalysis."
+  (when (and (fboundp 'tibetan-dharmamitra-translation-fire-tibetan)
+             (fboundp 'tibetan-dharmamitra-translation-needs-request-p)
+             (tibetan-dharmamitra-translation-needs-request-p filepath)
+             (not (and (fboundp 'tibetan-analysis--defer-mt-p)
+                       (tibetan-analysis--defer-mt-p filepath))))
+    (condition-case err
+        (tibetan-dharmamitra-translation-fire-tibetan
+         tibetan-text filepath)
+      (error (message "DharmaMitra fire skipped for %s: %s"
+                      (file-name-nondirectory filepath)
+                      (error-message-string err))))))
 
 (defvar tibetan-analysis--gloss-table-seg-start nil
   "Dynamic: first B2 segment number of the paragraph being rendered.
@@ -5703,6 +5725,8 @@ Returns plist (:file F :par-id ID :ok BOOL :error STR …)."
                 (error (message "Claude re-request failed for %s: %s"
                                 (file-name-nondirectory filepath)
                                 (error-message-string e2)))))
+            (tibetan-analysis--maybe-fire-dm-for-par
+             filepath (plist-get data :tibetan))
             `(:file ,filepath :par-id ,par-id :ok t
                     :claude-preserved ,(and has-any t)))
         (error
