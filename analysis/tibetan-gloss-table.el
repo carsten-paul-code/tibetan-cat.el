@@ -243,25 +243,33 @@ nothing renders.  VOCAB-ALIST feeds the Claude-POS label tier."
     (when tables
       (string-join tables "\n\n"))))
 
-(defun tibetan-gloss-table-render-captioned (segs &optional vocab-alist)
+(defun tibetan-gloss-table-render-captioned (segs &optional vocab-alist
+                                                  heading-level)
   "Captioned tables for SEGS, the cascade ((GLOBAL-NUM . TEXT)…) shape.
-Like `tibetan-gloss-table-render', but each table is preceded by a
-plain caption line `Unit K — Segment N' (K = 1-based ordinal, N =
-the global segment number — the same key the Reading section's
-⟦N⟧ rendering lines and the per-unit Sentence Structure headers
-use).  Deliberately NOT a heading: the Claude heading machinery
-probes L2 names file-wide (the §5.51 collision lesson).  A unit
-that yields no tokens drops caption AND table together — captions
-carry the segment number, so skipping cannot misalign anything.
-nil when nothing renders.  VOCAB-ALIST feeds the Claude-POS tier."
+Like `tibetan-gloss-table-render', but each table carries its
+segment number.  With HEADING-LEVEL nil the caption is a plain
+line `Unit K — Segment N' (K = 1-based ordinal, N = the global
+segment number — the ⟦N⟧ rendering key); with an integer it is an
+org heading `Segment N' at that star level (the §184-handout
+form, foldable per segment — safe at level ≥3: the Claude heading
+machinery probes L2 names, the legacy cascade reader exactly
+`^** Segment N').  A unit that yields no tokens drops caption AND
+table together — captions carry the segment number, so skipping
+cannot misalign anything.  nil when nothing renders.  VOCAB-ALIST
+feeds the Claude-POS tier."
   (let ((ordinal 0)
         blocks)
     (dolist (seg segs)
       (let ((rows (tibetan-gloss-table--unit-rows (cdr seg) vocab-alist)))
         (when rows
           (cl-incf ordinal)
-          (push (format "Unit %d — Segment %d\n%s"
-                        ordinal (car seg)
+          (push (format "%s\n%s"
+                        (if heading-level
+                            (format "%s Segment %d"
+                                    (make-string heading-level ?*)
+                                    (car seg))
+                          (format "Unit %d — Segment %d"
+                                  ordinal (car seg)))
                         (tibetan-gloss-table--format-rows rows))
                 blocks))))
     (when blocks

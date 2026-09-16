@@ -359,6 +359,20 @@ global key."
   (tibetan-gloss-table-test--with-tokens '(("U1" . nil))
     (should-not (tibetan-gloss-table-render-captioned '((105 . "U1"))))))
 
+(ert-deftest tibetan-gloss-table-render-captioned-heading-level ()
+  "With HEADING-LEVEL, captions become org headings `*** Segment N'
+(the handout form — foldable per segment); the plain `Unit K —'
+prefix disappears."
+  (tibetan-gloss-table-test--with-tokens
+      `(("U1" . ,tibetan-gloss-table-test--toks-a)
+        ("U2" . ,tibetan-gloss-table-test--toks-b))
+    (let ((out (tibetan-gloss-table-render-captioned
+                '((1718 . "U1") (1719 . "U2")) nil 3)))
+      (should (string-match-p "^\\*\\*\\* Segment 1718$" out))
+      (should (string-match-p "^\\*\\*\\* Segment 1719$" out))
+      (should (string-match-p "^\\*\\*\\* Segment 1718\n| " out))
+      (should-not (string-match-p "^Unit [0-9]" out)))))
+
 (ert-deftest tibetan-gloss-table-render-captioned-forwards-vocab ()
   "The vocab-alist reaches the per-token label resolver (Claude-POS
 tier) unchanged."

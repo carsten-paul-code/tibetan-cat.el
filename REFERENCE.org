@@ -1,6 +1,6 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-16T08:22:58
+#+DATE: 2026-09-16T08:23:37
 #+OPTIONS: toc:2 num:nil
 
 Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1427 forms
@@ -1212,19 +1212,22 @@ nothing renders.  VOCAB-ALIST feeds the Claude-POS label tier.
 :PROPERTIES:
 :KIND: defun
 :LINE: 246
-:SIGNATURE: (tibetan-gloss-table-render-captioned segs &optional vocab-alist)
+:SIGNATURE: (tibetan-gloss-table-render-captioned segs &optional vocab-alist
+                                                  heading-level)
 :END:
 
 Captioned tables for SEGS, the cascade ((GLOBAL-NUM . TEXT)…) shape.
-Like `tibetan-gloss-table-render', but each table is preceded by a
-plain caption line `Unit K — Segment N' (K = 1-based ordinal, N =
-the global segment number — the same key the Reading section's
-⟦N⟧ rendering lines and the per-unit Sentence Structure headers
-use).  Deliberately NOT a heading: the Claude heading machinery
-probes L2 names file-wide (the §5.51 collision lesson).  A unit
-that yields no tokens drops caption AND table together — captions
-carry the segment number, so skipping cannot misalign anything.
-nil when nothing renders.  VOCAB-ALIST feeds the Claude-POS tier.
+Like `tibetan-gloss-table-render', but each table carries its
+segment number.  With HEADING-LEVEL nil the caption is a plain
+line `Unit K — Segment N' (K = 1-based ordinal, N = the global
+segment number — the ⟦N⟧ rendering key); with an integer it is an
+org heading `Segment N' at that star level (the §184-handout
+form, foldable per segment — safe at level ≥3: the Claude heading
+machinery probes L2 names, the legacy cascade reader exactly
+`^** Segment N').  A unit that yields no tokens drops caption AND
+table together — captions carry the segment number, so skipping
+cannot misalign anything.  nil when nothing renders.  VOCAB-ALIST
+feeds the Claude-POS tier.
 
 ** ~tibetan-gloss-table-max-width~  /customize variable/
 :PROPERTIES:
