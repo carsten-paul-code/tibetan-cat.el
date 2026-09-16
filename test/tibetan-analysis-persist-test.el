@@ -611,6 +611,54 @@ before (seg-file output byte-stable)."
                   "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།")))
     (should-not (string-match-p "^\\*\\*\\* Segment " content))))
 
+(ert-deftest tibetan-analysis-par-reanalyze-never-prompts-on-stale-buffer ()
+  "§5.49 class, par path (2026-09-16): a reanalyze after an
+EXTERNAL write to the same file (stale visiting buffer from the
+previous run's regenerate) must not hit the interactive
+supersession/reread prompt — in batch that prompt is a HARD
+DEADLOCK (found as a full-suite hang: regenerate-auto still used
+raw `find-file-noselect')."
+  (let* ((dir (make-temp-file "tibetan-par-stale-" t))
+         (src (expand-file-name "quelle.org" dir))
+         (analysis-dir (expand-file-name "analysis" dir))
+         (par-file (expand-file-name "par-042.org" analysis-dir)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'yes-or-no-p)
+                   (lambda (prompt)
+                     (error "Interactive prompt in batch: %s" prompt)))
+                  ((symbol-function 'y-or-n-p)
+                   (lambda (prompt)
+                     (error "Interactive prompt in batch: %s" prompt))))
+          (make-directory analysis-dir t)
+          (with-temp-file src
+            (insert "#+TITLE: Q\n\n* Text\n** §42\n*** Tibetisch\nབདུད།\n"))
+          (with-temp-file par-file
+            (insert "#+TITLE: Paragraph 42 Analysis\n"
+                    "#+SOURCE: [[file:../quelle.org::*§42][Q / §42]]\n\n"
+                    "* Tibetan Text\nབདུད།\n\n"
+                    "* Tibetan Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nx\n\n"
+                    "* Footnotes\n"))
+          ;; First run leaves a visiting buffer behind…
+          (should (plist-get (tibetan-analysis-reanalyze-paragraph-file
+                              par-file :re-request-claude nil)
+                             :ok))
+          ;; …an external write makes it stale…
+          (with-temp-buffer
+            (insert-file-contents par-file)
+            (goto-char (point-max))
+            (insert "\n# extern angefasst\n")
+            (write-region (point-min) (point-max) par-file nil 'silent))
+          ;; …and the second run must proceed WITHOUT any prompt.
+          (should (plist-get (tibetan-analysis-reanalyze-paragraph-file
+                              par-file :re-request-claude nil)
+                             :ok)))
+      (let ((abuf (get-file-buffer par-file)))
+        (when abuf
+          (with-current-buffer abuf (set-buffer-modified-p nil))
+          (kill-buffer abuf)))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-analysis-par-reference-translations-at-bottom ()
   "2026-09-16 (Carsten): `* Reference Translations' moves to the
 BOTTOM of the par file — after `* Apparatus', before

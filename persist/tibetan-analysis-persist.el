@@ -18,6 +18,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(declare-function tibetan-fresh-file-buffer "tibetan-utils" (file))
 ;; Only require org when not in batch mode (can hang in batch)
 (unless noninteractive
   (require 'org))
@@ -741,7 +742,7 @@ Tibetan from the file's own `* Tibetan Text' section."
   (when (and filepath (file-exists-p filepath))
     (let ((text (tibetan-analysis--read-section-body filepath "Tibetan Text")))
       (when (and text (tibetan-analysis--shad-boundary-words text))
-        (with-current-buffer (find-file-noselect filepath)
+        (with-current-buffer (tibetan-fresh-file-buffer filepath)
           (tibetan-analysis--mark-l2-section
            "Interlinear Gloss"
            (lambda (b) (tibetan-analysis--mark-shads-in-interlinear b text)))
@@ -1650,7 +1651,7 @@ folder, which is much slower and re-fires Claude requests."
     (unless files
       (user-error "No analysis files found in %s" folder))
     (dolist (file files)
-      (with-current-buffer (find-file-noselect file)
+      (with-current-buffer (tibetan-fresh-file-buffer file)
         (let ((n (tibetan-analysis--strip-dangling-term-links-in-buffer)))
           (when (> n 0)
             (cl-incf modified)
@@ -1801,7 +1802,7 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
                 (buffer-substring-no-properties
                  (point-min) (line-beginning-position))
               ""))))
-    (with-current-buffer (find-file-noselect filepath)
+    (with-current-buffer (tibetan-fresh-file-buffer filepath)
       ;; Full rewrite into canonical order.  We read everything we
       ;; want to preserve into local vars above, erase the buffer,
       ;; then re-emit in the canonical shape — cleaner than trying
@@ -2084,7 +2085,7 @@ Pre-conditions:
     preserved body exists)."
   (when (and filepath (file-exists-p filepath)
              body (stringp body) (not (string-empty-p body)))
-    (with-current-buffer (find-file-noselect filepath)
+    (with-current-buffer (tibetan-fresh-file-buffer filepath)
       (save-excursion
         (goto-char (point-min))
         (when (re-search-forward "^\\* Tibetan Analysis$" nil t)
