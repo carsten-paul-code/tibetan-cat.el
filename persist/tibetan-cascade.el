@@ -171,7 +171,10 @@ when nothing renders."
                      segs
                      (and (boundp
                            'tibetan-analysis--claude-vocabulary-for-render)
-                          tibetan-analysis--claude-vocabulary-for-render))
+                          tibetan-analysis--claude-vocabulary-for-render)
+                     ;; Carsten's 2026-09-16 form: segment number as
+                     ;; a foldable L3 HEADING (handout style).
+                     3)
                   (error nil)))))
       (concat "* Reading\n"
               (if tables

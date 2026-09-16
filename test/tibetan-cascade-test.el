@@ -1454,25 +1454,30 @@ three-row tables per shad unit BEFORE the Interlinear — carrying a
 :GENERATED_HASH: drawer (the edit-protection anchor: hash of the
 emitted body, so a later regenerate can tell generated from
 hand-edited)."
-  (cl-letf (((symbol-function 'tibetan-reading-decorated-lines)
-             (lambda (units)
-               (mapcar (lambda (u) (format "LINE(%s)" u)) units)))
-            ((symbol-function 'tibetan-gloss-table-render-captioned)
-             (lambda (_segs _vocab)
-               "Unit 1 — Segment 105\n| CAPTBL |")))
-    (let ((s (tibetan-cascade--reading-section
-              '((105 . "བདག།") (106 . "ཆོས།")))))
-      (let ((gt (string-match "^\\*\\* Gloss Tables$" s))
-            (il (string-match "^\\*\\* Interlinear$" s))
-            (re (string-match "^\\*\\* Renderings$" s)))
-        (should (and gt il re))
-        (should (< gt il re)))
-      (should (string-match-p "^| CAPTBL |$" s))
-      ;; Edit-protection drawer with the body hash.
-      (should (string-match-p
-               (concat ":GENERATED_HASH: "
-                       (sha1 "Unit 1 — Segment 105\n| CAPTBL |"))
-               s)))))
+  (let (seen-level)
+    (cl-letf (((symbol-function 'tibetan-reading-decorated-lines)
+               (lambda (units)
+                 (mapcar (lambda (u) (format "LINE(%s)" u)) units)))
+              ((symbol-function 'tibetan-gloss-table-render-captioned)
+               (lambda (_segs _vocab &optional level)
+                 (setq seen-level level)
+                 "*** Segment 105\n| CAPTBL |")))
+      (let ((s (tibetan-cascade--reading-section
+                '((105 . "བདག།") (106 . "ཆོས།")))))
+        ;; Carsten's 2026-09-16 form: Segment number as HEADING.
+        (should (eql 3 seen-level))
+        (let ((gt (string-match "^\\*\\* Gloss Tables$" s))
+              (il (string-match "^\\*\\* Interlinear$" s))
+              (re (string-match "^\\*\\* Renderings$" s)))
+          (should (and gt il re))
+          (should (< gt il re)))
+        (should (string-match-p "^| CAPTBL |$" s))
+        (should (string-match-p "^\\*\\*\\* Segment 105$" s))
+        ;; Edit-protection drawer with the body hash.
+        (should (string-match-p
+                 (concat ":GENERATED_HASH: "
+                         (sha1 "*** Segment 105\n| CAPTBL |"))
+                 s))))))
 
 (ert-deftest tibetan-cascade-reading-section-omits-gloss-tables-when-empty ()
   "No renderable unit (or the gloss-table module absent) → no
@@ -1482,7 +1487,7 @@ degraded scaffold stays valid."
              (lambda (units)
                (mapcar (lambda (u) (format "LINE(%s)" u)) units)))
             ((symbol-function 'tibetan-gloss-table-render-captioned)
-             (lambda (_segs _vocab) nil)))
+             (lambda (_segs _vocab &optional _level) nil)))
     (let ((s (tibetan-cascade--reading-section '((105 . "བདག།")))))
       (should-not (string-match-p "^\\*\\* Gloss Tables$" s))
       (should (string-match-p "^\\*\\* Interlinear$" s)))))
@@ -1508,7 +1513,7 @@ edit (the hash now mismatches the body)."
 section is regenerated fresh — new content, new hash."
   (tibetan-cascade-test--with-cascade-file
     (cl-letf (((symbol-function 'tibetan-gloss-table-render-captioned)
-               (lambda (_segs _vocab) "Unit 1 — Segment 105\n| NEU |")))
+               (lambda (_segs _vocab &optional _level) "Unit 1 — Segment 105\n| NEU |")))
       (tibetan-cascade--regenerate
        cascade-file 4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
        (expand-file-name "doc.org" dir)))
@@ -1529,7 +1534,7 @@ layer, like the handout's hand-tuned tables."
     (tibetan-cascade-test--edit-gloss-tables cascade-file
                                              "EDITIERT-VON-CARSTEN")
     (cl-letf (((symbol-function 'tibetan-gloss-table-render-captioned)
-               (lambda (_segs _vocab) "Unit 1 — Segment 105\n| NEU |")))
+               (lambda (_segs _vocab &optional _level) "Unit 1 — Segment 105\n| NEU |")))
       (tibetan-cascade--regenerate
        cascade-file 4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
        (expand-file-name "doc.org" dir)))
@@ -1546,7 +1551,7 @@ layer, like the handout's hand-tuned tables."
     (let ((before (with-temp-buffer
                     (insert-file-contents cascade-file) (buffer-string))))
       (cl-letf (((symbol-function 'tibetan-gloss-table-render-captioned)
-                 (lambda (_segs _vocab) "Unit 1 — Segment 105\n| NEU |")))
+                 (lambda (_segs _vocab &optional _level) "Unit 1 — Segment 105\n| NEU |")))
         (tibetan-cascade--regenerate
          cascade-file 4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
          (expand-file-name "doc.org" dir)))
@@ -1564,7 +1569,7 @@ re-inserted as the first Reading child (eb9b573 pattern)."
     (tibetan-cascade-test--edit-gloss-tables cascade-file
                                              "EDITIERT-VON-CARSTEN")
     (cl-letf (((symbol-function 'tibetan-gloss-table-render-captioned)
-               (lambda (_segs _vocab) nil)))
+               (lambda (_segs _vocab &optional _level) nil)))
       (tibetan-cascade--regenerate
        cascade-file 4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
        (expand-file-name "doc.org" dir)))

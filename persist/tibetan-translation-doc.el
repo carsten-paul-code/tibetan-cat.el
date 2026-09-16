@@ -333,7 +333,13 @@ translations (Lopez / W&M) never appear.  Returns the file."
               (when tib
                 (push (concat "*** Tibetisch\n" tib "\n\n") parts))
               (when (and tables (not (string-empty-p tables)))
-                (push (concat "*** Glossentabellen\n" tables "\n\n")
+                ;; The body carries `*** Segment N' headings — under
+                ;; the view's own L3 they would become siblings and
+                ;; break the outline; demote one level.
+                (push (concat "*** Glossentabellen\n"
+                              (replace-regexp-in-string
+                               "^\\*\\*\\* " "**** " tables)
+                              "\n\n")
                       parts))
               ;; Suggestions: only real content — the machine
               ;; placeholders ([Requesting…]/[Awaiting…]) are noise

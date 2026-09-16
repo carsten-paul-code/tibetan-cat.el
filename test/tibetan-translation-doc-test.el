@@ -314,6 +314,21 @@ previous output is."
     (insert "** Gloss Tables\n" body "\n\n")
     (write-region (point-min) (point-max) file nil 'silent)))
 
+(ert-deftest tibetan-translation-doc-section-view-demotes-table-headings ()
+  "The cascade `** Gloss Tables' body now carries `*** Segment N'
+headings; copied verbatim under the view's L3 `*** Glossentabellen'
+they would become SIBLINGS and break the outline — the view
+demotes them one level to `**** Segment N'."
+  (tibetan-translation-doc-test--with-corpus
+    (tibetan-translation-doc-test--add-gloss-tables
+     (tibetan-sentence--filepath 2 analysis-dir source-file)
+     "*** Segment 2\n| EDITIERTE-TABELLE |")
+    (let* ((out (tibetan-translation-doc-section-view source-file 167))
+           (s (with-temp-buffer (insert-file-contents out)
+                                (buffer-string))))
+      (should (string-match-p "^\\*\\*\\*\\* Segment 2$" s))
+      (should-not (string-match-p "^\\*\\*\\* Segment 2$" s)))))
+
 (ert-deftest tibetan-translation-doc-section-view-structure ()
   "The §167 view: `* §167', then `** Satz 2' with Tibetisch /
 Glossentabellen (VERBATIM, incl. Carsten's edits) / Claude and DM
