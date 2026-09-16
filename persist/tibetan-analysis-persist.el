@@ -1215,12 +1215,6 @@ written filepath."
       (insert "\n\n")
       (insert "* My Notes\n\n\n")
       (insert "* Working Translation\n\n\n")
-      (when references
-        (insert "* Reference Translations\n")
-        (insert "# Imported from the comparative source document.  ")
-        (insert "Read-only by convention — edit only in the source.\n\n")
-        (dolist (ref references)
-          (insert (format "** %s\n%s\n\n" (car ref) (cdr ref)))))
       ;; Carve-out (Phase 1.2 of layout-revision §5.18, 2026-05-04):
       ;; paragraph files (`par-NNN.org') keep `* Auto-Analysis'.
       ;; Paragraph layout is not in the parallel-Sanskrit pipeline;
@@ -1237,6 +1231,15 @@ written filepath."
               "file) rather than in the comparative source so the "
               "philological work is co-located with the translation "
               "work; the comparative source stays read-only.\n\n\n")
+      ;; Reference material at the BOTTOM (Carsten, 2026-09-16):
+      ;; the Lopez/W&M blocks are consulted on demand, not read in
+      ;; flow — they no longer push the analysis down the file.
+      (when references
+        (insert "* Reference Translations\n")
+        (insert "# Imported from the comparative source document.  ")
+        (insert "Read-only by convention — edit only in the source.\n\n")
+        (dolist (ref references)
+          (insert (format "** %s\n%s\n\n" (car ref) (cdr ref)))))
       (insert "* Footnotes\n\n")
       ;; Export safety (2026-05-18) — see segment create-file.
       (tibetan-analysis--strip-dangling-term-links-in-buffer))
@@ -1855,13 +1858,6 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
       (insert (or working-translation "* Working Translation\n\n\n"))
       (unless (string-suffix-p "\n\n" (or working-translation ""))
         (insert "\n"))
-      ;; Reference Translations — paragraph-only, preserved verbatim
-      ;; if present.  Only emitted when the original file had it
-      ;; (avoids polluting seg-NNN.org with an empty section).
-      (when reference-translations
-        (insert reference-translations)
-        (unless (string-suffix-p "\n\n" reference-translations)
-          (insert "\n")))
       ;; Translation Comparison — paragraph-only, refreshed by an
       ;; explicit `C-c u T' (NOT by reanalyze).  Preserved verbatim.
       (when translation-comparison
@@ -1908,6 +1904,14 @@ Updates `#+TIBETAN_HASH' and `#+LAST_ANALYZED' as a side-effect."
       (when apparatus
         (insert apparatus)
         (unless (string-suffix-p "\n\n" apparatus)
+          (insert "\n")))
+      ;; Reference Translations — paragraph-only, preserved verbatim,
+      ;; at the BOTTOM since 2026-09-16 (Carsten: reference material
+      ;; is consulted on demand, not read in flow).  Old-layout files
+      ;; migrate here on their next regenerate.
+      (when reference-translations
+        (insert reference-translations)
+        (unless (string-suffix-p "\n\n" reference-translations)
           (insert "\n")))
       ;; H2: unknown top-level sections, verbatim, before Footnotes.
       (when unknown-sections

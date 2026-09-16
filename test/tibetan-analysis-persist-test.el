@@ -611,6 +611,60 @@ before (seg-file output byte-stable)."
                   "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།")))
     (should-not (string-match-p "^\\*\\*\\* Segment " content))))
 
+(ert-deftest tibetan-analysis-par-reference-translations-at-bottom ()
+  "2026-09-16 (Carsten): `* Reference Translations' moves to the
+BOTTOM of the par file — after `* Apparatus', before
+`* Footnotes' — on create AND (migration) on regenerate of an
+old-layout file, body verbatim."
+  (let* ((dir (make-temp-file "tibetan-par-rt-" t))
+         (src (expand-file-name "quelle.org" dir))
+         (analysis-dir (expand-file-name "analysis" dir))
+         (par-file (expand-file-name "par-042.org" analysis-dir)))
+    (unwind-protect
+        (progn
+          (make-directory analysis-dir t)
+          (with-temp-file src
+            (insert "#+TITLE: Q\n\n* Text\n** §42\n*** Tibetisch\nབདུད།\n"))
+          ;; CREATE path.
+          (cl-letf (((symbol-function 'tibetan-analysis-get-folder)
+                     (lambda () analysis-dir)))
+            (tibetan-analysis-create-paragraph-file
+             42 "བདུད།" src "** Wylie\nbdud\n"
+             '(("Lopez 2006" . "REF-BODY-LOPEZ"))))
+          (let* ((s (with-temp-buffer (insert-file-contents par-file)
+                                      (buffer-string)))
+                 (app (string-match "^\\* Apparatus$" s))
+                 (rt (string-match "^\\* Reference Translations$" s))
+                 (foot (string-match "^\\* Footnotes$" s)))
+            (should (and app rt foot))
+            (should (< app rt foot)))
+          ;; MIGRATION path: plant an OLD-layout file (RT at top).
+          (with-temp-file par-file
+            (insert "#+TITLE: Paragraph 42 Analysis\n"
+                    "#+SOURCE: [[file:../quelle.org::*§42][Q / §42]]\n\n"
+                    "* Tibetan Text\nབདུད།\n\n"
+                    "* My Notes\n\n\n* Working Translation\n\n\n"
+                    "* Reference Translations\n** Lopez 2006\nREF-BODY-LOPEZ\n\n"
+                    "* Auto-Analysis\n:PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                    "** Wylie Transliteration\nbdud\n\n"
+                    "* Apparatus\n\n\n* Footnotes\n\n"))
+          (should (plist-get (tibetan-analysis-reanalyze-paragraph-file
+                              par-file :re-request-claude nil)
+                             :ok))
+          (let* ((s (with-temp-buffer (insert-file-contents par-file)
+                                      (buffer-string)))
+                 (app (string-match "^\\* Apparatus$" s))
+                 (rt (string-match "^\\* Reference Translations$" s))
+                 (foot (string-match "^\\* Footnotes$" s)))
+            (should (and app rt foot))
+            (should (< app rt foot))
+            (should (string-match-p "REF-BODY-LOPEZ" s))))
+      (let ((abuf (get-file-buffer par-file)))
+        (when abuf
+          (with-current-buffer abuf (set-buffer-modified-p nil))
+          (kill-buffer abuf)))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-analysis-par-seg-start-reads-source-drawer ()
   "`tibetan-analysis--par-seg-start' reads the source §-heading's
 :B2_SEG_START: drawer property; falls back to the
