@@ -3,7 +3,11 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-09-15 (§5.54: Masterarbeit-Drei-Sichten —
+editing. Last updated 2026-09-16 (§5.55: §185-Review — Sentence
+Structure tabellarisch je Einheit, Segment-Headings + Breiten-
+Chunking der Glossentabellen, par: Tabelle vor Interlinear /
+Reference Translations unten / DM-Fire; Batch-Wedge-Bugfix;
+ERT 2339 / BDD 250.  Previous: §5.54: Masterarbeit-Drei-Sichten —
 `** Gloss Tables` als erstes Reading-Kind mit Edit-Schutz
 (generiert-bis-angefasst, :GENERATED_HASH:), Übersetzungs-Stitcher +
 §-Ansicht-Generator in `persist/tibetan-translation-doc.el`
@@ -3873,6 +3877,50 @@ Suite 2291 → **2322 ERT** (0 unexpected, 1 skip); BDD 249 → **250**
 (+ translation-doc-Szenario); compile clean durchgehend;
 REFERENCE.org je def-Commit.  Korpus-Landung (56 Rgyan-Dateien
 regenerieren, Demo-Stitch, §184-Ansicht) siehe Korpus-Commits.
+
+### 5.55 §185-Review: Struktur-Tabellen · Segment-Headings · par-Politur (done, 2026-09-16)
+
+Carstens Review der regenerierten par-185: vier Punkte, alle
+RED-first umgesetzt (Commits `1ff0d34`…`1d23e1a`).
+
+- **Glossentabellen**: überbreite Einheiten brechen in gestapelte
+  3-Zeilen-Blöcke (`tibetan-gloss-table-max-width`, Default 100 —
+  der ExPex-Umbruch des Handouts auf Textebene); Beschriftung ist
+  jetzt ein faltbares `*** Segment N`-HEADING (Kaskade Level 3;
+  par-Dateien nummerieren ihre Einheiten aus dem Quell-§-Drawer
+  `:B2_SEG_START:` bzw. dem `:seg_A_to_B:`-Tag via neuer Dynamik
+  `tibetan-analysis--gloss-table-seg-start`); im Two-File-Layout
+  sitzt die Tabelle VOR dem Interlinear (Lesereihenfolge wie die
+  Kaskade).  Die §-Ansicht demotet die kopierten Headings auf L4.
+- **Sentence Structure tabellarisch** („Beides"):
+  `tibetan-analysis--render-structure-tables` — EINE Übersicht
+  (Seg | Satzphrasen | Verb | Anschluss, Konverb-Kette in der
+  Anschluss-Spalte, HAUPTVERB auf der letzten Einheit) + je
+  Einheit `*** Segment N` mit Detailtabelle (Phrase | Kasus |
+  Funktion; deutsche Rollenlabels, [elidiert] sichtbar,
+  Konverb-/Komplement-Klausen textuell geflattet mit →-Zeilen).
+  JE SHAD-EINHEIT gerechnet — der par-Pfad lief zuvor über den
+  ganzen § (Adjunkt-Müllhalde).  Kaskade delegiert
+  (`--sentence-structure-body` → Tabellen, Baum-Fallback);
+  seg/sent-Dateien behalten den flachen Baum (Milarepa-Lock,
+  test-gepinnt).
+- **par-Layout**: `* Reference Translations` ans Ende (nach
+  Apparatus, vor Footnotes; Migration beim nächsten Regenerate).
+- **DM-Fire für par** (`--maybe-fire-dm-for-par`, beide
+  par-Kommandos): Gates needs-request-p (§5.29) + defer-MT.
+- **BUG en route** (`e7ec847`): Batch-par-Reanalyze wedgte auf
+  dem Supersession-Prompt — vier persist-Stellen (u.a.
+  regenerate-auto!) nutzten rohes `find-file-noselect`; jetzt
+  `tibetan-fresh-file-buffer` (§5.49-Klasse).  RED via
+  yes-or-no-p-Signal-Stub statt Hänger.
+- **Test-Harness**: der No-Network-Stub deckte den curl-Transport
+  (§5.48) nicht — der neue DM-Fire traf LIVE dharmamitra.org aus
+  den Fixtures.  run-all-tests.el gated `--http-post` hinter
+  `tibetan-test-allow-dm-transport`; die zwei Transport-
+  Selbsttests binden die Var (offline über eigene Primitiv-Stubs).
+
+Suite 2324 → **2339 ERT** (0 unexpected, 1 skip); BDD 250;
+compile clean; REFERENCE.org je def-Commit.
 
 ## 6. Open work (prioritised)
 
