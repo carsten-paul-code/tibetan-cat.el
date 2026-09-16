@@ -167,31 +167,64 @@ unit yields no tokens."
                   r3)))
         (list (nreverse r1) (nreverse r2) (nreverse r3))))))
 
+(defcustom tibetan-gloss-table-max-width 100
+  "Maximum rendered line width of a gloss table, in columns.
+A shad unit whose table would be wider breaks into stacked
+3-row continuation blocks (the ExPex-style wrap of the §184
+handout, done at render time) — a 30-token segment otherwise
+wraps unreadably in the buffer (§185 review, 2026-09-16).
+A single over-wide column still renders alone."
+  :type 'integer
+  :group 'tibetan-cat)
+
+(defun tibetan-gloss-table--column-chunks (widths)
+  "Partition column indexes into blocks within the width budget.
+WIDTHS is the per-column width list; the rendered line costs
+Σwidth + 3·ncols + 1 (separators and edges).  Greedy left-to-
+right, at least one column per block."
+  (let ((budget tibetan-gloss-table-max-width)
+        (chunks nil) (current nil) (cost 1))
+    (cl-loop for w in widths
+             for i from 0
+             do (let ((add (+ w 3)))
+                  (if (and current (> (+ cost add) budget))
+                      (progn (push (nreverse current) chunks)
+                             (setq current (list i) cost (+ 1 add)))
+                    (push i current)
+                    (cl-incf cost add))))
+    (when current (push (nreverse current) chunks))
+    (nreverse chunks)))
+
 (defun tibetan-gloss-table--format-rows (rows)
-  "ROWS (three equal-length cell lists) as one aligned org table.
+  "ROWS (three equal-length cell lists) as aligned org table blocks.
 Column width = the widest cell of the three rows, space-padded,
 so the table reads aligned in the raw buffer too (the §184
-handout alignment request)."
+handout alignment request).  A table wider than
+`tibetan-gloss-table-max-width' splits into stacked 3-row
+continuation blocks, blank-line separated, token order kept."
   (let* ((ncols (length (car rows)))
          (widths
           (cl-loop for i below ncols
                    collect (cl-loop for row in rows
                                     maximize (string-width
-                                              (or (nth i row) ""))))))
+                                              (or (nth i row) "")))))
+         (chunks (tibetan-gloss-table--column-chunks widths)))
     (mapconcat
-     (lambda (row)
-       (concat
-        "| "
-        (mapconcat
-         #'identity
-         (cl-loop for cell in row
-                  for w in widths
-                  collect (concat cell
-                                  (make-string
-                                   (- w (string-width cell)) ?\s)))
-         " | ")
-        " |"))
-     rows "\n")))
+     (lambda (chunk)
+       (mapconcat
+        (lambda (row)
+          (concat
+           "| "
+           (mapconcat
+            (lambda (i)
+              (let ((cell (nth i row))
+                    (w (nth i widths)))
+                (concat cell
+                        (make-string (- w (string-width cell)) ?\s))))
+            chunk " | ")
+           " |"))
+        rows "\n"))
+     chunks "\n\n")))
 
 (defun tibetan-gloss-table-render (units &optional vocab-alist)
   "One aligned three-row org table per shad unit in UNITS.

@@ -261,6 +261,66 @@ body entirely)."
     (should-not (tibetan-gloss-table-render nil))))
 
 ;; ----------------------------------------------------------------------------
+;; Width chunking (2026-09-16 — §185 review: 30-column tables wrap
+;; unreadably; wide units break into stacked continuation blocks)
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-gloss-table-chunks-wide-tables ()
+  "A unit wider than `tibetan-gloss-table-max-width' splits into
+stacked 3-row blocks: every line within budget, every block
+internally aligned, all tokens present in order."
+  (tibetan-gloss-table-test--with-tokens
+      '(("U1" . ((:tibetan "ཀ" :wylie "kha-chig" :kind word
+                  :meaning "erstes Wort mit langer Glosse")
+                 (:tibetan "ཁ" :wylie "kha-gnyis" :kind word
+                  :meaning "zweites Wort mit langer Glosse")
+                 (:tibetan "ག" :wylie "kha-gsum" :kind word
+                  :meaning "drittes Wort mit langer Glosse")
+                 (:tibetan "ང" :wylie "kha-bzhi" :kind word
+                  :meaning "viertes Wort mit langer Glosse"))))
+    (let* ((tibetan-gloss-table-max-width 70)
+           (out (tibetan-gloss-table-render '("U1")))
+           (lines (split-string out "\n"))
+           (pipe-lines (seq-filter (lambda (l) (string-prefix-p "|" l))
+                                   lines)))
+      ;; More than one block: 4 tokens à ~35 Zeichen passen nie in
+      ;; eine 70er-Zeile → mindestens 2 Blöcke = ≥6 Pipe-Zeilen.
+      (should (>= (length pipe-lines) 6))
+      (should (= 0 (mod (length pipe-lines) 3)))
+      ;; Budget: keine Zeile breiter als max-width.
+      (dolist (l pipe-lines)
+        (should (<= (string-width l) 70)))
+      ;; Alle Tokens, in Reihenfolge (Zeile 1 der Blöcke konkateniert).
+      (let ((row1 (mapconcat #'identity
+                             (cl-loop for i from 0 below (length pipe-lines)
+                                      when (= 0 (mod i 3))
+                                      collect (nth i pipe-lines))
+                             " ")))
+        (should (string-match-p
+                 "kha-chig.*kha-gnyis.*kha-gsum.*kha-bzhi" row1)))
+      ;; Blöcke durch Leerzeile getrennt.
+      (should (string-match-p "|\n\n|" out)))))
+
+(ert-deftest tibetan-gloss-table-chunking-keeps-narrow-tables-whole ()
+  "A unit within budget renders as ONE block — byte-identical to
+the pre-chunking output."
+  (tibetan-gloss-table-test--with-tokens
+      `(("U1" . ,tibetan-gloss-table-test--toks-a))
+    (let* ((tibetan-gloss-table-max-width 100)
+           (out (tibetan-gloss-table-render '("U1"))))
+      (should (= 3 (length (split-string out "\n")))))))
+
+(ert-deftest tibetan-gloss-table-chunking-single-column-may-overflow ()
+  "A single over-wide column still renders (one column per block
+minimum) — never an infinite loop, never a dropped token."
+  (tibetan-gloss-table-test--with-tokens
+      '(("U1" . ((:tibetan "ཀ" :wylie "kha" :kind word
+                  :meaning "eine absurd lange Glosse die jedes Budget sprengt und trotzdem erscheinen muss"))))
+    (let* ((tibetan-gloss-table-max-width 20)
+           (out (tibetan-gloss-table-render '("U1"))))
+      (should (string-match-p "absurd lange Glosse" out)))))
+
+;; ----------------------------------------------------------------------------
 ;; Captioned renderer (cascade Reading layer, 2026-09-15)
 ;; ----------------------------------------------------------------------------
 

@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-15T17:04:44
+#+DATE: 2026-09-16T08:22:58
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1425 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1427 forms
 
 Regenerated automatically by:
 
@@ -19,7 +19,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#analysis/tibetan-clause-segmenter.el][analysis/tibetan-clause-segmenter.el]]  (20)
   - [[#analysis/tibetan-enhanced-display.el][analysis/tibetan-enhanced-display.el]]  (16)
   - [[#analysis/tibetan-enhanced-parser.el][analysis/tibetan-enhanced-parser.el]]  (16)
-  - [[#analysis/tibetan-gloss-table.el][analysis/tibetan-gloss-table.el]]  (8)
+  - [[#analysis/tibetan-gloss-table.el][analysis/tibetan-gloss-table.el]]  (10)
   - [[#analysis/tibetan-interlinear.el][analysis/tibetan-interlinear.el]]  (22)
   - [[#analysis/tibetan-mitra-translation.el][analysis/tibetan-mitra-translation.el]]  (24)
   - [[#analysis/tibetan-particles-bialek.el][analysis/tibetan-particles-bialek.el]]  (8)
@@ -1169,22 +1169,36 @@ empty — their information is the row-3 label), row 3 the
 `tibetan-gloss-table--token-label' grammar label.  nil when the
 unit yields no tokens.
 
+** ~tibetan-gloss-table--column-chunks~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 180
+:SIGNATURE: (tibetan-gloss-table--column-chunks widths)
+:END:
+
+Partition column indexes into blocks within the width budget.
+WIDTHS is the per-column width list; the rendered line costs
+Σwidth + 3·ncols + 1 (separators and edges).  Greedy left-to-
+right, at least one column per block.
+
 ** ~tibetan-gloss-table--format-rows~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 170
+:LINE: 198
 :SIGNATURE: (tibetan-gloss-table--format-rows rows)
 :END:
 
-ROWS (three equal-length cell lists) as one aligned org table.
+ROWS (three equal-length cell lists) as aligned org table blocks.
 Column width = the widest cell of the three rows, space-padded,
 so the table reads aligned in the raw buffer too (the §184
-handout alignment request).
+handout alignment request).  A table wider than
+`tibetan-gloss-table-max-width' splits into stacked 3-row
+continuation blocks, blank-line separated, token order kept.
 
 ** ~tibetan-gloss-table-render~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 196
+:LINE: 229
 :SIGNATURE: (tibetan-gloss-table-render units &optional vocab-alist)
 :END:
 
@@ -1197,7 +1211,7 @@ nothing renders.  VOCAB-ALIST feeds the Claude-POS label tier.
 ** ~tibetan-gloss-table-render-captioned~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 213
+:LINE: 246
 :SIGNATURE: (tibetan-gloss-table-render-captioned segs &optional vocab-alist)
 :END:
 
@@ -1211,6 +1225,22 @@ probes L2 names file-wide (the §5.51 collision lesson).  A unit
 that yields no tokens drops caption AND table together — captions
 carry the segment number, so skipping cannot misalign anything.
 nil when nothing renders.  VOCAB-ALIST feeds the Claude-POS tier.
+
+** ~tibetan-gloss-table-max-width~  /customize variable/
+:PROPERTIES:
+:KIND: defcustom
+:LINE: 170
+:TYPE: 'integer
+:GROUP: tibetan-cat
+:DEFAULT: 100
+:END:
+
+Maximum rendered line width of a gloss table, in columns.
+A shad unit whose table would be wider breaks into stacked
+3-row continuation blocks (the ExPex-style wrap of the §184
+handout, done at render time) — a 30-token segment otherwise
+wraps unreadably in the buffer (§185 review, 2026-09-16).
+A single over-wide column still renders alone.
 
 
 * analysis/tibetan-interlinear.el
