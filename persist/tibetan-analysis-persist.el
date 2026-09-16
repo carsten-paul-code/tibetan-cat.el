@@ -3644,10 +3644,11 @@ For each Bialek-detected particle in BIALEK-ANALYSIS:
 (defconst tibetan-analysis--priority-section-order
   '("** Wylie Transliteration"
     ;; "** Phonetics" retired 2026-09-15 (user request; F1 mechanism).
-    "** Interlinear Gloss"
-    ;; §184-handout form (2026-09-15): the three-row per-unit table
-    ;; directly under the flowing trot it tabulates.
+    ;; §184-handout form: the three-row per-unit tables — since
+    ;; 2026-09-16 ABOVE the flowing trot (Carsten's read order,
+    ;; same as the cascade Reading layer).
     "** Gloss Table"
+    "** Interlinear Gloss"
     "** Claude Vocabulary"
     "** Claude Translation"
     "** Translation"
@@ -4423,17 +4424,37 @@ unused-arg warning without breaking the public API."
             (setq enriched-vocab-pairs (nreverse enriched-vocab-pairs))
 
             ;; ============================================================
+            ;; SECTION 1a (deferred): Interlinear Gloss + Particle Overview
+            ;; Now that enriched-vocab-pairs is ready, go back to the marker
+            ;; position and insert the interlinear sections before Claude
+            ;; Translation.
+            ;; ============================================================
+            (when (and enriched-vocab-pairs
+                       (fboundp 'tibetan-interlinear-insert-sections))
+              (let ((bialek-data (condition-case nil
+                                     (when (fboundp 'tibetan-analyze-grammar-bialek)
+                                       (tibetan-analyze-grammar-bialek tibetan-text))
+                                   (error nil))))
+                (save-excursion
+                  (goto-char interlinear-marker)
+                  (tibetan-interlinear-insert-sections
+                   enriched-vocab-pairs
+                   bialek-data
+                   tibetan-text
+                   vocab-pairs
+                   curated-words-hash))))
+            ;; ============================================================
             ;; SECTION 1a'': Gloss Table (2026-09-15, §184-handout form;
             ;; 2026-09-16: per-segment headings when the par path binds
             ;; the seg-start var).
             ;; Per shad unit ONE aligned three-row org table (Wylie /
             ;; gloss / grammar label) from the tibetan-reading token
-            ;; stream.  Inserted at the interlinear marker BEFORE the
-            ;; deferred Interlinear pass below — both write at the same
-            ;; position and the LAST writer lands FIRST, so the final
-            ;; order is Interlinear → Gloss Table → Claude Vocabulary
-            ;; (and simply Gloss Table → Claude Vocabulary when the
-            ;; Interlinear has nothing to emit).
+            ;; stream.  Runs AFTER the deferred Interlinear insertion:
+            ;; both write at the interlinear marker and the LAST writer
+            ;; lands FIRST, so the final order is Gloss Table →
+            ;; Interlinear Gloss → Claude Vocabulary (Carsten's
+            ;; 2026-09-16 read order — same as the cascade Reading
+            ;; layer).
             ;; ============================================================
             (when (and interlinear-marker
                        (fboundp 'tibetan-gloss-table-render))
@@ -4465,27 +4486,7 @@ unused-arg warning without breaking the public API."
                     (goto-char interlinear-marker)
                     (insert "** Gloss Table\n" table "\n\n")))))
 
-            ;; ============================================================
-            ;; SECTION 1a (deferred): Interlinear Gloss + Particle Overview
-            ;; Now that enriched-vocab-pairs is ready, go back to the marker
-            ;; position and insert the interlinear sections before Claude
-            ;; Translation.
-            ;; ============================================================
-            (when (and enriched-vocab-pairs
-                       (fboundp 'tibetan-interlinear-insert-sections))
-              (let ((bialek-data (condition-case nil
-                                     (when (fboundp 'tibetan-analyze-grammar-bialek)
-                                       (tibetan-analyze-grammar-bialek tibetan-text))
-                                   (error nil))))
-                (save-excursion
-                  (goto-char interlinear-marker)
-                  (tibetan-interlinear-insert-sections
-                   enriched-vocab-pairs
-                   bialek-data
-                   tibetan-text
-                   vocab-pairs
-                   curated-words-hash))))
-            (when interlinear-marker
+                        (when interlinear-marker
               (set-marker interlinear-marker nil))
 
             ;; ============================================================

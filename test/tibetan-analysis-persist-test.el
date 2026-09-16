@@ -574,8 +574,13 @@ and the priority order knows the heading."
   (let ((content (tibetan-analysis-generate-content "བདག་གིས་ལས་བྱས།")))
     (should (string-match-p "^\\*\\* Gloss Table$" content))
     (let ((tbl   (string-match "^\\*\\* Gloss Table$" content))
+          (il    (string-match "^\\*\\* Interlinear Gloss$" content))
           (vocab (string-match "^\\*\\* Claude Vocabulary$" content)))
-      (should (and tbl vocab (< tbl vocab))))
+      (should (and tbl vocab (< tbl vocab)))
+      ;; 2026-09-16 (Carsten): table BEFORE the Interlinear —
+      ;; same read order as the cascade Reading layer.
+      (when il
+        (should (< tbl il))))
     ;; Body: one real org table — at least the three `|' rows —
     ;; before the next L2 heading.
     (string-match "^\\*\\* Gloss Table$" content)
