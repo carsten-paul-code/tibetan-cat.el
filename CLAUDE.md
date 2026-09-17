@@ -3,11 +3,14 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-09-16 (§5.55: §185-Review — Sentence
+editing. Last updated 2026-09-17 (§5.56: §15-Review — Ein-Raster-
+Glossentabellen: hline-Bänder auf gemeinsamem Spaltenraster statt
+Leerzeilen-Chunks, Zeile-2-Zellen-Budget 25 (…), Escape-Strip;
+ERT 2345 / BDD 250.  Previous: §5.55: §185-Review — Sentence
 Structure tabellarisch je Einheit, Segment-Headings + Breiten-
 Chunking der Glossentabellen, par: Tabelle vor Interlinear /
 Reference Translations unten / DM-Fire; Batch-Wedge-Bugfix;
-ERT 2339 / BDD 250.  Previous: §5.54: Masterarbeit-Drei-Sichten —
+ERT 2339 / BDD 250.  §5.54: Masterarbeit-Drei-Sichten —
 `** Gloss Tables` als erstes Reading-Kind mit Edit-Schutz
 (generiert-bis-angefasst, :GENERATED_HASH:), Übersetzungs-Stitcher +
 §-Ansicht-Generator in `persist/tibetan-translation-doc.el`
@@ -3921,6 +3924,45 @@ RED-first umgesetzt (Commits `1ff0d34`…`1d23e1a`).
 
 Suite 2324 → **2339 ERT** (0 unexpected, 1 skip); BDD 250;
 compile clean; REFERENCE.org je def-Commit.
+
+### 5.56 §15-Review: Ein-Raster-Glossentabellen (done, 2026-09-17)
+
+Carstens Befund an der frisch erzeugten par-015.org: „die
+Tabellendarstellung ist nicht spaltenweise ausgerichtet" — der
+§5.55-Breiten-Chunker zerlegte §15 in 37 leerzeilengetrennte
+Mini-Tabellen à 1–5 Spalten mit je PRIVATEN Spaltenbreiten
+(innerhalb jedes Blocks org-align-identisch, verifiziert; das
+Segment als Ganzes ohne gemeinsames Raster, org-Tabellenbefehle
+nur je Block).  Treiber: Bedeutungszellen mit dem Interlinear-
+Budget (60/30) drückten die Chunks auf 2–3 Spalten.  Formwahl
+Carstens (AskUserQuestion): „Ein Raster + kompakte Zellen".
+Vier Commits (`8851881`…`b96d8b5`), alle RED-first:
+
+- `--format-rows` rendert je Einheit EINE org-Tabelle: Umbruch in
+  3-Zeilen-Bänder, getrennt durch org-hlines, alle Bänder teilen
+  EIN Spaltenraster (`--band-width`/`--columns-per-band`: größte
+  Spaltenzahl je Band im Budget, Position k = Max über die k-ten
+  Spalten aller Bänder, letztes Band mit Leerzellen gefüllt).
+  Schmale Einheiten byte-identisch; `--column-chunks` entfernt.
+  Ausrichtungs-Lock-Test: identische Pipe-Positionen über ALLE
+  Zeilen.
+- Zeile-2-Zellen-Budget: defcustom
+  `tibetan-gloss-table-cell-gloss-width` (25) + `--truncate-cell`
+  (Wortgrenze, hängende Interpunktion gestrippt, IMMER `…` als
+  Verweis auf die Vollglosse in Claude Vocabulary/Interlinear).
+  Reading-Zeilen-Budgets unberührt.
+- Literale `\n`/`\t`-Serialisierungsreste: geteilter
+  `--strip-escapes`, läuft VOR der Kappung (der Schnitt durch die
+  2-Zeichen-Sequenz hinterließ sonst `contemplate\…`) und als
+  Netz in `--cell`.
+
+Landung: par-015/184/185 regeneriert (`:claude-preserved t`,
+DM/RT/Slots intakt; par-015 erstmals committet — sein DM-Fire
+hatte beim Anlegen automatisch gegriffen).  Kaskaden-sent-Dateien
+migrieren beim nächsten Regenerate (editierte `** Gloss Tables`
+bleiben per §5.54-Schutz stehen).  Suite 2339 → **2345 ERT**
+(0 unexpected, 1 skip); BDD 250; compile clean; REFERENCE.org je
+def-Commit.
 
 ## 6. Open work (prioritised)
 
