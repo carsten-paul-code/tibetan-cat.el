@@ -136,9 +136,13 @@ A trailing clitic's label is dot-appended (NMLZ.GEN, N.GEN)."
 ;; ----------------------------------------------------------------------------
 
 (defun tibetan-gloss-table--cell (s)
-  "S as a safe org-table cell: whitespace collapsed, `|' escaped
-as the org entity `\\vert' (a literal bar would split the cell)."
-  (let* ((flat (replace-regexp-in-string "[ \t\n]+" " " (or s "")))
+  "S as a safe org-table cell: whitespace collapsed, LITERAL
+backslash-escape sequences (\\n, \\t — serialization junk that
+upstream vocabulary strings occasionally carry) dropped, `|'
+escaped as the org entity `\\vert' (a literal bar would split
+the cell)."
+  (let* ((noesc (replace-regexp-in-string "\\\\[nt]" " " (or s "")))
+         (flat (replace-regexp-in-string "[ \t\n]+" " " noesc))
          (safe (replace-regexp-in-string "|" "\\\\vert" flat)))
     (string-trim safe)))
 

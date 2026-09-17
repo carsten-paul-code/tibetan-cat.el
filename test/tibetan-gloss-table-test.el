@@ -229,6 +229,18 @@ cell carries emphasis/link markup."
       (dolist (bad '("=" "~" "!" "\\[\\["))
         (should-not (string-match-p bad out))))))
 
+(ert-deftest tibetan-gloss-table-cell-strips-literal-escape-sequences ()
+  "A gloss carrying LITERAL backslash-escape sequences (\\n, \\t —
+serialization junk from upstream vocabulary strings) renders
+without them: `contemplate\\n' must not put a backslash-n into
+the org cell (SS15 review, par-015 Segment 154)."
+  (tibetan-gloss-table-test--with-tokens
+      '(("U1" . ((:tibetan "བསམ" :wylie "bsam" :kind word
+                  :meaning "think; contemplate\\n"))))
+    (let ((out (tibetan-gloss-table-render '("U1"))))
+      (should (string-match-p "contemplate" out))
+      (should-not (string-match-p "\\\\n" out)))))
+
 (ert-deftest tibetan-gloss-table-render-escapes-pipe ()
   "A `|' inside a gloss must not split the cell — escaped as the
 org \\vert entity, keeping every row at the unit's column count."
