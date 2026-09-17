@@ -241,6 +241,38 @@ the org cell (SS15 review, par-015 Segment 154)."
       (should (string-match-p "contemplate" out))
       (should-not (string-match-p "\\\\n" out)))))
 
+(ert-deftest tibetan-gloss-table-cell-gloss-capped-with-ellipsis ()
+  "Row-2 gloss cells are capped at
+`tibetan-gloss-table-cell-gloss-width' and marked with a trailing
+`…' — the table is the at-a-glance form; the full gloss stays in
+Claude Vocabulary / Interlinear (SS15 review, 2026-09-17).  Cut
+prefers a word boundary; dangling punctuation before the `…' is
+stripped.  Rows 1 and 3 are untouched."
+  (tibetan-gloss-table-test--with-tokens
+      '(("U1" . ((:tibetan "འདས" :wylie "'das" :kind word
+                  :meaning "pf. of 'da'; to die (DE: Pf. von 'da'; sterben)"))))
+    (let* ((tibetan-gloss-table-cell-gloss-width 25)
+           (out (tibetan-gloss-table-render '("U1")))
+           (lines (split-string out "\n"))
+           (gloss (string-trim
+                   (car (butlast (cdr (split-string (nth 1 lines) "|")))))))
+      ;; Budget + ellipsis, no dangling `(DE:' fragment.
+      (should (<= (length gloss) 26))
+      (should (string-suffix-p "…" gloss))
+      (should-not (string-match-p "(DE:…" gloss))
+      ;; Row 1 keeps the full Wylie.
+      (should (string-match-p "'das" (nth 0 lines))))))
+
+(ert-deftest tibetan-gloss-table-cell-gloss-short-untouched ()
+  "A gloss within the cell budget renders verbatim — no ellipsis,
+no cut."
+  (tibetan-gloss-table-test--with-tokens
+      `(("U1" . ,tibetan-gloss-table-test--toks-a))
+    (let* ((tibetan-gloss-table-cell-gloss-width 25)
+           (out (tibetan-gloss-table-render '("U1"))))
+      (should (string-match-p "| Ehrwürdiger " out))
+      (should-not (string-match-p "…" out)))))
+
 (ert-deftest tibetan-gloss-table-render-escapes-pipe ()
   "A `|' inside a gloss must not split the cell — escaped as the
 org \\vert entity, keeping every row at the unit's column count."

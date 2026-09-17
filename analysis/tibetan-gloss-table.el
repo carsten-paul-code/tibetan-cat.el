@@ -146,11 +146,39 @@ the cell)."
          (safe (replace-regexp-in-string "|" "\\\\vert" flat)))
     (string-trim safe)))
 
+(defcustom tibetan-gloss-table-cell-gloss-width 25
+  "Maximum width of a row-2 gloss cell, in characters.
+A longer gloss is cut (word boundary preferred) and marked with
+a trailing `…'.  The table is the at-a-glance overview — the
+full gloss stays readable in `** Claude Vocabulary' and the
+Interlinear.  Wide uncapped cells force the shared-grid wrap
+into 2-column bands, which is what fragmented the SS15 tables
+\(review 2026-09-17)."
+  :type 'integer
+  :group 'tibetan-cat)
+
+(defun tibetan-gloss-table--truncate-cell (gloss)
+  "GLOSS capped at `tibetan-gloss-table-cell-gloss-width', or nil.
+Within budget → verbatim.  Over budget → cut at the last word
+boundary past half the budget (else hard cut), dangling
+punctuation stripped, `…' appended so the reader knows where to
+find the full gloss."
+  (let ((budget tibetan-gloss-table-cell-gloss-width))
+    (if (or (null gloss) (<= (length gloss) budget))
+        gloss
+      (let* ((cut (substring gloss 0 budget))
+             (space (cl-position ?\s cut :from-end t))
+             (head (if (and space (> space (/ budget 2)))
+                       (substring cut 0 space)
+                     cut)))
+        (concat (string-trim-right head "[ \t;,:/(·—-]+") "…")))))
+
 (defun tibetan-gloss-table--unit-rows (unit-text &optional vocab-alist)
   "Three cell-string lists (Wylie / gloss / label) for UNIT-TEXT.
 One column per `tibetan-reading--unit-tokens' token: row 1 the
 plain Wylie with a merged clitic re-attached (rje'i), row 2 the
-`tibetan-reading--gloss' display gloss (particle cells stay
+`tibetan-reading--gloss' display gloss capped at
+`tibetan-gloss-table-cell-gloss-width' (particle cells stay
 empty — their information is the row-3 label), row 3 the
 `tibetan-gloss-table--token-label' grammar label.  nil when the
 unit yields no tokens."
@@ -164,7 +192,9 @@ unit yields no tokens."
                    (concat (plist-get tok :wylie) (car clitic)))
                   r1)
             (push (tibetan-gloss-table--cell
-                   (if particle-p "" (tibetan-reading--gloss tok)))
+                   (if particle-p ""
+                     (tibetan-gloss-table--truncate-cell
+                      (tibetan-reading--gloss tok))))
                   r2)
             (push (tibetan-gloss-table--cell
                    (tibetan-gloss-table--token-label tok vocab-alist))

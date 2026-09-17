@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-16T08:59:57
+#+DATE: 2026-09-17T14:26:40
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1440 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1442 forms
 
 Regenerated automatically by:
 
@@ -19,7 +19,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#analysis/tibetan-clause-segmenter.el][analysis/tibetan-clause-segmenter.el]]  (20)
   - [[#analysis/tibetan-enhanced-display.el][analysis/tibetan-enhanced-display.el]]  (16)
   - [[#analysis/tibetan-enhanced-parser.el][analysis/tibetan-enhanced-parser.el]]  (16)
-  - [[#analysis/tibetan-gloss-table.el][analysis/tibetan-gloss-table.el]]  (10)
+  - [[#analysis/tibetan-gloss-table.el][analysis/tibetan-gloss-table.el]]  (12)
   - [[#analysis/tibetan-interlinear.el][analysis/tibetan-interlinear.el]]  (22)
   - [[#analysis/tibetan-mitra-translation.el][analysis/tibetan-mitra-translation.el]]  (24)
   - [[#analysis/tibetan-particles-bialek.el][analysis/tibetan-particles-bialek.el]]  (8)
@@ -1151,20 +1151,37 @@ A trailing clitic's label is dot-appended (NMLZ.GEN, N.GEN).
 :SIGNATURE: (tibetan-gloss-table--cell s)
 :END:
 
-S as a safe org-table cell: whitespace collapsed, `|' escaped
-as the org entity `\vert' (a literal bar would split the cell).
+S as a safe org-table cell: whitespace collapsed, LITERAL
+backslash-escape sequences (\n, \t — serialization junk that
+upstream vocabulary strings occasionally carry) dropped, `|'
+escaped as the org entity `\vert' (a literal bar would split
+the cell).
+
+** ~tibetan-gloss-table--truncate-cell~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 160
+:SIGNATURE: (tibetan-gloss-table--truncate-cell gloss)
+:END:
+
+GLOSS capped at `tibetan-gloss-table-cell-gloss-width', or nil.
+Within budget → verbatim.  Over budget → cut at the last word
+boundary past half the budget (else hard cut), dangling
+punctuation stripped, `…' appended so the reader knows where to
+find the full gloss.
 
 ** ~tibetan-gloss-table--unit-rows~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 145
+:LINE: 176
 :SIGNATURE: (tibetan-gloss-table--unit-rows unit-text &optional vocab-alist)
 :END:
 
 Three cell-string lists (Wylie / gloss / label) for UNIT-TEXT.
 One column per `tibetan-reading--unit-tokens' token: row 1 the
 plain Wylie with a merged clitic re-attached (rje'i), row 2 the
-`tibetan-reading--gloss' display gloss (particle cells stay
+`tibetan-reading--gloss' display gloss capped at
+`tibetan-gloss-table-cell-gloss-width' (particle cells stay
 empty — their information is the row-3 label), row 3 the
 `tibetan-gloss-table--token-label' grammar label.  nil when the
 unit yields no tokens.
@@ -1172,7 +1189,7 @@ unit yields no tokens.
 ** ~tibetan-gloss-table--column-chunks~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 180
+:LINE: 214
 :SIGNATURE: (tibetan-gloss-table--column-chunks widths)
 :END:
 
@@ -1184,7 +1201,7 @@ right, at least one column per block.
 ** ~tibetan-gloss-table--format-rows~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 198
+:LINE: 232
 :SIGNATURE: (tibetan-gloss-table--format-rows rows)
 :END:
 
@@ -1198,7 +1215,7 @@ continuation blocks, blank-line separated, token order kept.
 ** ~tibetan-gloss-table-render~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 229
+:LINE: 263
 :SIGNATURE: (tibetan-gloss-table-render units &optional vocab-alist)
 :END:
 
@@ -1211,7 +1228,7 @@ nothing renders.  VOCAB-ALIST feeds the Claude-POS label tier.
 ** ~tibetan-gloss-table-render-captioned~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 246
+:LINE: 280
 :SIGNATURE: (tibetan-gloss-table-render-captioned segs &optional vocab-alist
                                                   heading-level)
 :END:
@@ -1229,10 +1246,27 @@ table together — captions carry the segment number, so skipping
 cannot misalign anything.  nil when nothing renders.  VOCAB-ALIST
 feeds the Claude-POS tier.
 
+** ~tibetan-gloss-table-cell-gloss-width~  /customize variable/
+:PROPERTIES:
+:KIND: defcustom
+:LINE: 149
+:TYPE: 'integer
+:GROUP: tibetan-cat
+:DEFAULT: 25
+:END:
+
+Maximum width of a row-2 gloss cell, in characters.
+A longer gloss is cut (word boundary preferred) and marked with
+a trailing `…'.  The table is the at-a-glance overview — the
+full gloss stays readable in `** Claude Vocabulary' and the
+Interlinear.  Wide uncapped cells force the shared-grid wrap
+into 2-column bands, which is what fragmented the SS15 tables
+(review 2026-09-17).
+
 ** ~tibetan-gloss-table-max-width~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 170
+:LINE: 204
 :TYPE: 'integer
 :GROUP: tibetan-cat
 :DEFAULT: 100
