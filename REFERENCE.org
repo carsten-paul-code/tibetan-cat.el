@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-17T14:26:40
+#+DATE: 2026-09-17T14:28:57
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1442 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1443 forms
 
 Regenerated automatically by:
 
@@ -19,7 +19,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#analysis/tibetan-clause-segmenter.el][analysis/tibetan-clause-segmenter.el]]  (20)
   - [[#analysis/tibetan-enhanced-display.el][analysis/tibetan-enhanced-display.el]]  (16)
   - [[#analysis/tibetan-enhanced-parser.el][analysis/tibetan-enhanced-parser.el]]  (16)
-  - [[#analysis/tibetan-gloss-table.el][analysis/tibetan-gloss-table.el]]  (12)
+  - [[#analysis/tibetan-gloss-table.el][analysis/tibetan-gloss-table.el]]  (13)
   - [[#analysis/tibetan-interlinear.el][analysis/tibetan-interlinear.el]]  (22)
   - [[#analysis/tibetan-mitra-translation.el][analysis/tibetan-mitra-translation.el]]  (24)
   - [[#analysis/tibetan-particles-bialek.el][analysis/tibetan-particles-bialek.el]]  (8)
@@ -1186,36 +1186,50 @@ empty — their information is the row-3 label), row 3 the
 `tibetan-gloss-table--token-label' grammar label.  nil when the
 unit yields no tokens.
 
-** ~tibetan-gloss-table--column-chunks~  /function/
+** ~tibetan-gloss-table--band-width~  /function/
 :PROPERTIES:
 :KIND: defun
 :LINE: 214
-:SIGNATURE: (tibetan-gloss-table--column-chunks widths)
+:SIGNATURE: (tibetan-gloss-table--band-width widths n)
 :END:
 
-Partition column indexes into blocks within the width budget.
-WIDTHS is the per-column width list; the rendered line costs
-Σwidth + 3·ncols + 1 (separators and edges).  Greedy left-to-
-right, at least one column per block.
+Rendered line width for bands of N consecutive columns.
+The bands share ONE grid: position K is as wide as the widest
+K-th column of any band; separators and edges cost 3·N + 1.
+
+** ~tibetan-gloss-table--columns-per-band~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 225
+:SIGNATURE: (tibetan-gloss-table--columns-per-band widths)
+:END:
+
+The most columns per band whose shared-grid line width fits
+`tibetan-gloss-table-max-width'.  At least 1 — a single over-wide
+column still renders alone.
 
 ** ~tibetan-gloss-table--format-rows~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 232
+:LINE: 235
 :SIGNATURE: (tibetan-gloss-table--format-rows rows)
 :END:
 
-ROWS (three equal-length cell lists) as aligned org table blocks.
+ROWS (three equal-length cell lists) as ONE aligned org table.
 Column width = the widest cell of the three rows, space-padded,
 so the table reads aligned in the raw buffer too (the §184
 handout alignment request).  A table wider than
-`tibetan-gloss-table-max-width' splits into stacked 3-row
-continuation blocks, blank-line separated, token order kept.
+`tibetan-gloss-table-max-width' wraps into hline-separated 3-row
+bands that SHARE one column grid — every band's k-th column is
+padded to the same width, the last band is padded with empty
+cells, token order kept.  Private per-block widths fragmented
+the segment visually and for org's table commands (§15 review,
+2026-09-17).
 
 ** ~tibetan-gloss-table-render~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 263
+:LINE: 280
 :SIGNATURE: (tibetan-gloss-table-render units &optional vocab-alist)
 :END:
 
@@ -1228,7 +1242,7 @@ nothing renders.  VOCAB-ALIST feeds the Claude-POS label tier.
 ** ~tibetan-gloss-table-render-captioned~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 280
+:LINE: 297
 :SIGNATURE: (tibetan-gloss-table-render-captioned segs &optional vocab-alist
                                                   heading-level)
 :END:
@@ -1273,8 +1287,8 @@ into 2-column bands, which is what fragmented the SS15 tables
 :END:
 
 Maximum rendered line width of a gloss table, in columns.
-A shad unit whose table would be wider breaks into stacked
-3-row continuation blocks (the ExPex-style wrap of the §184
+A shad unit whose table would be wider wraps into hline-separated
+3-row BANDS of one org table (the ExPex-style wrap of the §184
 handout, done at render time) — a 30-token segment otherwise
 wraps unreadably in the buffer (§185 review, 2026-09-16).
 A single over-wide column still renders alone.

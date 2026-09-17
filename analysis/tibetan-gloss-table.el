@@ -203,62 +203,79 @@ unit yields no tokens."
 
 (defcustom tibetan-gloss-table-max-width 100
   "Maximum rendered line width of a gloss table, in columns.
-A shad unit whose table would be wider breaks into stacked
-3-row continuation blocks (the ExPex-style wrap of the §184
+A shad unit whose table would be wider wraps into hline-separated
+3-row BANDS of one org table (the ExPex-style wrap of the §184
 handout, done at render time) — a 30-token segment otherwise
 wraps unreadably in the buffer (§185 review, 2026-09-16).
 A single over-wide column still renders alone."
   :type 'integer
   :group 'tibetan-cat)
 
-(defun tibetan-gloss-table--column-chunks (widths)
-  "Partition column indexes into blocks within the width budget.
-WIDTHS is the per-column width list; the rendered line costs
-Σwidth + 3·ncols + 1 (separators and edges).  Greedy left-to-
-right, at least one column per block."
-  (let ((budget tibetan-gloss-table-max-width)
-        (chunks nil) (current nil) (cost 1))
+(defun tibetan-gloss-table--band-width (widths n)
+  "Rendered line width for bands of N consecutive columns.
+The bands share ONE grid: position K is as wide as the widest
+K-th column of any band; separators and edges cost 3·N + 1."
+  (let ((posw (make-list n 0)))
     (cl-loop for w in widths
              for i from 0
-             do (let ((add (+ w 3)))
-                  (if (and current (> (+ cost add) budget))
-                      (progn (push (nreverse current) chunks)
-                             (setq current (list i) cost (+ 1 add)))
-                    (push i current)
-                    (cl-incf cost add))))
-    (when current (push (nreverse current) chunks))
-    (nreverse chunks)))
+             do (let ((slot (nthcdr (mod i n) posw)))
+                  (setcar slot (max (car slot) w))))
+    (+ 1 (cl-loop for w in posw sum (+ w 3)))))
+
+(defun tibetan-gloss-table--columns-per-band (widths)
+  "The most columns per band whose shared-grid line width fits
+`tibetan-gloss-table-max-width'.  At least 1 — a single over-wide
+column still renders alone."
+  (or (cl-loop for n downfrom (length widths) to 2
+               when (<= (tibetan-gloss-table--band-width widths n)
+                        tibetan-gloss-table-max-width)
+               return n)
+      1))
 
 (defun tibetan-gloss-table--format-rows (rows)
-  "ROWS (three equal-length cell lists) as aligned org table blocks.
+  "ROWS (three equal-length cell lists) as ONE aligned org table.
 Column width = the widest cell of the three rows, space-padded,
 so the table reads aligned in the raw buffer too (the §184
 handout alignment request).  A table wider than
-`tibetan-gloss-table-max-width' splits into stacked 3-row
-continuation blocks, blank-line separated, token order kept."
+`tibetan-gloss-table-max-width' wraps into hline-separated 3-row
+bands that SHARE one column grid — every band's k-th column is
+padded to the same width, the last band is padded with empty
+cells, token order kept.  Private per-block widths fragmented
+the segment visually and for org's table commands (§15 review,
+2026-09-17)."
   (let* ((ncols (length (car rows)))
          (widths
           (cl-loop for i below ncols
                    collect (cl-loop for row in rows
                                     maximize (string-width
                                               (or (nth i row) "")))))
-         (chunks (tibetan-gloss-table--column-chunks widths)))
+         (n (tibetan-gloss-table--columns-per-band widths))
+         (posw (cl-loop for k below n
+                        collect (cl-loop for i from k below ncols by n
+                                         maximize (nth i widths))))
+         (hline (concat "|"
+                        (mapconcat (lambda (w) (make-string (+ w 2) ?-))
+                                   posw "+")
+                        "|"))
+         (nbands (ceiling ncols n)))
     (mapconcat
-     (lambda (chunk)
+     (lambda (band)
        (mapconcat
         (lambda (row)
           (concat
            "| "
            (mapconcat
-            (lambda (i)
-              (let ((cell (nth i row))
-                    (w (nth i widths)))
+            (lambda (k)
+              (let* ((i (+ (* band n) k))
+                     (cell (or (and (< i ncols) (nth i row)) ""))
+                     (w (nth k posw)))
                 (concat cell
                         (make-string (- w (string-width cell)) ?\s))))
-            chunk " | ")
+            (number-sequence 0 (1- n)) " | ")
            " |"))
         rows "\n"))
-     chunks "\n\n")))
+     (number-sequence 0 (1- nbands))
+     (concat "\n" hline "\n"))))
 
 (defun tibetan-gloss-table-render (units &optional vocab-alist)
   "One aligned three-row org table per shad unit in UNITS.

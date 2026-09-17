@@ -305,62 +305,119 @@ body entirely)."
     (should-not (tibetan-gloss-table-render nil))))
 
 ;; ----------------------------------------------------------------------------
-;; Width chunking (2026-09-16 — §185 review: 30-column tables wrap
-;; unreadably; wide units break into stacked continuation blocks)
+;; Width wrap (2026-09-16 — §185 review: 30-column tables wrap
+;; unreadably.  2026-09-17 — §15 review: the stacked blocks with
+;; PRIVATE column widths fragmented the segment; a wide unit now
+;; wraps into hline-separated bands of ONE org table that share a
+;; single column grid.)
 ;; ----------------------------------------------------------------------------
 
-(ert-deftest tibetan-gloss-table-chunks-wide-tables ()
-  "A unit wider than `tibetan-gloss-table-max-width' splits into
-stacked 3-row blocks: every line within budget, every block
-internally aligned, all tokens present in order."
+(defconst tibetan-gloss-table-test--toks-wide
+  '((:tibetan "ཀ" :wylie "kha-chig" :kind word
+     :meaning "erstes Wort mit langer Glosse")
+    (:tibetan "ཁ" :wylie "kha-gnyis" :kind word
+     :meaning "zweites Wort mit langer Glosse")
+    (:tibetan "ག" :wylie "kha-gsum" :kind word
+     :meaning "drittes Wort mit langer Glosse")
+    (:tibetan "ང" :wylie "kha-bzhi" :kind word
+     :meaning "viertes Wort mit langer Glosse"))
+  "Canned token stream: four words whose glosses overflow a
+70-column budget together.")
+
+(defun tibetan-gloss-table-test--pipe-positions (line)
+  "The column positions of every `|' in LINE."
+  (cl-loop for ch across line
+           for i from 0
+           when (eq ch ?|) collect i))
+
+(ert-deftest tibetan-gloss-table-wraps-wide-unit-into-banded-table ()
+  "A unit wider than `tibetan-gloss-table-max-width' renders as
+ONE org table: 3-row bands separated by hline rows (no blank line
+inside the unit), every line within budget, all tokens present in
+order."
   (tibetan-gloss-table-test--with-tokens
-      '(("U1" . ((:tibetan "ཀ" :wylie "kha-chig" :kind word
-                  :meaning "erstes Wort mit langer Glosse")
-                 (:tibetan "ཁ" :wylie "kha-gnyis" :kind word
-                  :meaning "zweites Wort mit langer Glosse")
-                 (:tibetan "ག" :wylie "kha-gsum" :kind word
-                  :meaning "drittes Wort mit langer Glosse")
-                 (:tibetan "ང" :wylie "kha-bzhi" :kind word
-                  :meaning "viertes Wort mit langer Glosse"))))
+      `(("U1" . ,tibetan-gloss-table-test--toks-wide))
     (let* ((tibetan-gloss-table-max-width 70)
+           (tibetan-gloss-table-cell-gloss-width 25)
            (out (tibetan-gloss-table-render '("U1")))
            (lines (split-string out "\n"))
-           (pipe-lines (seq-filter (lambda (l) (string-prefix-p "|" l))
+           (hlines (seq-filter (lambda (l) (string-match-p "^|-" l)) lines))
+           (cell-lines (seq-filter (lambda (l) (string-prefix-p "| " l))
                                    lines)))
-      ;; More than one block: 4 tokens à ~35 Zeichen passen nie in
-      ;; eine 70er-Zeile → mindestens 2 Blöcke = ≥6 Pipe-Zeilen.
-      (should (>= (length pipe-lines) 6))
-      (should (= 0 (mod (length pipe-lines) 3)))
+      ;; One table: bands are hline-joined, never blank-line-joined.
+      (should-not (string-match-p "\n\n" out))
+      (should (>= (length hlines) 1))
+      (should (= 0 (mod (length cell-lines) 3)))
+      (should (= (length hlines) (1- (/ (length cell-lines) 3))))
       ;; Budget: keine Zeile breiter als max-width.
-      (dolist (l pipe-lines)
+      (dolist (l lines)
         (should (<= (string-width l) 70)))
-      ;; Alle Tokens, in Reihenfolge (Zeile 1 der Blöcke konkateniert).
+      ;; Alle Tokens, in Reihenfolge (Zeile 1 der Bänder konkateniert).
       (let ((row1 (mapconcat #'identity
-                             (cl-loop for i from 0 below (length pipe-lines)
+                             (cl-loop for i from 0 below (length cell-lines)
                                       when (= 0 (mod i 3))
-                                      collect (nth i pipe-lines))
+                                      collect (nth i cell-lines))
                              " ")))
         (should (string-match-p
-                 "kha-chig.*kha-gnyis.*kha-gsum.*kha-bzhi" row1)))
-      ;; Blöcke durch Leerzeile getrennt.
-      (should (string-match-p "|\n\n|" out)))))
+                 "kha-chig.*kha-gnyis.*kha-gsum.*kha-bzhi" row1))))))
 
-(ert-deftest tibetan-gloss-table-chunking-keeps-narrow-tables-whole ()
-  "A unit within budget renders as ONE block — byte-identical to
-the pre-chunking output."
+(ert-deftest tibetan-gloss-table-bands-share-one-column-grid ()
+  "The SS15 complaint, locked: every row of a wrapped table —
+cell rows AND hlines, across all bands — carries its pipes at
+IDENTICAL column positions, so the whole segment reads as one
+aligned grid."
+  (tibetan-gloss-table-test--with-tokens
+      `(("U1" . ,tibetan-gloss-table-test--toks-wide))
+    (let* ((tibetan-gloss-table-max-width 70)
+           (tibetan-gloss-table-cell-gloss-width 25)
+           (out (tibetan-gloss-table-render '("U1")))
+           (lines (split-string out "\n"))
+           (positions
+            (delete-dups
+             (mapcar (lambda (l)
+                       (mapcar (lambda (p) p)
+                               (tibetan-gloss-table-test--pipe-positions
+                                (replace-regexp-in-string "\\+" "|" l))))
+                     lines))))
+      (should (= 1 (length positions))))))
+
+(ert-deftest tibetan-gloss-table-last-band-padded-with-empty-cells ()
+  "A band count that doesn't divide the token count pads the last
+band with EMPTY cells — every row keeps the full pipe count (org
+aligns the table as one grid)."
+  (tibetan-gloss-table-test--with-tokens
+      '(("U1" . ((:tibetan "ཀ" :wylie "aaaa" :kind word :meaning "eins zwei drei")
+                 (:tibetan "ཁ" :wylie "bbbb" :kind word :meaning "vier fünf sechs")
+                 (:tibetan "ག" :wylie "cccc" :kind word :meaning "sieben acht"))))
+    (let* ((tibetan-gloss-table-max-width 46)
+           (out (tibetan-gloss-table-render '("U1")))
+           (lines (split-string out "\n"))
+           (counts (delete-dups
+                    (mapcar (lambda (l)
+                              (+ (cl-count ?| l) (cl-count ?+ l)))
+                            lines))))
+      ;; 3 tokens, 2 per band → 2 bands, last padded: uniform pipe count.
+      (should (string-match-p "^|-" out))
+      (should (= 1 (length counts))))))
+
+(ert-deftest tibetan-gloss-table-wrap-keeps-narrow-tables-whole ()
+  "A unit within budget renders as ONE 3-row block without any
+hline — byte-identical to the pre-wrap output."
   (tibetan-gloss-table-test--with-tokens
       `(("U1" . ,tibetan-gloss-table-test--toks-a))
     (let* ((tibetan-gloss-table-max-width 100)
            (out (tibetan-gloss-table-render '("U1"))))
-      (should (= 3 (length (split-string out "\n")))))))
+      (should (= 3 (length (split-string out "\n"))))
+      (should-not (string-match-p "^|-" out)))))
 
-(ert-deftest tibetan-gloss-table-chunking-single-column-may-overflow ()
-  "A single over-wide column still renders (one column per block
+(ert-deftest tibetan-gloss-table-wrap-single-column-may-overflow ()
+  "A single over-wide column still renders (one column per band
 minimum) — never an infinite loop, never a dropped token."
   (tibetan-gloss-table-test--with-tokens
       '(("U1" . ((:tibetan "ཀ" :wylie "kha" :kind word
-                  :meaning "eine absurd lange Glosse die jedes Budget sprengt und trotzdem erscheinen muss"))))
+                  :meaning "eine absurd lange Glosse die jedes Budget sprengt"))))
     (let* ((tibetan-gloss-table-max-width 20)
+           (tibetan-gloss-table-cell-gloss-width 80)
            (out (tibetan-gloss-table-render '("U1"))))
       (should (string-match-p "absurd lange Glosse" out)))))
 
