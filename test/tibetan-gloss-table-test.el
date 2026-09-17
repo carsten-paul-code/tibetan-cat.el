@@ -263,6 +263,19 @@ stripped.  Rows 1 and 3 are untouched."
       ;; Row 1 keeps the full Wylie.
       (should (string-match-p "'das" (nth 0 lines))))))
 
+(ert-deftest tibetan-gloss-table-cell-cap-strips-escapes-before-cut ()
+  "A literal escape sequence sitting ON the cut point must not
+leave a lone backslash in the cell: the escape strip runs BEFORE
+the budget cut (par-015 Segment 154 after the first fix round:
+`contemplate\\…')."
+  (tibetan-gloss-table-test--with-tokens
+      '(("U1" . ((:tibetan "བསམ" :wylie "bsam" :kind word
+                  :meaning "verb: think; contemplate\\n more text here"))))
+    (let* ((tibetan-gloss-table-cell-gloss-width 25)
+           (out (tibetan-gloss-table-render '("U1"))))
+      (should (string-match-p "contemplate" out))
+      (should-not (string-match-p "\\\\" out)))))
+
 (ert-deftest tibetan-gloss-table-cell-gloss-short-untouched ()
   "A gloss within the cell budget renders verbatim — no ellipsis,
 no cut."

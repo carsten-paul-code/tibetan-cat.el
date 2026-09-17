@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-17T14:28:57
+#+DATE: 2026-09-17T14:30:46
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1443 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1444 forms
 
 Regenerated automatically by:
 
@@ -19,7 +19,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#analysis/tibetan-clause-segmenter.el][analysis/tibetan-clause-segmenter.el]]  (20)
   - [[#analysis/tibetan-enhanced-display.el][analysis/tibetan-enhanced-display.el]]  (16)
   - [[#analysis/tibetan-enhanced-parser.el][analysis/tibetan-enhanced-parser.el]]  (16)
-  - [[#analysis/tibetan-gloss-table.el][analysis/tibetan-gloss-table.el]]  (13)
+  - [[#analysis/tibetan-gloss-table.el][analysis/tibetan-gloss-table.el]]  (14)
   - [[#analysis/tibetan-interlinear.el][analysis/tibetan-interlinear.el]]  (22)
   - [[#analysis/tibetan-mitra-translation.el][analysis/tibetan-mitra-translation.el]]  (24)
   - [[#analysis/tibetan-particles-bialek.el][analysis/tibetan-particles-bialek.el]]  (8)
@@ -1144,23 +1144,33 @@ tier.  Precedence: native particle label → NMLZ (bare nominaliser
 after a verb) → V/V.HON (Hill) → Claude POS mapping → "?".
 A trailing clitic's label is dot-appended (NMLZ.GEN, N.GEN).
 
-** ~tibetan-gloss-table--cell~  /function/
+** ~tibetan-gloss-table--strip-escapes~  /function/
 :PROPERTIES:
 :KIND: defun
 :LINE: 138
+:SIGNATURE: (tibetan-gloss-table--strip-escapes s)
+:END:
+
+S without LITERAL backslash-escape sequences (\n, \t) —
+serialization junk that upstream vocabulary strings occasionally
+carry.  Runs BEFORE any budget cut so a cut can never strand a
+lone backslash mid-sequence.
+
+** ~tibetan-gloss-table--cell~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 145
 :SIGNATURE: (tibetan-gloss-table--cell s)
 :END:
 
-S as a safe org-table cell: whitespace collapsed, LITERAL
-backslash-escape sequences (\n, \t — serialization junk that
-upstream vocabulary strings occasionally carry) dropped, `|'
-escaped as the org entity `\vert' (a literal bar would split
-the cell).
+S as a safe org-table cell: escape sequences dropped,
+whitespace collapsed, `|' escaped as the org entity `\vert'
+(a literal bar would split the cell).
 
 ** ~tibetan-gloss-table--truncate-cell~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 160
+:LINE: 165
 :SIGNATURE: (tibetan-gloss-table--truncate-cell gloss)
 :END:
 
@@ -1173,7 +1183,7 @@ find the full gloss.
 ** ~tibetan-gloss-table--unit-rows~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 176
+:LINE: 184
 :SIGNATURE: (tibetan-gloss-table--unit-rows unit-text &optional vocab-alist)
 :END:
 
@@ -1189,7 +1199,7 @@ unit yields no tokens.
 ** ~tibetan-gloss-table--band-width~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 214
+:LINE: 222
 :SIGNATURE: (tibetan-gloss-table--band-width widths n)
 :END:
 
@@ -1200,7 +1210,7 @@ K-th column of any band; separators and edges cost 3·N + 1.
 ** ~tibetan-gloss-table--columns-per-band~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 225
+:LINE: 233
 :SIGNATURE: (tibetan-gloss-table--columns-per-band widths)
 :END:
 
@@ -1211,7 +1221,7 @@ column still renders alone.
 ** ~tibetan-gloss-table--format-rows~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 235
+:LINE: 243
 :SIGNATURE: (tibetan-gloss-table--format-rows rows)
 :END:
 
@@ -1229,7 +1239,7 @@ the segment visually and for org's table commands (§15 review,
 ** ~tibetan-gloss-table-render~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 280
+:LINE: 288
 :SIGNATURE: (tibetan-gloss-table-render units &optional vocab-alist)
 :END:
 
@@ -1242,7 +1252,7 @@ nothing renders.  VOCAB-ALIST feeds the Claude-POS label tier.
 ** ~tibetan-gloss-table-render-captioned~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 297
+:LINE: 305
 :SIGNATURE: (tibetan-gloss-table-render-captioned segs &optional vocab-alist
                                                   heading-level)
 :END:
@@ -1263,7 +1273,7 @@ feeds the Claude-POS tier.
 ** ~tibetan-gloss-table-cell-gloss-width~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 149
+:LINE: 154
 :TYPE: 'integer
 :GROUP: tibetan-cat
 :DEFAULT: 25
@@ -1280,7 +1290,7 @@ into 2-column bands, which is what fragmented the SS15 tables
 ** ~tibetan-gloss-table-max-width~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 204
+:LINE: 212
 :TYPE: 'integer
 :GROUP: tibetan-cat
 :DEFAULT: 100

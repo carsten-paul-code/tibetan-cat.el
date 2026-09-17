@@ -135,13 +135,18 @@ A trailing clitic's label is dot-appended (NMLZ.GEN, N.GEN)."
 ;; org-table renderer (pure)
 ;; ----------------------------------------------------------------------------
 
+(defun tibetan-gloss-table--strip-escapes (s)
+  "S without LITERAL backslash-escape sequences (\\n, \\t) —
+serialization junk that upstream vocabulary strings occasionally
+carry.  Runs BEFORE any budget cut so a cut can never strand a
+lone backslash mid-sequence."
+  (replace-regexp-in-string "\\\\[nt]" " " (or s "")))
+
 (defun tibetan-gloss-table--cell (s)
-  "S as a safe org-table cell: whitespace collapsed, LITERAL
-backslash-escape sequences (\\n, \\t — serialization junk that
-upstream vocabulary strings occasionally carry) dropped, `|'
-escaped as the org entity `\\vert' (a literal bar would split
-the cell)."
-  (let* ((noesc (replace-regexp-in-string "\\\\[nt]" " " (or s "")))
+  "S as a safe org-table cell: escape sequences dropped,
+whitespace collapsed, `|' escaped as the org entity `\\vert'
+\(a literal bar would split the cell)."
+  (let* ((noesc (tibetan-gloss-table--strip-escapes s))
          (flat (replace-regexp-in-string "[ \t\n]+" " " noesc))
          (safe (replace-regexp-in-string "|" "\\\\vert" flat)))
     (string-trim safe)))
@@ -163,7 +168,10 @@ Within budget → verbatim.  Over budget → cut at the last word
 boundary past half the budget (else hard cut), dangling
 punctuation stripped, `…' appended so the reader knows where to
 find the full gloss."
-  (let ((budget tibetan-gloss-table-cell-gloss-width))
+  (let ((budget tibetan-gloss-table-cell-gloss-width)
+        (gloss (and gloss
+                    (string-trim
+                     (tibetan-gloss-table--strip-escapes gloss)))))
     (if (or (null gloss) (<= (length gloss) budget))
         gloss
       (let* ((cut (substring gloss 0 budget))
