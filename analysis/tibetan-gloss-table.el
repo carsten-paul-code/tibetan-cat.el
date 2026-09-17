@@ -209,13 +209,21 @@ unit yields no tokens."
                   r3)))
         (list (nreverse r1) (nreverse r2) (nreverse r3))))))
 
-(defcustom tibetan-gloss-table-max-width 100
+(defcustom tibetan-gloss-table-max-width 160
   "Maximum rendered line width of a gloss table, in columns.
 A shad unit whose table would be wider wraps into hline-separated
 3-row BANDS of one org table (the ExPex-style wrap of the §184
 handout, done at render time) — a 30-token segment otherwise
 wraps unreadably in the buffer (§185 review, 2026-09-16).
-A single over-wide column still renders alone."
+A single over-wide column still renders alone.
+
+160 (was 100) per the §15 follow-up review 2026-09-17: 100 used
+only half of the ~225-column analysis window.  Change the DEFAULT
+here rather than setq-ing it in a personal init: a batch
+regenerate (emacs -batch) never loads the init, so a per-init
+value makes interactive and batch output diverge — the §5.53
+drift class.  For the same reason the budget must never be
+derived from the live window width."
   :type 'integer
   :group 'tibetan-cat)
 

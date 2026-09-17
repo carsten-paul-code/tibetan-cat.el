@@ -343,6 +343,14 @@ body entirely)."
            for i from 0
            when (eq ch ?|) collect i))
 
+(ert-deftest tibetan-gloss-table-default-width-uses-display ()
+  "The DEFAULT table budget is 160 — Carstens SS15-Folge-Review
+(2026-09-17): 100 nutzte nur die halbe Displaybreite (~225
+Spalten Analyse-Fenster).  Locked as the default so batch and
+interactive regenerates stay byte-identical (the §5.53 drift
+class forbids a window-width-dependent budget)."
+  (should (= 160 (default-value 'tibetan-gloss-table-max-width))))
+
 (ert-deftest tibetan-gloss-table-wraps-wide-unit-into-banded-table ()
   "A unit wider than `tibetan-gloss-table-max-width' renders as
 ONE org table: 3-row bands separated by hline rows (no blank line

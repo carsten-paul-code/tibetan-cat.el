@@ -1,6 +1,6 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-17T14:30:46
+#+DATE: 2026-09-17T14:48:05
 #+OPTIONS: toc:2 num:nil
 
 Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1444 forms
@@ -1199,7 +1199,7 @@ unit yields no tokens.
 ** ~tibetan-gloss-table--band-width~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 222
+:LINE: 230
 :SIGNATURE: (tibetan-gloss-table--band-width widths n)
 :END:
 
@@ -1210,7 +1210,7 @@ K-th column of any band; separators and edges cost 3·N + 1.
 ** ~tibetan-gloss-table--columns-per-band~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 233
+:LINE: 241
 :SIGNATURE: (tibetan-gloss-table--columns-per-band widths)
 :END:
 
@@ -1221,7 +1221,7 @@ column still renders alone.
 ** ~tibetan-gloss-table--format-rows~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 243
+:LINE: 251
 :SIGNATURE: (tibetan-gloss-table--format-rows rows)
 :END:
 
@@ -1239,7 +1239,7 @@ the segment visually and for org's table commands (§15 review,
 ** ~tibetan-gloss-table-render~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 288
+:LINE: 296
 :SIGNATURE: (tibetan-gloss-table-render units &optional vocab-alist)
 :END:
 
@@ -1252,7 +1252,7 @@ nothing renders.  VOCAB-ALIST feeds the Claude-POS label tier.
 ** ~tibetan-gloss-table-render-captioned~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 305
+:LINE: 313
 :SIGNATURE: (tibetan-gloss-table-render-captioned segs &optional vocab-alist
                                                   heading-level)
 :END:
@@ -1293,7 +1293,7 @@ into 2-column bands, which is what fragmented the SS15 tables
 :LINE: 212
 :TYPE: 'integer
 :GROUP: tibetan-cat
-:DEFAULT: 100
+:DEFAULT: 160
 :END:
 
 Maximum rendered line width of a gloss table, in columns.
@@ -1302,6 +1302,14 @@ A shad unit whose table would be wider wraps into hline-separated
 handout, done at render time) — a 30-token segment otherwise
 wraps unreadably in the buffer (§185 review, 2026-09-16).
 A single over-wide column still renders alone.
+
+160 (was 100) per the §15 follow-up review 2026-09-17: 100 used
+only half of the ~225-column analysis window.  Change the DEFAULT
+here rather than setq-ing it in a personal init: a batch
+regenerate (emacs -batch) never loads the init, so a per-init
+value makes interactive and batch output diverge — the §5.53
+drift class.  For the same reason the budget must never be
+derived from the live window width.
 
 
 * analysis/tibetan-interlinear.el
