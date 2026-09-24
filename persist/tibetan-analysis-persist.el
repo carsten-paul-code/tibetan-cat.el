@@ -4336,12 +4336,18 @@ unused-arg warning without breaking the public API."
             (insert "[Awaiting Claude…]\n\n")
 
             ;; ============================================================
-            ;; SECTION 1b: Claude Translation (promoted to level 2)
+            ;; SECTION 1b: Translation (promoted to level 2)
             ;; Kept at the top so students see the fluent English rendering
             ;; right after the Wylie reading — before the word-by-word lists.
             ;; Populated asynchronously by `tibetan-analysis--insert-claude-sections'.
+            ;; Heading: `** Translation' — the §5.18 writer contract
+            ;; (writers emit the NEW name only).  This scaffold was the
+            ;; last emitter of the legacy `** Claude Translation'; on
+            ;; cascade files a landed sentence translation then sat as
+            ;; `** Translation' BESIDE the stale legacy placeholder
+            ;; (Tshig-gsal-Befund, 2026-09-24).  Readers stay dual-name.
             ;; ============================================================
-            (insert "** Claude Translation\n")
+            (insert "** Translation\n")
             (insert "[Requesting translation...]\n\n")
 
             ;; ============================================================
@@ -4981,7 +4987,8 @@ unused-arg warning without breaking the public API."
        (concat "** Wylie Transliteration\n"
                (or wylie "[Wylie conversion unavailable]")
                "\n\n"
-               "** Claude Translation\n[Requesting translation...]\n\n"
+               ;; §5.18 writer contract — new name only (2026-09-24).
+               "** Translation\n[Requesting translation...]\n\n"
                "** Grammar\n*** Claude Grammar\n\n\n"
                (format "** [Analysis error — partial file only]\nParser failure for this segment: %s\n\nThe structural analysis sections (Particle Map, Interlinear Gloss, Word/Particle List, Verb Classification, Grammatical Markers, Sentence Structure, Clause Structure, Detailed Dictionary) could not be generated.  The Tibetan Text and Claude sections above should still be usable.\n\nTo retry: `C-c u R' on this segment, or check the source segment's Tibetan for an unusual construction.\n"
                        (error-message-string err))))))))

@@ -915,6 +915,36 @@ reshaped into the two-file sentence layout (it would lose the whole
         (should (equal "KEEP ACROSS BATCH."
                        (tibetan-cascade--read-rendering sent4 105)))))))
 
+(ert-deftest tibetan-cascade-scaffold-emits-current-translation-heading ()
+  "Tshig-gsal-Befund 2 (2026-09-24): der Segment-Renderer emittierte
+im Scaffold noch den LEGACY-Namen `** Claude Translation' (SS5.18
+verlangt: Writer emittieren nur den neuen Namen).  Folge: sobald
+die Satz-Übersetzung landet, entsteht ein DUPLIKAT —
+Legacy-Platzhalter oben, gefüllte `** Translation' unten.  Der
+frische Kaskaden-Scaffold muss `** Translation' tragen und den
+Legacy-Namen nirgends emittieren."
+  ;; Bewusst OHNE den Stub-Renderer der übrigen Kaskaden-Fixtures:
+  ;; der Legacy-Name kommt aus dem ECHTEN generate-content-Pfad
+  ;; (SECTION 1b), den der Stub umgeht.
+  (let* ((dir (make-temp-file "cascade-heading-" t))
+         (src (expand-file-name "doc.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file src
+            (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                    "* Tibetan Text\n"
+                    "*** Sentence 1\n"
+                    "**** Segment 1\nབདག་གིས་ལས་བྱས།\n"))
+          (let* ((file (tibetan-cascade--create-file
+                        1 '((1 . "བདག་གིས་ལས་བྱས།")) src))
+                 (s (with-temp-buffer
+                      (insert-file-contents file)
+                      (buffer-string))))
+            (should (string-match-p "^\\*\\* Translation$" s))
+            (should-not (string-match-p
+                         "^\\*\\* Claude Translation$" s))))
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-cascade-open-for-segment-fires-on-create ()
   "Tshig-gsal-Befund (2026-09-24): `tibetan-cascade-open-for-segment'
 \(der C-c u A-Zweig) erzeugte die Kaskaden-Datei, feuerte aber NIE

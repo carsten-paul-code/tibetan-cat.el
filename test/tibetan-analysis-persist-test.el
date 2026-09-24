@@ -970,7 +970,7 @@ file only]' fallback template."
     ;; Full layout sections present.
     (should (string-match-p "^\\*\\* Wylie Transliteration$" out))
     (should (string-match-p "^\\*\\* Interlinear Gloss" out))
-    (should (string-match-p "^\\*\\* Claude Translation$" out))
+    (should (string-match-p "^\\*\\* Translation$" out))
     (should (string-match-p "^\\*\\* Grammar" out))
     (should (string-match-p "^\\*\\* Sentence Structure" out))
     (should (string-match-p "^\\*\\* Verb Classification" out))
