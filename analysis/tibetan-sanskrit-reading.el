@@ -100,12 +100,30 @@ in file order; nil-safe."
                      (rest (match-string 2 l))
                      (label (when (string-match ";[ \t]*\\([^;]+\\)\\'" rest)
                               (string-trim (match-string 1 rest)))))
+                ;; C6b (sa-Dry-Run, 2026-09-24): compact the label —
+                ;; models append parenthetical commentary
+                ;; (`PRON.NOM.SG.M (relative pronoun)') that blows
+                ;; the table columns; commentary belongs in the
+                ;; Vocabulary section.
                 (when label
+                  (setq label (string-trim
+                               (car (split-string label "(" )))))
+                (when (and label (not (string-empty-p label)))
                   (push (cons word label) morph))))
              ((null pada)
               ;; First plain line of the segment = the padapāṭha.
-              (setq pada (nreverse
-                          (tibetan-sanskrit-reading--tokenize-surface l)))))))
+              ;; C6b: strip a leading label the models like to add
+              ;; (`**Padapāṭha:**' / `Padapāṭha:') — it must never
+              ;; become the first table column.
+              (let ((line l))
+                (setq line (replace-regexp-in-string
+                            "\\`\\*\\*[^*\n]+\\*\\*:?[ \t]*" "" line))
+                (setq line (replace-regexp-in-string
+                            "\\`[[:alpha:]āīūṛṝḷḹṃḥśṣṭḍṇñṅ-]+:[ \t]*" ""
+                            line))
+                (setq pada (nreverse
+                            (tibetan-sanskrit-reading--tokenize-surface
+                             line))))))))
         (flush))
       (nreverse result))))
 

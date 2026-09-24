@@ -281,20 +281,23 @@ A `### Segment N' subsection per segment.  In each, the FIRST line
 is that segment's padapāṭha: the complete sandhi-resolved word
 sequence, space-separated, in text order — split all external
 sandhi; keep a compound as ONE word (hyphenate its members when
-helpful).  Then one bullet per padapāṭha word:
-`- word — lemma; MORPH' where MORPH is a compact morphology label:
-nominals N./ADJ./PRON. + case.number(.gender), e.g. N.GEN.PL,
-ADJ.NOM.SG.F; finite verbs V. + tense/mood.person.number, e.g.
-V.PRS.3SG, V.OPT.3SG; participles/absolutives/infinitives
-PTCP./ABS./INF. + what applies; indeclinables IND.  Spell every
-word EXACTLY as in the padapāṭha line.
+helpful).  The line contains ONLY the words themselves — never a
+label or prefix such as `Padapāṭha:'.  Then one bullet per
+padapāṭha word: `- word — lemma; MORPH' where MORPH is the compact
+morphology label ONLY — no parentheses, no commentary (commentary
+belongs in `## Vocabulary'): nominals N./ADJ./PRON. +
+case.number(.gender), e.g. N.GEN.PL, ADJ.NOM.SG.F; finite verbs
+V. + tense/mood.person.number, e.g. V.PRS.3SG, V.OPT.3SG;
+participles/absolutives/infinitives PTCP./ABS./INF. + what
+applies; indeclinables IND.  Spell every word EXACTLY as in the
+padapāṭha line.
 
 ## Vocabulary
-A `### Segment N' subsection per segment; one line per padapāṭha
-word worth glossing, comma format:
-`word, part of speech, \"gloss\", short note'.  The word key MUST be
-spelled exactly as in the padapāṭha.  Indeclinables get compact
-entries.
+A `### Segment N' subsection per segment; one PLAIN line per
+padapāṭha word worth glossing — no leading bullet or dash — in the
+comma format `word, part of speech, \"gloss\", short note'.  The
+word key MUST be spelled exactly as in the padapāṭha.
+Indeclinables get compact entries.
 
 ## Grammar
 Open with a 2-4 sentence overview of the whole sentence/verse

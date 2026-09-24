@@ -146,6 +146,38 @@ textkeyed Dynamik auf (string-trim-Schlüssel)."
                     "dharmāṇāṃ śūnyatā"
                     '(:pada ("dharmāṇām" "śūnyatā") :morph nil))))))
 
+(ert-deftest tibetan-sanskrit-reading-parse-strips-pada-label ()
+  "C6b (sa-Dry-Run, 2026-09-24): Claude prefixt die Padapāṭha-Zeile
+gern mit einem Label (`**Padapāṭha:**' o.ä.) — das Label darf NIE
+als erstes Wort in die Tabelle laufen."
+  (let ((parsed (tibetan-sanskrit-reading-parse-word-analysis
+                 "### Segment 1
+**Padapāṭha:** yaḥ pratītya-samutpādaḥ śūnyatām
+- yaḥ — yad; PRON.NOM.SG.M
+- śūnyatām — śūnyatā; N.ACC.SG.F")))
+    (should (equal '("yaḥ" "pratītya-samutpādaḥ" "śūnyatām")
+                   (plist-get (cdr (assq 1 parsed)) :pada))))
+  ;; Auch die Klartext-Form `Padapāṭha:'.
+  (let ((parsed (tibetan-sanskrit-reading-parse-word-analysis
+                 "### Segment 2
+Padapāṭha: sā prajñaptiḥ
+- sā — tad; PRON.NOM.SG.F")))
+    (should (equal '("sā" "prajñaptiḥ")
+                   (plist-get (cdr (assq 2 parsed)) :pada)))))
+
+(ert-deftest tibetan-sanskrit-reading-parse-compacts-morph ()
+  "C6b: Morph-Labels mit Klammer-Kommentar (`PRON.NOM.SG.M
+\(relative pronoun)') werden aufs kompakte Label gekürzt — der
+Kommentar sprengte die Tabellenspalten (Dry-Run: 2er-Bänder)."
+  (let ((parsed (tibetan-sanskrit-reading-parse-word-analysis
+                 "### Segment 1
+yaḥ pracakṣmahe
+- yaḥ — yad; PRON.NOM.SG.M (relative pronoun)
+- pracakṣmahe — pra-√cakṣ; V.PRS.1PL (ātmanepada, \"we call\")")))
+    (let ((morph (plist-get (cdr (assq 1 parsed)) :morph)))
+      (should (equal "PRON.NOM.SG.M" (cdr (assoc "yaḥ" morph))))
+      (should (equal "V.PRS.1PL" (cdr (assoc "pracakṣmahe" morph)))))))
+
 (provide 'tibetan-sanskrit-reading-test)
 
 ;;; tibetan-sanskrit-reading-test.el ends here
