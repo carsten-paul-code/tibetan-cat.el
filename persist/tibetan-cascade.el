@@ -1824,6 +1824,22 @@ is what counts."
                            "(#+TIBETAN_DEFER_MT, portfolio mode) — "
                            "draft your own translation first; remove "
                            "the header and re-fire when frozen")))
+        ;; Tshig-gsal-Befund (2026-09-24): opening implied creating,
+        ;; but NOT firing — Claude/DM stayed placeholders until a
+        ;; manual C-c u R (parity gap to the two-file openers,
+        ;; §5.8.1/§5.29).  Fire the sentence-level dispatcher on
+        ;; every open: its gates (claim/dedup, needs-request,
+        ;; rendering placeholders) decline populated files, and the
+        ;; leaf fire still defers under #+TIBETAN_DEFER_MT.  Same
+        ;; opt-out as every create-fire.
+        (when (and (boundp 'tibetan-auto-fire-claude-on-create)
+                   tibetan-auto-fire-claude-on-create
+                   (fboundp 'tibetan-analysis--fire-sentence-level))
+          (condition-case err
+              (tibetan-analysis--fire-sentence-level
+               "" file source-file seg-id nil)
+            (error (message "Cascade open fire skipped: %s"
+                            (error-message-string err)))))
         buf))))
 
 ;; ============================================================================

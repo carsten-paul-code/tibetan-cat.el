@@ -915,6 +915,40 @@ reshaped into the two-file sentence layout (it would lose the whole
         (should (equal "KEEP ACROSS BATCH."
                        (tibetan-cascade--read-rendering sent4 105)))))))
 
+(ert-deftest tibetan-cascade-open-for-segment-fires-on-create ()
+  "Tshig-gsal-Befund (2026-09-24): `tibetan-cascade-open-for-segment'
+\(der C-c u A-Zweig) erzeugte die Kaskaden-Datei, feuerte aber NIE
+Claude/DM — Paritätslücke zu den Two-File-Öffnern (SS5.8.1/SS5.29):
+Claude Vocabulary/Translation/DM blieben Platzhalter, bis der User
+von Hand C-c u R gab.  Erwartet: der Sentence-Level-Dispatcher wird
+nach dem Öffnen gerufen (seine Gates/Claims verhindern Doppel-Fires
+auf befüllten Dateien)."
+  (tibetan-cascade-test--with-cascade-source
+    (let ((tibetan-auto-fire-claude-on-create t)
+          (fires nil))
+      (cl-letf (((symbol-function 'display-buffer-in-side-window)
+                 (lambda (&rest _) nil))
+                ((symbol-function 'tibetan-analysis--fire-sentence-level)
+                 (lambda (&rest args) (push args fires) 'fired)))
+        (tibetan-cascade-open-for-segment 105 src))
+      (should (= 1 (length fires)))
+      ;; Datei wurde erzeugt.
+      (should (car (directory-files
+                    (expand-file-name "analysis" dir) t "\\`sent-004"))))))
+
+(ert-deftest tibetan-cascade-open-for-segment-no-fire-when-opted-out ()
+  "Der Auto-Fire-Optout (`tibetan-auto-fire-claude-on-create' nil)
+gilt auch für den Öffnungs-Fire."
+  (tibetan-cascade-test--with-cascade-source
+    (let ((tibetan-auto-fire-claude-on-create nil)
+          (fires nil))
+      (cl-letf (((symbol-function 'display-buffer-in-side-window)
+                 (lambda (&rest _) nil))
+                ((symbol-function 'tibetan-analysis--fire-sentence-level)
+                 (lambda (&rest args) (push args fires) 'fired)))
+        (tibetan-cascade-open-for-segment 105 src))
+      (should (= 0 (length fires))))))
+
 (ert-deftest tibetan-cascade-reanalyze-for-segment-routes ()
   "C-c u R at a segment of a cascade source regenerates the owning
 cascade file (preserving content) instead of a seg file."
