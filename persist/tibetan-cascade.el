@@ -952,14 +952,31 @@ fallback.  Returns t when written."
 (defun tibetan-cascade--write-rendering (file seg-num body)
   "Replace SEG-NUM's rendering in FILE with BODY; t on success.
 Same dual-format resolution as the buffer variant; nil (file
-untouched) when neither format carries the unit."
+untouched) when neither format carries the unit.
+
+C7 (2026-09-24, §5.49-Klasse): writes through
+`tibetan-fresh-file-buffer' + `save-buffer' — the old
+temp-buffer + `write-region' path was the last direct disk writer
+crossing the buffer-writer family on the SAME landing: after the
+section writers left a visiting buffer and the first span's
+`write-region' changed the file behind it, the SECOND span's
+`write-region' hit Emacs' supersession ask (\"Cannot resolve
+conflict in batch mode\"), silently swallowed by the
+condition-case — ⟦2⟧ stayed a placeholder in every real landing.
+Masked in tempdir tests: `lock_file' matches the visiting buffer
+only when the passed path is the TRUENAME (/var/… tempdir paths
+never match; /Users/… production paths always do)."
   (when (and file (stringp file) (file-exists-p file) seg-num body)
     (condition-case nil
-        (with-temp-buffer
-          (insert-file-contents file)
-          (when (tibetan-cascade--write-rendering-in-buffer seg-num body)
-            (write-region (point-min) (point-max) file nil 'silent)
-            t))
+        (let ((buf (if (fboundp 'tibetan-fresh-file-buffer)
+                       (tibetan-fresh-file-buffer file)
+                     (find-file-noselect file))))
+          (with-current-buffer buf
+            (save-excursion
+              (when (tibetan-cascade--write-rendering-in-buffer
+                     seg-num body)
+                (save-buffer)
+                t))))
       (error nil))))
 
 (defun tibetan-cascade--rendering-numbers (file)

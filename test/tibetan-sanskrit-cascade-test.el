@@ -392,6 +392,77 @@ beim manuellen Regenerate."
                 (should (string-match-p "\\[ich selbst\\]" s))))))
       (delete-directory dir t))))
 
+(ert-deftest tibetan-sanskrit-cascade-write-rendering-survives-stale-buffer ()
+  "C7 (SS5.49-Klasse, deterministisch): der Span-Writer muss auch
+dann schreiben, wenn ein Visiting-Buffer der Datei STALE ist (im
+Batch der Normalfall: die Buffer-Writer-Familie (Word Analysis,
+Sektionen) hinterlässt den Buffer, das Regenerate schreibt per
+write-region daran vorbei).  Der alte temp-buffer+write-region-
+Pfad lief in die Supersession-Falle ('Cannot resolve conflict in
+batch mode'), vom condition-case still geschluckt → Rendering
+blieb Platzhalter.  Staleness hier deterministisch über eine
+künstlich gealterte visited-file-modtime (die Sekunden-mtime-
+Granularität machte den Subsekunden-Repro sonst flaky)."
+  (tibetan-sanskrit-cascade-test--with-source
+    (let* ((file (file-truename
+                  (tibetan-cascade--create-file
+                   1 '((1 . "dharmāṇāṃ śūnyatā svabhāvaḥ ।")
+                       (2 . "na svato nāpi parataḥ ॥"))
+                   src)))
+           (buf (find-file-noselect file)))
+      (unwind-protect
+          (progn
+            ;; Drei Zutaten der Falle (alle nötig): (1) der Pfad ist
+            ;; der TRUENAME (lock_file matcht den Visiting-Buffer
+            ;; ohne Symlink-Auflösung — Tempdir-Pfade /var/… maskieren
+            ;; den Bug, Produktionspfade /Users/… treffen ihn);
+            ;; (2) die Datei ändert sich INHALTLICH hinter dem Buffer
+            ;; (reine mtime-Abweichung heilt Emacs' content-unchanged-
+            ;; Check still); (3) mtime über die Sekunden-Granularität.
+            (should (tibetan-cascade--write-rendering
+                     file 1 "Erster Span hinter dem Buffer."))
+            (set-file-times file (time-add (current-time) 5))
+            (should (tibetan-cascade--write-rendering
+                     file 2 "Deterministischer Span."))
+            (should (equal "Deterministischer Span."
+                           (tibetan-cascade--read-rendering file 2)))
+            (should (equal "Erster Span hinter dem Buffer."
+                           (tibetan-cascade--read-rendering file 1))))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf))))))
+
+(ert-deftest tibetan-sanskrit-cascade-land-survives-visiting-buffer ()
+  "C7 (sa-Dry-Run, 2026-09-24, SS5.49-Klasse): die Landung muss
+ALLE Spans schreiben, auch wenn ein Visiting-Buffer der Datei lebt
+\(der Normalfall im Batch: die Sektions-Writer erzeugen ihn).  Der
+Span-Writer lief per write-region am Buffer vorbei; nach
+Sektions-Schreibungen + Regenerate löste der ZWEITE Span-Write die
+Supersession-Falle aus ('Cannot resolve conflict in batch mode') —
+vom condition-case still geschluckt, ⟦2⟧ blieb Platzhalter."
+  (tibetan-sanskrit-cascade-test--with-source
+    (let* ((file (tibetan-cascade--create-file
+                  1 '((1 . "dharmāṇāṃ śūnyatā svabhāvaḥ ।")
+                      (2 . "na svato nāpi parataḥ ॥"))
+                  src))
+           (buf (find-file-noselect file)))
+      (unwind-protect
+          (progn
+            (should (tibetan-cascade--land-response
+                     tibetan-sanskrit-cascade-test--response
+                     (list :sent-num 1 :seg-nums '(1 2)
+                           :sent-file file :cascade t :force t)))
+            (should-not (tibetan-cascade--rendering-needs-request-p
+                         file 1))
+            (should-not (tibetan-cascade--rendering-needs-request-p
+                         file 2))
+            (should (string-match-p
+                     "weder aus sich"
+                     (or (tibetan-cascade--read-rendering file 2) ""))))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf))))))
+
 ;; ----------------------------------------------------------------------------
 ;; D1 — Importer: Rohtext → sa-Kaskaden-Quelle
 ;; ----------------------------------------------------------------------------
