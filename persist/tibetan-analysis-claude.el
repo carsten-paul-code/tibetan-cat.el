@@ -401,7 +401,7 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
   (let (title work author sources ctx vocab corpus target-lang source-mode
               dm-sanskrit-source dm-tibetan-source
               text-type class-mode sentence-detail
-              author-header defer-mt layout section-refs)
+              author-header defer-mt layout section-refs source-lang)
     (when (and source-file (file-exists-p source-file))
       (condition-case nil
           (with-temp-buffer
@@ -483,6 +483,17 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
               (let ((val (string-trim (match-string 1))))
                 (unless (string-empty-p val)
                   (setq layout (downcase val)))))
+            ;; Sanskrit-Kaskade B1 (2026-09-24): per-document source
+            ;; language ("sa" = Sanskrit; absent = Tibetan).  Its own
+            ;; header, NOT #+SOURCE_MODE — that one is owned by the
+            ;; two-file parallel-sanskrit mode and gates a different
+            ;; pipeline.
+            (goto-char (point-min))
+            (when (re-search-forward
+                   "^#\\+SOURCE_LANG:[ \t]*\\(.*\\)$" nil t)
+              (let ((val (string-trim (match-string 1))))
+                (unless (string-empty-p val)
+                  (setq source-lang (downcase val)))))
             ;; C7.2 (2026-07-29): path (relative to the source) of a
             ;; §-comparative document whose reference translations are
             ;; injected as ¶-context into the USER prompt.
@@ -541,7 +552,8 @@ Safe when SOURCE-FILE is nil or does not exist — returns an empty plist."
           :sentence-detail sentence-detail
           :defer-mt defer-mt
           :layout layout
-          :section-refs section-refs)))
+          :section-refs section-refs
+          :source-lang source-lang)))
 
 
 (defun tibetan-analysis--defer-mt-p (file)
@@ -586,6 +598,37 @@ signals; returns nil for nil / unresolvable input."
                            (tibetan-analysis--read-source-metadata src)
                            :layout)))))
       (error nil))))
+
+(defun tibetan-analysis--resolve-source-lang (file)
+  "Return FILE's document source language, default \"bo\".
+
+Sanskrit-Kaskade B1 (2026-09-24): a source carrying
+`#+SOURCE_LANG: sa' routes the cascade render/prompt paths to the
+Sanskrit providers.  FILE may be the source document itself or an
+analysis file whose `#+SOURCE:' link resolves to it — same
+resolution order as `tibetan-analysis--cascade-p'.  Absence of the
+header means Classical Tibetan (\"bo\") — every existing corpus.
+Never signals; unresolvable input yields the default."
+  (or (when (and file (stringp file))
+        (condition-case nil
+            (or (plist-get (tibetan-analysis--read-source-metadata file)
+                           :source-lang)
+                (let ((src (tibetan-analysis--source-file-from-analysis
+                            file)))
+                  (and src
+                       (plist-get
+                        (tibetan-analysis--read-source-metadata src)
+                        :source-lang))))
+          (error nil)))
+      "bo"))
+
+(defvar tibetan-analysis--source-lang nil
+  "Dynamic source language for the render paths (\"sa\" or nil/bo).
+Bound by the cascade scaffold/regenerate from the SOURCE document's
+metadata (`tibetan-analysis--resolve-source-lang') — never from
+window or init state, so batch and interactive runs render
+identically (the §5.53 parity rule).  `tibetan-reading--unit-tokens'
+and friends dispatch on it.")
 
 (defconst tibetan-analysis-defer-mt-placeholder
   "[Awaiting your own draft — MT deferred: this document carries #+TIBETAN_DEFER_MT (portfolio mode).  Machine translation fires only after your translation is frozen; then remove the header and re-fire (C-c u R).]"

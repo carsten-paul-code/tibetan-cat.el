@@ -76,6 +76,51 @@ absent or empty header → nil."
                             source-file)
                            :layout))))
 
+(ert-deftest tibetan-cascade-metadata-source-lang-key ()
+  "B1 (Sanskrit-Kaskade, 2026-09-24): `#+SOURCE_LANG:' parst in den
+:source-lang-Plist-Key (downcased); fehlend/leer → nil.  Bewusst
+NICHT #+SOURCE_MODE (gehört dem Parallelmodus)."
+  (tibetan-cascade-test--with-source "#+SOURCE_LANG: sa\n"
+    (should (equal "sa"
+                   (plist-get (tibetan-analysis--read-source-metadata
+                               source-file)
+                              :source-lang))))
+  (tibetan-cascade-test--with-source "#+SOURCE_LANG: SA\n"
+    (should (equal "sa"
+                   (plist-get (tibetan-analysis--read-source-metadata
+                               source-file)
+                              :source-lang))))
+  (tibetan-cascade-test--with-source ""
+    (should-not (plist-get (tibetan-analysis--read-source-metadata
+                            source-file)
+                           :source-lang)))
+  (tibetan-cascade-test--with-source "#+SOURCE_LANG:\n"
+    (should-not (plist-get (tibetan-analysis--read-source-metadata
+                            source-file)
+                           :source-lang))))
+
+(ert-deftest tibetan-analysis-resolve-source-lang ()
+  "B1: `--resolve-source-lang' — Datei selbst zuerst, dann der
+#+SOURCE-Link (Auflösungsordnung wie --cascade-p); Default \"bo\";
+signalisiert nie."
+  ;; Direct source file.
+  (tibetan-cascade-test--with-source "#+SOURCE_LANG: sa\n"
+    (should (equal "sa" (tibetan-analysis--resolve-source-lang
+                         source-file)))
+    ;; Analysis file resolves through the #+SOURCE link.
+    (should (equal "sa" (tibetan-analysis--resolve-source-lang
+                         analysis-file))))
+  ;; No header → the Tibetan default, also via analysis file.
+  (tibetan-cascade-test--with-source ""
+    (should (equal "bo" (tibetan-analysis--resolve-source-lang
+                         source-file)))
+    (should (equal "bo" (tibetan-analysis--resolve-source-lang
+                         analysis-file))))
+  ;; Garbage input degrades to the default, never signals.
+  (should (equal "bo" (tibetan-analysis--resolve-source-lang nil)))
+  (should (equal "bo" (tibetan-analysis--resolve-source-lang
+                       "/nonexistent/nowhere.org"))))
+
 (ert-deftest tibetan-cascade-p-predicate ()
   "`--cascade-p' is t only for a cascade-layout document; resolves an
 analysis file through its #+SOURCE link; never signals."
