@@ -3,10 +3,15 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-09-17 (§5.56: §15-Review — Ein-Raster-
+editing. Last updated 2026-09-24 (§5.57: SANSKRIT im Kaskaden-
+Layout — `#+SOURCE_LANG: sa`, Importer `C-c o k`, Padapāṭha-
+Kontrakt (`** Word Analysis`), Regenerate-after-Land (auch bo),
+Devanagari→IAST, DM iast/german; 4 Bugfixes vorneweg (u.a. C-c s R
+Kaskaden-Zerstörung, B0-Klasse); ERT 2401 / BDD 251.  Previous:
+§5.56: §15-Review — Ein-Raster-
 Glossentabellen: hline-Bänder auf gemeinsamem Spaltenraster statt
 Leerzeilen-Chunks, Zeile-2-Zellen-Budget 25 (…), Escape-Strip;
-ERT 2345 / BDD 250.  Previous: §5.55: §185-Review — Sentence
+ERT 2345 / BDD 250.  §5.55: §185-Review — Sentence
 Structure tabellarisch je Einheit, Segment-Headings + Breiten-
 Chunking der Glossentabellen, par: Tabelle vor Interlinear /
 Reference Translations unten / DM-Fire; Batch-Wedge-Bugfix;
@@ -3963,6 +3968,88 @@ migrieren beim nächsten Regenerate (editierte `** Gloss Tables`
 bleiben per §5.54-Schutz stehen).  Suite 2339 → **2345 ERT**
 (0 unexpected, 1 skip); BDD 250; compile clean; REFERENCE.org je
 def-Commit.
+
+### 5.57 SANSKRIT im Kaskaden-Layout (done, 2026-09-24)
+
+Die Masterarbeit braucht Sanskrit-Belegstellen (Candrakīrti: PP ad
+MMK 24.8/24.10, MAv VI.28 — Prosa UND Vers) im Drei-Sichten-
+Workflow.  Carstens Entscheidungen (AskUserQuestion): Kaskade als
+EINE Arbeitsfläche; Glossen zunächst Claude+DM (Monier-Williams =
+Ausbau); Eingabe gemischt IAST/Devanagari → intern IAST.  Plan
+`~/.claude/plans/idempotent-pondering-wozniak.md`; alle Commits
+RED-first (`4f112ca`…).
+
+**Kernproblem/-lösung**: Tibetische Tokens existieren VOR Claude
+(tsheg); Sanskrit-Wörter entstehen erst durch die Sandhi-Auflösung
+— also aus Claudes Antwort.  Dreistufig: (1) Scaffold rendert
+degradiertes Reading (Oberflächen-IAST, Labels `?`); (2) die
+Satz-Antwort trägt je Segment einen **Padapāṭha** + Morphologie in
+der neuen, preservierten Sektion `** Word Analysis` (Kontrakt:
+Zeile 1 = sandhi-aufgelöste Wortfolge OHNE Label; Bullets
+`- wort — lemma; MORPH` mit kompakten Labels N.GEN.PL/V.PRS.3SG/
+IND) und das Vokabular im unveränderten Komma-Format (Schlüssel =
+Padapāṭha-Schreibung); (3) **Regenerate-after-Land** (pur,
+fire-frei — NIE über reanalyze-file: dessen Fire-Logik + Stubs =
+Schleife; Reihenfolge Sektionen→Regen→Spans, sonst degradiert der
+sichtbare Missing-Stub) materialisiert Tabellen/Interlinear.  Der
+Re-Render läuft für ALLE Kaskaden-Dateien — schließt zugleich die
+bo-Lücke (gelandetes Vokabular erreichte das Reading erst beim
+manuellen Regenerate; der Auto-Regen-Router kennt nur seg-/par-).
+
+**Bugfixes vorneweg (Teil A)**: A1 `C-c s R`/`C-c s A` umgingen
+die Kaskaden-Weiche (B0-Klasse — Two-File-Regenerate hätte
+* Reading zerstört; textuelle Probe + Refusal); A2 tote
+fboundp-Guard (nicht existentes Symbol) ließ Parallel-Sanskrit-
+Docs in den Sentence-First-Pfad; A3 Kaskaden-Re-Fire ohne
+`:children` → leere Prompt-Enumeration; A4 DM-Sanskrit ohne
+target-lang.  Dry-Run-Nachzügler: C6a Vocab-Parser strippt
+Bullet-Zeilen (Modell-Drift traf den Glossen-Tier), C6b
+Padapāṭha-Label-Strip + Morph-Kompaktierung (Parser UND Prompt).
+
+**Bausteine**: `#+SOURCE_LANG: sa` (+ Resolver
+`--resolve-source-lang`, Dynamik `tibetan-analysis--source-lang` —
+Bindung NUR aus Quell-Metadaten, §5.53-Parität; NICHT SOURCE_MODE,
+der gehört dem Two-File-Parallelmodus) · NEU
+core/tibetan-sanskrit-script.el (Devanagari→IAST, pur,
+idempotent; Daṇḍas bleiben als Split-Anker) · NEU
+analysis/tibetan-sanskrit-reading.el (Token-Provider: Oberfläche/
+Padapāṭha, textkeyed Dynamik `--word-analysis`; NIE Wylie-Lexika —
+na/ca/ma/sa träfen tibetische Einträge, Poison-Locks) ·
+reading/gloss-table-Dispatch (HARTES require, kein
+fboundp-Fallback; `:morph` = neuer Tier 0 in Zeile 3) ·
+sa-System-Base `tibetan-sentence-claude--system-prompt-sanskrit`
+(vierter Cache-Präfix; kein Wylie, kein Zettel-/Dict-Grounding) +
+Chunk-Pendant · DM `--input-encoding` (sa→"iast"; bo explizit
+"auto" = Default, Bodies byte-identisch) · Importer
+`tibetan-cascade-import-sanskrit` (`C-c o k`, Menü „Translation"):
+`# LABEL`-Zeilen = Sections (`:LOPEZ_SECTION:` = Sequenz-Int, das
+Label trägt die echte Referenz), Vers = Zeile-je-Pāda (Block =
+Strophe = Satz), Prosa = Daṇḍa-Unit = EIGENER Satz (Singletons
+feuern seit B-1.2); Konkatenations-Kontrakt; Überschreib-Refusal.
+Stitcher/§-Ansicht laufen unverändert (Poison-Lock mitgetestet).
+
+**Empfehlung Betrieb**: EIN Belegstellen-Dokument je Vorhaben,
+EIGENER Ordner je Quelle (Stitcher-Ausgabenamen pro analysis/ fix;
+make-short-name kollabiert `MMK-*` auf denselben Suffix).
+Referenz-ÜBERSETZUNGEN (Siderits/Katsura, MacDonald …) nur in
+`** Provided Translations` — der §5.54-Poison-Lock hält sie aus
+den generierten Dokumenten.
+
+**Dry-Run (echte API, MMK 24.18)**: Import→create-all→Fire→
+Landung end-to-end; deutsche Übersetzung, Word Analysis, Tabellen
+mit Morph-Zeile, DM iast/german — die vier Kontrakt-Abweichungen
+des ersten Calls sind als C6a/C6b verriegelt.  BDD-Suite
+sanskrit-cascade-spec (gecannte Antwort, voller Durchlauf).
+
+**NICHT im Scope (Ausbaustufen)**: Sanskrit-Tibetisch-Parallel IN
+der Kaskade (bleibt Two-File); Monier-Williams-Tier;
+IAST→Devanagari; Umbenennung `* Tibetan Analysis` (kosmetisch —
+Writer keyen auf den Literal); Two-File-Sanskrit-Writer-Härtung
+über A2/A4 hinaus (§5.30-H3); IAST-Diakritika im Headword-Bolder;
+Wizard-Route des Importers.
+
+Suite 2346 → **2401 ERT** (0 unexpected, 1 skip); BDD 250 →
+**251**; compile clean durchgehend; REFERENCE.org je def-Commit.
 
 ## 6. Open work (prioritised)
 
