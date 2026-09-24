@@ -175,6 +175,88 @@ Zeile 1, Morph-Labels in Zeile 3)."
         (should (string-match-p "Die Leerheit der Gegebenheiten…" s))
         (should (string-match-p "| HANDEDIT |" s))))))
 
+;; ----------------------------------------------------------------------------
+;; C2 — Prompts (Satz + Chunk)
+;; ----------------------------------------------------------------------------
+
+(require 'tibetan-sentence-claude)
+
+(defun tibetan-sanskrit-cascade-test--sentence-plist ()
+  '(:sent-num 1 :seg-nums (1 2)
+    :children ((:seg-num 1 :text "dharmāṇāṃ śūnyatā svabhāvaḥ ।")
+               (:seg-num 2 :text "na svato nāpi parataḥ ॥"))
+    :tibetan-text "dharmāṇāṃ śūnyatā svabhāvaḥ ।na svato nāpi parataḥ ॥"))
+
+(ert-deftest tibetan-sanskrit-cascade-sentence-prompt-sa ()
+  "C2: der Satz-Prompt eines sa-Dokuments — KEIN 'Wylie:', KEIN
+'Classical Tibetan'; System trägt den Sanskrit-Kontrakt
+\(## Word Analysis, Padapāṭha, ⟦N⟧-Marker) und die
+### Segment-Enumeration erreicht den User-Prompt."
+  (tibetan-sanskrit-cascade-test--with-source
+    (let* ((prompts (tibetan-sentence-claude--build-prompts
+                     (tibetan-sanskrit-cascade-test--sentence-plist)
+                     src analysis-dir))
+           (system (car prompts))
+           (user (cdr prompts)))
+      (should (string-match-p "## Word Analysis" system))
+      (should (string-match-p "padapāṭha" system))
+      (should (string-match-p "⟦N⟧" system))
+      (should (string-match-p "Sanskrit" user))
+      (should (string-match-p "### Segment 1" user))
+      (should (string-match-p "### Segment 2" user))
+      (should-not (string-match-p "Wylie:" user))
+      (should-not (string-match-p "Classical Tibetan" user))
+      (should-not (string-match-p "Classical Tibetan" system)))))
+
+(ert-deftest tibetan-sanskrit-cascade-sentence-prompt-cache-constant ()
+  "C2: der sa-System-Prompt ist pro Dokument byte-konstant
+\(Anthropic-Cache-Präfix — vierter koexistierender)."
+  (tibetan-sanskrit-cascade-test--with-source
+    (let ((s1 (car (tibetan-sentence-claude--build-prompts
+                    (tibetan-sanskrit-cascade-test--sentence-plist)
+                    src analysis-dir)))
+          (s2 (car (tibetan-sentence-claude--build-prompts
+                    '(:sent-num 2 :seg-nums (3)
+                      :children ((:seg-num 3 :text "kutaḥ ॥"))
+                      :tibetan-text "kutaḥ ॥")
+                    src analysis-dir))))
+      (should (equal s1 s2)))))
+
+(ert-deftest tibetan-sanskrit-cascade-chunk-prompt-sa ()
+  "C2: der Chunk-Prompt eines sa-Dokuments sagt 'Sanskrit passage'
+und behält die ⟦N⟧-Only-Translation-Anweisung."
+  (tibetan-sanskrit-cascade-test--with-source
+    (let* ((chunk '(:label "PP ad MMK 24.8" :lopez 1
+                    :sentences ((:sent-num 1
+                                 :segs ((1 . "dharmāṇāṃ śūnyatā ।")
+                                        (2 . "na svato ॥"))))))
+           (prompts (tibetan-cascade--build-chunk-prompts chunk src))
+           (system (car prompts))
+           (user (cdr prompts)))
+      (should (string-match-p "Sanskrit passage" user))
+      (should-not (string-match-p "Classical Tibetan" user))
+      (should-not (string-match-p "Classical Tibetan" system))
+      (should (string-match-p "ONLY" system))
+      (should (string-match-p "⟦N⟧" system)))))
+
+(ert-deftest tibetan-sanskrit-cascade-bo-prompts-unchanged ()
+  "C2-Lock: bo-Prompts bleiben unverändert (Header 'Classical
+Tibetan sentence', Wylie-Zeile vorhanden wenn konvertierbar)."
+  (let ((dir (make-temp-file "bo-prompt-" t)))
+    (unwind-protect
+        (let ((src (expand-file-name "doc.org" dir)))
+          (with-temp-file src
+            (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                    "* Tibetan Text\n*** Sentence 1\n**** Segment 1\nབདག\n"))
+          (let* ((prompts (tibetan-sentence-claude--build-prompts
+                           '(:sent-num 1 :seg-nums (1)
+                             :children ((:seg-num 1 :text "བདག"))
+                             :tibetan-text "བདག")
+                           src nil))
+                 (user (cdr prompts)))
+            (should (string-match-p "Classical Tibetan sentence" user))))
+      (delete-directory dir t))))
+
 (provide 'tibetan-sanskrit-cascade-test)
 
 ;;; tibetan-sanskrit-cascade-test.el ends here

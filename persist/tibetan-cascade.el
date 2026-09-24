@@ -47,6 +47,9 @@
 ;; by the scaffold/regenerate below; same shadow hazard as above.
 (defvar tibetan-analysis--source-lang)
 (defvar tibetan-sanskrit-reading--word-analysis)
+(defvar tibetan-sentence-claude--system-prompt-sanskrit)
+(declare-function tibetan-analysis--resolve-source-lang
+                  "tibetan-analysis-claude")
 
 ;; The §184-handout gloss tables (Masterarbeit three-view plan,
 ;; 2026-09-15).  Soft — the emitter is fboundp-guarded and
@@ -1372,13 +1375,44 @@ beside the segment-level and sentence-level ones.  Output is the
 translation ONLY: the §5.40 record shows long multi-section
 responses drop content, so vocabulary/grammar stay per-sentence.")
 
+(defconst tibetan-cascade--chunk-system-addendum-sanskrit
+  "
+
+CHUNK MODE — this request covers a PASSAGE spanning several
+sentences (the daṇḍa-delimited segments your user prompt lists under
+`### Segment N' headers).  Produce ONLY the section
+`## Translation': ONE fluent translation of the WHOLE passage.
+Inside it, wrap the span corresponding to EACH listed segment in
+markers `⟦N⟧' before and `⟦/N⟧' after, using the exact segment
+numbers — every listed segment exactly once, no nesting, no
+overlaps (the translation may reorder the segments; mark the spans
+wherever they fall).  NO `### Segment' subsections, NO other `## '
+sections, no commentary before or after."
+  "The Sanskrit chunk addendum (Sanskrit-Kaskade C2, 2026-09-24) —
+appended to the Sanskrit base; overrides its five-section schema
+down to the translation-only chunk contract, exactly like the
+Tibetan pair.  Constant per document.")
+
 (defun tibetan-cascade--build-chunk-prompts (chunk source-file)
   "Build (SYSTEM . USER) for a chunk-fire call over CHUNK."
-  (let* ((system (concat
-                  (if (boundp 'tibetan-analysis--claude-system-prompt)
-                      tibetan-analysis--claude-system-prompt
-                    "")
-                  tibetan-cascade--chunk-system-addendum
+  (let* ((sa-p (and source-file
+                    (fboundp 'tibetan-analysis--resolve-source-lang)
+                    (equal (tibetan-analysis--resolve-source-lang
+                            source-file)
+                           "sa")))
+         (system (concat
+                  (if sa-p
+                      (concat
+                       (if (boundp
+                            'tibetan-sentence-claude--system-prompt-sanskrit)
+                           tibetan-sentence-claude--system-prompt-sanskrit
+                         "")
+                       tibetan-cascade--chunk-system-addendum-sanskrit)
+                    (concat
+                     (if (boundp 'tibetan-analysis--claude-system-prompt)
+                         tibetan-analysis--claude-system-prompt
+                       "")
+                     tibetan-cascade--chunk-system-addendum))
                   (if (and source-file
                            (fboundp
                             'tibetan-analysis--claude-static-system-blocks))
@@ -1399,7 +1433,9 @@ responses drop content, so vocabulary/grammar stay per-sentence.")
                  (tibetan-cascade--section-refs-block
                   (car sentences) source-file)))
          (user (concat
-                (format "Classical Tibetan passage (%s — segments %s):\n\n"
+                (format "%s (%s — segments %s):\n\n"
+                        (if sa-p "Sanskrit passage (IAST)"
+                          "Classical Tibetan passage")
                         (or (plist-get chunk :label) "passage")
                         (mapconcat (lambda (sp)
                                      (number-to-string (car sp)))

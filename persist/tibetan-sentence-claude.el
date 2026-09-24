@@ -210,6 +210,8 @@ preamble, Concept Notes = the sentence-level body."
 
 (declare-function tibetan-analysis--claude-static-system-blocks
                   "tibetan-analysis-claude")
+(declare-function tibetan-analysis--resolve-source-lang
+                  "tibetan-analysis-claude")
 (declare-function tibetan-analysis--read-interlinear-glosses
                   "tibetan-analysis-claude")
 (declare-function tibetan-analysis--collect-zettel-references
@@ -256,6 +258,67 @@ sentence-first schema.  Appended to the base segment system prompt;
 constant per document, so it forms a stable Anthropic cache prefix
 \(distinct from the segment-level prefix — the two coexist).")
 
+(defconst tibetan-sentence-claude--system-prompt-sanskrit
+  "You are an expert Sanskrit philologist assisting a Buddhist
+Studies graduate thesis.  The user prompt gives ONE complete
+Sanskrit sentence or verse (IAST) spanning one or more numbered
+segments (listed under `### Segment N' headers).  Produce EXACTLY
+these five sections, each under a `## ' heading:
+
+## Translation
+FIRST the fluent translation of the WHOLE sentence/verse (no header
+before it; use the document's target-language directive below —
+default English).  Inside it, wrap the span corresponding to EACH
+listed segment in markers: `⟦N⟧' before and `⟦/N⟧' after, using the
+exact segment numbers — every listed segment exactly once, no
+nesting, no overlaps (the translation may reorder the segments; mark
+the spans wherever they fall).  Words supplied by the translator go
+in square brackets.  THEN a `### Segment N' subsection per segment
+with just that segment's sub-translation (NO markers inside).
+
+## Word Analysis
+A `### Segment N' subsection per segment.  In each, the FIRST line
+is that segment's padapāṭha: the complete sandhi-resolved word
+sequence, space-separated, in text order — split all external
+sandhi; keep a compound as ONE word (hyphenate its members when
+helpful).  Then one bullet per padapāṭha word:
+`- word — lemma; MORPH' where MORPH is a compact morphology label:
+nominals N./ADJ./PRON. + case.number(.gender), e.g. N.GEN.PL,
+ADJ.NOM.SG.F; finite verbs V. + tense/mood.person.number, e.g.
+V.PRS.3SG, V.OPT.3SG; participles/absolutives/infinitives
+PTCP./ABS./INF. + what applies; indeclinables IND.  Spell every
+word EXACTLY as in the padapāṭha line.
+
+## Vocabulary
+A `### Segment N' subsection per segment; one line per padapāṭha
+word worth glossing, comma format:
+`word, part of speech, \"gloss\", short note'.  The word key MUST be
+spelled exactly as in the padapāṭha.  Indeclinables get compact
+entries.
+
+## Grammar
+Open with a 2-4 sentence overview of the whole sentence/verse
+(clause structure, agreement, notable sandhi or metre) BEFORE the
+first subsection; then a `### Segment N' subsection per segment
+with labeled bullets.  Metalanguage: English.
+
+## Concept Notes
+0-3 short encyclopedia notes on Buddhist/philosophical technical
+terms in the passage — sentence-level only, no subsections;
+`[No notable concepts in this passage]' when none apply.
+
+Every listed segment MUST receive its subsections; never merge two
+segments under one header."
+  "The Sanskrit sentence-first system prompt (Sanskrit-Kaskade C2,
+2026-09-24).  A full BASE — not an addendum to the Tibetan base,
+whose particle-centric schema does not apply.  Constant per
+document (the per-document static blocks are appended by the
+builder), so it forms the fourth coexisting Anthropic cache prefix
+beside the segment / sentence / chunk prefixes.  The response
+contract feeds `tibetan-sanskrit-reading-parse-word-analysis'
+\(padapāṭha + morph) and the unchanged comma-format vocabulary
+parser.")
+
 (defun tibetan-sentence-claude--collect-children-vocab (seg-nums folder)
   "Per-child Interlinear grounding: `=== Segment N ===' labelled
 `wylie = gloss' blocks from each child seg file.  nil when nothing."
@@ -287,34 +350,49 @@ cache-constant).  FOLDER locates the child seg files for grounding."
   (let* ((sent-num (plist-get sentence :sent-num))
          (seg-nums (plist-get sentence :seg-nums))
          (text (plist-get sentence :tibetan-text))
+         ;; Sanskrit-Kaskade C2 (2026-09-24): a `#+SOURCE_LANG: sa'
+         ;; document swaps the Tibetan base+addendum for the Sanskrit
+         ;; base (Word-Analysis/padapāṭha contract) and drops the
+         ;; Tibetan-only user-prompt parts (Wylie line, dictionary
+         ;; grounding, zettel block — all Wylie-keyed).
+         (sa-p (and source-file
+                    (fboundp 'tibetan-analysis--resolve-source-lang)
+                    (equal (tibetan-analysis--resolve-source-lang
+                            source-file)
+                           "sa")))
          (system (concat
-                  (if (boundp 'tibetan-analysis--claude-system-prompt)
-                      tibetan-analysis--claude-system-prompt
-                    "")
-                  tibetan-sentence-claude--system-addendum
+                  (if sa-p
+                      tibetan-sentence-claude--system-prompt-sanskrit
+                    (concat
+                     (if (boundp 'tibetan-analysis--claude-system-prompt)
+                         tibetan-analysis--claude-system-prompt
+                       "")
+                     tibetan-sentence-claude--system-addendum))
                   (if (and source-file
                            (fboundp
                             'tibetan-analysis--claude-static-system-blocks))
                       (tibetan-analysis--claude-static-system-blocks
                        source-file)
                     "")))
-         (wylie (condition-case nil
-                    (when (fboundp 'tibetan-to-wylie-fixed)
-                      (tibetan-to-wylie-fixed text))
-                  (error nil)))
+         (wylie (unless sa-p
+                  (condition-case nil
+                      (when (fboundp 'tibetan-to-wylie-fixed)
+                        (tibetan-to-wylie-fixed text))
+                    (error nil))))
          (enumeration
           (mapconcat (lambda (c)
                        (format "### Segment %d\n%s"
                                (plist-get c :seg-num)
                                (string-trim (or (plist-get c :text) ""))))
                      (plist-get sentence :children) "\n"))
-         (vocab-block (tibetan-sentence-claude--collect-children-vocab
-                       seg-nums folder))
+         (vocab-block (unless sa-p
+                        (tibetan-sentence-claude--collect-children-vocab
+                         seg-nums folder)))
          ;; FOLDER must be explicit: the child-filepath helper falls
          ;; back to buffer-file-name-derived lookup, which errors in
          ;; headless batch (§5.34 class).  No folder → no grounding.
          (grounding-block
-          (when (and folder
+          (when (and (not sa-p) folder
                      (fboundp 'tibetan-sentence--collect-children-grounding))
             (tibetan-sentence--collect-children-grounding
              seg-nums folder)))
@@ -323,7 +401,8 @@ cache-constant).  FOLDER locates the child seg files for grounding."
          ;; Interlinear sections.  Only consulted when the child-file
          ;; blocks came up empty, so two-file docs are unaffected.
          (cascade-block
-          (when (and (null vocab-block) (null grounding-block)
+          (when (and (not sa-p)
+                     (null vocab-block) (null grounding-block)
                      folder
                      (fboundp 'tibetan-analysis--cascade-p)
                      (fboundp 'tibetan-cascade--prompt-grounding)
@@ -337,12 +416,16 @@ cache-constant).  FOLDER locates the child seg files for grounding."
           (when (fboundp 'tibetan-cascade--section-refs-block)
             (tibetan-cascade--section-refs-block sentence source-file)))
          (zettel-block
-          (when (and (fboundp 'tibetan-analysis--collect-zettel-references)
+          (when (and (not sa-p)
+                     (fboundp 'tibetan-analysis--collect-zettel-references)
                      (fboundp 'tibetan-analysis--format-zettel-references-block))
             (tibetan-analysis--format-zettel-references-block
              (tibetan-analysis--collect-zettel-references text))))
          (user (concat
-                (format "Classical Tibetan sentence (Sentence %s — segment%s %s):\n\n"
+                (format "%s (Sentence %s — segment%s %s):\n\n"
+                        (if sa-p
+                            "Sanskrit sentence/verse (IAST)"
+                          "Classical Tibetan sentence")
                         (or sent-num "?")
                         (if (cdr seg-nums) "s" "")
                         (mapconcat #'number-to-string seg-nums ", "))
