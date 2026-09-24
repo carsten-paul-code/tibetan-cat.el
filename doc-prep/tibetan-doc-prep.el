@@ -627,6 +627,10 @@ FILE is the PDF or image to process."
         (call-interactively
          #'tibetan-wylie-ingest-validate-input-interactive)))
 
+    ;; Sanskrit-Kaskade D2 (2026-09-24): Rohtext (IAST/Devanagari)
+    ;; → Kaskaden-Quelldokument.
+    (define-key map (kbd "k") #'tibetan-cascade-import-sanskrit)
+
     ;; Individual steps
     (define-key map (kbd "r") #'tibetan-doc-prep-ocr)
     (define-key map (kbd "v") #'tibetan-doc-prep-validate)

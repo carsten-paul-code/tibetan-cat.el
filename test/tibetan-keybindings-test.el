@@ -33,6 +33,13 @@
   (skip-unless (fboundp 'tibetan-prepare-document))
   (should (eq (key-binding (kbd "C-c u P")) 'tibetan-prepare-document)))
 
+(ert-deftest tibetan-keybinding-sanskrit-import ()
+  "D2 (Sanskrit-Kaskade, 2026-09-24): C-c o k ruft den
+Sanskrit-Importer."
+  (skip-unless (boundp 'tibetan-doc-prep-map))
+  (should (eq (lookup-key tibetan-doc-prep-map (kbd "k"))
+              'tibetan-cascade-import-sanskrit)))
+
 (ert-deftest tibetan-keybinding-auto-analyze ()
   "Test that C-c u B is bound to tibetan-auto-analyze-document."
   (skip-unless (fboundp 'tibetan-auto-analyze-document))
