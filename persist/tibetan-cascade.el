@@ -1630,6 +1630,19 @@ still defers under #+TIBETAN_DEFER_MT.  Returns
               (when (eq (tibetan-cascade--fire-sentence
                          (list :sent-num sent-id
                                :seg-nums (mapcar #'car segs)
+                               ;; A3 (2026-09-24): --build-prompts
+                               ;; derives the `### Segment N' user-
+                               ;; prompt enumeration from :children —
+                               ;; without it Claude gets no per-
+                               ;; segment texts and cannot place the
+                               ;; ⟦N⟧ spans (the walker path always
+                               ;; carried it; this hand-built plist
+                               ;; did not).
+                               :children (mapcar
+                                          (lambda (s)
+                                            (list :seg-num (car s)
+                                                  :text (cdr s)))
+                                          segs)
                                :tibetan-text (mapconcat #'cdr segs ""))
                          src (file-name-directory
                               (expand-file-name filepath))

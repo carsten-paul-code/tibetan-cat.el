@@ -887,6 +887,43 @@ cascade file (preserving content) instead of a seg file."
                        (tibetan-cascade--read-rendering sent4 105)))
         (should (= 0 (length (directory-files analysis nil "\\`seg-"))))))))
 
+(ert-deftest tibetan-cascade-reanalyze-fire-carries-segment-enumeration ()
+  "A3 (2026-09-24): der Re-Fire aus `tibetan-cascade-reanalyze-file'
+\(C-c u R auf der Kaskaden-Datei) muss die Sentence-Plist MIT
+`:children' bauen — `tibetan-sentence-claude--build-prompts' leitet
+die `### Segment N'-Enumeration daraus ab; ohne sie enthält der
+User-Prompt keine Segmenttexte und Claude kann keine korrekten
+⟦N⟧-Spans liefern.  (Der Dispatcher-Pfad über den Walker war
+korrekt; nur der Reanalyze-Pfad baute die Plist von Hand.)"
+  (tibetan-cascade-test--with-cascade-source
+    (let ((tibetan-auto-fire-claude-on-create nil)
+          (captured nil))
+      (tibetan-auto-analyze-document)
+      (let* ((analysis (expand-file-name "analysis" dir))
+             (sent4 (car (directory-files analysis t "\\`sent-004"))))
+        (cl-letf (((symbol-function 'tibetan-sentence-claude--claim)
+                   (lambda (&rest _) t))
+                  ((symbol-function 'tibetan-sentence-claude--request)
+                   (lambda (sentence &rest _) (setq captured sentence)))
+                  ((symbol-function 'tibetan-sentence-claude--schedule-dm)
+                   (lambda (&rest _) nil)))
+          (tibetan-cascade-reanalyze-file sent4 :source-file src
+                                          :re-request-claude t))
+        (should captured)
+        (let ((children (plist-get captured :children)))
+          (should children)
+          (should (equal (plist-get captured :seg-nums)
+                         (mapcar (lambda (c) (plist-get c :seg-num))
+                                 children)))
+          (dolist (c children)
+            (should (> (length (string-trim (or (plist-get c :text) "")))
+                       0))))
+        ;; End-to-End: die Enumeration erreicht den User-Prompt.
+        (let ((prompts (tibetan-sentence-claude--build-prompts
+                        captured src (file-name-directory sent4))))
+          (should (string-match-p "### Segment 105" (cdr prompts)))
+          (should (string-match-p "### Segment 106" (cdr prompts))))))))
+
 ;; ============================================================================
 ;; C5.2 — tibetan-shad-split-segments (one-time source transform)
 ;; ============================================================================
