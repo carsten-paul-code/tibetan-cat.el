@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-24T14:02:22
+#+DATE: 2026-09-24T14:04:29
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  75 modules  ·  1446 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  76 modules  ·  1453 forms
 
 Regenerated automatically by:
 
@@ -35,6 +35,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#core/tibetan-org-structure.el][core/tibetan-org-structure.el]]  (37)
   - [[#core/tibetan-sanskrit-parallel-dharmamitra.el][core/tibetan-sanskrit-parallel-dharmamitra.el]]  (22)
   - [[#core/tibetan-sanskrit-parallel.el][core/tibetan-sanskrit-parallel.el]]  (24)
+  - [[#core/tibetan-sanskrit-script.el][core/tibetan-sanskrit-script.el]]  (7)
   - [[#core/tibetan-steinert.el][core/tibetan-steinert.el]]  (13)
   - [[#core/tibetan-text-classifier.el][core/tibetan-text-classifier.el]]  (9)
   - [[#core/tibetan-thesaurus.el][core/tibetan-thesaurus.el]]  (34)
@@ -4764,6 +4765,88 @@ keeps the toggle one-keystroke.
 :END:
 
 /(no docstring)/
+
+
+* core/tibetan-sanskrit-script.el
+:PROPERTIES:
+:CUSTOM_ID: core/tibetan-sanskrit-script.el
+:SOURCE_PATH: /Users/cp/tibetan-cat.el/core/tibetan-sanskrit-script.el
+:END:
+
+** ~tibetan-sanskrit-script-devanagari-to-iast~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 55
+:SIGNATURE: (tibetan-sanskrit-script-devanagari-to-iast str)
+:END:
+
+STR with every Devanagari character transliterated to IAST.
+Non-Devanagari characters (including existing IAST, whitespace and
+the daṇḍas ।/॥) pass through untouched, so mixed input is safe and
+the function is idempotent on pure IAST.  nil-safe.
+
+Consonant logic: a consonant emits its base form, then the NEXT
+character decides the vowel — a dependent vowel sign replaces the
+inherent a, the virāma suppresses it (conjuncts, word-final stops),
+anything else (another consonant, space, end of string) leaves the
+inherent a in place.
+
+** ~tibetan-sanskrit-script-normalize~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 104
+:SIGNATURE: (tibetan-sanskrit-script-normalize str)
+:END:
+
+STR NFC-normalized with Devanagari transliterated to IAST.
+The importer's single entry point for mixed IAST/Devanagari input.
+Line structure survives untouched (pāda breaks are data).
+Idempotent; nil-safe.
+
+** ~tibetan-sanskrit-script--consonants~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 24
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+** ~tibetan-sanskrit-script--independent-vowels~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 35
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+** ~tibetan-sanskrit-script--vowel-signs~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 42
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+** ~tibetan-sanskrit-script--signs~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 48
+:DEFAULT: '
+:END:
+
+/(no docstring)/
+
+** ~tibetan-sanskrit-script--virama~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 52
+:DEFAULT: ?्
+:END:
+
+The Devanagari virāma (vowel killer).
 
 
 * core/tibetan-steinert.el
@@ -20110,7 +20193,7 @@ Holds the result of the WHEN clause for use in THEN assertions.
 ** ~tibetan-cat-setup~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 295
+:LINE: 296
 :SIGNATURE: (tibetan-cat-setup)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -20122,7 +20205,7 @@ Loads glossaries and prepares the system for use.
 ** ~tibetan-cat-version~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 381
+:LINE: 382
 :SIGNATURE: (tibetan-cat-version)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -20133,7 +20216,7 @@ Display Tibetan CAT version and feature summary.
 ** ~tibetan-cat--server-socket-path~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 424
+:LINE: 425
 :SIGNATURE: (tibetan-cat--server-socket-path server-name)
 :END:
 
@@ -20145,7 +20228,7 @@ removed when the server is stopped).
 ** ~tibetan-cat-open-zettel-for-word-at-point~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 435
+:LINE: 436
 :SIGNATURE: (tibetan-cat-open-zettel-for-word-at-point &optional arg)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -20178,7 +20261,7 @@ in the appropriate instance.
 ** ~tibetan-cat-zettel-target-server~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 404
+:LINE: 405
 :TYPE: 'string
 :GROUP: tibetan-cat
 :DEFAULT: "research-emacs"
@@ -20200,7 +20283,7 @@ Empty string disables remote routing entirely.
 ** ~tibetan-cat-version~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 292
+:LINE: 293
 :END:
 
 /(no docstring)/
@@ -20208,7 +20291,7 @@ Empty string disables remote routing entirely.
 ** ~tibetan-cat-version~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 377
+:LINE: 378
 :DEFAULT: "2.1.0"
 :END:
 
@@ -20217,7 +20300,7 @@ Version of Tibetan CAT system.
 ** ~server-socket-dir~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 422
+:LINE: 423
 :END:
 
 /(no docstring)/

@@ -135,6 +135,7 @@
 ;; treats the document as Tibetan-only.  Future Sanskrit CAT will
 ;; consume the same primitives.
 (require 'tibetan-sanskrit-parallel nil t)
+(require 'tibetan-sanskrit-script nil t)   ; Devanagari→IAST (Sanskrit-Kaskade B2)
 
 ;; ============================================================================
 ;; LOAD ANALYSIS MODULES

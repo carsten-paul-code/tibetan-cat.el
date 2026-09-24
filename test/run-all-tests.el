@@ -197,6 +197,9 @@ body in the test suite (the transport self-tests only).")
 ;; §184-handout three-row gloss tables (2026-09-15)
 (condition-case nil (require 'tibetan-gloss-table-test) (error nil))
 
+;; Sanskrit-Kaskade: Devanagari→IAST transliteration (2026-09-24)
+(condition-case nil (require 'tibetan-sanskrit-script-test) (error nil))
+
 ;; Throttled Claude request queue (concurrency cap + 429 retry)
 (condition-case nil (require 'tibetan-claude-queue-test) (error nil))
 
