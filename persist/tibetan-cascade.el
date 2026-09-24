@@ -41,6 +41,12 @@
 ;; shadow under lexical-binding — the `features'-shadow lesson.
 (defvar tibetan-analysis--target-lang)
 (defvar tibetan-analysis--claude-vocabulary-for-render)
+;; Sanskrit-Kaskade C1 (2026-09-24): the source-language dispatch var
+;; (defined in tibetan-analysis-claude.el) and the text-keyed word
+;; analysis (defined in tibetan-sanskrit-reading.el) — both let-bound
+;; by the scaffold/regenerate below; same shadow hazard as above.
+(defvar tibetan-analysis--source-lang)
+(defvar tibetan-sanskrit-reading--word-analysis)
 
 ;; The §184-handout gloss tables (Masterarbeit three-view plan,
 ;; 2026-09-15).  Soft — the emitter is fboundp-guarded and
@@ -375,6 +381,17 @@ marks the file for every reader (§2.8: explicit, never sniffed)."
                      (error nil)))
               (and (boundp 'tibetan-analysis--target-lang)
                    tibetan-analysis--target-lang)))
+         ;; Sanskrit-Kaskade C1 (2026-09-24): bind the source language
+         ;; from the SOURCE document's metadata — the reading/gloss-
+         ;; table dispatch (B4) keys on it.  Metadata-only binding =
+         ;; batch/interactive parity by construction (§5.53).
+         (tibetan-analysis--source-lang
+          (and source-file
+               (fboundp 'tibetan-analysis--resolve-source-lang)
+               (condition-case nil
+                   (tibetan-analysis--resolve-source-lang source-file)
+                 (error nil))))
+         (sa-p (equal tibetan-analysis--source-lang "sa"))
          (date (format-time-string "%Y-%m-%d"))
          (tibetan-text (mapconcat #'cdr segs ""))
          (hash (and (fboundp 'tibetan-sentence--compute-hash)
@@ -388,6 +405,11 @@ marks the file for every reader (§2.8: explicit, never sniffed)."
       (insert "#+STARTUP: showall\n")
       (insert "#+OPTIONS: toc:nil num:nil\n")
       (insert "#+TIBETAN_LAYOUT: cascade\n")
+      ;; C1: mirror the source language into the sent file so the
+      ;; dependency-free textual probes (B0 class) work without the
+      ;; source, and the metadata resolver prefers the file itself.
+      (when sa-p
+        (insert "#+SOURCE_LANG: sa\n"))
       (when source-name
         (insert (format
                  "#+SOURCE: [[file:../%s::*Sentence %d][%s / Sentence %d]]\n"
@@ -414,7 +436,13 @@ marks the file for every reader (§2.8: explicit, never sniffed)."
       ;; placeholders otherwise.
       (insert "* Tibetan Analysis\n")
       (insert ":PROPERTIES:\n:GENERATED: t\n:END:\n\n")
-      (let ((auto (and (fboundp 'tibetan-sentence--render-auto-analysis)
+      ;; C1: no Tibetan auto-analysis over IAST — the segment
+      ;; renderer's Tibetan-line filter would return ~nothing anyway,
+      ;; but it still runs the full Tibetan lookup machinery over
+      ;; Sanskrit words en route.  sa gets the minimal placeholder
+      ;; scaffold; the landing writers create further headings.
+      (let ((auto (and (not sa-p)
+                       (fboundp 'tibetan-sentence--render-auto-analysis)
                        (condition-case nil
                            (tibetan-sentence--render-auto-analysis
                             tibetan-text)
@@ -433,8 +461,12 @@ marks the file for every reader (§2.8: explicit, never sniffed)."
           (insert "** DharmaMitra Translation\n[Awaiting DharmaMitra…]\n\n"))
         ;; R10: replace the auto renderer's whole-sentence Sentence
         ;; Structure (fused across shads) with the per-unit trees;
-        ;; keep the fallback body when no unit parses.
-        (let ((per-unit (tibetan-cascade--sentence-structure-body segs)))
+        ;; keep the fallback body when no unit parses.  C1: skipped
+        ;; outright for sa — the Hill/case-frame machinery is
+        ;; Tibetan-only and would only burn lookups over IAST.
+        (let ((per-unit (and (not sa-p)
+                             (tibetan-cascade--sentence-structure-body
+                              segs))))
           (when per-unit
             (if (save-excursion
                   (goto-char (point-min))
@@ -724,8 +756,13 @@ Returns FILEPATH."
              #'cdr
              (mapcar (lambda (h)
                        (cons h (tibetan-sentence--read-l2-body filepath h)))
+                     ;; C1 (2026-09-24): "Word Analysis" is the
+                     ;; landed Sanskrit padapāṭha/morphology section
+                     ;; — preserved like every Claude-owned slot,
+                     ;; re-bound below so the tables materialize.
                      '("Translation" "DharmaMitra Translation"
                        "Claude Vocabulary" "Concept Notes"
+                       "Word Analysis"
                        "Provided Translations")))))
          (claude-grammar (tibetan-cascade--read-l3-body
                           filepath "Claude Grammar"))
@@ -760,7 +797,24 @@ Returns FILEPATH."
                    (tibetan-analysis--claude-render-vars
                     (list :vocabulary
                           (cdr (assoc "Claude Vocabulary" keep-l2))))
-                   :vocabulary))))
+                   :vocabulary)))
+            ;; C1 (2026-09-24): the preserved `** Word Analysis'
+            ;; body, parsed and re-keyed by UNIT TEXT (the shared
+            ;; renderer signatures carry no segment number) — the
+            ;; Sanskrit gloss tables and Interlinear lines
+            ;; materialize from it.  nil for bo files and for sa
+            ;; files Claude has not answered yet (degraded surface
+            ;; render).
+            (tibetan-sanskrit-reading--word-analysis
+             (when (fboundp 'tibetan-sanskrit-reading-parse-word-analysis)
+               (let ((parsed (tibetan-sanskrit-reading-parse-word-analysis
+                              (cdr (assoc "Word Analysis" keep-l2)))))
+                 (when parsed
+                   (cl-loop for (n . text) in segs
+                            for entry = (assq n parsed)
+                            when entry
+                            collect (cons (string-trim text)
+                                          (cdr entry))))))))
         (insert (tibetan-cascade--scaffold sent-num segs source-file)))
       (when edited-gloss-tables
         (tibetan-cascade--restore-gloss-tables-in-buffer

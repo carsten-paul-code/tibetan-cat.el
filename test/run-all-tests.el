@@ -203,6 +203,9 @@ body in the test suite (the transport self-tests only).")
 ;; Sanskrit-Kaskade: Token-Provider (Padapāṭha/Word Analysis, 2026-09-24)
 (condition-case nil (require 'tibetan-sanskrit-reading-test) (error nil))
 
+;; Sanskrit-Kaskade: Scaffold/Regenerate/Landung (2026-09-24)
+(condition-case nil (require 'tibetan-sanskrit-cascade-test) (error nil))
+
 ;; Throttled Claude request queue (concurrency cap + 429 retry)
 (condition-case nil (require 'tibetan-claude-queue-test) (error nil))
 
