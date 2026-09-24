@@ -392,6 +392,37 @@ beim manuellen Regenerate."
                 (should (string-match-p "\\[ich selbst\\]" s))))))
       (delete-directory dir t))))
 
+;; ----------------------------------------------------------------------------
+;; C5 — Drei-Sichten-Smoke: Stitcher über eine sa-Quelle
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-sanskrit-cascade-stitcher-smoke ()
+  "C5: `tibetan-translation-doc-build' funktioniert unverändert über
+eine sa-Quelle — §-Gruppierung aus :LOPEZ_SECTION:, Working
+Translation fließt, Maschinen-Slots (Renderings/DM) NIE im Output."
+  (skip-unless (fboundp 'tibetan-translation-doc-build))
+  (tibetan-sanskrit-cascade-test--with-source
+    (let ((file (tibetan-cascade--create-file
+                 1 '((1 . "dharmāṇāṃ śūnyatā svabhāvaḥ ।")
+                     (2 . "na svato nāpi parataḥ ॥"))
+                 src))
+          (out (expand-file-name "uebersetzung.org" analysis-dir)))
+      ;; Working Translation füllen + einen Poison-String in die
+      ;; Renderings legen (darf NIE in den Stitch).
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (re-search-forward "^\\* Working Translation\n")
+        (insert "Die Leerheit der Gegebenheiten ist ihr Eigenwesen.\n")
+        (write-region (point-min) (point-max) file nil 'silent))
+      (tibetan-cascade--write-rendering file 1 "POISON-RENDERING-XYZ")
+      (tibetan-translation-doc-build src out)
+      (let ((s (tibetan-sanskrit-cascade-test--file-string out)))
+        (should (string-match-p "^\\* §1" s))
+        (should (string-match-p
+                 "Die Leerheit der Gegebenheiten ist ihr Eigenwesen\\." s))
+        (should-not (string-match-p "POISON-RENDERING-XYZ" s))))))
+
 (provide 'tibetan-sanskrit-cascade-test)
 
 ;;; tibetan-sanskrit-cascade-test.el ends here

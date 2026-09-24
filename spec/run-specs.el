@@ -88,6 +88,7 @@
 (require 'structure-reorg-spec)
 (require 'paragraph-analysis-spec)
 (require 'sentence-first-spec)
+(require 'sanskrit-cascade-spec)
 (require 'translation-doc-spec)
 
 ;; Run specs when loaded in batch mode
