@@ -1296,6 +1296,98 @@ cascade-naming :error, file bytes untouched."
                         (insert-file-contents path)
                         (buffer-string))))))))
 
+(defvar tibetan-sentence-test--cascade-source-buffer
+  (concat "#+TIBETAN_LAYOUT: cascade\n\n"
+          tibetan-sentence-test--section-wrap-buffer)
+  "Section-wrap fixture declared as a cascade-layout source.")
+
+(ert-deftest tibetan-sentence-reanalyze-command-routes-cascade ()
+  "A1 (2026-09-24, B0-Klasse): `tibetan-sentence-reanalyze' (C-c s R)
+auf einem Kaskaden-Dokument muss an `tibetan-cascade-reanalyze-file'
+routen — der Two-File-Regenerate würde `* Reading' (Renderings +
+editierte Glossentabellen) und den Layout-Header zerstören."
+  (tibetan-sentence-test--with-source-buffer
+   tibetan-sentence-test--cascade-source-buffer
+   (let* ((analysis-dir (expand-file-name "analysis" tmp-dir))
+          (path (progn (make-directory analysis-dir t)
+                       (expand-file-name "sent-001-src.org" analysis-dir)))
+          (content (concat "#+TITLE: Sentence 1 Analysis\n"
+                           "#+TIBETAN_LAYOUT: cascade\n"
+                           (format "#+SOURCE: [[file:%s]]\n\n" src-file)
+                           "* Reading\n** Renderings\n- ⟦1⟧ Erster Satz.\n\n"
+                           "* Tibetan Analysis\n** Translation\nkept\n"))
+          (calls nil))
+     (with-temp-file path (insert content))
+     (cl-letf (((symbol-function 'tibetan-cascade-reanalyze-file)
+                (lambda (file &rest args)
+                  (push (cons file args) calls)
+                  (list :file file :ok t)))
+               ((symbol-function 'yes-or-no-p) (lambda (_p) t)))
+       (goto-char (point-min))
+       (re-search-forward "^\\*\\*\\* Sentence 1" nil t)
+       (tibetan-sentence-reanalyze))
+     ;; Routed, not regenerated two-file:
+     (should (= 1 (length calls)))
+     (should (equal path (caar calls)))
+     (should (equal content
+                    (with-temp-buffer
+                      (insert-file-contents path)
+                      (buffer-string)))))))
+
+(ert-deftest tibetan-sentence-reanalyze-command-refuses-cascade-without-module ()
+  "A1: ist tibetan-cascade nicht ladbar, muss C-c s R auf einem
+Kaskaden-File mit `user-error' VERWEIGERN — nie still in den
+destruktiven Two-File-Zweig fallen (d7ff7ec-Klasse).  Das Feature
+`tibetan-cascade' bleibt in `features', darum ist das
+Selbstheilungs-`require' ein No-op und die fmakunbound-Lücke echt."
+  (tibetan-sentence-test--with-source-buffer
+   tibetan-sentence-test--cascade-source-buffer
+   (let* ((analysis-dir (expand-file-name "analysis" tmp-dir))
+          (path (progn (make-directory analysis-dir t)
+                       (expand-file-name "sent-001-src.org" analysis-dir)))
+          (content (concat "#+TITLE: Sentence 1 Analysis\n"
+                           "#+TIBETAN_LAYOUT: cascade\n"
+                           (format "#+SOURCE: [[file:%s]]\n\n" src-file)
+                           "* Reading\n** Renderings\n- ⟦1⟧ Erster Satz.\n")))
+     (with-temp-file path (insert content))
+     (let ((orig (symbol-function 'tibetan-cascade-reanalyze-file)))
+       (unwind-protect
+           (progn
+             (fmakunbound 'tibetan-cascade-reanalyze-file)
+             (cl-letf (((symbol-function 'yes-or-no-p) (lambda (_p) t)))
+               (goto-char (point-min))
+               (re-search-forward "^\\*\\*\\* Sentence 1" nil t)
+               (should-error (tibetan-sentence-reanalyze)
+                             :type 'user-error)))
+         (fset 'tibetan-cascade-reanalyze-file orig)))
+     (should (equal content
+                    (with-temp-buffer
+                      (insert-file-contents path)
+                      (buffer-string)))))))
+
+(ert-deftest tibetan-sentence-open-analysis-routes-cascade-create ()
+  "A1: `tibetan-sentence-open-analysis' (C-c s A) darf auf einem
+Kaskaden-Dokument KEINE Two-File-Satzdatei anlegen — der Create-Zweig
+delegiert an `tibetan-cascade-open-for-segment' (öffnet UND erzeugt)."
+  (tibetan-sentence-test--with-source-buffer
+   tibetan-sentence-test--cascade-source-buffer
+   (let ((calls nil)
+         (two-file (expand-file-name "analysis/sent-001-src.org" tmp-dir)))
+     (cl-letf (((symbol-function 'tibetan-cascade-open-for-segment)
+                (lambda (seg-id source-file)
+                  (push (cons seg-id source-file) calls)
+                  nil))
+               ((symbol-function 'display-buffer-in-side-window)
+                (lambda (&rest _) nil))
+               ((symbol-function 'tibetan-analysis--fire-sentence-level)
+                (lambda (&rest _) t)))
+       (goto-char (point-min))
+       (re-search-forward "^\\*\\*\\* Sentence 1" nil t)
+       (tibetan-sentence-open-analysis))
+     (should (= 1 (length calls)))
+     (should (equal 1 (caar calls)))
+     (should-not (file-exists-p two-file)))))
+
 ;; ============================================================================
 ;; RE-SEGMENTATION WORKFLOW TESTS
 ;; ============================================================================

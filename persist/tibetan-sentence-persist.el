@@ -1437,6 +1437,16 @@ source buffer must visit a file"))
             (goto-char (point-min)))
           (display-buffer-in-side-window
            buf '((side . right) (window-width . 0.5)))))
+       ;; A1 (2026-09-24, B0-Klasse): on a cascade source the create
+       ;; branch must not scaffold a TWO-FILE sentence file —
+       ;; delegate to the cascade opener (which creates when
+       ;; missing).  Textual probe, module unavailable → refuse.
+       ((tibetan-sentence--cascade-layout-p source-file)
+        (require 'tibetan-cascade nil t)
+        (unless (fboundp 'tibetan-cascade-open-for-segment)
+          (user-error
+           "Cascade source, but tibetan-cascade is unavailable — refusing the two-file create (B0 guard)"))
+        (tibetan-cascade-open-for-segment (car seg-nums) source-file))
        (t
         (let ((newpath (tibetan-sentence--create-file
                         sent-num seg-nums tib-text source-file)))
@@ -1502,10 +1512,33 @@ called with a prefix argument."
       (unless (file-exists-p filepath)
         (user-error
          "No sentence analysis file exists yet — use C-c u S first"))
-      (when (yes-or-no-p
-             (format "Re-analyze sentence %d (user content preserved)? "
-                     sent-num))
-        (tibetan-sentence--regenerate filepath sent-num seg-nums tib-text)
+      ;; A1 (2026-09-24, B0-Klasse): a cascade file must NEVER reach
+      ;; the two-file regenerate below — it would destroy * Reading
+      ;; (renderings + edited gloss tables) and the layout header.
+      ;; Textual probes only (dependency-free), file first, source as
+      ;; belt-and-braces; module unavailable → REFUSE, never fall
+      ;; through destructively (the d7ff7ec lesson).
+      (if (or (tibetan-sentence--cascade-layout-p filepath)
+              (tibetan-sentence--cascade-layout-p source-file))
+          (progn
+            (require 'tibetan-cascade nil t)
+            (unless (fboundp 'tibetan-cascade-reanalyze-file)
+              (user-error
+               "Cascade file, but tibetan-cascade is unavailable — refusing the two-file regenerate (B0 guard)"))
+            (let ((r (tibetan-cascade-reanalyze-file
+                      filepath :source-file source-file
+                      :re-request-claude (and current-prefix-arg t))))
+              (let ((buf (get-file-buffer filepath)))
+                (when buf
+                  (with-current-buffer buf
+                    (revert-buffer t t))))
+              (message "Re-analyzed sentence %d (cascade)%s" sent-num
+                       (if (plist-get r :ok) "" " — FAILED, see :error"))
+              r))
+        (when (yes-or-no-p
+               (format "Re-analyze sentence %d (user content preserved)? "
+                       sent-num))
+          (tibetan-sentence--regenerate filepath sent-num seg-nums tib-text)
         ;; Refresh open buffer.
         (let ((buf (get-file-buffer filepath)))
           (when buf
@@ -1543,7 +1576,7 @@ called with a prefix argument."
                      tib-text skt-plist source-file filepath)
                   (error (message
                           "Sentence Sanskrit/Combined fire skipped: %s"
-                          (error-message-string e2))))))))))))
+                          (error-message-string e2)))))))))))))
 
 (defun tibetan-sentence--cascade-layout-p (filepath)
   "Non-nil when FILEPATH itself declares `#+TIBETAN_LAYOUT: cascade'.
