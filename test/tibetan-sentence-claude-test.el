@@ -408,6 +408,68 @@ single-segment sentences → nil (caller falls back to per-segment)."
       (tibetan-sentence-claude-clear-inflight)
       (delete-directory dir t))))
 
+(ert-deftest tibetan-sentence-claude-declines-parallel-sanskrit-doc ()
+  "A2 (2026-09-24): ein `#+SOURCE_MODE: parallel-sanskrit'-Dokument
+behält seine Drei-Call-Kette — der Sentence-First-Dispatcher muss
+ablehnen.  Die Guard prüfte bisher ein NICHT EXISTIERENDES Symbol
+\(tibetan-sanskrit-parallel--source-mode-parallel-p; real:
+tibetan-cat--source-mode-parallel-p) → fboundp konstant nil, die
+Ausnahme war tot und Parallel-Dokumente liefen fälschlich in den
+Sentence-First-Pfad."
+  (require 'tibetan-sanskrit-parallel nil t)
+  (let ((dir (make-temp-file "tstc-par" t))
+        (submits 0))
+    (unwind-protect
+        (let* ((src (expand-file-name "doc.org" dir)))
+          (dolist (n '(105 106))
+            (with-temp-file (expand-file-name (format "seg-%03d.org" n) dir)
+              (insert (format
+                       "#+SOURCE: [[file:doc.org::*Segment %d][doc / Segment %d]]\n"
+                       n n)
+                      "* Tibetan Text\nx\n")))
+          (with-temp-file src
+            (insert "#+TITLE: D\n"
+                    "#+SOURCE_MODE: parallel-sanskrit\n\n"
+                    "* Tibetan Text\n"
+                    "*** Sentence 4\n"
+                    "**** Segment 105\nབདག\n\n"
+                    "**** Segment 106\nཆོས\n"))
+          (tibetan-sentence-claude-clear-inflight)
+          (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+                     (lambda (&rest _) (cl-incf submits))))
+            (should-not (tibetan-analysis--fire-sentence-level
+                         "བདག" (expand-file-name "seg-105.org" dir)
+                         src 105 t))
+            (should (= 0 submits))))
+      (tibetan-sentence-claude-clear-inflight)
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sentence-claude-proceeds-on-non-parallel-doc ()
+  "A2-Gegentest: ohne SOURCE_MODE-Header feuert der Dispatcher wie
+bisher (Lock gegen eine zu breite Guard)."
+  (require 'tibetan-sanskrit-parallel nil t)
+  (let ((dir (make-temp-file "tstc-np" t))
+        (submits 0))
+    (unwind-protect
+        (let* ((src (expand-file-name "doc.org" dir)))
+          (with-temp-file (expand-file-name "seg-105.org" dir)
+            (insert "#+SOURCE: [[file:doc.org::*Segment 105][doc / Segment 105]]\n"
+                    "* Tibetan Text\nx\n"))
+          (with-temp-file src
+            (insert "#+TITLE: D\n\n* Tibetan Text\n"
+                    "*** Sentence 4\n"
+                    "**** Segment 105\nབདག\n"))
+          (tibetan-sentence-claude-clear-inflight)
+          (cl-letf (((symbol-function 'tibetan-claude-queue-submit)
+                     (lambda (&rest _) (cl-incf submits))))
+            (should (eq 'fired
+                        (tibetan-analysis--fire-sentence-level
+                         "བདག" (expand-file-name "seg-105.org" dir)
+                         src 105 t)))
+            (should (= 1 submits))))
+      (tibetan-sentence-claude-clear-inflight)
+      (delete-directory dir t))))
+
 (ert-deftest tibetan-sentence-claude-single-seg-fires-sentence-level ()
   "A single-segment sentence fires through the dispatcher (B-1.2).
 The >1-segment guard made e.g. Khu-dbon Sentence 25 (= Segment 136

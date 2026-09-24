@@ -379,7 +379,7 @@ cache-constant).  FOLDER locates the child seg files for grounding."
                   "tibetan-sentence-persist")
 (declare-function tibetan-sentence--filepath "tibetan-sentence-persist")
 (declare-function tibetan-claude-queue-submit "tibetan-claude-queue")
-(declare-function tibetan-sanskrit-parallel--source-mode-parallel-p
+(declare-function tibetan-cat--source-mode-parallel-p
                   "tibetan-sanskrit-parallel")
 (declare-function gptel-request "gptel")
 (defvar gptel-cache)
@@ -674,8 +674,12 @@ per-segment Claude)."
   (when (and analysis-file source-file seg-id
              (fboundp 'tibetan-sentence--sentence-for-segment)
              ;; Parallel-Sanskrit docs keep their three-call chain.
-             (not (and (fboundp 'tibetan-sanskrit-parallel--source-mode-parallel-p)
-                       (tibetan-sanskrit-parallel--source-mode-parallel-p
+             ;; A2 (2026-09-24): the probe used to name a function
+             ;; that never existed (…parallel--source-mode-parallel-p)
+             ;; — the fboundp was constantly nil, the exclusion dead,
+             ;; and parallel docs fell into the sentence-first path.
+             (not (and (fboundp 'tibetan-cat--source-mode-parallel-p)
+                       (tibetan-cat--source-mode-parallel-p
                         source-file))))
     (let ((sentence (condition-case nil
                         (tibetan-sentence--sentence-for-segment
