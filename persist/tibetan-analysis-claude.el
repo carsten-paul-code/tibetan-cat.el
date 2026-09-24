@@ -3162,6 +3162,13 @@ with `---' are skipped."
                (not (string-empty-p vocab-text)))
       (dolist (line (split-string vocab-text "\n" t))
         (let ((trimmed (string-trim line)))
+          ;; C6 (Sanskrit-Dry-Run, 2026-09-24): tolerate a leading
+          ;; list bullet — models occasionally emit `- word, …'
+          ;; despite the plain-line schema; the key then became
+          ;; "- word" and the gloss tier silently missed every entry.
+          (setq trimmed (string-trim
+                         (replace-regexp-in-string
+                          "\\`[-*][ \t]+" "" trimmed)))
           (unless (or (string-empty-p trimmed)
                       (string-prefix-p "---" trimmed))
             (when (string-match "\\`\\([^,]+\\)," trimmed)

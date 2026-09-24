@@ -951,6 +951,22 @@ the `:concepts' slot for migration."
     ;; Full line is preserved
     (should (string-match-p "^bdag, noun" (cdr (nth 0 result))))))
 
+(ert-deftest tibetan-claude-vocabulary-parse-strips-bullets ()
+  "C6 (Sanskrit-Dry-Run, 2026-09-24): Modelle bulletten die
+Vocabulary-Zeilen gelegentlich (`- yaḥ, …') — der Key wurde dann
+`- yaḥ' und der Glossen-Tier fand nichts.  Führende `- '/`* '
+werden gestrippt; der Key bleibt das erste Komma-Feld."
+  (let* ((text (concat "- yaḥ, relative pronoun, \"which\", intro\n"
+                       "* śūnyatām, noun, \"emptiness\", note\n"
+                       "tām, pronoun, \"that\", plain line\n"))
+         (result (tibetan-analysis--parse-claude-vocabulary text)))
+    (should (= (length result) 3))
+    (should (equal (car (nth 0 result)) "yaḥ"))
+    (should (equal (car (nth 1 result)) "śūnyatām"))
+    (should (equal (car (nth 2 result)) "tām"))
+    ;; Volle Zeile OHNE das Bullet (der Renderer zeigt sie an).
+    (should (string-match-p "\\`yaḥ, relative" (cdr (nth 0 result))))))
+
 (ert-deftest tibetan-claude-vocabulary-parse-skips-blanks-and-separators ()
   "Blank lines and `---' separators are skipped."
   (let* ((text (concat "\n"
