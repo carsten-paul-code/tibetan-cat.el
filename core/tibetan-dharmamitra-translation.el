@@ -357,6 +357,23 @@ missing.  This predicate triggers when EITHER side needs work."
       (tibetan-dharmamitra-translation-needs-request-p
        analysis-file "Sanskrit")))
 
+(defun tibetan-dharmamitra-translation--input-encoding (file)
+  "Return the DM chat-translate input encoding for FILE's document.
+
+Sanskrit-Kaskade C4 (2026-09-24): a `#+SOURCE_LANG: sa' document
+sends \"iast\" so DM's server-side detection cannot misread short
+IAST lines; everything else keeps \"auto\" — the request bodies of
+every existing Tibetan corpus stay byte-identical (cache keys
+unchanged).  Resolution order as `--target-lang': the file itself,
+then its `#+SOURCE:' link.  Never signals."
+  (if (and file
+           (fboundp 'tibetan-analysis--resolve-source-lang)
+           (condition-case nil
+               (equal (tibetan-analysis--resolve-source-lang file) "sa")
+             (error nil)))
+      "iast"
+    "auto"))
+
 (defun tibetan-dharmamitra-translation--target-lang (file)
   "Return the DM chat-translate target language for FILE's document.
 
@@ -415,6 +432,9 @@ Returns t on successful write, nil otherwise."
                         tibetan-text
                         :target-lang
                         (tibetan-dharmamitra-translation--target-lang
+                         analysis-file)
+                        :input-encoding
+                        (tibetan-dharmamitra-translation--input-encoding
                          analysis-file))))
       (when (and translation (not (string-empty-p translation)))
         (tibetan-dharmamitra-translation--write-section
@@ -568,6 +588,9 @@ file's `#+SOURCE:' link), nothing fires.  Soft-guarded via fboundp."
                 sentence-text
                 :target-lang
                 (tibetan-dharmamitra-translation--target-lang
+                 (or (car child-files) sent-file))
+                :input-encoding
+                (tibetan-dharmamitra-translation--input-encoding
                  (or (car child-files) sent-file)))
              (error
               (message "DharmaMitra sentence request failed (Sentence %s): %s"
@@ -626,6 +649,9 @@ limit.  Target language from the document (B-0.2).  Defers under
                   section-text
                   :target-lang
                   (tibetan-dharmamitra-translation--target-lang
+                   (car files))
+                  :input-encoding
+                  (tibetan-dharmamitra-translation--input-encoding
                    (car files)))
                (error
                 (message "DharmaMitra section request failed (%s): %s"

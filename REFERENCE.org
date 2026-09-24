@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-24T14:21:49
+#+DATE: 2026-09-24T14:23:32
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  77 modules  ·  1473 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  77 modules  ·  1474 forms
 
 Regenerated automatically by:
 
@@ -32,7 +32,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#config/tibetan-keybindings.el][config/tibetan-keybindings.el]]  (3)
   - [[#config/tibetan-menu.el][config/tibetan-menu.el]]  (1)
   - [[#core/tibetan-dharmamitra-api.el][core/tibetan-dharmamitra-api.el]]  (13)
-  - [[#core/tibetan-dharmamitra-translation.el][core/tibetan-dharmamitra-translation.el]]  (14)
+  - [[#core/tibetan-dharmamitra-translation.el][core/tibetan-dharmamitra-translation.el]]  (15)
   - [[#core/tibetan-org-structure.el][core/tibetan-org-structure.el]]  (37)
   - [[#core/tibetan-sanskrit-parallel-dharmamitra.el][core/tibetan-sanskrit-parallel-dharmamitra.el]]  (22)
   - [[#core/tibetan-sanskrit-parallel.el][core/tibetan-sanskrit-parallel.el]]  (24)
@@ -3274,10 +3274,26 @@ absent (DM Sanskrit fire missed), the gate returned nil and
 `* DharmaMitra Translation (Sanskrit)' stayed permanently
 missing.  This predicate triggers when EITHER side needs work.
 
-** ~tibetan-dharmamitra-translation--target-lang~  /function/
+** ~tibetan-dharmamitra-translation--input-encoding~  /function/
 :PROPERTIES:
 :KIND: defun
 :LINE: 360
+:SIGNATURE: (tibetan-dharmamitra-translation--input-encoding file)
+:END:
+
+Return the DM chat-translate input encoding for FILE's document.
+
+Sanskrit-Kaskade C4 (2026-09-24): a `#+SOURCE_LANG: sa' document
+sends "iast" so DM's server-side detection cannot misread short
+IAST lines; everything else keeps "auto" — the request bodies of
+every existing Tibetan corpus stay byte-identical (cache keys
+unchanged).  Resolution order as `--target-lang': the file itself,
+then its `#+SOURCE:' link.  Never signals.
+
+** ~tibetan-dharmamitra-translation--target-lang~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 377
 :SIGNATURE: (tibetan-dharmamitra-translation--target-lang file)
 :END:
 
@@ -3298,7 +3314,7 @@ translation fire.
 ** ~tibetan-dharmamitra-translation-fire-tibetan~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 392
+:LINE: 409
 :SIGNATURE: (tibetan-dharmamitra-translation-fire-tibetan tibetan-text analysis-file)
 :AUTOLOAD: t
 :END:
@@ -3324,7 +3340,7 @@ Returns t on successful write, nil otherwise.
 ** ~tibetan-dharmamitra-translation-fire-sanskrit~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 428
+:LINE: 448
 :SIGNATURE: (tibetan-dharmamitra-translation-fire-sanskrit sanskrit-text analysis-file)
 :AUTOLOAD: t
 :END:
@@ -3354,7 +3370,7 @@ Returns t on successful write, nil otherwise.
 ** ~tibetan-dharmamitra-translation-fire-for-segment~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 477
+:LINE: 497
 :SIGNATURE: (tibetan-dharmamitra-translation-fire-for-segment tibetan-text analysis-file &optional source-file seg-id force)
 :AUTOLOAD: t
 :END:
@@ -3390,7 +3406,7 @@ via fboundp — this core module must load without persist/.
 ** ~tibetan-dharmamitra-translation-fire-tibetan-sentence~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 535
+:LINE: 555
 :SIGNATURE: (tibetan-dharmamitra-translation-fire-tibetan-sentence sentence-text sent-num seg-nums child-files sent-file &optional force)
 :END:
 
@@ -3415,7 +3431,7 @@ file's `#+SOURCE:' link), nothing fires.  Soft-guarded via fboundp.
 ** ~tibetan-dharmamitra-translation-fire-section~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 599
+:LINE: 622
 :SIGNATURE: (tibetan-dharmamitra-translation-fire-section section-text label
                                                      files
                                                      &optional force)

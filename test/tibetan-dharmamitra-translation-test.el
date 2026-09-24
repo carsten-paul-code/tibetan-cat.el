@@ -711,6 +711,72 @@ NOTHING (preserve pattern)."
            ,@body)
        (delete-directory dir t))))
 
+(defmacro tibetan-dm-trans-test--with-sa-source (&rest body)
+  "Bind DIR, SOURCE-FILE (sa + de) und ANALYSIS-FILE (#+SOURCE→it)."
+  (declare (indent 0))
+  `(let* ((dir (make-temp-file "tibetan-dm-sa-" t))
+          (source-file (expand-file-name "quelle.org" dir))
+          (analysis-file (expand-file-name "sent-001.org" dir)))
+     (unwind-protect
+         (progn
+           (with-temp-file source-file
+             (insert "#+TITLE: Quelle\n#+TIBETAN_LAYOUT: cascade\n"
+                     "#+SOURCE_LANG: sa\n#+TIBETAN_TARGET_LANG: de\n\n"
+                     "* Tibetan Text\n"))
+           (with-temp-file analysis-file
+             (insert "#+TITLE: Sentence 1 Analysis\n"
+                     "#+SOURCE: [[file:quelle.org::*Sentence 1][Sentence 1]]\n\n"
+                     "* Tibetan Analysis\n** DharmaMitra Translation\n"
+                     "[Awaiting DharmaMitra…]\n"))
+           ,@body)
+       (delete-directory dir t))))
+
+(ert-deftest tibetan-dm-trans-input-encoding-resolver ()
+  "C4 (Sanskrit-Kaskade, 2026-09-24): der Encoding-Resolver —
+sa-Dokument → \"iast\", sonst \"auto\" (Auflösung wie
+--target-lang: Datei selbst → #+SOURCE-Link; signalisiert nie)."
+  (tibetan-dm-trans-test--with-sa-source
+    (should (equal "iast"
+                   (tibetan-dharmamitra-translation--input-encoding
+                    analysis-file)))
+    (should (equal "iast"
+                   (tibetan-dharmamitra-translation--input-encoding
+                    source-file))))
+  (tibetan-dm-trans-test--with-de-source
+    (should (equal "auto"
+                   (tibetan-dharmamitra-translation--input-encoding
+                    analysis-file))))
+  (should (equal "auto"
+                 (tibetan-dharmamitra-translation--input-encoding nil))))
+
+(ert-deftest tibetan-dm-trans-sentence-fire-threads-iast-encoding ()
+  "C4: fire-tibetan-sentence reicht für sa-Dokumente
+:input-encoding \"iast\" (+ german) an chat-translate durch."
+  (let ((captured-enc 'missing) (captured-lang 'missing))
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+               (lambda (_text &rest args)
+                 (setq captured-enc (plist-get args :input-encoding)
+                       captured-lang (plist-get args :target-lang))
+                 "Die Leerheit der Gegebenheiten…")))
+      (tibetan-dm-trans-test--with-sa-source
+        (tibetan-dharmamitra-translation-fire-tibetan-sentence
+         "dharmāṇāṃ śūnyatā ।" 1 '(1) (list analysis-file) nil t)
+        (should (equal "iast" captured-enc))
+        (should (equal "german" captured-lang))))))
+
+(ert-deftest tibetan-dm-trans-bo-encoding-stays-auto ()
+  "C4-Lock: bo-Dokumente senden weiterhin \"auto\" (bzw. lassen den
+Default) — Request-Bodies der Bestandskorpora unverändert."
+  (let ((captured 'missing))
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+               (lambda (_text &rest args)
+                 (setq captured (plist-get args :input-encoding))
+                 "Von mir wurde die Arbeit getan.")))
+      (tibetan-dm-trans-test--with-de-source
+        (tibetan-dharmamitra-translation-fire-tibetan
+         "བདག་གིས་ལས་བྱས།" analysis-file)
+        (should (member captured '(nil "auto")))))))
+
 (ert-deftest tibetan-dm-trans-target-lang-maps-de-to-german ()
   "`--target-lang' maps de→german, everything else→english."
   (skip-unless (fboundp 'tibetan-analysis--read-source-metadata))
