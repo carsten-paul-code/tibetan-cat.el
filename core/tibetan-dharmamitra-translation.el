@@ -454,7 +454,14 @@ Returns t on successful write, nil otherwise."
                        (tibetan-sanskrit-parallel--placeholder-text-p
                         sanskrit-text)))
              analysis-file)
-    (let ((translation (tibetan-dharmamitra-api-chat-translate sanskrit-text)))
+    ;; A4 (2026-09-24): thread the resolved target language — this
+    ;; leaf was the only DM fire without it, so Sanskrit output came
+    ;; back English even in #+TIBETAN_TARGET_LANG: de documents.
+    (let ((translation (tibetan-dharmamitra-api-chat-translate
+                        sanskrit-text
+                        :target-lang
+                        (tibetan-dharmamitra-translation--target-lang
+                         analysis-file))))
       (when (and translation (not (string-empty-p translation)))
         (tibetan-dharmamitra-translation--write-section
          analysis-file translation "Sanskrit")))))

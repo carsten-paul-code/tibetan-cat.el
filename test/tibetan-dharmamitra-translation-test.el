@@ -762,6 +762,36 @@ NOTHING (preserve pattern)."
          "བདག་གིས་ལས་བྱས།" 5 '(5) (list analysis-file) nil t)
         (should (equal "german" captured))))))
 
+(ert-deftest tibetan-dm-trans-fire-sanskrit-passes-target-lang ()
+  "A4 (2026-09-24): `fire-sanskrit' muss die aufgelöste Zielsprache
+an chat-translate durchreichen — bisher fehlte :target-lang, DM
+lieferte auch in de-Dokumenten Englisch (die drei Tibetisch-Leaves
+machen es längst richtig)."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-sanskrit))
+  (let ((captured 'missing))
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+               (lambda (_text &rest args)
+                 (setq captured (plist-get args :target-lang))
+                 "Hier ist ein Bodhisattva von Natur aus…")))
+      (tibetan-dm-trans-test--with-de-source
+        (tibetan-dharmamitra-translation-fire-sanskrit
+         "iha bodhisattvaḥ prakṛtyaiva" analysis-file)
+        (should (equal "german" captured))))))
+
+(ert-deftest tibetan-dm-trans-fire-sanskrit-english-without-header ()
+  "A4-Gegentest: ohne #+TIBETAN_TARGET_LANG bleibt es bei english."
+  (skip-unless (fboundp 'tibetan-dharmamitra-translation-fire-sanskrit))
+  (let ((captured 'missing))
+    (cl-letf (((symbol-function 'tibetan-dharmamitra-api-chat-translate)
+               (lambda (_text &rest args)
+                 (setq captured (plist-get args :target-lang))
+                 "Here a bodhisattva by nature…")))
+      (tibetan-dm-trans-test--with-analysis-file
+          (tibetan-dm-trans-test--baseline-analysis)
+        (tibetan-dharmamitra-translation-fire-sanskrit
+         "iha bodhisattvaḥ prakṛtyaiva" analysis-file)
+        (should (equal "english" captured))))))
+
 (ert-deftest tibetan-dharmamitra-writer-survives-stale-buffer ()
   "The nested-Tibetan DM writer lands cleanly when the analysis file
 changed on disk behind a live visiting buffer (the write-region /
