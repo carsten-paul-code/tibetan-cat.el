@@ -257,6 +257,141 @@ Tibetan sentence', Wylie-Zeile vorhanden wenn konvertierbar)."
             (should (string-match-p "Classical Tibetan sentence" user))))
       (delete-directory dir t))))
 
+;; ----------------------------------------------------------------------------
+;; C3 — Landung: Word Analysis + Regenerate-after-Land
+;; ----------------------------------------------------------------------------
+
+(defconst tibetan-sanskrit-cascade-test--response
+  "## Translation
+⟦1⟧Die Leerheit der Gegebenheiten ist das Eigenwesen⟦/1⟧ — ⟦2⟧weder aus sich noch aus anderem⟦/2⟧.
+
+### Segment 1
+Die Leerheit der Gegebenheiten ist das Eigenwesen.
+
+### Segment 2
+Weder aus sich noch aus anderem.
+
+## Word Analysis
+### Segment 1
+dharmāṇām śūnyatā svabhāvaḥ
+- dharmāṇām — dharma; N.GEN.PL
+- śūnyatā — śūnyatā; N.NOM.SG
+- svabhāvaḥ — svabhāva; N.NOM.SG
+
+### Segment 2
+na svataḥ na api parataḥ
+- na — na; IND
+- svataḥ — svatas; IND
+- api — api; IND
+- parataḥ — paratas; IND
+
+## Vocabulary
+### Segment 1
+dharmāṇām, noun, \"Gegebenheiten\", Genitiv Plural
+śūnyatā, noun, \"Leerheit\", Abstraktum
+
+### Segment 2
+svataḥ, indeclinable, \"aus sich\", Ablativadverb
+
+## Grammar
+Nominalsatz; die Negationen verteilen sich chiastisch.
+
+### Segment 1
+- Prädikatsnomen im Nominativ.
+
+### Segment 2
+- Elliptische Fortführung.
+
+## Concept Notes
+[No notable concepts in this passage]"
+  "Gecannte sa-Satz-Antwort im vollen C2-Kontrakt.")
+
+(ert-deftest tibetan-sanskrit-cascade-land-writes-word-analysis ()
+  "C3: die Landung schreibt `** Word Analysis' (### → *** demotet)
+UND das Regenerate-after-Land materialisiert die Glossentabellen
+daraus (Padapāṭha Zeile 1, Morph Zeile 3, Claude-Glosse Zeile 2)."
+  (tibetan-sanskrit-cascade-test--with-source
+    (let ((file (tibetan-cascade--create-file
+                 1 '((1 . "dharmāṇāṃ śūnyatā svabhāvaḥ ।")
+                     (2 . "na svato nāpi parataḥ ॥"))
+                 src)))
+      (should (tibetan-cascade--land-response
+               tibetan-sanskrit-cascade-test--response
+               (list :sent-num 1 :seg-nums '(1 2)
+                     :sent-file file :cascade t)))
+      (let ((s (tibetan-sanskrit-cascade-test--file-string file)))
+        ;; Word Analysis landed, org-demoted.
+        (should (string-match-p "^\\*\\* Word Analysis$" s))
+        (should (string-match-p "^\\*\\*\\* Segment 1$" s))
+        (should (string-match-p "- dharmāṇām — dharma; N\\.GEN\\.PL" s))
+        (should-not (string-match-p "^### Segment" s))
+        ;; Spans landed.
+        (should (string-match-p
+                 "⟦1⟧.*Die Leerheit der Gegebenheiten" s))
+        ;; Regenerate-after-Land: tables carry padapāṭha + morph +
+        ;; the Claude gloss (row 2 via the vocabulary tier).
+        (should (string-match-p "| dharmāṇām" s))
+        (should (string-match-p "| N\\.GEN\\.PL" s))
+        (should (string-match-p "Gegebenheiten" s))))))
+
+(ert-deftest tibetan-sanskrit-cascade-land-never-refires ()
+  "C3-Loop-Guard: das Regenerate nach der Landung feuert NIE —
+auch bei einer Teilantwort, deren Stubs weiterhin als
+needs-request zählen (sonst Land→Regen→Fire-Schleife)."
+  (tibetan-sanskrit-cascade-test--with-source
+    (let ((file (tibetan-cascade--create-file
+                 1 '((1 . "dharmāṇāṃ śūnyatā svabhāvaḥ ।")
+                     (2 . "na svato nāpi parataḥ ॥"))
+                 src))
+          (fires 0) (requests 0))
+      (cl-letf (((symbol-function 'tibetan-cascade--fire-sentence)
+                 (lambda (&rest _) (cl-incf fires) 'stubbed))
+                ((symbol-function 'tibetan-sentence-claude--request)
+                 (lambda (&rest _) (cl-incf requests))))
+        ;; Teilantwort: Segment 2 ohne Span → Stub bleibt offen.
+        (tibetan-cascade--land-response
+         "## Translation\n⟦1⟧Nur Segment eins⟦/1⟧ hier.\n\n### Segment 1\nNur Segment eins."
+         (list :sent-num 1 :seg-nums '(1 2)
+               :sent-file file :cascade t)))
+      (should (= 0 fires))
+      (should (= 0 requests))
+      ;; Segment 1s gelandeter Span überlebt das Re-Render; Segment 2
+      ;; bleibt needs-request (Stub/Platzhalter — beide zählen so).
+      (should (string-match-p
+               "Nur Segment eins"
+               (tibetan-sanskrit-cascade-test--file-string file)))
+      (should (tibetan-cascade--rendering-needs-request-p file 2))
+      (should-not (tibetan-cascade--rendering-needs-request-p file 1)))))
+
+(ert-deftest tibetan-sanskrit-cascade-land-regenerates-bo-file ()
+  "C3 (bo-Gewinn): nach der Landung trägt die Reading-Zeile einer
+TIBETISCHEN Kaskaden-Datei sofort die Claude-Glosse — bisher
+erreichte frisch gelandetes Vokabular die Reading-Schicht erst
+beim manuellen Regenerate."
+  (let ((dir (make-temp-file "bo-land-" t)))
+    (unwind-protect
+        (let* ((src (expand-file-name "doc.org" dir))
+               (analysis (file-name-as-directory
+                          (expand-file-name "analysis" dir))))
+          (make-directory analysis t)
+          (with-temp-file src
+            (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                    "* Tibetan Text\n*** Sentence 1\n**** Segment 1\nབདག\n"))
+          (cl-letf (((symbol-function 'tibetan-cascade--fire-sentence)
+                     (lambda (&rest _) 'stubbed)))
+            (let ((file (tibetan-cascade--create-file 1 '((1 . "བདག"))
+                                                      src)))
+              (tibetan-cascade--land-response
+               (concat "## Translation\n⟦1⟧Ich selbst.⟦/1⟧\n\n"
+                       "### Segment 1\nIch selbst.\n\n"
+                       "## Vocabulary\n### Segment 1\n"
+                       "bdag, pronoun, \"ich selbst\", Reflexivum\n")
+               (list :sent-num 1 :seg-nums '(1)
+                     :sent-file file :cascade t))
+              (let ((s (tibetan-sanskrit-cascade-test--file-string file)))
+                (should (string-match-p "\\[ich selbst\\]" s))))))
+      (delete-directory dir t))))
+
 (provide 'tibetan-sanskrit-cascade-test)
 
 ;;; tibetan-sanskrit-cascade-test.el ends here

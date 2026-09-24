@@ -48,8 +48,12 @@
 (defvar tibetan-analysis--source-lang)
 (defvar tibetan-sanskrit-reading--word-analysis)
 (defvar tibetan-sentence-claude--system-prompt-sanskrit)
+(defvar tibetan-analysis-auto-regen-on-claude-arrival)
 (declare-function tibetan-analysis--resolve-source-lang
                   "tibetan-analysis-claude")
+(declare-function tibetan-analysis--sanitize-claude-body-stars
+                  "tibetan-analysis-claude")
+(declare-function tibetan-fresh-file-buffer "tibetan-utils")
 
 ;; The §184-handout gloss tables (Masterarbeit three-view plan,
 ;; 2026-09-15).  Soft — the emitter is fboundp-guarded and
@@ -1092,6 +1096,105 @@ nil when nothing is available for any segment."
     (when parts
       (mapconcat #'identity parts "\n\n"))))
 
+(defun tibetan-cascade--response-word-analysis-body (response)
+  "The `## Word Analysis' section body of RESPONSE, or nil.
+Extracted from the RAW response with plain ^##-bounds —
+`tibetan-sentence-claude--parse-response' is deliberately NOT
+extended (its known-heading scan keeps the two-file responses
+byte-identical)."
+  (when (and response (stringp response))
+    (with-temp-buffer
+      (insert response)
+      (goto-char (point-min))
+      (when (re-search-forward "^## Word Analysis[ \t]*$" nil t)
+        (let ((beg (progn (forward-line 1) (point)))
+              (end (if (re-search-forward "^## " nil t)
+                       (line-beginning-position)
+                     (point-max))))
+          (let ((body (string-trim (buffer-substring-no-properties
+                                    beg end))))
+            (and (not (string-empty-p body)) body)))))))
+
+(defun tibetan-cascade--write-word-analysis (file body)
+  "Write BODY as the `** Word Analysis' section of FILE.
+Placed at the end of `* Tibetan Analysis' (above `* Footnotes');
+an existing section is replaced.  `### Segment N' headers are
+demoted to `*** Segment N' (the md-h3 convention), line-leading
+star runs deeper than the section are left alone, shallower ones
+get the §5.38-C1b space prefix.  Writes through
+`tibetan-fresh-file-buffer' (§5.49 — never the raw
+find-file-noselect at a landing site)."
+  (when (and file (file-exists-p file) body (stringp body))
+    (let* ((org-body
+            (replace-regexp-in-string "^### \\(Segment [0-9]+\\)"
+                                      "*** \\1" body))
+           (safe (if (fboundp 'tibetan-analysis--sanitize-claude-body-stars)
+                     (tibetan-analysis--sanitize-claude-body-stars
+                      org-body 2)
+                   org-body))
+           (buf (if (fboundp 'tibetan-fresh-file-buffer)
+                    (tibetan-fresh-file-buffer file)
+                  (find-file-noselect file))))
+      (with-current-buffer buf
+        (save-excursion
+          (goto-char (point-min))
+          ;; Replace an existing section …
+          (if (re-search-forward "^\\*\\* Word Analysis[ \t]*$" nil t)
+              (let ((beg (progn (forward-line 1) (point)))
+                    (end (if (re-search-forward "^\\*\\{1,2\\} " nil t)
+                             (line-beginning-position)
+                           (point-max))))
+                (delete-region beg end)
+                (goto-char beg)
+                (insert (string-trim-right safe) "\n\n"))
+            ;; … or create it above * Footnotes.
+            (goto-char (point-min))
+            (if (re-search-forward "^\\* Footnotes" nil t)
+                (goto-char (line-beginning-position))
+              (goto-char (point-max))
+              (unless (bolp) (insert "\n")))
+            (insert "** Word Analysis\n"
+                    (string-trim-right safe) "\n\n")))
+        (save-buffer))
+      t)))
+
+(defun tibetan-cascade--regenerate-after-land (file)
+  "Pure preserve-regenerate of the cascade FILE after a landing.
+Materializes what just landed into the Reading layer: the Claude
+vocabulary reaches the Interlinear/gloss-table gloss tier, and for
+Sanskrit files the Word Analysis becomes padapāṭha tables (C3,
+2026-09-24 — before this, a cascade file showed fresh vocabulary
+only after a MANUAL regenerate; the auto-regen router only knew
+seg-/par- files).
+
+Deliberately calls `tibetan-cascade--regenerate' DIRECTLY, never
+`tibetan-cascade-reanalyze-file': that entry point carries the
+fire logic, and a PARTIAL landing leaves stubs that still count as
+needs-request — routing through it would loop
+Land→Regenerate→Fire→Land.  The pure regenerate never fires.
+Never signals (a failed re-render must not kill the landing)."
+  (condition-case nil
+      (let* ((source-file
+              (and (fboundp 'tibetan-sentence--source-file-from-analysis)
+                   (tibetan-sentence--source-file-from-analysis file)))
+             (sent-num
+              (and (fboundp 'tibetan-sentence--sent-id-from-filename)
+                   (tibetan-sentence--sent-id-from-filename file)))
+             (segs (and source-file sent-num
+                        (tibetan-cascade--segs-for-sentence
+                         source-file sent-num))))
+        (when (and segs (file-exists-p file))
+          ;; A live visiting buffer would shadow the on-disk write —
+          ;; drop it into sync afterwards via the fresh-buffer helper.
+          (tibetan-cascade--regenerate file sent-num segs source-file)
+          (let ((buf (get-file-buffer file)))
+            (when buf
+              (with-current-buffer buf
+                (unless (buffer-modified-p)
+                  (revert-buffer t t)))))
+          t))
+    (error nil)))
+
 (defun tibetan-cascade--land-response (response ctx)
   "Land a sentence-first RESPONSE into the ONE cascade file.
 CTX: (:sent-num N :seg-nums L :sent-file FILE :cascade t :force BOOL).
@@ -1122,7 +1225,25 @@ touched."
          (whole (plist-get parsed :translation-whole)))
     (ignore sent-num)
     (when (and parsed file (file-exists-p file))
-      ;; Sentence-level sections.
+      ;; Sanskrit-Kaskade C3 (2026-09-24): land the `## Word
+      ;; Analysis' section (padapāṭha + morphology) — the sent file
+      ;; mirrors `#+SOURCE_LANG: sa' since C1, so the resolver reads
+      ;; the file itself.  Gate: FORCE or section absent (idempotent
+      ;; second landing).
+      (when (and (fboundp 'tibetan-analysis--resolve-source-lang)
+                 (equal (tibetan-analysis--resolve-source-lang file)
+                        "sa"))
+        (let ((wa (tibetan-cascade--response-word-analysis-body
+                   response)))
+          (when (and wa
+                     (or force
+                         (not (and (fboundp 'tibetan-sentence--read-l2-body)
+                                   (tibetan-sentence--read-l2-body
+                                    file "Word Analysis")))))
+            (tibetan-cascade--write-word-analysis file wa))))
+      ;; Sentence-level sections.  The generic auto-regen router only
+      ;; knows seg-/par- files and would silently fail on a sent file
+      ;; — bound off; the cascade does its OWN re-render below.
       (let ((md (tibetan-sentence-claude--synthesize-segment-markdown
                  (list :translation
                        (and whole
@@ -1139,7 +1260,19 @@ touched."
         (when (and md (not (string-empty-p md))
                    (or force
                        (tibetan-analysis--claude-needs-request-p file)))
-          (tibetan-analysis--insert-claude-sections md file)))
+          (let ((tibetan-analysis-auto-regen-on-claude-arrival nil))
+            (tibetan-analysis--insert-claude-sections md file))))
+      ;; C3 (2026-09-24): ONE pure re-render so the landing reaches
+      ;; the Reading layer immediately — the Claude vocabulary hits
+      ;; the gloss tier, and a Sanskrit file materializes its
+      ;; padapāṭha tables from the just-written Word Analysis.
+      ;; Fire-free by construction (see --regenerate-after-land).
+      ;; Runs BEFORE the renderings write: the regenerate replaces
+      ;; still-needs-request placeholders freshly, so a missing-span
+      ;; stub written first would silently degrade to the generic
+      ;; `[Awaiting…]' — the §5.40 visible-stub intent would be lost
+      ;; at the only moment the stub appears.
+      (tibetan-cascade--regenerate-after-land file)
       ;; Subsegment renderings — span or visible stub, per-unit gated.
       ;; R6: dual-format writer — ⟦N⟧ line in new-layout files,
       ;; legacy subtree otherwise.
@@ -1481,6 +1614,12 @@ landing-gated per file (§5.38-M7)."
               (sent-num (plist-get s :sent-num))
               (seg-nums (plist-get s :seg-nums)))
           (when (and file (file-exists-p file))
+            ;; C3 (2026-09-24): re-render FIRST (fire-free — see
+            ;; --regenerate-after-land), then write spans/stubs and
+            ;; the slice — the regenerate replaces needs-request
+            ;; placeholders freshly and would degrade a stub written
+            ;; before it.
+            (tibetan-cascade--regenerate-after-land file)
             ;; Subsegment renderings (R6: dual-format writer).
             (dolist (n seg-nums)
               (when (or force
@@ -1519,10 +1658,12 @@ landing-gated per file (§5.38-M7)."
                                  (replace-regexp-in-string
                                   "⟦/?[0-9]+⟧" "" slice))))
                     (unless (string-empty-p plain)
-                      (tibetan-analysis--insert-claude-sections
-                       (format "## Translation\n(Sentence %s — %s chunk)\n%s\n"
-                               sent-num label plain)
-                       file)))))))))
+                      (let ((tibetan-analysis-auto-regen-on-claude-arrival
+                             nil))
+                        (tibetan-analysis--insert-claude-sections
+                         (format "## Translation\n(Sentence %s — %s chunk)\n%s\n"
+                                 sent-num label plain)
+                         file))))))))))
       t)))
 
 
