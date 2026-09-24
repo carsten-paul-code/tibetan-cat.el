@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-24T14:23:32
+#+DATE: 2026-09-24T14:27:46
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  77 modules  ·  1474 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  78 modules  ·  1483 forms
 
 Regenerated automatically by:
 
@@ -65,7 +65,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (154)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (29)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (72)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (76)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
@@ -84,6 +84,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#spec/generate-living-doc.el][spec/generate-living-doc.el]]  (10)
   - [[#spec/run-specs.el][spec/run-specs.el]]  (1)
   - [[#spec/suites/particle-analysis-spec.el][spec/suites/particle-analysis-spec.el]]  (1)
+  - [[#spec/suites/sanskrit-cascade-spec.el][spec/suites/sanskrit-cascade-spec.el]]  (5)
   - [[#spec/suites/sentence-first-spec.el][spec/suites/sentence-first-spec.el]]  (5)
   - [[#spec/suites/tigress-story-spec.el][spec/suites/tigress-story-spec.el]]  (5)
   - [[#spec/tibetan-bdd.el][spec/tibetan-bdd.el]]  (22)
@@ -16783,13 +16784,89 @@ split segment; Working Translation siblings are untouched; the
 concatenated Tibetan is preserved (the C1 splitter's contract).
 Returns (:segments-before N :segments-after M).
 
-** ~tibetan-cascade-import-comparative~  /function/  ⚡  ↗
+** ~tibetan-cascade--sanskrit-split-prose~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2040
-:SIGNATURE: (tibetan-cascade-import-comparative comparative-file output-file)
+:LINE: 2043
+:SIGNATURE: (tibetan-cascade--sanskrit-split-prose block)
+:END:
+
+BLOCK (IAST prose) as daṇḍa units, concatenation-preserving.
+Splits after ।, ॥ and the romanized |, || of many e-texts; each
+unit keeps its trailing daṇḍa run plus following whitespace (the
+`tibetan-cascade-split-shad-units' contract, transposed).  A
+daṇḍa-less block is ONE unit.  nil-safe.
+
+** ~tibetan-cascade--sanskrit-block-verse-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 2060
+:SIGNATURE: (tibetan-cascade--sanskrit-block-verse-p block)
+:END:
+
+Non-nil when BLOCK reads as a verse: ≥2 lines AND a double-daṇḍa
+(॥ or ||) close.  Everything else is prose.
+
+** ~tibetan-cascade--sanskrit-split-blocks~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 2067
+:SIGNATURE: (tibetan-cascade--sanskrit-split-blocks text)
+:END:
+
+TEXT as ((LABEL . (BLOCK…)) …) — section marker lines `# LABEL'
+open a new section; blank-line-separated paragraphs are blocks.
+Text before the first marker forms a section labeled "Text".
+
+** ~tibetan-cascade-import-sanskrit~  /function (cl)/  ⚡  ↗
+:PROPERTIES:
+:KIND: cl-defun
+:LINE: 2096
+:SIGNATURE: (tibetan-cascade-import-sanskrit input output-file &key title)
 :INTERACTIVE: t
 :AUTOLOAD: t
+:END:
+
+Import raw Sanskrit INPUT into the cascade CAT source OUTPUT-FILE.
+
+Sanskrit-Kaskade D1 (2026-09-24).  INPUT is a string (or,
+interactively, the active region / a file's contents), mixed
+IAST/Devanagari — normalized to IAST via
+`tibetan-sanskrit-script-normalize'.  Structure rules, all
+deterministic:
+
+  - a line `# LABEL' opens a new `** Section LABEL' (e.g.
+    `# PP ad MMK 24.8'); the drawer carries a SEQUENTIAL
+    `:LOPEZ_SECTION:' integer — the stitcher/§-view key on ints,
+    the heading text carries the real reference;
+  - blank-line paragraphs are blocks; a block of ≥2 lines closed by
+    ॥/|| is a VERSE: each line = one pāda = one `**** Segment', the
+    block = one `*** Sentence' (stanza);
+  - any other block is PROSE: each daṇḍa unit (।/॥/|/||) = one
+    Segment = its OWN Sentence (singletons fire sentence-level
+    since B-1.2; joining units into larger sentences is hand work
+    in the source, as with Tibetan);
+  - sentence and segment numbers are GLOBAL from 1; every segment
+    is daṇḍa-terminated as written, so the cascade's shad-less
+    one-unit contract applies per segment.
+
+Headers written: `#+TIBETAN_LAYOUT: cascade', `#+SOURCE_LANG: sa',
+`#+TIBETAN_TARGET_LANG: de', TITLE.  Refuses to overwrite an
+existing OUTPUT-FILE (hand-owned once created — the
+import-comparative rule).  Empfehlung: EIN Belegstellen-Dokument
+je Vorhaben und ein EIGENER Ordner je Quelle — die Stitcher-
+Ausgabenamen sind pro analysis/-Ordner fix, und
+`tibetan-analysis-make-short-name' kollabiert ähnliche Dateinamen
+(MMK-…) auf denselben Suffix.
+
+Returns (:sections N :sentences N :segments N :file OUTPUT-FILE).
+
+** ~tibetan-cascade-import-comparative~  /function/  ⚡
+:PROPERTIES:
+:KIND: defun
+:LINE: 2196
+:SIGNATURE: (tibetan-cascade-import-comparative comparative-file output-file)
+:INTERACTIVE: t
 :END:
 
 One-time import of a §-comparative document into a cascade CAT source.
@@ -16817,7 +16894,7 @@ hand-owned from the moment it exists.  Returns
 ** ~tibetan-cascade--sentence-lopez-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2156
+:LINE: 2312
 :SIGNATURE: (tibetan-cascade--sentence-lopez-section source-file sent-num)
 :END:
 
@@ -16826,7 +16903,7 @@ The :LOPEZ_SECTION: of the Section wrapping SENT-NUM, or nil.
 ** ~tibetan-cascade--section-refs-block~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2176
+:LINE: 2332
 :SIGNATURE: (tibetan-cascade--section-refs-block sentence source-file)
 :END:
 
@@ -16842,7 +16919,7 @@ anything along the chain is missing.
 ** ~tibetan-cascade--schedule-dm-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2249
+:LINE: 2405
 :SIGNATURE: (tibetan-cascade--schedule-dm-section chunk files force)
 :END:
 
@@ -16853,7 +16930,7 @@ per SECTION instead of one per sentence.
 ** ~tibetan-cascade--fire-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2273
+:LINE: 2429
 :SIGNATURE: (tibetan-cascade--fire-section chunk source-file folder
                                       &optional force)
 :END:
@@ -16868,7 +16945,7 @@ flavor); DM rides the same claim at SECTION granularity.  Returns
 ** ~tibetan-cascade-fire-sections~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 2340
+:LINE: 2496
 :SIGNATURE: (tibetan-cascade-fire-sections &optional force)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -17006,7 +17083,7 @@ Tibetan pair.  Constant per document.
 ** ~tibetan-sentence-claude--dm-schedule-count~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 2246
+:LINE: 2402
 :END:
 
 /(no docstring)/
@@ -17014,7 +17091,7 @@ Tibetan pair.  Constant per document.
 ** ~tibetan-dharmamitra-sentence-request-delay~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 2247
+:LINE: 2403
 :END:
 
 /(no docstring)/
@@ -20116,6 +20193,61 @@ Directory containing Tibetan CAT data files.
 :END:
 
 Get particle annotation for WORD using analysis-persist function.
+
+
+* spec/suites/sanskrit-cascade-spec.el
+:PROPERTIES:
+:CUSTOM_ID: spec/suites/sanskrit-cascade-spec.el
+:SOURCE_PATH: /Users/cp/tibetan-cat.el/spec/suites/sanskrit-cascade-spec.el
+:END:
+
+** ~sanskrit-cascade-spec--corpus~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 77
+:SIGNATURE: (sanskrit-cascade-spec--corpus dir)
+:END:
+
+Ein sa-Quelldokument (1 Section, 1 Satz, 2 Segmente); Pfad-Plist.
+
+** ~sanskrit-cascade-spec--read~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 98
+:SIGNATURE: (sanskrit-cascade-spec--read path)
+:END:
+
+/(no docstring)/
+
+** ~sanskrit-cascade-spec--run~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 101
+:SIGNATURE: (sanskrit-cascade-spec--run paths)
+:END:
+
+create-all + Satz-Fire mit gecannter Antwort; Ergebnis-Plist.
+
+** ~sanskrit-cascade-spec--response~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 28
+:DEFAULT: "## Translation
+⟦1⟧Die Leerheit der Gegebenheiten ist das Eigenwesen⟦/1⟧ — ⟦2⟧weder aus sich noch aus anderem⟦/2⟧.
+
+### 
+:END:
+
+Gecannte sa-Satz-Antwort im vollen C2-Kontrakt.
+
+** ~sanskrit-cascade-spec--dir~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 75
+:DEFAULT: nil
+:END:
+
+/(no docstring)/
 
 
 * spec/suites/sentence-first-spec.el

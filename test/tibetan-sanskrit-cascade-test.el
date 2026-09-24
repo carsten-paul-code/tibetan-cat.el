@@ -393,6 +393,99 @@ beim manuellen Regenerate."
       (delete-directory dir t))))
 
 ;; ----------------------------------------------------------------------------
+;; D1 — Importer: Rohtext → sa-Kaskaden-Quelle
+;; ----------------------------------------------------------------------------
+
+(defconst tibetan-sanskrit-cascade-test--import-input
+  "# PP ad MMK 24.8
+dve satye samupāśritya buddhānāṃ dharmadeśanā |
+lokasaṃvṛtisatyaṃ ca satyaṃ ca paramārthataḥ ||
+
+atra brūmaḥ | śūnyatāyāṃ prayojanaṃ tvaṃ na jānāsi |
+
+# MAv VI.28
+मोहः स्वभावावरणाद्धि संवृतिः सत्यं तया ख्याति यदेव कृत्रिमम् ।
+जगाद तत्संवृतिसत्यमित्यसौ मुनिः पदार्थं कृतकं च संवृतिम् ॥"
+  "Import-Fixture: Vers (IAST), Prosa (2 Daṇḍa-Units), Vers
+\(Devanagari) — zwei Sections über `# '-Markerzeilen.")
+
+(ert-deftest tibetan-sanskrit-cascade-import-structure ()
+  "D1: der Importer erzeugt die exakte Kaskaden-Struktur —
+** Section je Markerzeile mit :LOPEZ_SECTION:-Int-Drawer,
+*** Sentence (exakt 3 Sterne — Stitcher-Regex), **** Segment;
+Vers: Zeile = Pāda = Segment, Block = Satz; Prosa: Daṇḍa-Unit =
+eigener Satz; Nummern global fortlaufend; Header komplett."
+  (let* ((dir (make-temp-file "sa-import-" t))
+         (out (expand-file-name "belegstellen.org" dir)))
+    (unwind-protect
+        (progn
+          (let ((r (tibetan-cascade-import-sanskrit
+                    tibetan-sanskrit-cascade-test--import-input out
+                    :title "Sanskrit-Belegstellen")))
+            (should (equal 2 (plist-get r :sections)))
+            ;; Vers(1) + Prosa(2) + Vers(1) = 4 Sätze.
+            (should (equal 4 (plist-get r :sentences)))
+            ;; Vers1: 2 Pādas, Prosa: 2 Units, Vers2: 2 Pādas = 6.
+            (should (equal 6 (plist-get r :segments))))
+          (let ((s (tibetan-sanskrit-cascade-test--file-string out)))
+            ;; Header.
+            (should (string-match-p "^#\\+TIBETAN_LAYOUT: cascade$" s))
+            (should (string-match-p "^#\\+SOURCE_LANG: sa$" s))
+            (should (string-match-p "^#\\+TIBETAN_TARGET_LANG: de$" s))
+            (should (string-match-p "^#\\+TITLE: Sanskrit-Belegstellen$" s))
+            ;; Struktur.
+            (should (string-match-p "^\\* Tibetan Text$" s))
+            (should (string-match-p "^\\*\\* Section PP ad MMK 24\\.8$" s))
+            (should (string-match-p "^\\*\\* Section MAv VI\\.28$" s))
+            (should (string-match-p "^:LOPEZ_SECTION: 1$" s))
+            (should (string-match-p "^:LOPEZ_SECTION: 2$" s))
+            (dolist (n '(1 2 3 4))
+              (should (string-match-p
+                       (format "^\\*\\*\\* Sentence %d$" n) s)))
+            (dolist (n '(1 2 3 4 5 6))
+              (should (string-match-p
+                       (format "^\\*\\*\\*\\* Segment %d$" n) s)))
+            ;; Vers: Pāda-Zeilen als eigene Segmente.
+            (should (string-match-p
+                     "dve satye samupāśritya buddhānāṃ dharmadeśanā |" s))
+            ;; Prosa: Daṇḍa-Units einzeln.
+            (should (string-match-p "atra brūmaḥ |" s))
+            (should (string-match-p
+                     "śūnyatāyāṃ prayojanaṃ tvaṃ na jānāsi |" s))
+            ;; Devanagari normalisiert: keine Devanagari-BUCHSTABEN
+            ;; mehr (die Daṇḍas ।/॥ U+0964/65 bleiben absichtlich —
+            ;; skriptneutrale Interpunktion, Split-Anker).
+            (should-not (string-match-p "[ऀ-ॣ०-ॿ]" s))
+            (should (string-match-p "mohaḥ svabhāvāvaraṇāddhi" s))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sanskrit-cascade-import-refuses-overwrite ()
+  "D1: eine existierende Zieldatei ist hand-owned — Refusal."
+  (let* ((dir (make-temp-file "sa-import-" t))
+         (out (expand-file-name "belegstellen.org" dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file out (insert "HAND-OWNED\n"))
+          (should-error (tibetan-cascade-import-sanskrit
+                         "na svataḥ |" out)
+                        :type 'user-error)
+          (should (equal "HAND-OWNED\n"
+                         (tibetan-sanskrit-cascade-test--file-string
+                          out))))
+      (delete-directory dir t))))
+
+(ert-deftest tibetan-sanskrit-cascade-import-prose-concatenation ()
+  "D1-Splitter-Kontrakt: die Prosa-Units konkateniert ergeben den
+Block byte-genau (Daṇḍa verbleibt am Unit-Ende)."
+  (let ((block "atra brūmaḥ | śūnyatāyāṃ prayojanaṃ tvaṃ na jānāsi | kutaḥ ॥"))
+    (should (equal block
+                   (string-join
+                    (tibetan-cascade--sanskrit-split-prose block)
+                    "")))
+    (should (equal 3 (length
+                      (tibetan-cascade--sanskrit-split-prose block))))))
+
+;; ----------------------------------------------------------------------------
 ;; C5 — Drei-Sichten-Smoke: Stitcher über eine sa-Quelle
 ;; ----------------------------------------------------------------------------
 

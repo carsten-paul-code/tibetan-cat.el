@@ -2037,6 +2037,162 @@ Returns (:segments-before N :segments-after M)."
 ;; ============================================================================
 
 ;;;###autoload
+(declare-function tibetan-sanskrit-script-normalize
+                  "tibetan-sanskrit-script")
+
+(defun tibetan-cascade--sanskrit-split-prose (block)
+  "BLOCK (IAST prose) as daṇḍa units, concatenation-preserving.
+Splits after ।, ॥ and the romanized |, || of many e-texts; each
+unit keeps its trailing daṇḍa run plus following whitespace (the
+`tibetan-cascade-split-shad-units' contract, transposed).  A
+daṇḍa-less block is ONE unit.  nil-safe."
+  (when (and block (stringp block)
+             (not (string-empty-p (string-trim block))))
+    (let ((units '())
+          (start 0))
+      (while (string-match "[।॥|]+[ \t\n]*" block start)
+        (push (substring block start (match-end 0)) units)
+        (setq start (match-end 0)))
+      (when (< start (length block))
+        (push (substring block start) units))
+      (nreverse units))))
+
+(defun tibetan-cascade--sanskrit-block-verse-p (block)
+  "Non-nil when BLOCK reads as a verse: ≥2 lines AND a double-daṇḍa
+\(॥ or ||) close.  Everything else is prose."
+  (let ((lines (split-string (string-trim block) "\n" t)))
+    (and (>= (length lines) 2)
+         (string-match-p "\\(?:॥\\|||\\)[ \t]*\\'" (string-trim block)))))
+
+(defun tibetan-cascade--sanskrit-split-blocks (text)
+  "TEXT as ((LABEL . (BLOCK…)) …) — section marker lines `# LABEL'
+open a new section; blank-line-separated paragraphs are blocks.
+Text before the first marker forms a section labeled \"Text\"."
+  (let ((sections '())
+        (label nil)
+        (chunk '()))
+    (cl-flet ((flush-block (acc)
+                (let ((b (string-trim (string-join (nreverse chunk) "\n"))))
+                  (setq chunk '())
+                  (if (string-empty-p b) acc (cons b acc)))))
+      (let ((blocks '()))
+        (dolist (line (split-string (or text "") "\n"))
+          (cond
+           ((string-match "\\`#[ \t]+\\(.+\\)\\'" line)
+            (setq blocks (flush-block blocks))
+            (when (or label blocks)
+              (push (cons (or label "Text") (nreverse blocks)) sections)
+              (setq blocks '()))
+            (setq label (string-trim (match-string 1 line))))
+           ((string-empty-p (string-trim line))
+            (setq blocks (flush-block blocks)))
+           (t (push line chunk))))
+        (setq blocks (flush-block blocks))
+        (when (or label blocks)
+          (push (cons (or label "Text") (nreverse blocks)) sections))))
+    (nreverse sections)))
+
+;;;###autoload
+(cl-defun tibetan-cascade-import-sanskrit (input output-file &key title)
+  "Import raw Sanskrit INPUT into the cascade CAT source OUTPUT-FILE.
+
+Sanskrit-Kaskade D1 (2026-09-24).  INPUT is a string (or,
+interactively, the active region / a file's contents), mixed
+IAST/Devanagari — normalized to IAST via
+`tibetan-sanskrit-script-normalize'.  Structure rules, all
+deterministic:
+
+  - a line `# LABEL' opens a new `** Section LABEL' (e.g.
+    `# PP ad MMK 24.8'); the drawer carries a SEQUENTIAL
+    `:LOPEZ_SECTION:' integer — the stitcher/§-view key on ints,
+    the heading text carries the real reference;
+  - blank-line paragraphs are blocks; a block of ≥2 lines closed by
+    ॥/|| is a VERSE: each line = one pāda = one `**** Segment', the
+    block = one `*** Sentence' (stanza);
+  - any other block is PROSE: each daṇḍa unit (।/॥/|/||) = one
+    Segment = its OWN Sentence (singletons fire sentence-level
+    since B-1.2; joining units into larger sentences is hand work
+    in the source, as with Tibetan);
+  - sentence and segment numbers are GLOBAL from 1; every segment
+    is daṇḍa-terminated as written, so the cascade's shad-less
+    one-unit contract applies per segment.
+
+Headers written: `#+TIBETAN_LAYOUT: cascade', `#+SOURCE_LANG: sa',
+`#+TIBETAN_TARGET_LANG: de', TITLE.  Refuses to overwrite an
+existing OUTPUT-FILE (hand-owned once created — the
+import-comparative rule).  Empfehlung: EIN Belegstellen-Dokument
+je Vorhaben und ein EIGENER Ordner je Quelle — die Stitcher-
+Ausgabenamen sind pro analysis/-Ordner fix, und
+`tibetan-analysis-make-short-name' kollabiert ähnliche Dateinamen
+\(MMK-…) auf denselben Suffix.
+
+Returns (:sections N :sentences N :segments N :file OUTPUT-FILE)."
+  (interactive
+   (list (if (use-region-p)
+             (buffer-substring-no-properties (region-beginning)
+                                             (region-end))
+           (with-temp-buffer
+             (insert-file-contents
+              (read-file-name "Sanskrit-Rohtext (Datei): " nil nil t))
+             (buffer-string)))
+         (read-file-name "Kaskaden-Quelle anlegen: ")
+         :title (read-string "Titel: " "Sanskrit-Belegstellen")))
+  (when (file-exists-p output-file)
+    (user-error
+     "%s already exists — the CAT source is hand-owned once created"
+     (file-name-nondirectory output-file)))
+  (unless (and input (stringp input)
+               (not (string-empty-p (string-trim input))))
+    (user-error "Empty Sanskrit input"))
+  (let* ((normalized (if (fboundp 'tibetan-sanskrit-script-normalize)
+                         (tibetan-sanskrit-script-normalize input)
+                       input))
+         (sections (tibetan-cascade--sanskrit-split-blocks normalized))
+         (sent-num 0) (seg-num 0) (sec-num 0))
+    (unless sections
+      (user-error "No Sanskrit content found in the input"))
+    (with-temp-file output-file
+      (insert (format "#+TITLE: %s\n" (or title "Sanskrit-Belegstellen")))
+      (insert "#+STARTUP: showall\n")
+      (insert "#+OPTIONS: toc:nil num:nil\n")
+      (insert "#+TIBETAN_LAYOUT: cascade\n")
+      (insert "#+SOURCE_LANG: sa\n")
+      (insert "#+TIBETAN_TARGET_LANG: de\n\n")
+      (insert "* Tibetan Text\n")
+      (dolist (sec sections)
+        (cl-incf sec-num)
+        (insert (format "** Section %s\n" (car sec)))
+        (insert ":PROPERTIES:\n"
+                (format ":LOPEZ_SECTION: %d\n" sec-num)
+                ":END:\n")
+        (dolist (block (cdr sec))
+          (if (tibetan-cascade--sanskrit-block-verse-p block)
+              ;; Verse: one sentence, one segment per pāda line.
+              (progn
+                (cl-incf sent-num)
+                (insert (format "*** Sentence %d\n" sent-num))
+                (dolist (line (split-string block "\n" t))
+                  (let ((pada (string-trim line)))
+                    (unless (string-empty-p pada)
+                      (cl-incf seg-num)
+                      (insert (format "**** Segment %d\n%s\n\n"
+                                      seg-num pada))))))
+            ;; Prose: each daṇḍa unit = its own sentence + segment.
+            (dolist (unit (tibetan-cascade--sanskrit-split-prose block))
+              (let ((u (string-trim unit)))
+                (unless (string-empty-p u)
+                  (cl-incf sent-num)
+                  (cl-incf seg-num)
+                  (insert (format "*** Sentence %d\n" sent-num))
+                  (insert (format "**** Segment %d\n%s\n\n"
+                                  seg-num u)))))))))
+    (when (called-interactively-p 'interactive)
+      (message "Sanskrit-Import: %d Section%s, %d Sätze, %d Segmente → %s"
+               sec-num (if (= 1 sec-num) "" "s") sent-num seg-num
+               (file-name-nondirectory output-file)))
+    (list :sections sec-num :sentences sent-num :segments seg-num
+          :file output-file)))
+
 (defun tibetan-cascade-import-comparative (comparative-file output-file)
   "One-time import of a §-comparative document into a cascade CAT source.
 
