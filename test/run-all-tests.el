@@ -200,6 +200,9 @@ body in the test suite (the transport self-tests only).")
 ;; Sanskrit-Kaskade: Devanagari→IAST transliteration (2026-09-24)
 (condition-case nil (require 'tibetan-sanskrit-script-test) (error nil))
 
+;; Sanskrit-Kaskade: Token-Provider (Padapāṭha/Word Analysis, 2026-09-24)
+(condition-case nil (require 'tibetan-sanskrit-reading-test) (error nil))
+
 ;; Throttled Claude request queue (concurrency cap + 429 retry)
 (condition-case nil (require 'tibetan-claude-queue-test) (error nil))
 

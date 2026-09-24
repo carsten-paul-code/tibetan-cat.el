@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-24T14:04:29
+#+DATE: 2026-09-24T14:07:50
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  76 modules  ·  1453 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  77 modules  ·  1460 forms
 
 Regenerated automatically by:
 
@@ -24,6 +24,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#analysis/tibetan-mitra-translation.el][analysis/tibetan-mitra-translation.el]]  (24)
   - [[#analysis/tibetan-particles-bialek.el][analysis/tibetan-particles-bialek.el]]  (8)
   - [[#analysis/tibetan-reading.el][analysis/tibetan-reading.el]]  (21)
+  - [[#analysis/tibetan-sanskrit-reading.el][analysis/tibetan-sanskrit-reading.el]]  (7)
   - [[#analysis/tibetan-sentence-tree.el][analysis/tibetan-sentence-tree.el]]  (10)
   - [[#analysis/tibetan-translation-engine.el][analysis/tibetan-translation-engine.el]]  (10)
   - [[#analysis/tibetan-translation-suggest.el][analysis/tibetan-translation-suggest.el]]  (2)
@@ -2331,6 +2332,104 @@ achung, ai/au ligatures, vocalic r/l, anusvāra, visarga, retroflex
 letters).  A syllable carrying one can not be a native Tibetan word
 — dictionary-lookup noise for it is suppressed (mai [(look up)],
 the W6 Portfolio finding).
+
+
+* analysis/tibetan-sanskrit-reading.el
+:PROPERTIES:
+:CUSTOM_ID: analysis/tibetan-sanskrit-reading.el
+:SOURCE_PATH: /Users/cp/tibetan-cat.el/analysis/tibetan-sanskrit-reading.el
+:END:
+
+** ~tibetan-sanskrit-reading--tokenize-surface~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 47
+:SIGNATURE: (tibetan-sanskrit-reading--tokenize-surface unit-text)
+:END:
+
+UNIT-TEXT (IAST) as a list of surface word strings.
+Whitespace-split; daṇḍas (।/॥ and romanized |/||) and clinging
+punctuation are stripped; empty results drop.  nil-safe.
+
+NOTE: the avagraha apostrophe is IAST-meaningful (so \='pi) — only
+EDGE punctuation is stripped, and a leading apostrophe followed by
+a letter survives via the word-character check.
+
+** ~tibetan-sanskrit-reading-parse-word-analysis~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 73
+:SIGNATURE: (tibetan-sanskrit-reading-parse-word-analysis body)
+:END:
+
+Parse a `** Word Analysis' BODY into a seg-keyed alist.
+Accepts both the landed org form (`*** Segment N' — after md-h3
+conversion) and the raw markdown form (`### Segment N') — the
+dual-format lesson of R5.  Per segment: the FIRST non-bullet line
+is the padapāṭha (whitespace-separated word sequence); each
+following `- WORD — LEMMA; MORPH' bullet contributes a morph
+label.  Returns ((SEG-NUM . (:pada (W…) :morph ((W . LABEL)…))) …)
+in file order; nil-safe.
+
+** ~tibetan-sanskrit-reading--analysis-for-unit~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 112
+:SIGNATURE: (tibetan-sanskrit-reading--analysis-for-unit unit-text)
+:END:
+
+The (:pada … :morph …) entry for UNIT-TEXT from the dynamic
+text-keyed index, or nil.
+
+** ~tibetan-sanskrit-reading-unit-tokens~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 121
+:SIGNATURE: (tibetan-sanskrit-reading-unit-tokens unit-text &optional word-analysis)
+:END:
+
+Token plists for the Sanskrit unit UNIT-TEXT.
+WORD-ANALYSIS is one segment's (:pada … :morph …) plist; when nil
+it is resolved from `tibetan-sanskrit-reading--word-analysis' by
+UNIT-TEXT.  Without an analysis: surface tokens (degraded pre-
+Claude form).  With one: padapāṭha tokens carrying :morph.  Never
+consults the Tibetan tokenizer or the Wylie-keyed dictionaries.
+
+** ~tibetan-sanskrit-reading-unit-line~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 140
+:SIGNATURE: (tibetan-sanskrit-reading-unit-line unit-text &optional word-analysis)
+:END:
+
+The `** Interlinear' line for the Sanskrit unit UNIT-TEXT.
+Padapāṭha words, each as `word [gloss]' when the Claude-gloss tier
+yields one (`tibetan-reading--gloss' — loaded by the dispatching
+caller); degrades to the plain surface line.  No ` /' suffix —
+IAST units carry no shad.
+
+** ~tibetan-sanskrit-reading--word-analysis~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 36
+:DEFAULT: nil
+:END:
+
+Text-keyed word analysis for the unit renderers, or nil.
+Alist ((UNIT-TEXT . (:pada (WORD…) :morph ((WORD . LABEL)…))) …),
+UNIT-TEXT `string-trim'-med.  Bound by the cascade regenerate from
+the file's preserved `** Word Analysis' body (never from window or
+init state — §5.53 batch/interactive parity).
+
+** ~tibetan-sanskrit-reading--punct-re~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 43
+:DEFAULT: "[।॥|/.,;:!?()\"'«»]+"
+:END:
+
+Punctuation stripped from token edges — daṇḍas (Unicode and the
+romanized |/|| of many e-texts) plus Western sentence punctuation.
 
 
 * analysis/tibetan-sentence-tree.el
