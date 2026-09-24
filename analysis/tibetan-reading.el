@@ -117,13 +117,42 @@ stream.  Curated whole tokens are never split (W4b authority rule)."
 (declare-function tibetan-steinert-available-p "tibetan-steinert" ())
 (declare-function tibetan-steinert-url "tibetan-steinert" (wylie))
 
+;; B4 (2026-09-24): the Sanskrit token provider — a HARD require by
+;; design (both modules are pure, no cycle: sanskrit-reading only
+;; declares tibetan-reading--gloss).  An fboundp fallback to the
+;; Tibetan tokenizer would be the forbidden divergent branch choice.
+(require 'tibetan-sanskrit-reading)
+
+(defvar tibetan-analysis--source-lang)
+
+(defun tibetan-reading--source-lang-sa-p ()
+  "Non-nil when the dynamic source language is Sanskrit.
+B4 (2026-09-24): bound by the cascade scaffold/regenerate from the
+SOURCE document's `#+SOURCE_LANG:' header — never from load or
+window state, so batch and interactive runs dispatch identically."
+  (and (boundp 'tibetan-analysis--source-lang)
+       (equal tibetan-analysis--source-lang "sa")))
+
 (defun tibetan-reading--unit-tokens (unit-text)
   "Classified token plists for one shad unit, in order.
 Each: (:tibetan S :wylie W :kind particle|verb|word :label L
 :meaning M :curated-p BOOL :clitic (CL-WYLIE . CL-LABEL)|nil).
 :meaning is the ranked-lookup gloss the token cell carried
 \(curated-first after W1) — the combined Reading line renders it
-inline, so the layer IS the interlinear trot."
+inline, so the layer IS the interlinear trot.
+
+B4 (2026-09-24): a Sanskrit document (`#+SOURCE_LANG: sa')
+delegates to `tibetan-sanskrit-reading-unit-tokens' — a HARD
+require, no fboundp fallback: falling back to the Tibetan
+tokenizer would silently run Wylie-keyed dictionary lookups over
+IAST (na/ca/ma/sa hit Tibetan entries), the forbidden divergent
+branch choice (§5.52/§5.53)."
+  (if (tibetan-reading--source-lang-sa-p)
+      (tibetan-sanskrit-reading-unit-tokens unit-text)
+    (tibetan-reading--unit-tokens-bo unit-text)))
+
+(defun tibetan-reading--unit-tokens-bo (unit-text)
+  "The Tibetan body of `tibetan-reading--unit-tokens'."
   (let ((cells (and (fboundp 'tibetan-extract-vocabulary)
                     (condition-case nil
                         (tibetan-extract-vocabulary unit-text)
@@ -304,7 +333,17 @@ decorated Wylie + ★ + glosses per token (Carsten's 2026-08-12
 decision — the Wylie skeleton and the interlinear trot are one
 layer).  When LAST-UNIT-P, the unit's FINAL verb token is the
 sentence's main verb (`*x*'); every other verb wears `!x!'.  The
-line ends ` /' when the unit carries a trailing shad run."
+line ends ` /' when the unit carries a trailing shad run.
+
+B4 (2026-09-24): a Sanskrit document renders the plain
+`tibetan-sanskrit-reading-unit-line' instead — no Wylie
+decoration, no verb marking, no shad suffix."
+  (if (tibetan-reading--source-lang-sa-p)
+      (or (tibetan-sanskrit-reading-unit-line unit-text) "")
+    (tibetan-reading--decorated-unit-line-bo unit-text last-unit-p)))
+
+(defun tibetan-reading--decorated-unit-line-bo (unit-text last-unit-p)
+  "The Tibetan body of `tibetan-reading-decorated-unit-line'."
   (let* ((toks (tibetan-reading--unit-tokens unit-text))
          (last-verb (when last-unit-p
                       (cl-find-if (lambda (tk) (eq (plist-get tk :kind)

@@ -152,6 +152,30 @@ a Claude-classified noun with 'i → N.GEN."
                     :clitic ("'i" . "GEN"))
                   '(("rje" . "rje, noun, \"lord\", x"))))))
 
+(ert-deftest tibetan-gloss-table-token-label-prefers-morph-tier ()
+  "B4 (Sanskrit-Kaskade, 2026-09-24): ein Token mit :morph trägt
+das Morphologie-Label verbatim in Zeile 3 — NEUER erster Tier vor
+Partikel/NMLZ/V/Claude-POS.  Tibetische Tokens tragen nie :morph."
+  (should (equal "N.NOM.SG"
+                 (tibetan-gloss-table--token-label
+                  '(:tibetan "śūnyatā" :wylie "śūnyatā" :kind word
+                    :morph "N.NOM.SG"))))
+  (should (equal "V.PRS.3SG"
+                 (tibetan-gloss-table--token-label
+                  '(:tibetan "bhavati" :wylie "bhavati" :kind word
+                    :morph "V.PRS.3SG")))))
+
+(ert-deftest tibetan-gloss-table-token-label-unchanged-without-morph ()
+  "B4-Lock: ohne :morph bleibt die Tier-Kette byte-identisch
+\(Partikel-Label verbatim; Fallback `?')."
+  (should (equal "ERG"
+                 (tibetan-gloss-table--token-label
+                  '(:tibetan "གིས" :wylie "gis" :kind particle
+                    :label "ERG"))))
+  (should (equal "?"
+                 (tibetan-gloss-table--token-label
+                  '(:tibetan "ཆོས" :wylie "chos" :kind word)))))
+
 ;; ----------------------------------------------------------------------------
 ;; org-table renderer
 ;; ----------------------------------------------------------------------------

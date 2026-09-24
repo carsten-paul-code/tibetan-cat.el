@@ -210,5 +210,42 @@ dictionary behaviour."
                "chos \\[dharma\\]"
                (tibetan-reading-decorated-unit-line "ཆོས་བྱུང།"))))))
 
+(ert-deftest tibetan-reading-unit-tokens-dispatches-sa ()
+  "B4 (Sanskrit-Kaskade, 2026-09-24): bei gebundener Quellsprache
+\"sa\" delegiert --unit-tokens an den Sanskrit-Provider — der
+tibetische Tokenizer wird NIE berührt (Poison-Stub signalisiert)."
+  (let ((tibetan-analysis--source-lang "sa"))
+    (cl-letf (((symbol-function 'tibetan-extract-vocabulary)
+               (lambda (&rest _) (error "POISON: tibetan tokenizer"))))
+      (let ((toks (tibetan-reading--unit-tokens "dharmāṇāṃ śūnyatā ।")))
+        (should (equal '("dharmāṇāṃ" "śūnyatā")
+                       (mapcar (lambda (tk) (plist-get tk :wylie))
+                               toks)))))))
+
+(ert-deftest tibetan-reading-unit-tokens-bo-unchanged ()
+  "B4-Lock: ohne sa-Bindung läuft der tibetische Pfad unverändert
+über tibetan-extract-vocabulary."
+  (let ((tibetan-analysis--source-lang nil)
+        (called nil))
+    (cl-letf (((symbol-function 'tibetan-extract-vocabulary)
+               (lambda (_text) (setq called t)
+                 '(("བདག" . "self")))))
+      (let ((toks (tibetan-reading--unit-tokens "བདག")))
+        (should called)
+        (should (= 1 (length toks)))))))
+
+(ert-deftest tibetan-reading-decorated-lines-dispatch-sa ()
+  "B4: sa-Zeilen sind reine IAST-Zeilen — kein Wylie-Dekor
+\(=…=/~…~/!…!), kein ` /'-Suffix, tibetischer Tokenizer unberührt."
+  (let ((tibetan-analysis--source-lang "sa"))
+    (cl-letf (((symbol-function 'tibetan-extract-vocabulary)
+               (lambda (&rest _) (error "POISON: tibetan tokenizer"))))
+      (let ((lines (tibetan-reading-decorated-lines
+                    '("na svato nāpi parataḥ ।" "kutaḥ ॥"))))
+        (should (equal '("na svato nāpi parataḥ" "kutaḥ") lines))
+        (dolist (l lines)
+          (should-not (string-match-p "[=~!]" l))
+          (should-not (string-suffix-p " /" l)))))))
+
 (provide 'tibetan-reading-test)
 ;;; tibetan-reading-test.el ends here

@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-09-24T14:07:50
+#+DATE: 2026-09-24T14:09:47
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  77 modules  ·  1460 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  77 modules  ·  1464 forms
 
 Regenerated automatically by:
 
@@ -23,7 +23,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#analysis/tibetan-interlinear.el][analysis/tibetan-interlinear.el]]  (22)
   - [[#analysis/tibetan-mitra-translation.el][analysis/tibetan-mitra-translation.el]]  (24)
   - [[#analysis/tibetan-particles-bialek.el][analysis/tibetan-particles-bialek.el]]  (8)
-  - [[#analysis/tibetan-reading.el][analysis/tibetan-reading.el]]  (21)
+  - [[#analysis/tibetan-reading.el][analysis/tibetan-reading.el]]  (25)
   - [[#analysis/tibetan-sanskrit-reading.el][analysis/tibetan-sanskrit-reading.el]]  (7)
   - [[#analysis/tibetan-sentence-tree.el][analysis/tibetan-sentence-tree.el]]  (10)
   - [[#analysis/tibetan-translation-engine.el][analysis/tibetan-translation-engine.el]]  (10)
@@ -1149,7 +1149,7 @@ A trailing clitic's label is dot-appended (NMLZ.GEN, N.GEN).
 ** ~tibetan-gloss-table--strip-escapes~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 138
+:LINE: 144
 :SIGNATURE: (tibetan-gloss-table--strip-escapes s)
 :END:
 
@@ -1161,7 +1161,7 @@ lone backslash mid-sequence.
 ** ~tibetan-gloss-table--cell~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 145
+:LINE: 151
 :SIGNATURE: (tibetan-gloss-table--cell s)
 :END:
 
@@ -1172,7 +1172,7 @@ whitespace collapsed, `|' escaped as the org entity `\vert'
 ** ~tibetan-gloss-table--truncate-cell~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 165
+:LINE: 171
 :SIGNATURE: (tibetan-gloss-table--truncate-cell gloss)
 :END:
 
@@ -1185,7 +1185,7 @@ find the full gloss.
 ** ~tibetan-gloss-table--unit-rows~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 184
+:LINE: 190
 :SIGNATURE: (tibetan-gloss-table--unit-rows unit-text &optional vocab-alist)
 :END:
 
@@ -1201,7 +1201,7 @@ unit yields no tokens.
 ** ~tibetan-gloss-table--band-width~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 230
+:LINE: 236
 :SIGNATURE: (tibetan-gloss-table--band-width widths n)
 :END:
 
@@ -1212,7 +1212,7 @@ K-th column of any band; separators and edges cost 3·N + 1.
 ** ~tibetan-gloss-table--columns-per-band~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 241
+:LINE: 247
 :SIGNATURE: (tibetan-gloss-table--columns-per-band widths)
 :END:
 
@@ -1223,7 +1223,7 @@ column still renders alone.
 ** ~tibetan-gloss-table--format-rows~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 251
+:LINE: 257
 :SIGNATURE: (tibetan-gloss-table--format-rows rows)
 :END:
 
@@ -1241,7 +1241,7 @@ the segment visually and for org's table commands (§15 review,
 ** ~tibetan-gloss-table-render~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 296
+:LINE: 302
 :SIGNATURE: (tibetan-gloss-table-render units &optional vocab-alist)
 :END:
 
@@ -1254,7 +1254,7 @@ nothing renders.  VOCAB-ALIST feeds the Claude-POS label tier.
 ** ~tibetan-gloss-table-render-captioned~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 313
+:LINE: 319
 :SIGNATURE: (tibetan-gloss-table-render-captioned segs &optional vocab-alist
                                                   heading-level)
 :END:
@@ -1275,7 +1275,7 @@ feeds the Claude-POS tier.
 ** ~tibetan-gloss-table-cell-gloss-width~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 154
+:LINE: 160
 :TYPE: 'integer
 :GROUP: tibetan-cat
 :DEFAULT: 25
@@ -1292,7 +1292,7 @@ into 2-column bands, which is what fragmented the SS15 tables
 ** ~tibetan-gloss-table-max-width~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 212
+:LINE: 218
 :TYPE: 'integer
 :GROUP: tibetan-cat
 :DEFAULT: 160
@@ -2153,10 +2153,22 @@ stream.  Curated whole tokens are never split (W4b authority rule).
 
 Wrap WYLIE in `=…=' or `~…~' according to LABEL and context.
 
+** ~tibetan-reading--source-lang-sa-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 128
+:SIGNATURE: (tibetan-reading--source-lang-sa-p)
+:END:
+
+Non-nil when the dynamic source language is Sanskrit.
+B4 (2026-09-24): bound by the cascade scaffold/regenerate from the
+SOURCE document's `#+SOURCE_LANG:' header — never from load or
+window state, so batch and interactive runs dispatch identically.
+
 ** ~tibetan-reading--unit-tokens~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 120
+:LINE: 136
 :SIGNATURE: (tibetan-reading--unit-tokens unit-text)
 :END:
 
@@ -2167,10 +2179,26 @@ Each: (:tibetan S :wylie W :kind particle|verb|word :label L
 (curated-first after W1) — the combined Reading line renders it
 inline, so the layer IS the interlinear trot.
 
+B4 (2026-09-24): a Sanskrit document (`#+SOURCE_LANG: sa')
+delegates to `tibetan-sanskrit-reading-unit-tokens' — a HARD
+require, no fboundp fallback: falling back to the Tibetan
+tokenizer would silently run Wylie-keyed dictionary lookups over
+IAST (na/ca/ma/sa hit Tibetan entries), the forbidden divergent
+branch choice (§5.52/§5.53).
+
+** ~tibetan-reading--unit-tokens-bo~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 154
+:SIGNATURE: (tibetan-reading--unit-tokens-bo unit-text)
+:END:
+
+The Tibetan body of `tibetan-reading--unit-tokens'.
+
 ** ~tibetan-reading--claude-gloss~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 167
+:LINE: 196
 :SIGNATURE: (tibetan-reading--claude-gloss tok)
 :END:
 
@@ -2187,7 +2215,7 @@ Returns the first double-quoted field of the matched line
 ** ~tibetan-reading--sanskrit-token-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 195
+:LINE: 224
 :SIGNATURE: (tibetan-reading--sanskrit-token-p tok)
 :END:
 
@@ -2196,7 +2224,7 @@ Non-nil when TOK's Tibetan carries a Sanskrit-only sign.
 ** ~tibetan-reading--gloss~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 200
+:LINE: 229
 :SIGNATURE: (tibetan-reading--gloss tok)
 :END:
 
@@ -2219,7 +2247,7 @@ short, deliberate, and in the document's target language.
 ** ~tibetan-reading--linkify~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 243
+:LINE: 272
 :SIGNATURE: (tibetan-reading--linkify wylie tok)
 :END:
 
@@ -2231,7 +2259,7 @@ interlinears.
 ** ~tibetan-reading--render-token~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 257
+:LINE: 286
 :SIGNATURE: (tibetan-reading--render-token tok &optional main-verb-p)
 :END:
 
@@ -2248,7 +2276,7 @@ colors vanish.
 ** ~tibetan-reading-decorated-unit-line~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 301
+:LINE: 330
 :SIGNATURE: (tibetan-reading-decorated-unit-line unit-text &optional last-unit-p)
 :END:
 
@@ -2259,10 +2287,23 @@ layer).  When LAST-UNIT-P, the unit's FINAL verb token is the
 sentence's main verb (`*x*'); every other verb wears `!x!'.  The
 line ends ` /' when the unit carries a trailing shad run.
 
+B4 (2026-09-24): a Sanskrit document renders the plain
+`tibetan-sanskrit-reading-unit-line' instead — no Wylie
+decoration, no verb marking, no shad suffix.
+
+** ~tibetan-reading--decorated-unit-line-bo~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 345
+:SIGNATURE: (tibetan-reading--decorated-unit-line-bo unit-text last-unit-p)
+:END:
+
+The Tibetan body of `tibetan-reading-decorated-unit-line'.
+
 ** ~tibetan-reading-decorated-lines~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 322
+:LINE: 361
 :SIGNATURE: (tibetan-reading-decorated-lines units)
 :END:
 
@@ -2304,10 +2345,18 @@ The main verb is marked in the LAST unit only.
 
 /(no docstring)/
 
+** ~tibetan-analysis--source-lang~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 126
+:END:
+
+/(no docstring)/
+
 ** ~tibetan-analysis--target-lang~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 164
+:LINE: 193
 :END:
 
 /(no docstring)/
@@ -2315,7 +2364,7 @@ The main verb is marked in the LAST unit only.
 ** ~tibetan-analysis--claude-vocabulary-for-render~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 165
+:LINE: 194
 :END:
 
 /(no docstring)/
@@ -2323,7 +2372,7 @@ The main verb is marked in the LAST unit only.
 ** ~tibetan-reading--sanskrit-sign-re~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 187
+:LINE: 216
 :DEFAULT: "[ཱཻཽྲྀཷླྀཹཾཿྃཊཋཌཎཥ]"
 :END:
 

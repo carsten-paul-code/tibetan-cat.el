@@ -101,6 +101,12 @@ A trailing clitic's label is dot-appended (NMLZ.GEN, N.GEN)."
          (clitic (plist-get tok :clitic))
          (base
           (cond
+           ;; 0. Morphology label (Sanskrit-Kaskade B4, 2026-09-24):
+           ;;    a token carrying :morph (N.NOM.SG, V.PRS.3SG, IND —
+           ;;    from the landed Word Analysis) wins outright.
+           ;;    Tibetan tokens never carry the key — zero change
+           ;;    for every existing corpus.
+           ((plist-get tok :morph) (plist-get tok :morph))
            ;; 1. Native particle label, verbatim (ERG / GEN / …,
            ;;    CONV:* converbs).
            ((eq kind 'particle) (plist-get tok :label))
