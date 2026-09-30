@@ -5481,20 +5481,29 @@ the segment-level `tibetan-reanalyze-segment' contract."
             (tibetan-analysis--request-claude-translation tibetan-text filepath)
           (error (message "Claude translation skipped: %s"
                           (error-message-string err))))
-        (tibetan-analysis--maybe-fire-dm-for-par filepath tibetan-text)))))
+        ;; Explicit reanalysis (C-c u R) → FORCE, like the segment and
+        ;; cascade paths: a populated DM slot is refreshed for the
+        ;; current Tibetan text (2026-09-30, par-220 after resegmentation).
+        (tibetan-analysis--maybe-fire-dm-for-par filepath tibetan-text t)))))
 
-(defun tibetan-analysis--maybe-fire-dm-for-par (filepath tibetan-text)
+(defun tibetan-analysis--maybe-fire-dm-for-par (filepath tibetan-text &optional force)
   "Fire the DharmaMitra translation for the par file FILEPATH.
 2026-09-16 (Carsten: \"DharmaMitra ist leer\") — the par pipeline
 never fired DM; the handout's DM text came from a manual paste.
-Gates, in order: module present → nested section still a
-placeholder (`tibetan-dharmamitra-translation-needs-request-p',
+Gates, in order: module present → FORCE non-nil OR nested section
+still a placeholder (`tibetan-dharmamitra-translation-needs-request-p',
 the §5.29 populated-stays policy) → NOT #+TIBETAN_DEFER_MT
-(P1 portfolio protocol).  Errors degrade to a message — a DM
-hiccup must never fail the reanalysis."
+(P1 portfolio protocol; never overridden by FORCE).  FORCE is passed
+by explicit reanalysis (`tibetan-reanalyze-paragraph', `C-c u R') and
+by the batch path when Claude is re-requested, so the paragraph
+contract matches `tibetan-dharmamitra-translation-fire-for-segment'
+(2026-09-30: without it `C-c u R' could never refresh a populated slot
+after the paragraph's Tibetan text changed).  Errors degrade to a
+message — a DM hiccup must never fail the reanalysis."
   (when (and (fboundp 'tibetan-dharmamitra-translation-fire-tibetan)
              (fboundp 'tibetan-dharmamitra-translation-needs-request-p)
-             (tibetan-dharmamitra-translation-needs-request-p filepath)
+             (or force
+                 (tibetan-dharmamitra-translation-needs-request-p filepath))
              (not (and (fboundp 'tibetan-analysis--defer-mt-p)
                        (tibetan-analysis--defer-mt-p filepath))))
     (condition-case err
@@ -6001,8 +6010,11 @@ Returns plist (:file F :par-id ID :ok BOOL :error STR …)."
                 (error (message "Claude re-request failed for %s: %s"
                                 (file-name-nondirectory filepath)
                                 (error-message-string e2)))))
+            ;; Batch: FORCE the DM refresh exactly when Claude is
+            ;; re-requested explicitly (RE-REQUEST-CLAUDE = t), so
+            ;; `C-u C-c u r' refreshes both machine translations.
             (tibetan-analysis--maybe-fire-dm-for-par
-             filepath (plist-get data :tibetan))
+             filepath (plist-get data :tibetan) (eq re-request-claude t))
             `(:file ,filepath :par-id ,par-id :ok t
                     :claude-preserved ,(and has-any t)))
         (error

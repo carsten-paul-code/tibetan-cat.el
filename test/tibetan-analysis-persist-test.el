@@ -4174,5 +4174,52 @@ of the particle-map keywords, and the main-verb face exists."
   (let ((kw (car tibetan-analysis--reading-verb-font-lock-keywords)))
     (should (equal "\\(!\\)\\([^!\n]+\\)\\(!\\)" (car kw)))))
 
+;;; ---------------------------------------------------------------------
+;;; DharmaMitra gate for paragraph files (2026-09-30)
+;;; Regression: `C-c u R' on a par-NNN.org file never refreshed a
+;;; POPULATED `** DharmaMitra Translation' slot — the paragraph path
+;;; had no FORCE, unlike the segment/cascade paths.  Found on par-220
+;;; after the §220/§221 resegmentation (Masterarbeit, Uebergabe Defekt 12).
+
+(defmacro tibetan-analysis-test--with-dm-gate-mocks (populated &rest body)
+  "Run BODY with the DM gate collaborators mocked.
+POPULATED non-nil means `needs-request-p' reports a filled slot.
+`fire-tibetan' records its call in `fired' (bound for BODY)."
+  (declare (indent 1))
+  `(let ((fired nil))
+     (cl-letf (((symbol-function 'tibetan-dharmamitra-translation-fire-tibetan)
+                (lambda (text file) (setq fired (list text file)) t))
+               ((symbol-function 'tibetan-dharmamitra-translation-needs-request-p)
+                (lambda (&rest _) (not ,populated)))
+               ((symbol-function 'tibetan-analysis--defer-mt-p)
+                (lambda (&rest _) nil)))
+       ,@body)))
+
+(ert-deftest tibetan-analysis-dm-par-populated-not-refired-without-force ()
+  "Populated DM slot, no FORCE → left alone (populated-stays policy)."
+  (tibetan-analysis-test--with-dm-gate-mocks t
+    (tibetan-analysis--maybe-fire-dm-for-par "/tmp/par-220.org" "ཀུན་རྫོབ།")
+    (should (null fired))))
+
+(ert-deftest tibetan-analysis-dm-par-populated-refired-with-force ()
+  "Populated DM slot, FORCE → fired anyway (explicit reanalysis)."
+  (tibetan-analysis-test--with-dm-gate-mocks t
+    (tibetan-analysis--maybe-fire-dm-for-par "/tmp/par-220.org" "ཀུན་རྫོབ།" t)
+    (should (equal fired '("ཀུན་རྫོབ།" "/tmp/par-220.org")))))
+
+(ert-deftest tibetan-analysis-dm-par-empty-fired-without-force ()
+  "Empty / placeholder DM slot → fired even without FORCE."
+  (tibetan-analysis-test--with-dm-gate-mocks nil
+    (tibetan-analysis--maybe-fire-dm-for-par "/tmp/par-220.org" "ཀུན་རྫོབ།")
+    (should fired)))
+
+(ert-deftest tibetan-analysis-dm-par-force-respects-defer-mt ()
+  "FORCE never overrides #+TIBETAN_DEFER_MT (portfolio protocol)."
+  (tibetan-analysis-test--with-dm-gate-mocks t
+    (cl-letf (((symbol-function 'tibetan-analysis--defer-mt-p)
+               (lambda (&rest _) t)))
+      (tibetan-analysis--maybe-fire-dm-for-par "/tmp/par-220.org" "ཀུན་རྫོབ།" t)
+      (should (null fired)))))
+
 (provide 'tibetan-analysis-persist-test)
 ;;; tibetan-analysis-persist-test.el ends here
