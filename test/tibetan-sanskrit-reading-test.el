@@ -79,6 +79,22 @@ Padapāṭha, Bullets = Morph-Labels."
       (should (equal "IND"
                      (cdr (assoc "na" (plist-get s154 :morph))))))))
 
+(ert-deftest tibetan-sanskrit-reading-parse-word-analysis-lemmas ()
+  "§5.59: der Parser liefert zusätzlich :lemma ((WORT . LEMMA) …) —
+das Lese-Handout zeigt „Lemma; MORPH“ (die Wörterbuchform ist beim
+Nachschlagen der Schlüssel).  :pada/:morph bleiben unverändert."
+  (let* ((parsed (tibetan-sanskrit-reading-parse-word-analysis
+                  tibetan-sanskrit-reading-test--wa-md))
+         (s153 (cdr (assq 153 parsed))))
+    (should (equal "dharma"
+                   (cdr (assoc "dharmāṇām" (plist-get s153 :lemma)))))
+    (should (equal "svatas"
+                   (cdr (assoc "svataḥ"
+                               (plist-get (cdr (assq 154 parsed))
+                                          :lemma)))))
+    (should (equal "N.GEN.PL"
+                   (cdr (assoc "dharmāṇām" (plist-get s153 :morph)))))))
+
 (ert-deftest tibetan-sanskrit-reading-parse-word-analysis-org-form ()
   "Dual-Format (R5-Lektion): die gelandete `*** Segment N'-Form
 parst identisch."

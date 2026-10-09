@@ -77,16 +77,19 @@ conversion) and the raw markdown form (`### Segment N') — the
 dual-format lesson of R5.  Per segment: the FIRST non-bullet line
 is the padapāṭha (whitespace-separated word sequence); each
 following `- WORD — LEMMA; MORPH' bullet contributes a morph
-label.  Returns ((SEG-NUM . (:pada (W…) :morph ((W . LABEL)…))) …)
-in file order; nil-safe."
+label and its lemma.  Returns ((SEG-NUM . (:pada (W…) :morph ((W .
+LABEL)…) :lemma ((W . LEMMA)…))) …) in file order; nil-safe.
+:lemma (§5.59) feeds the reading handout's \"lemma; MORPH\" column —
+the dictionary form is the look-up key."
   (when (and body (stringp body) (not (string-empty-p (string-trim body))))
-    (let (result seg pada morph)
+    (let (result seg pada morph lemma)
       (cl-flet ((flush ()
                   (when seg
                     (push (cons seg (list :pada (nreverse pada)
-                                          :morph (nreverse morph)))
+                                          :morph (nreverse morph)
+                                          :lemma (nreverse lemma)))
                           result))
-                  (setq seg nil pada nil morph nil)))
+                  (setq seg nil pada nil morph nil lemma nil)))
         (dolist (line (split-string body "\n"))
           (let ((l (string-trim line)))
             (cond
@@ -109,7 +112,13 @@ in file order; nil-safe."
                   (setq label (string-trim
                                (car (split-string label "(" )))))
                 (when (and label (not (string-empty-p label)))
-                  (push (cons word label) morph))))
+                  (push (cons word label) morph))
+                ;; The lemma is only trustworthy in the contract form
+                ;; `LEMMA; MORPH' — a bare `N.NOM.SG' is no lemma.
+                (when (string-match-p ";" rest)
+                  (let ((lem (string-trim (car (split-string rest ";")))))
+                    (unless (string-empty-p lem)
+                      (push (cons word lem) lemma))))))
              ((null pada)
               ;; First plain line of the segment = the padapāṭha.
               ;; C6b: strip a leading label the models like to add
