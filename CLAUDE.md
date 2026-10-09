@@ -3,7 +3,13 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-10-09 (§5.58: READING-CLASS-STRUKTUR —
+editing. Last updated 2026-10-09 (§5.59: C-c u A/R AUF JEDER EBENE
+der Kaskaden-Quelle (Section/§/`* Tibetan Text' analysieren bzw.
+rendern den org-Subtree — vorher Absatz-Fehlweg) + LESE-HANDOUT
+C-c u H (Wylie + Uchen, Übersetzung, Vokabular ★-zuerst, Grammatik
+gefiltert → org → LuaLaTeX-PDF); Bugfix org-Wortliste verschluckte
+die erste Tabellenzeile (`bden pa gnyis'); ERT 2470 / BDD 251.
+Previous: §5.58: READING-CLASS-STRUKTUR —
 Kaskaden-Satzdateien umgebaut für die 4 Reading-Klassen WS26:
 * Translation auf L1, Reading = nur Gloss Tables (⟦N⟧-Zeile unter
 der Segment-Tabelle, steinert:-Links in Zeile 1, Converb-Funktion
@@ -3977,6 +3983,89 @@ migrieren beim nächsten Regenerate (editierte `** Gloss Tables`
 bleiben per §5.54-Schutz stehen).  Suite 2339 → **2345 ERT**
 (0 unexpected, 1 skip); BDD 250; compile clean; REFERENCE.org je
 def-Commit.
+
+### 5.59 C-c u A/R auf jeder Ebene · Lese-Handout C-c u H (done, 2026-10-09)
+
+Carsten (09.10.): für die Reading-Klassen ein Druckblatt neben dem
+Klassentext (er arbeitet parallel analog) — Wylie, Übersetzung,
+Vokabular („ohne Claude in der Überschrift; gibt es eine
+Vokabelliste, diese Übersetzungen bevorzugt"), Grammatik.  Nach
+einem Probedruck §220 entschied er: § UND Satz; satzweise;
+★-Bedeutung zuerst, Kontextglosse klein dahinter nur wenn abweichend;
+Wiederholungen ok; Grammatik nur „Verb backbone" + „Notable
+constructions"; Uchen-Zeile; sa analog; generierte .org → PDF.
+Dazu: „C-c u A sollte auf jeder Hierarchieebene funktionieren und
+kaskadierend analysieren."  Plan `~/.claude/plans/idempotent-
+pondering-wozniak.md`; alle Commits RED-first (`de29096`…`0b901cd`).
+
+**Bug A1/A2 (zuerst):** in einer KASKADEN-Quelle lief C-c u A auf
+`** Section §220' in den Two-File-Absatzpfad (`tibetan-org-at-
+paragraph-p' matcht jedes „§" → „has no `*** Tibetisch' child"),
+auf Sections ohne „§" (sa) und `* Tibetan Text' in den Segment-Impl
+(„Not in a segment or paragraph"); C-c u R ebenso.  Jetzt: Zweig
+NACH Segment/Satz, VOR Absatz (textuelle Layout-Probe + hartes
+require, B0-Lektion) → `tibetan-cascade-analyze-subtree' (org-
+Subtree an Punkt = Umfang; fehlende Dateien anlegen, Fire nur wo das
+geteilte Gate `--sentence-needs-fire-p' offen ist; über
+`tibetan-cascade-subtree-confirm-threshold' (10) y-or-n-p mit Anzahl;
+danach öffnet der erste Satz, nach Ablehnung ohne Open-Fire) bzw.
+`tibetan-cascade-reanalyze-subtree' (Satz-Semantik von C-c u R:
+existierende Dateien preserve-rendern, kein Fire; C-u = erzwungenes
+Neu-Feuern, IMMER bestätigt).  A0 legte `--fire-plist' (A3-Vertrag
+:children an EINER Stelle) und das Gate als Helfer frei.
+
+**Bugfix unterwegs (f760ddc):** `tibetan-parse-wordlist-org' —
+die Zellen-Regex lief über das Zeilenende, las die org-Trennlinie
+`|---+---|' mit dem Pipe der Folgezeile als Eintrag und VERSCHLUCKTE
+die erste Datenzeile jeder org-Tabellen-Wortliste.  In
+Wortliste-rgyan.org ist das `bden pa gnyis' — der in §5.58 als
+Datenfrage notierte Fall.  Bestehende Dateien zeigen den ★ erst nach
+dem nächsten Regenerate.
+
+**Handout (persist/tibetan-handout.el, drei Schichten):**
+- Daten `--sentence-data': Segmente aus der Quelle (Wylie + Uchen;
+  sa: IAST); Übersetzung = ⟦N⟧-Zeilen wenn alle gelandet (nummeriert),
+  sonst Translation-Slot ohne „(Sentence …)"-Label, Platzhalter/
+  Stub = Lücke; Vokabular je Segment (Splitter
+  `tibetan-analysis--split-body-by-segment', B0) mit ★ über
+  `tibetan-vocab--curated-exact-entry': exakt → Partikel-SILBE am Ende
+  (Liste aus `tibetan-extract-vocab--particle-tails', ra/sa/'i
+  ausgenommen) → Klitikum NUR wenn Claudes Wortart es deckt
+  (`tibetan-handout--clitic-pos-rules': blos ergative → blo, rgyas
+  Verb ≠ rgya); sa NIE ★ (Poison, per Negativ-Probe tragend), Info
+  „Lemma; MORPH" (Word-Analysis-Parser liefert jetzt `:lemma');
+  Grammatik nur `tibetan-handout-grammar-labels', Fallback alle
+  Bullets (nie leer).  Wortliste aus dem Resources-Ordner der QUELLE
+  unter `let' (kein globales Leck).  Lopez/W&M/DM/Working
+  Translation nie (Poison-Lock-Test).
+- Renderer `tibetan-handout-render' (rein): GENERATED-Kopf,
+  LuaLaTeX, rechts 6 cm Notizrand, Libertinus + Noto Serif Tibetan
+  (HarfBuzz; `tibetan-handout-tibetan-font'), `* Text' (Uchen über
+  Wylie, Rand-Nummern, Export-Block, eigene Seiten), je Satz
+  Übersetzung/Vokabular (longtable je Segment)/Grammatik
+  (Beschreibungsliste); Markdown → org nur wo org die Hervorhebung
+  erkennt, sonst Snippet; nirgends „Claude".
+- Kommando `tibetan-handout' (C-c u H): Umfang wie A1 (+ sent-Buffer);
+  `handouts/<kurz>-par-NNN.org' bzw. `-sent-N[-M].org' neben der
+  Quelle, Überschreibschutz per Marker; PDF mit LOKAL gebundenem
+  `org-latex-pdf-process' (2× lualatex); C-u nur .org; IN einer
+  Handout-.org exportiert C-c u H die bearbeitete Fassung (Kürzungen
+  gehen nie durch Neu-Generieren verloren).
+
+Korpus (buddhist-studies `2c79883`): `Translations/handouts/
+rgyan-par-220.{org,pdf}' (5 S.; Satz 656 noch Lücken bis C-c u A
+auf §220) und `Madhyamakavatara-sa/handouts/mav-sent-001.{org,pdf}'.
+
+**Offen / Ausbau:** Uchen-Zeilen für sa (kein IAST→Devanagari);
+Partikel-Funktion je Vokabel ins Handout (nur auf Zuruf);
+`wordlist.txt' (Tibetisch-IV-Kopie) trägt PDF-Umlautverluste
+(„ku nstlich") — Carsten: Vorsemester, kein Scope.  Testlauf-Hinweis:
+`make test' lädt veraltete .elc — vor dem Test `make compile' (oder
+`load-prefer-newer'), sonst testet man alten Code.
+
+Suite 2440 → **2470 ERT** (0 unexpected, 1 Skip; der echte
+LuaLaTeX-Smoke-Test läuft nur mit lualatex + Font); BDD 251;
+compile clean durchgehend; REFERENCE.org je def-Commit.
 
 ### 5.58 READING-CLASS-STRUKTUR der Kaskaden-Satzdateien (done, 2026-10-09)
 
