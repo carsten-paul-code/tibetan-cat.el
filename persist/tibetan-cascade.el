@@ -2373,6 +2373,61 @@ beides Fehlermeldungen statt Analyse."
       (list :sentences (length sentences) :created created
             :fired fired :pending (- (length todo) fired)))))
 
+;;;###autoload
+(defun tibetan-cascade-reanalyze-subtree (source-file &optional force)
+  "C-c u R on a heading ABOVE sentence level of the cascade SOURCE-FILE.
+Mirrors C-c u R on a sentence (`tibetan-sentence-reanalyze', A1
+branch): every EXISTING cascade file of the org subtree at point is
+regenerated preserve-mode (user/Claude/DM content stays) — no fire.
+FORCE (C-u) re-fires every one of them, overwriting landed Claude
+content; therefore always confirmed with the count.  Missing files
+are reported (C-c u A creates them).  Visiting buffers are reverted.
+Returns (:reanalyzed N :failed N :missing N).
+A2 (§5.59): dieselbe Fehlerklasse wie A1 — C-c u R auf
+`** Section §220' lief in `tibetan-reanalyze-paragraph'."
+  (let* ((sub (tibetan-cascade--subtree-sentences))
+         (label (or (car sub) (file-name-nondirectory source-file)))
+         (folder (file-name-as-directory
+                  (expand-file-name
+                   "analysis" (file-name-directory source-file))))
+         (files '())
+         (missing 0))
+    (unless (cdr sub)
+      (user-error "Keine Sätze unter „%s“" label))
+    (dolist (s (cdr sub))
+      (let ((file (tibetan-sentence--filepath (plist-get s :sent-num)
+                                              folder source-file)))
+        (if (file-exists-p file)
+            (push file files)
+          (cl-incf missing))))
+    (setq files (nreverse files))
+    (if (and force files
+             (not (y-or-n-p
+                   (format "%s: %d Sätze NEU an Claude + DharmaMitra senden (überschreibt Gelandetes)? "
+                           label (length files)))))
+        (progn (message "Nichts geändert.")
+               (list :reanalyzed 0 :failed 0 :missing missing))
+      (let ((ok 0) (failed 0))
+        (dolist (file files)
+          (if (plist-get (tibetan-cascade-reanalyze-file
+                          file :source-file source-file
+                          :re-request-claude (and force t))
+                         :ok)
+              (cl-incf ok)
+            (cl-incf failed))
+          (let ((buf (get-file-buffer file)))
+            (when buf
+              (with-current-buffer buf (revert-buffer t t)))))
+        (message "%s: %d Satzdatei%s neu gerendert%s%s%s"
+                 label ok (if (= ok 1) "" "en")
+                 (if force ", neu gefeuert" "")
+                 (if (> failed 0) (format ", %d FEHLER" failed) "")
+                 (if (> missing 0)
+                     (format " — %d ohne Datei (C-c u A legt sie an)"
+                             missing)
+                   ""))
+        (list :reanalyzed ok :failed failed :missing missing)))))
+
 ;; ============================================================================
 ;; C4.3 — reanalyze routing (single file, per-segment, batch guard)
 ;; ============================================================================

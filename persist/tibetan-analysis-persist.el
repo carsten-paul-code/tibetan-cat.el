@@ -5004,6 +5004,8 @@ unused-arg warning without breaking the public API."
 
 (declare-function tibetan-cascade-analyze-subtree "tibetan-cascade"
                   (source-file))
+(declare-function tibetan-cascade-reanalyze-subtree "tibetan-cascade"
+                  (source-file &optional force))
 
 ;;;###autoload
 (defun tibetan-open-segment-analysis ()
@@ -5251,7 +5253,10 @@ sentence."
 (defun tibetan-reanalyze-segment ()
   "Re-analyze current segment / sentence / paragraph, preserving user notes.
 Dispatches by context exactly like `tibetan-open-segment-analysis':
-segment > sentence > paragraph > legacy, most-specific-wins."
+segment > sentence > cascade subtree > paragraph > legacy,
+most-specific-wins.  In a cascade source, any heading above sentence
+level re-renders the org subtree's sentence files
+\(`tibetan-cascade-reanalyze-subtree'; with C-u: confirmed re-fire)."
   (interactive)
   (cond
    ((and (derived-mode-p 'org-mode)
@@ -5278,6 +5283,15 @@ segment > sentence > paragraph > legacy, most-specific-wins."
          (tibetan-org-at-sentence-p)
          (fboundp 'tibetan-sentence-reanalyze))
     (tibetan-sentence-reanalyze))
+   ;; A2 (§5.59): above sentence level in a CASCADE source the org
+   ;; subtree is re-rendered (C-u: force re-fire, confirmed) — never
+   ;; the two-file paragraph path.  Textual probe + hard require (B0).
+   ((and (derived-mode-p 'org-mode)
+         (buffer-file-name)
+         (tibetan-analysis--cascade-p (buffer-file-name)))
+    (require 'tibetan-cascade)
+    (tibetan-cascade-reanalyze-subtree (buffer-file-name)
+                                       (and current-prefix-arg t)))
    ((and (derived-mode-p 'org-mode)
          (fboundp 'tibetan-org-at-paragraph-p)
          (tibetan-org-at-paragraph-p))

@@ -1620,6 +1620,65 @@ entscheidet — Zählung und Fire benutzen dasselbe Prädikat)."
       (tibetan-open-segment-analysis))
     (should (equal '(5) fired))))
 
+(defmacro tibetan-cascade-test--with-cu-r-stubs (&rest body)
+  "Inside `--with-sectioned-source': create the files of Sentences 4
+and 6 (5 stays missing), stub the per-file regenerate and the
+two-file paragraph reanalyze.  REANALYZED collects (BASENAME .
+RE-REQUEST) pairs; PARAGRAPH-R is set by the paragraph path."
+  (declare (indent 0))
+  `(let ((reanalyzed '()) (paragraph-r nil))
+     (dolist (n '(4 6))
+       (tibetan-cascade--create-file
+        n (tibetan-cascade--segs-for-sentence src n) src))
+     (cl-letf (((symbol-function 'tibetan-cascade-reanalyze-file)
+                (lambda (file &rest args)
+                  (push (cons (file-name-nondirectory file)
+                              (plist-get args :re-request-claude))
+                        reanalyzed)
+                  (list :file file :ok t)))
+               ((symbol-function 'tibetan-reanalyze-paragraph)
+                (lambda (&rest _) (setq paragraph-r t))))
+       ,@body)))
+
+(ert-deftest tibetan-cascade-cu-r-on-section-rerenders-subtree ()
+  "A2 (§5.59, gleiche Klasse wie A1): C-c u R auf `** Section §167'
+lief in `tibetan-reanalyze-paragraph'.  Jetzt: jede EXISTIERENDE
+Satzdatei des Subtrees wird neu gerendert (Inhalte bleiben) — ohne
+Fire, wie C-c u R auf dem Satz."
+  (tibetan-cascade-test--with-sectioned-source "Section §167"
+    (tibetan-cascade-test--with-cu-r-stubs
+      (goto-char (point-min))
+      (re-search-forward "^\\*\\* Section §167")
+      (let ((current-prefix-arg nil))
+        (tibetan-reanalyze-segment))
+      (should-not paragraph-r)
+      ;; Satz 5 hat keine Datei (C-c u A legt sie an), Satz 6 liegt
+      ;; außerhalb des Subtrees.
+      (should (equal '(("sent-004-doc.org" . nil)) reanalyzed)))))
+
+(ert-deftest tibetan-cascade-cu-r-prefix-forces-refire-after-confirm ()
+  "A2 (§5.59): C-u C-c u R auf einer höheren Ebene erzwingt das
+Neu-Feuern (überschreibt Gelandetes!) — darum IMMER y-or-n-p mit
+der Anzahl; „n\" → gar nichts."
+  (tibetan-cascade-test--with-sectioned-source "Section §167"
+    (tibetan-cascade-test--with-cu-r-stubs
+      (let ((prompts '()) (answer t))
+        (cl-letf (((symbol-function 'y-or-n-p)
+                   (lambda (p) (push p prompts) answer)))
+          (goto-char (point-min))
+          (re-search-forward "^\\* Tibetan Text")
+          (let ((current-prefix-arg '(4)))
+            (tibetan-reanalyze-segment))
+          (should (= 1 (length prompts)))
+          (should (string-match-p "\\b2\\b" (car prompts)))
+          (should (equal '(("sent-004-doc.org" . t) ("sent-006-doc.org" . t))
+                         (sort reanalyzed
+                               (lambda (a b) (string< (car a) (car b))))))
+          (setq reanalyzed nil answer nil)
+          (let ((current-prefix-arg '(4)))
+            (tibetan-reanalyze-segment))
+          (should-not reanalyzed))))))
+
 ;; ============================================================================
 ;; C4.3 — reanalyze routing + folder-batch safety
 ;; ============================================================================
