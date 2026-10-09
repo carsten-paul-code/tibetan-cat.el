@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-10-09T10:34:03
+#+DATE: 2026-10-09T10:36:58
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  78 modules  ·  1496 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  78 modules  ·  1499 forms
 
 Regenerated automatically by:
 
@@ -37,7 +37,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#core/tibetan-sanskrit-parallel-dharmamitra.el][core/tibetan-sanskrit-parallel-dharmamitra.el]]  (22)
   - [[#core/tibetan-sanskrit-parallel.el][core/tibetan-sanskrit-parallel.el]]  (24)
   - [[#core/tibetan-sanskrit-script.el][core/tibetan-sanskrit-script.el]]  (7)
-  - [[#core/tibetan-steinert.el][core/tibetan-steinert.el]]  (13)
+  - [[#core/tibetan-steinert.el][core/tibetan-steinert.el]]  (16)
   - [[#core/tibetan-text-classifier.el][core/tibetan-text-classifier.el]]  (9)
   - [[#core/tibetan-thesaurus.el][core/tibetan-thesaurus.el]]  (34)
   - [[#core/tibetan-utils.el][core/tibetan-utils.el]]  (14)
@@ -5125,6 +5125,44 @@ docstring claimed an \='s/\='i strip the code never did).
 
 Return an org-mode link to the Steinert web dictionary for WYLIE-TERM.
 Format: [[url][Steinert]].  Returns nil if WYLIE-TERM is empty.
+
+** ~tibetan-steinert-link-follow~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 231
+:SIGNATURE: (tibetan-steinert-link-follow path &optional _prefix)
+:END:
+
+Open the Steinert web dictionary for the Wylie term PATH.
+Die URL entsteht ZUR KLICKZEIT (`tibetan-steinert-url', verbatim —
+kein downcase, B6b); die Datei trägt nur den kurzen
+`[[steinert:TERM][TERM]]'-Link statt der ~250-Zeichen-URL.
+Klitika strippt der EMITTER (die Tabellen verlinken den Stamm,
+`:wylie'), nicht dieser Handler.
+
+** ~tibetan-steinert-link-export~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 240
+:SIGNATURE: (tibetan-steinert-link-export path desc backend)
+:END:
+
+Export a `steinert:' link as a REAL web URL for BACKEND.
+HTML → Anker, LaTeX → \href, sonst der sichtbare Text — ohne
+diesen Export trügen HTML-/PDF-Ausgaben der Analysedateien tote
+steinert:-Pseudolinks.
+
+** ~tibetan-steinert-register-link-type~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 252
+:SIGNATURE: (tibetan-steinert-register-link-type)
+:END:
+
+Register the `steinert:' org link type (idempotent).
+NICHT an die lokale SQLite gekoppelt (§5.53: der Web-Link braucht
+keine Datenbank; `tibetan-steinert-available-p' gated nur die
+lokalen Lookups).
 
 ** ~tibetan-steinert-db-path~  /customize variable/
 :PROPERTIES:

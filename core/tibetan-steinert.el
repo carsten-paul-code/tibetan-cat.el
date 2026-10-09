@@ -224,5 +224,47 @@ Format: [[url][Steinert]].  Returns nil if WYLIE-TERM is empty."
     (when url
       (format "[[%s][Steinert]]" url))))
 
+;; ---------------------------------------------------------------------------
+;; org link type `steinert:' (T1, §5.58)
+;; ---------------------------------------------------------------------------
+
+(defun tibetan-steinert-link-follow (path &optional _prefix)
+  "Open the Steinert web dictionary for the Wylie term PATH.
+Die URL entsteht ZUR KLICKZEIT (`tibetan-steinert-url', verbatim —
+kein downcase, B6b); die Datei trägt nur den kurzen
+`[[steinert:TERM][TERM]]'-Link statt der ~250-Zeichen-URL.
+Klitika strippt der EMITTER (die Tabellen verlinken den Stamm,
+`:wylie'), nicht dieser Handler."
+  (browse-url (tibetan-steinert-url path)))
+
+(defun tibetan-steinert-link-export (path desc backend)
+  "Export a `steinert:' link as a REAL web URL for BACKEND.
+HTML → Anker, LaTeX → \\href, sonst der sichtbare Text — ohne
+diesen Export trügen HTML-/PDF-Ausgaben der Analysedateien tote
+steinert:-Pseudolinks."
+  (let ((url (tibetan-steinert-url path))
+        (text (or desc path)))
+    (pcase backend
+      ('html (format "<a href=\"%s\">%s</a>" url text))
+      ('latex (format "\\href{%s}{%s}" url text))
+      (_ text))))
+
+(defun tibetan-steinert-register-link-type ()
+  "Register the `steinert:' org link type (idempotent).
+NICHT an die lokale SQLite gekoppelt (§5.53: der Web-Link braucht
+keine Datenbank; `tibetan-steinert-available-p' gated nur die
+lokalen Lookups)."
+  (when (fboundp 'org-link-set-parameters)
+    (org-link-set-parameters "steinert"
+                             :follow #'tibetan-steinert-link-follow
+                             :export #'tibetan-steinert-link-export)))
+
+;; Register as soon as org's link machinery is around — immediately
+;; when ol is already loaded, else on its load.
+(if (featurep 'ol)
+    (tibetan-steinert-register-link-type)
+  (with-eval-after-load 'ol
+    (tibetan-steinert-register-link-type)))
+
 (provide 'tibetan-steinert)
 ;;; tibetan-steinert.el ends here

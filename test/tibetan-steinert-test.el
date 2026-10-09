@@ -146,5 +146,43 @@ muss unverändert in den JSON-Fragment-Hash."
     (should (equal (gethash "activeTerm" parsed) "rwA"))
     (should (equal (gethash "currentListTerm" parsed) "rwA"))))
 
+;; ----------------------------------------------------------------------------
+;; T1 (§5.58): der org-Linktyp `steinert:'
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-steinert-link-type-registered ()
+  "T1 (§5.58): `steinert:' ist ein registrierter org-Linktyp —
+kurze Links ([[steinert:chags ldan][chags ldan]]) statt
+~250-Zeichen-URLs in den Tabellen; die URL entsteht zur Klickzeit."
+  (require 'ol)
+  (tibetan-steinert-register-link-type)
+  (should (eq #'tibetan-steinert-link-follow
+              (org-link-get-parameter "steinert" :follow)))
+  (should (eq #'tibetan-steinert-link-export
+              (org-link-get-parameter "steinert" :export))))
+
+(ert-deftest tibetan-steinert-link-follow-opens-url ()
+  "Follow baut die URL zur Klickzeit (verbatim-Term, kein
+downcase — B6b) und öffnet sie im Browser."
+  (let (opened)
+    (cl-letf (((symbol-function 'browse-url)
+               (lambda (url &rest _) (setq opened url))))
+      (tibetan-steinert-link-follow "rwA"))
+    (should opened)
+    (should (equal opened (tibetan-steinert-url "rwA")))))
+
+(ert-deftest tibetan-steinert-link-export-emits-real-url ()
+  "Export liefert echte URLs (HTML-Anker, LaTeX \\href) — sonst
+exportierten die Tabellen tote steinert:-Links."
+  (let ((html (tibetan-steinert-link-export "mnyam med" "mnyam med"
+                                            'html))
+        (latex (tibetan-steinert-link-export "mnyam med" "mnyam med"
+                                             'latex))
+        (other (tibetan-steinert-link-export "mnyam med" nil 'ascii)))
+    (should (string-match-p "\\`<a href=\"https://dictionary\\.christian-steinert\\.de/#" html))
+    (should (string-match-p ">mnyam med</a>\\'" html))
+    (should (string-prefix-p "\\href{https://dictionary.christian-steinert.de/#" latex))
+    (should (equal other "mnyam med"))))
+
 (provide 'tibetan-steinert-test)
 ;;; tibetan-steinert-test.el ends here
