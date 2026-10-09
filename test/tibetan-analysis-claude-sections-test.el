@@ -605,6 +605,26 @@ Body (Alt-Form ohne Gruppen) landet unter dem nil-Schlüssel."
   (should-not (tibetan-analysis--parse-claude-particles-by-segment nil))
   (should-not (tibetan-analysis--parse-claude-particles-by-segment "")))
 
+(ert-deftest tibetan-claude-sections-split-body-by-segment ()
+  "B0 (§5.59): der generische Segment-Splitter — Grundlage für
+Particles (T3) UND das Handout (Vokabular/Grammatik je Segment).
+`***'/`****'-Segment-Überschriften öffnen Gruppen; was davor steht
+\(Präambel, auch `*** Cross-clause overview') landet unter nil;
+Texte getrimmt, leere Gruppen entfallen."
+  (should (equal '((nil . "*** Cross-clause overview\n\nÜberblick.")
+                   (1975 . "- *Verb backbone:* de'o")
+                   (1976 . "zweite"))
+                 (tibetan-analysis--split-body-by-segment
+                  (concat "*** Cross-clause overview\n\nÜberblick.\n\n"
+                          "*** Segment 1975\n- *Verb backbone:* de'o\n\n"
+                          "**** Segment 1976\nzweite\n"))))
+  ;; Ohne Präambel keine nil-Gruppe; leerer Body → nil.
+  (should (equal '((5 . "x"))
+                 (tibetan-analysis--split-body-by-segment
+                  "\n*** Segment 5\nx\n*** Segment 6\n\n")))
+  (should-not (tibetan-analysis--split-body-by-segment nil))
+  (should-not (tibetan-analysis--split-body-by-segment "")))
+
 (ert-deftest tibetan-claude-sections-read-skips-placeholders ()
   "`[Requesting...]' / `[Claude unavailable...]' / `[Translation not available...]'
 bodies count as nothing-to-preserve."

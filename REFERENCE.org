@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-10-09T14:14:45
+#+DATE: 2026-10-09T14:15:27
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  78 modules  ·  1519 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  78 modules  ·  1520 forms
 
 Regenerated automatically by:
 
@@ -59,7 +59,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#doc-prep/tibetan-segment-migrate.el][doc-prep/tibetan-segment-migrate.el]]  (12)
   - [[#doc-prep/tibetan-sentence-structure.el][doc-prep/tibetan-sentence-structure.el]]  (25)
   - [[#doc-prep/tibetan-wylie-ingest.el][doc-prep/tibetan-wylie-ingest.el]]  (26)
-  - [[#persist/tibetan-analysis-claude.el][persist/tibetan-analysis-claude.el]]  (73)
+  - [[#persist/tibetan-analysis-claude.el][persist/tibetan-analysis-claude.el]]  (74)
   - [[#persist/tibetan-analysis-combine.el][persist/tibetan-analysis-combine.el]]  (14)
   - [[#persist/tibetan-analysis-combined.el][persist/tibetan-analysis-combined.el]]  (15)
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (154)
@@ -12453,10 +12453,25 @@ Lines that don't match the 4-field shape are silently skipped
 (Claude may emit commentary or sentinel `[none]' lines on short
 passages — those shouldn't crash the caller).
 
-** ~tibetan-analysis--parse-claude-particles-by-segment~  /function/
+** ~tibetan-analysis--split-body-by-segment~  /function/
 :PROPERTIES:
 :KIND: defun
 :LINE: 3395
+:SIGNATURE: (tibetan-analysis--split-body-by-segment body)
+:END:
+
+Split a landed Claude section BODY at its segment headings.
+Returns ((SEG-NUM . TEXT) …) in order: `*** Segment N' / `****
+Segment N' (the §5.58-v2 and Alt-Layout star levels) open a group;
+everything before the first one — preamble, also an `*** Cross-clause
+overview' heading — lands under nil.  TEXT is trimmed; empty groups
+are dropped.  B0 (§5.59): EIN Splitter für Particles (T3) und das
+Lese-Handout (Vokabular/Grammatik je Segment).
+
+** ~tibetan-analysis--parse-claude-particles-by-segment~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 3420
 :SIGNATURE: (tibetan-analysis--parse-claude-particles-by-segment body)
 :END:
 
@@ -12468,12 +12483,13 @@ form — land under the nil key.  Tuple shape =
 `tibetan-analysis--parse-claude-particles' (:word :particle
 :sub-id :label); lines that are not 4-field tuples are skipped.
 T3 (§5.58): die Glossentabellen brauchen die SEGMENT-Zuordnung,
-der flache Parser verlor sie.
+der flache Parser verlor sie.  Gruppierung über den geteilten
+`tibetan-analysis--split-body-by-segment' (B0, §5.59).
 
 ** ~tibetan-analysis--read-claude-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3429
+:LINE: 3448
 :SIGNATURE: (tibetan-analysis--read-claude-translation filepath)
 :END:
 
@@ -12485,7 +12501,7 @@ migrated yet.
 ** ~tibetan-analysis--claude-needs-request-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3436
+:LINE: 3455
 :SIGNATURE: (tibetan-analysis--claude-needs-request-p filepath)
 :END:
 
@@ -12505,7 +12521,7 @@ on files already populated.
 ** ~tibetan-analysis--should-fire-claude-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3454
+:LINE: 3473
 :SIGNATURE: (tibetan-analysis--should-fire-claude-p re-request-claude filepath)
 :END:
 
@@ -12525,7 +12541,7 @@ Returns non-nil when a request SHOULD be dispatched.
 ** ~tibetan-analysis--restore-claude-sections~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3473
+:LINE: 3492
 :SIGNATURE: (tibetan-analysis--restore-claude-sections filepath sections)
 :END:
 
@@ -12543,7 +12559,7 @@ L3 (via the else branch of `--claude-effective-section-order').
 ** ~tibetan-analysis--restore-claude-translation~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3502
+:LINE: 3521
 :SIGNATURE: (tibetan-analysis--restore-claude-translation filepath translation)
 :END:
 
