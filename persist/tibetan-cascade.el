@@ -2944,7 +2944,19 @@ die §5.54-Poison-Locks halten die Bodies aus Stitcher und
             (with-current-buffer buf
               (save-excursion
                 (dolist (nb bodies)
-                  (unless (tibetan-cascade--pt-slot-present-p (car nb))
+                  (unless (or
+                           ;; Carstens EIGENE Comparative-Rubrik
+                           ;; („Übersetzung CP") wird NIE dupliziert
+                           ;; — seine autorschaftliche Ebene hat
+                           ;; genau eine Quelle (Comparative bzw.
+                           ;; * Working Translation); zwei Kopien
+                           ;; drifteten sofort (Korpus-Befund
+                           ;; 09.10.: 21 Dateien).  Der PROMPT-Pfad
+                           ;; (--section-refs-block) bleibt
+                           ;; unverändert.
+                           (string-prefix-p "Übersetzung" (car nb))
+                           (tibetan-cascade--pt-slot-present-p
+                            (car nb)))
                     (when (tibetan-cascade--pt-insert-slot
                            (car nb) (cdr nb))
                       (setq any t)))))

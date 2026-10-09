@@ -1187,6 +1187,8 @@ Zweiter Lauf: idempotent, Hand-Edits bleiben unangetastet."
                       "*§7.* The mind itself is distilled here.\n\n"
                       "*** Wangjié & Mulligan\n:PROPERTIES:\n:READ_ONLY: t\n:END:\n"
                       "*§7.* [W&M ¶7, PDF-S. 12] The very mind.\n\n"
+                      "*** Übersetzung CP\n:PROPERTIES:\n:STATUS: in Arbeit\n:END:\n"
+                      "**** Stufe 1 — wörtlich\nCARSTENS EIGENE RUBRIK.\n\n"
                       "** §8\n*** Lopez 2006\nanderer §.\n"))
             (with-temp-file src
               (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n"
@@ -1221,7 +1223,13 @@ Zweiter Lauf: idempotent, Hand-Edits bleiben unangetastet."
                 (should-not (string-match-p "བོད་ཡིག" s))
                 (should-not (string-match-p "^bod yig$" s))
                 ;; Nicht der andere §.
-                (should-not (string-match-p "anderer §" s)))
+                (should-not (string-match-p "anderer §" s))
+                ;; Carstens EIGENE Rubrik wird NIE dupliziert — seine
+                ;; autorschaftliche Ebene lebt in der Comparative
+                ;; bzw. * Working Translation (Zwei-Quellen-Drift).
+                (should-not (string-match-p "Übersetzung CP" s))
+                (should-not (string-match-p
+                             "CARSTENS EIGENE RUBRIK" s)))
               ;; Hand-Edit + zweiter Lauf: idempotent, Edit bleibt.
               (with-temp-buffer
                 (insert-file-contents file)
