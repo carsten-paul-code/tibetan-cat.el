@@ -3,7 +3,16 @@
 This file briefs Claude Code (or any other Claude surface) picking up
 work on **tibetan-cat.el**, Carsten Paul's Emacs-Lisp Computer-Assisted
 Translation (CAT) system for Classical Tibetan. Read it in full before
-editing. Last updated 2026-09-24 (§5.57: SANSKRIT im Kaskaden-
+editing. Last updated 2026-10-09 (§5.58: READING-CLASS-STRUKTUR —
+Kaskaden-Satzdateien umgebaut für die 4 Reading-Klassen WS26:
+* Translation auf L1, Reading = nur Gloss Tables (⟦N⟧-Zeile unter
+der Segment-Tabelle, steinert:-Links in Zeile 1, Converb-Funktion
+in Zeile 3), * Tibetan Analysis flach, * Provided Translations L1
+mit DM + materialisierten Lopez/W&M; 6 Bugfixes vorneweg (keep-l2-
+fboundp B0, sa-Grammar-Verlust, Gate-Falle nach Chunk-Landung,
+Truncation-Stub, དེ/པས-Homographen, Steinert-downcase); Migration =
+Regenerate (migrate-structure-v2, render-only); ERT 2440 / BDD 251.
+Previous: §5.57: SANSKRIT im Kaskaden-
 Layout — `#+SOURCE_LANG: sa`, Importer `C-c o k`, Padapāṭha-
 Kontrakt (`** Word Analysis`), Regenerate-after-Land (auch bo),
 Devanagari→IAST, DM iast/german; 4 Bugfixes vorneweg (u.a. C-c s R
@@ -3968,6 +3977,100 @@ migrieren beim nächsten Regenerate (editierte `** Gloss Tables`
 bleiben per §5.54-Schutz stehen).  Suite 2339 → **2345 ERT**
 (0 unexpected, 1 skip); BDD 250; compile clean; REFERENCE.org je
 def-Commit.
+
+### 5.58 READING-CLASS-STRUKTUR der Kaskaden-Satzdateien (done, 2026-10-09)
+
+Carstens Struktur-Skizze (09.10.) für die 4 Reading-Klassen WS26
+(bo / sa / 2× beides; beim Drankommen zählt der schnelle Blick).
+Entscheidungen (AskUserQuestion): Interlinear ENTFÄLLT; Lopez/W&M
+EINMALIG materialisieren (editierbar); die 56 in Korpus-Commit
+`8627b91` verlorenen Abschnitts-Übersetzungen aus `3d5ebf0`
+wiederherstellen; ALLE Kaskaden-Korpora migrieren.  Plan
+`~/.claude/plans/idempotent-pondering-wozniak.md`; alle Commits
+RED-first (`87f47f9`…`b5890dd`).
+
+**Bugfixes vorneweg (B1–B6b, je ein Commit):** B1 keep-l2 hing an
+`(fboundp 'tibetan-sentence--read-l2-body)` — stiller Totalverlust
+aller L2-Bodies im modullosen Batch (B0-Klasse; jetzt hartes
+require).  B2 sa-Dateien verloren `*** Claude Grammar` bei JEDER
+Landung (L3-Restore ohne Anlege-Fallback; sent-001-mav.org: null
+Grammar-Headings).  B3 GATE-FALLE: nach Chunk-Landung (nur
+Translation) war needs-request-p (Translation UND Vocab leer)
+dauerhaft zu — Vocabulary/Grammar/Particles/Concept Notes kamen NIE
+mehr an (der Zustand von ~736/737 Rgyan-Dateien); jetzt per-Slot-
+Gates (`--claude-sections-incomplete-p` + Slot-Landung, M7 bleibt:
+Gelandetes wird ohne force nie überschrieben).  B4 TRUNCATION:
+sent-654s Antwort riss mitten im Particles-Tupel ab, Concept Notes
+blieb stummer Platzhalter; jetzt `--response-truncated-p`
+(fehlender ## Concept-Notes-Pflichtschluss) + persistenter Stub
+"[Antwort abgeschnitten …]" (ÜBERLEBT den Regenerate-after-Land —
+darum KEIN [Awaiting-Präfix; als leer zählt er via
+`--truncation-stub-p`, damit er Gate offen hält und seine eigene
+Ersetzung nicht blockiert); kein Auto-Refire (Schleifengefahr).
+B5 Homographen im Reading-Tokenizer kontextsensitiv: standalone
+དེ ohne Vorgänger-Verb = Demonstrativum (kein CONV:ste mehr),
+standalone པས/བས ohne Verb = NMLZ.ERG (§5.39; `snang de'
+postverbal bleibt CONV:ste, test-gepinnt).  B6b
+`tibetan-steinert-url` downcaste (zerstörte Wylie-Caps = Sanskrit)
++ Docstring log über Klitika-Strip; B6a (DB-Entkopplung der
+Reading-Links) bewusst entfallen — die Fläche starb mit S2, die
+Entkopplung lebt in T2.
+
+**Struktur (bo UND sa):** `* Translation` (L1) · `* Reading` →
+nur `** Gloss Tables` (je Einheit `*** Segment N` + Tabelle +
+`- ⟦N⟧ …` DARUNTER; T4) · `* Tibetan Analysis` flach (Sentence
+Structure / Claude Vocabulary / Claude Grammar L2 / Buddhist Terms
+L2 / Partikelkarte L2 (die Bialek-Karte) / Claude Particles L2 /
+Concept Notes / [Word Analysis sa]) · `* Provided Translations`
+(L1: DM + Lopez/W&M) · Working Translation · My Notes · Footnotes.
+`* Tibetan Text` und `** Interlinear`/`** Renderings` ENTFALLEN.
+
+**Mechanik:** T4 Hash-Kanonik (`--gloss-tables-canonical` strippt
+die ⟦N⟧-Maschinenzeilen beidseitig — Landung ≠ Edit, Zellen-Edit
+schützt weiter; Alt-Hashes bleiben gültig); Renderings-Region =
+ganze * Reading-Sektion (EIN Leser/Writer-Pfad alt+neu;
+Insert-if-missing hinter dem Segment-Heading); S1 Dual-Reads im
+geteilten Sections-Leser (Translation L1→L2→Legacy, Particles
+L2→L3) — Leser VOR Schreiber, sonst Doppel-Fire-Klasse; S2
+Regenerate = slot-bewusste MIGRATION (PT-Body komponiert: DM-Slot
++ PT-Rest ohne DM-/Particles-Duplikate; Anlege-Anker Ende
+* Tibetan Analysis statt vor * Footnotes); Landung: cascade-v2-
+Zweig in effective-section-order/ensure-claude-headings (textuelle
+Probe `^* Translation$`; Alt-Dateien landen im Segment-Zweig und
+migrieren beim Regenerate-after-Land — self-migrating);
+Prompt-Grounding aus den Token-Strömen
+(`--generated-reading-lines` über shad-gesplittete Units, gleiche
+Render-Var-Bindungen wie der Scaffold, Paritätstest §5.53);
+§-Ansicht liest Tibetisch aus den Quell-Segmenten.  T1
+org-Linktyp `steinert:` (:follow baut URL zur Klickzeit, :export
+echte URLs; Registrierung bei ol-Load).  T2 Tabellen-Zeile 1
+verlinkt Wörter+Verben (`[[steinert:STAMM][pa'i]]`), Breiten nach
+SICHTBAREM Text (`--visible-width`); sa linkfrei; Two-File-Tabellen
+erben beim nächsten expliziten Regenerate.  T3 Converb-Funktion in
+Zeile 3 (`CONV:nas (seq.)`): textkeyed Dynamik
+`tibetan-gloss-table--claude-particles` (Regenerate bindet aus dem
+preservierten Body; segment-gruppierter Parser
+`--parse-claude-particles-by-segment`; Vorkommens-Cursor je
+Partikel+Einheit, NIE first-match), Fallback = EIN Mapping der
+Clause-Segmenter-Klassen.  V1 Struktur-Übersicht ohne
+—-Strich-Zeilen (Zählzeile "n Einheit(en) ohne erkanntes
+Hill-Verb").  P1/P2 `tibetan-cascade-materialize-provided-
+translations` (einmalig, editierbar, keep-geschützt; Tibetisch/
+Wylie nie; §5.54-Poison-Locks um die neue L1-Form erweitert).  M1
+`tibetan-cascade-migrate-structure-v2` (render-only — WICHTIG:
+nach B3 gelten fast alle Rgyan-Dateien als incomplete, ein
+feuernder Batch wäre ~736 API-Calls; der Wrapper feuert NIE).
+
+**Ausbauliste / Folgearbeiten:** V2 Phrasengrenzen der
+Struktur-Übersicht (`blos · ba dang rnam gzhag…`, Split mitten in
+mthong ba dang — steckt in tibetan-sentence-tree.el, harte
+Scope-Grenze); Partikelkarte-Platzierung = mein Vorschlag (eigenes
+L2, deterministisch regeneriert) — Carstens Veto trivial
+umsetzbar; Nach-Fire der fehlenden Sektionen nur auf Zuruf
+(API-Spend), sequenzieller Treiber.
+
+Suite 2406 → **2440 ERT** (0 unexpected, 1 Skip); BDD 251;
+compile clean durchgehend; REFERENCE.org je def-Commit.
 
 ### 5.57 SANSKRIT im Kaskaden-Layout (done, 2026-09-24)
 
