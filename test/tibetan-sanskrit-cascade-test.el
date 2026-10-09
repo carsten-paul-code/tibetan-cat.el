@@ -175,6 +175,39 @@ Zeile 1, Morph-Labels in Zeile 3)."
         (should (string-match-p "Die Leerheit der Gegebenheiten…" s))
         (should (string-match-p "| HANDEDIT |" s))))))
 
+(ert-deftest tibetan-sanskrit-cascade-regenerate-preserves-claude-grammar ()
+  "B2 (§5.58): das sa-Scaffold emittiert kein `** Grammar' — der
+L3-Restore für `*** Claude Grammar' hatte keinen Anlege-Fallback
+\(anders als keep-l2 seit eb9b573), der gelandete Body ging also
+bei JEDEM Regenerate still verloren (Beleg: sent-001-mav.org trägt
+null Grammar-Headings, obwohl jede Landung eine schrieb)."
+  (tibetan-sanskrit-cascade-test--with-source
+    (let ((file (tibetan-cascade--create-file
+                 1 '((1 . "dharmāṇāṃ śūnyatā svabhāvaḥ ।")
+                     (2 . "na svato nāpi parataḥ ॥"))
+                 src)))
+      ;; Land a Claude Grammar the way --insert-claude-sections
+      ;; leaves it (** Grammar + *** Claude Grammar before Footnotes).
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (re-search-forward "^\\* Footnotes")
+        (goto-char (line-beginning-position))
+        (insert "** Grammar\n*** Claude Grammar\n"
+                "Der Genitiv dharmāṇām hängt von śūnyatā ab.\n\n")
+        (write-region (point-min) (point-max) file nil 'silent))
+      (let ((r (tibetan-cascade-reanalyze-file file :source-file src)))
+        (should (plist-get r :ok)))
+      (let ((s (tibetan-sanskrit-cascade-test--file-string file)))
+        (should (string-match-p "^\\*\\*\\* Claude Grammar$" s))
+        (should (string-match-p
+                 "Der Genitiv dharmāṇām hängt von śūnyatā ab\\." s))
+        ;; The restored heading sits INSIDE the analysis part (above
+        ;; * Footnotes), not dangling at the file end.
+        (let ((cg (string-match "^\\*\\*\\* Claude Grammar$" s))
+              (foot (string-match "^\\* Footnotes" s)))
+          (should (and cg foot (< cg foot))))))))
+
 ;; ----------------------------------------------------------------------------
 ;; C2 — Prompts (Satz + Chunk)
 ;; ----------------------------------------------------------------------------

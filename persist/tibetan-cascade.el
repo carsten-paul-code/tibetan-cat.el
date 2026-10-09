@@ -861,8 +861,31 @@ Returns FILEPATH."
             (insert "** " (car kv) "\n"
                     (string-trim-right (cdr kv)) "\n\n"))))
       (when claude-grammar
-        (tibetan-cascade--set-body-in-buffer 3 "Claude Grammar"
-                                             claude-grammar))
+        (unless (tibetan-cascade--set-body-in-buffer 3 "Claude Grammar"
+                                                     claude-grammar)
+          ;; B2 (§5.58): das sa-Scaffold emittiert kein ** Grammar —
+          ;; ohne Anlege-Fallback (den keep-l2 seit eb9b573 hat) ging
+          ;; der gelandete Body bei JEDEM Regenerate still verloren
+          ;; (sent-001-mav.org: null Grammar-Headings).  Heading-Paar
+          ;; anlegen: in einem vorhandenen ** Grammar-Subtree ans
+          ;; Ende, sonst samt ** Grammar oberhalb von * Footnotes.
+          (save-excursion
+            (goto-char (point-min))
+            (if (re-search-forward "^\\*\\* Grammar$" nil t)
+                (progn
+                  (forward-line 1)
+                  (if (re-search-forward "^\\*\\{1,2\\} " nil t)
+                      (goto-char (line-beginning-position))
+                    (goto-char (point-max))
+                    (unless (bolp) (insert "\n"))))
+              (goto-char (point-min))
+              (if (re-search-forward "^\\* Footnotes" nil t)
+                  (goto-char (line-beginning-position))
+                (goto-char (point-max))
+                (unless (bolp) (insert "\n")))
+              (insert "** Grammar\n"))
+            (insert "*** Claude Grammar\n"
+                    (string-trim-right claude-grammar) "\n\n"))))
       (dolist (r renderings)
         (when (cdr r)
           ;; R7: dual-format restore into whatever layout the
