@@ -70,12 +70,17 @@ na svataḥ na api parataḥ
     (buffer-string)))
 
 (defun tibetan-sanskrit-cascade-test--insert-word-analysis (file body)
-  "BODY als `** Word Analysis' vor `* Footnotes' in FILE einsetzen."
+  "BODY als `** Word Analysis' ans Ende von `* Tibetan Analysis'
+in FILE einsetzen (S2: vor * Footnotes läge der Slot seit der
+neuen L1-Ordnung im falschen Elternteil)."
   (with-temp-buffer
     (insert-file-contents file)
     (goto-char (point-min))
-    (re-search-forward "^\\* Footnotes")
-    (goto-char (line-beginning-position))
+    (re-search-forward "^\\* Tibetan Analysis$")
+    (forward-line 1)
+    (if (re-search-forward "^\\* " nil t)
+        (goto-char (line-beginning-position))
+      (goto-char (point-max)))
     (insert "** Word Analysis\n" body "\n\n")
     (write-region (point-min) (point-max) file nil 'silent)))
 
@@ -92,21 +97,27 @@ Oberflächenwörtern und `?'-Labels, KEINE Sentence Structure,
            (s (tibetan-sanskrit-cascade-test--file-string file)))
       (should (string-match-p "^#\\+SOURCE_LANG: sa$" s))
       (should (string-match-p "^\\* Reading$" s))
-      ;; Plain IAST interlinear line, no decoration, no shad suffix.
-      (should (string-match-p "^dharmāṇāṃ śūnyatā svabhāvaḥ$" s))
-      (should (string-match-p "^na svato nāpi parataḥ$" s))
-      (should-not (string-match-p "=[a-z]" s))
-      ;; Renderings placeholders per unit.
+      ;; Renderings placeholders per unit (S2: unter den Tabellen;
+      ;; die Interlinear-Schicht ist pensioniert).
       (should (string-match-p "⟦1⟧" s))
       (should (string-match-p "⟦2⟧" s))
+      (should-not (string-match-p "^\\*\\* Interlinear$" s))
       ;; Gloss tables: surface words in row 1, `?' labels in row 3.
       (should (string-match-p "^\\*\\* Gloss Tables$" s))
       (should (string-match-p "| dharmāṇāṃ" s))
       ;; No Tibetan sentence-structure trees over IAST.
       (should-not (string-match-p "^\\*\\* Sentence Structure$" s))
-      ;; Minimal analysis headings for the landing writers.
-      (should (string-match-p "^\\*\\* Translation$" s))
-      (should (string-match-p "^\\*\\* DharmaMitra Translation$" s)))))
+      ;; Minimal slots for the landing writers (S2: Translation L1,
+      ;; DM unter * Provided Translations, flat analysis slots).
+      (should (string-match-p "^\\* Translation$" s))
+      (should-not (string-match-p "^\\*\\* Translation$" s))
+      (should (string-match-p "^\\* Provided Translations$" s))
+      (should (string-match-p "^\\*\\* DharmaMitra Translation$" s))
+      (should (string-match-p "^\\*\\* Claude Vocabulary$" s))
+      (should (string-match-p "^\\*\\* Claude Grammar$" s))
+      (should (string-match-p "^\\*\\* Concept Notes$" s))
+      ;; sa trägt keine Partikel-Slots (Schema ohne ## Particles).
+      (should-not (string-match-p "^\\*\\* Claude Particles$" s)))))
 
 (ert-deftest tibetan-sanskrit-cascade-regenerate-preserves-word-analysis ()
   "C1: `** Word Analysis' überlebt das Regenerate byte-erhalten —
@@ -422,7 +433,9 @@ beim manuellen Regenerate."
                (list :sent-num 1 :seg-nums '(1)
                      :sent-file file :cascade t))
               (let ((s (tibetan-sanskrit-cascade-test--file-string file)))
-                (should (string-match-p "\\[ich selbst\\]" s))))))
+                ;; S2: die Reading-Schicht ist die Glossentabelle —
+                ;; Zeile 2 trägt nach der Landung die Claude-Glosse.
+                (should (string-match-p "| ich selbst" s))))))
       (delete-directory dir t))))
 
 (ert-deftest tibetan-sanskrit-cascade-write-rendering-survives-stale-buffer ()

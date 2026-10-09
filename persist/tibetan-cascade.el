@@ -202,72 +202,41 @@ schreibt."
 
 (defun tibetan-cascade--reading-section (segs)
   "The full `* Reading' section string for SEGS ((GLOBAL-NUM . TEXT)…).
-COMBINED arrangement (Carsten's decision 2026-08-12, second
-iteration): ONE `** Interlinear' layer — decorated Wylie + ★ +
-glosses per token, one line per shad unit (the skeleton and the
-trot are the same tokens; two layers doubled every line) — followed
-by the ⟦N⟧ Renderings list.  Shads render as `/'.
 
-2026-09-15 (Masterarbeit three-view plan): `** Gloss Tables' is the
-FIRST Reading child — captioned three-row tables per shad unit
-(§184-handout form), placed BEFORE the Interlinear per Carsten's
-decision.  The section carries a :GENERATED_HASH: drawer (sha1 of
-the emitted body) so `tibetan-cascade--regenerate' can distinguish
-a still-generated section (refresh it) from one Carsten has edited
-\(preserve it verbatim — his decision layer).  Omitted entirely
-when nothing renders."
-  (let* ((units (mapcar #'cdr segs))
-         (lines
-          (or (and (fboundp 'tibetan-reading-decorated-lines)
-                   (condition-case nil
-                       (tibetan-reading-decorated-lines units)
-                     (error nil)))
-              ;; Degraded: plain per-unit Wylie, still one line each,
-              ;; shad normalized to the same ` /' the combined lines
-              ;; carry.
-              (mapcar (lambda (u)
-                        (let* ((w (or (and (fboundp 'tibetan-to-wylie-fixed)
-                                           (condition-case nil
-                                               (tibetan-to-wylie-fixed u)
-                                             (error nil)))
-                                      "[Wylie not available]"))
-                               (w (string-trim
-                                   (replace-regexp-in-string
-                                    "\\s-*/+\\s-*\\'" "" (string-trim w)))))
-                          (if (tibetan-cascade--unit-has-shad-p u)
-                              (concat w " /")
-                            w)))
-                      units))))
-    (let ((tables
-           (and (fboundp 'tibetan-gloss-table-render-captioned)
-                (condition-case nil
-                    (tibetan-gloss-table-render-captioned
-                     segs
-                     (and (boundp
-                           'tibetan-analysis--claude-vocabulary-for-render)
-                          tibetan-analysis--claude-vocabulary-for-render)
-                     ;; Carsten's 2026-09-16 form: segment number as
-                     ;; a foldable L3 HEADING (handout style).
-                     3)
-                  (error nil)))))
-      ;; T4 (§5.58): `** Gloss Tables' wird IMMER emittiert — es ist
-      ;; jetzt das Zuhause der ⟦N⟧-Sequenzübersetzungen (eine Zeile
-      ;; unter jeder Segment-Tabelle); die eigene `** Renderings'-
-      ;; Sektion entfällt.  Der Hash deckt die KANONISCHE Form (ohne
-      ;; die Maschinenzeilen), damit Landungen den Edit-Schutz nicht
-      ;; kippen.
-      (let ((gt-body (tibetan-cascade--gloss-tables-with-renderings
-                      segs tables)))
-        (concat "* Reading\n"
-                "** Gloss Tables\n"
-                ":PROPERTIES:\n"
-                (format ":GENERATED_HASH: %s\n"
-                        (sha1 (tibetan-cascade--gloss-tables-canonical
-                               gt-body)))
-                ":END:\n"
-                gt-body "\n\n"
-                "** Interlinear\n"
-                (string-join lines "\n") "\n\n")))))
+§5.58 (S2, Reading-Class-Struktur): * Reading trägt NUR noch die
+`** Gloss Tables' — je Einheit das `*** Segment N'-Heading, die
+Drei-Zeilen-Tabelle (sofern renderbar) und die
+⟦N⟧-Sequenzübersetzung darunter (T4).  Die kombinierte
+`** Interlinear'-Zeile ist pensioniert: ihre Steinert-Links und
+Glossen wandern in die Tabellen, das Prompt-Grounding wird aus den
+Token-Strömen erzeugt (`tibetan-cascade--generated-reading-lines').
+
+Der :GENERATED_HASH:-Drawer deckt die KANONISCHE Form (ohne die
+⟦N⟧-Maschinenzeilen), damit Landungen den §5.54-Edit-Schutz nicht
+kippen; Reset weiterhin: Sektion löschen → nächster Regenerate
+emittiert frisch."
+  (let ((tables
+         (and (fboundp 'tibetan-gloss-table-render-captioned)
+              (condition-case nil
+                  (tibetan-gloss-table-render-captioned
+                   segs
+                   (and (boundp
+                         'tibetan-analysis--claude-vocabulary-for-render)
+                        tibetan-analysis--claude-vocabulary-for-render)
+                   ;; Carsten's 2026-09-16 form: segment number as
+                   ;; a foldable L3 HEADING (handout style).
+                   3)
+                (error nil)))))
+    (let ((gt-body (tibetan-cascade--gloss-tables-with-renderings
+                    segs tables)))
+      (concat "* Reading\n"
+              "** Gloss Tables\n"
+              ":PROPERTIES:\n"
+              (format ":GENERATED_HASH: %s\n"
+                      (sha1 (tibetan-cascade--gloss-tables-canonical
+                             gt-body)))
+              ":END:\n"
+              gt-body "\n\n"))))
 
 (declare-function tibetan-segment-text "tibetan-enhanced-parser" (text))
 (declare-function tibetan-extract-verbs-compound-aware
@@ -371,6 +340,117 @@ fresh generated one."
             ;; child (the eb9b573 create-missing pattern).
             (goto-char reading-start)
             (insert block)))))))
+
+(defun tibetan-cascade--extract-auto-sections (auto)
+  "Zerlege den Auto-Renderer-Block AUTO in die §5.58-Slots.
+Returns (:vocabulary B :concepts B :sentence-structure B
+:particles-map B :claude-grammar B :buddhist-terms B :rest LIST) —
+B jeweils der getrimmte Body oder nil, :rest die unbekannten
+L2-Subtrees verbatim (preserve-by-default, §5.38-H2).  Der
+Renderer bleibt unberührt (geteilt mit Two-File); die Kaskade hebt
+seinen Output hier in ihre flache Struktur um: die ** Grammar-Hülle
+wird in Partikelkarte / Claude Grammar / Buddhist Terms zerlegt,
+** Translation / ** Provided Translations / ** DharmaMitra
+Translation werden verworfen (eigene L1-Slots bzw. Scaffold-Sache)."
+  (let ((out (list :rest nil)))
+    (when (and auto (stringp auto))
+      (with-temp-buffer
+        (insert auto)
+        (goto-char (point-min))
+        (while (re-search-forward "^\\*\\* \\(.+?\\)[ \t]*$" nil t)
+          (let* ((heading (match-string 1))
+                 (h-start (line-beginning-position))
+                 (b-start (progn (forward-line 1) (point)))
+                 (end (if (re-search-forward "^\\*\\{1,2\\} " nil t)
+                          (line-beginning-position)
+                        (point-max)))
+                 (body (string-trim
+                        (buffer-substring-no-properties b-start end))))
+            (goto-char end)
+            (pcase heading
+              ("Claude Vocabulary"
+               (plist-put out :vocabulary
+                          (unless (string-empty-p body) body)))
+              ("Concept Notes"
+               (plist-put out :concepts
+                          (unless (string-empty-p body) body)))
+              ("Sentence Structure"
+               (plist-put out :sentence-structure
+                          (unless (string-empty-p body) body)))
+              ("Grammar"
+               ;; Die Hülle zerlegen: *** Particles → Partikelkarte,
+               ;; *** Claude Grammar / *** Buddhist Terms heben.
+               (with-temp-buffer
+                 (insert body)
+                 (goto-char (point-min))
+                 (while (re-search-forward "^\\*\\*\\* \\(.+?\\)[ \t]*$"
+                                           nil t)
+                   (let* ((h3 (match-string 1))
+                          (s3 (progn (forward-line 1) (point)))
+                          (e3 (if (re-search-forward
+                                   "^\\*\\{1,3\\} " nil t)
+                                  (line-beginning-position)
+                                (point-max)))
+                          (b3 (string-trim
+                               (buffer-substring-no-properties s3 e3))))
+                     (goto-char e3)
+                     (pcase h3
+                       ("Particles"
+                        (plist-put out :particles-map
+                                   (unless (string-empty-p b3) b3)))
+                       ("Claude Grammar"
+                        (plist-put out :claude-grammar
+                                   (unless (string-empty-p b3) b3)))
+                       ("Buddhist Terms"
+                        (plist-put out :buddhist-terms
+                                   (unless (string-empty-p b3) b3))))))))
+              ((or "Translation" "Claude Translation"
+                   "Provided Translations" "DharmaMitra Translation")
+               nil)
+              (_
+               (plist-put out :rest
+                          (append
+                           (plist-get out :rest
+                                      )
+                           (list (string-trim-right
+                                  (buffer-substring-no-properties
+                                   h-start end)))))))))))
+    out))
+
+(defun tibetan-cascade--analysis-body (auto sa-p segs)
+  "Der flache `* Tibetan Analysis'-Body der §5.58-Struktur.
+Reihenfolge: Sentence Structure (bo) · Claude Vocabulary · Claude
+Grammar · Buddhist Terms (bo, nur bei Inhalt) · Partikelkarte (bo,
+nur bei Inhalt) · Claude Particles (bo) · Concept Notes; unbekannte
+Renderer-Sektionen verbatim hinten.  AUTO ist der (geteilte)
+Renderer-Output oder nil (sa / degradiert)."
+  (let* ((x (tibetan-cascade--extract-auto-sections auto))
+         (per-unit (and (not sa-p)
+                        (tibetan-cascade--sentence-structure-body segs)))
+         (parts '()))
+    (cl-flet ((sec (heading body)
+                (push (format "** %s\n%s\n" heading
+                              (if (and body (not (string-empty-p body)))
+                                  (concat (string-trim-right body) "\n")
+                                ""))
+                      parts)))
+      (when (not sa-p)
+        (let ((ss (or per-unit (plist-get x :sentence-structure))))
+          (when ss (sec "Sentence Structure" ss))))
+      (sec "Claude Vocabulary"
+           (or (plist-get x :vocabulary) "[Awaiting Claude…]"))
+      (sec "Claude Grammar" (plist-get x :claude-grammar))
+      (when (and (not sa-p) (plist-get x :buddhist-terms))
+        (sec "Buddhist Terms" (plist-get x :buddhist-terms)))
+      (when (and (not sa-p) (plist-get x :particles-map))
+        (sec "Partikelkarte" (plist-get x :particles-map)))
+      (unless sa-p
+        (sec "Claude Particles" nil))
+      (sec "Concept Notes"
+           (or (plist-get x :concepts) "[Awaiting Claude…]"))
+      (dolist (r (plist-get x :rest))
+        (push (concat r "\n") parts)))
+    (mapconcat #'identity (nreverse parts) "\n")))
 
 (defun tibetan-cascade--sentence-structure-body (segs)
   "Per-shad-unit verb-first trees for the `** Sentence Structure'
@@ -498,63 +578,40 @@ marks the file for every reader (§2.8: explicit, never sniffed)."
       (insert (format "#+CREATED: %s\n" date))
       (insert (format "#+LAST_ANALYZED: %s\n" date))
       (insert "\n")
-      (insert "* My Notes\n\n\n")
-      (insert "* Working Translation\n\n\n")
-      (insert "* Tibetan Text\n")
-      (insert (string-trim-right tibetan-text))
-      (insert "\n\n")
-      ;; R8 (READING VIEW redesign, approved 2026-08-12): the compact
-      ;; per-layer reading block — decorated Wylie, Interlinear, ⟦N⟧
-      ;; Renderings, one line per shad unit — replaces the retired
-      ;; `* Subsegments' tree (and with it per-unit Phonetics).
+      ;; §5.58 (S2, Reading-Class-Struktur): die Satz-/Vers-
+      ;; Übersetzung steht GANZ OBEN als L1-Slot; * Tibetan Text
+      ;; entfällt ersatzlos (Hash/SEGMENTS kommen weiter aus den
+      ;; Quell-Segmenten, das Tibetische lebt in den Tabellen).
+      (insert "* Translation\n[Requesting translation...]\n\n")
+      ;; R8/T4: the Reading block — Gloss Tables with the per-unit
+      ;; ⟦N⟧ sequence-translation lines (the Interlinear layer is
+      ;; retired with S2; prompt grounding is generated from the
+      ;; token streams instead).
       (insert (tibetan-cascade--reading-section segs))
-      ;; Sentence-level analysis — compressed sentence renderer when
-      ;; loaded (Claude Vocabulary / Translation / Grammar / Sentence
-      ;; Structure / Concept Notes / Provided Translations), minimal
-      ;; placeholders otherwise.
+      ;; Flat sentence-level analysis (§5.58): Sentence Structure /
+      ;; Claude Vocabulary / Claude Grammar / [Buddhist Terms] /
+      ;; [Partikelkarte] / Claude Particles / Concept Notes — the
+      ;; shared renderer's output is decomposed, the ** Grammar hull
+      ;; and the nested Provided Translations are gone.
       (insert "* Tibetan Analysis\n")
       (insert ":PROPERTIES:\n:GENERATED: t\n:END:\n\n")
-      ;; C1: no Tibetan auto-analysis over IAST — the segment
-      ;; renderer's Tibetan-line filter would return ~nothing anyway,
-      ;; but it still runs the full Tibetan lookup machinery over
-      ;; Sanskrit words en route.  sa gets the minimal placeholder
-      ;; scaffold; the landing writers create further headings.
+      ;; C1: no Tibetan auto-analysis over IAST — sa gets the
+      ;; minimal slot scaffold; the landing writers fill it.
       (let ((auto (and (not sa-p)
                        (fboundp 'tibetan-sentence--render-auto-analysis)
                        (condition-case nil
                            (tibetan-sentence--render-auto-analysis
                             tibetan-text)
                          (error nil)))))
-        (if auto
-            (progn (insert auto)
-                   (unless (string-suffix-p "\n" auto) (insert "\n")))
-          (insert "** Translation\n[Requesting translation...]\n\n")
-          (insert "** Provided Translations\n\n"))
-        ;; The sentence-level DM fire lands in a nested slot — make
-        ;; sure it exists whichever renderer path ran.
-        (unless (save-excursion
-                  (goto-char (point-min))
-                  (re-search-forward "^\\*\\* DharmaMitra Translation$"
-                                     nil t))
-          (insert "** DharmaMitra Translation\n[Awaiting DharmaMitra…]\n\n"))
-        ;; R10: replace the auto renderer's whole-sentence Sentence
-        ;; Structure (fused across shads) with the per-unit trees;
-        ;; keep the fallback body when no unit parses.  C1: skipped
-        ;; outright for sa — the Hill/case-frame machinery is
-        ;; Tibetan-only and would only burn lookups over IAST.
-        (let ((per-unit (and (not sa-p)
-                             (tibetan-cascade--sentence-structure-body
-                              segs))))
-          (when per-unit
-            (if (save-excursion
-                  (goto-char (point-min))
-                  (re-search-forward "^\\*\\* Sentence Structure$" nil t))
-                (tibetan-cascade--set-body-in-buffer
-                 2 "Sentence Structure" per-unit)
-              (insert "** Sentence Structure\n" per-unit "\n\n")))))
-      ;; R8: `* Subsegments' retired — the Reading section above
-      ;; carries the per-unit layers.  Legacy READ primitives remain
-      ;; (quarantine folders still hold old-layout files).
+        (insert (tibetan-cascade--analysis-body auto sa-p segs))
+        (unless (bolp) (insert "\n")))
+      ;; §5.58: * Provided Translations ist jetzt L1 — DM-Slot (und
+      ;; später Lopez/W&M) leben hier, von keep-l1 als Subtree
+      ;; preserved.
+      (insert "\n* Provided Translations\n"
+              "** DharmaMitra Translation\n[Awaiting DharmaMitra…]\n\n")
+      (insert "* Working Translation\n\n\n")
+      (insert "* My Notes\n\n\n")
       (insert "* Footnotes\n\n")
       ;; DEFER-MT VISIBILITY (2026-07-30): on a defer-MT document the
       ;; generic placeholders read as a failure — say WHY they are
@@ -709,18 +766,22 @@ calling this primitive."
 
 (defconst tibetan-cascade--known-l1-sections
   '("My Notes" "Working Translation" "Tibetan Text" "Reading"
+    "Translation" "Provided Translations"
     "Tibetan Analysis" "Subsegments" "Footnotes")
   "The L1 headings the cascade scaffold owns.  Anything else found in
 an existing file is preserved verbatim across regenerate
 \(§5.38-H2: preserve-by-default, never a whitelist wipe).
 
-R8: \"Reading\" is the new owned section; \"Subsegments\" STAYS
-listed although the scaffold no longer emits it — it is
-OWNED-LEGACY, so regenerating an old file DROPS the retired tree
-\(its renderings having been preserved through the dual-format
-primitives) instead of re-appending it verbatim as an unknown
-section.  Preserve-mode reanalyze of an old file is thereby the
-migration.")
+R8: \"Subsegments\" STAYS listed although the scaffold no longer
+emits it — it is OWNED-LEGACY, so regenerating an old file DROPS
+the retired tree (its renderings having been preserved through the
+dual-format primitives) instead of re-appending it verbatim as an
+unknown section.  Preserve-mode reanalyze of an old file is thereby
+the migration.  §5.58 (S2): \"Translation\" und \"Provided
+Translations\" sind neue OWNED-Slots (slot-bewusst restauriert);
+\"Tibetan Text\" ist jetzt OWNED-LEGACY — der Scaffold emittiert
+ihn nicht mehr, das Regenerate droppt ihn (der Text lebt in den
+Quell-Segmenten und den Tabellen).")
 
 (defun tibetan-cascade--read-l1-body (file heading)
   "Trimmed body of `* HEADING' in FILE (bounded at the next L1
@@ -811,42 +872,100 @@ when replaced."
         (insert (string-trim-right body) "\n\n")
         t))))
 
+(defun tibetan-cascade--insert-l2-in-analysis (heading body)
+  "HEADING als `** '-Sektion mit BODY ans ENDE von `* Tibetan
+Analysis' im aktuellen Buffer einsetzen (S2, §5.58).  Der alte
+Anlege-Anker »vor * Footnotes« ist mit der neuen L1-Ordnung falsch
+— zwischen Analysis und Footnotes liegen jetzt Provided
+Translations / Working Translation / My Notes, ein dort angelegter
+Slot landete im falschen Elternteil."
+  (save-excursion
+    (goto-char (point-min))
+    (if (re-search-forward "^\\* Tibetan Analysis$" nil t)
+        (progn
+          (forward-line 1)
+          (if (re-search-forward "^\\* " nil t)
+              (goto-char (line-beginning-position))
+            (goto-char (point-max))
+            (unless (bolp) (insert "\n"))))
+      (goto-char (point-max))
+      (unless (bolp) (insert "\n")))
+    (insert "** " heading "\n"
+            (string-trim-right body) "\n\n")))
+
+(defun tibetan-cascade--provided-translations-rest (filepath)
+  "Der preservierte `Provided Translations'-Body OHNE den DM- und
+den Claude-Particles-Subtree, aus der L1- (neu) oder L2-Position
+\(alt), oder nil.  DM wird separat komponiert (eigener Slot unter
+* Provided Translations); *** Claude Particles zieht nach
+** Claude Particles um (S2) — beide dürfen nicht als PT-Rest
+dupliziert zurückkehren.  Was bleibt, sind Lopez/W&M und
+Hand-Einträge: verbatim erhalten."
+  (let ((body (or (tibetan-cascade--read-l1-body
+                   filepath "Provided Translations")
+                  (tibetan-sentence--read-l2-body
+                   filepath "Provided Translations"))))
+    (when body
+      (with-temp-buffer
+        (insert body)
+        ;; DM-Subtree (nur neue Dateien tragen ihn im PT-Body).
+        (goto-char (point-min))
+        (when (re-search-forward "^\\*\\* DharmaMitra Translation$" nil t)
+          (let ((start (line-beginning-position))
+                (end (progn (forward-line 1)
+                            (if (re-search-forward "^\\*\\{1,2\\} " nil t)
+                                (line-beginning-position)
+                              (point-max)))))
+            (delete-region start end)))
+        ;; Claude-Particles-Subtree (Alt-Layout).
+        (goto-char (point-min))
+        (when (re-search-forward "^\\*\\*\\* Claude Particles$" nil t)
+          (let ((start (line-beginning-position))
+                (end (progn (forward-line 1)
+                            (if (re-search-forward "^\\*\\{1,3\\} " nil t)
+                                (line-beginning-position)
+                              (point-max)))))
+            (delete-region start end)))
+        (let ((rest (string-trim (buffer-string))))
+          (unless (string-empty-p rest) rest))))))
+
 (defun tibetan-cascade--regenerate (filepath sent-num segs source-file)
   "Regenerate FILEPATH's deterministic sections; preserve everything
 user-valuable.  PRESERVE → REBUILD (via `tibetan-cascade--scaffold')
-→ RESTORE, the §5.18 sentence pattern.  Preserved: the three user
-slots, populated sentence-level bodies (Translation / DharmaMitra
-Translation / Claude Vocabulary / Concept Notes / Provided
-Translations subtree / *** Claude Grammar), populated subsegment
-`*** Rendering' bodies for segments still present in SEGS, and every
-UNKNOWN top-level section verbatim (§5.38-H2).  Placeholders
-regenerate freshly.  Idempotent modulo the LAST_ANALYZED stamp.
-Returns FILEPATH."
+→ RESTORE, the §5.18 sentence pattern.
+
+§5.58 (S2): die Restores sind SLOT-BEWUSST und heben Alt-Layout-
+Inhalte zugleich in die neue Struktur (das Regenerate IST die
+Migration): Translation (L2 alt / L1 neu, via Dual-Read) → L1-Slot;
+Claude Vocabulary / Claude Grammar / Claude Particles / Concept
+Notes (alle Positionen, placeholder-gefiltert via
+`tibetan-analysis--read-claude-sections') → ihre flachen L2-Slots
+in * Tibetan Analysis (fehlende Headings werden am Analysis-ENDE
+angelegt, nicht mehr vor * Footnotes); Word Analysis ebenso; der
+* Provided-Translations-Body wird KOMPONIERT (DM-Slot mit
+preserviertem Body samt :LAST_TRANSLATED:-Drawer, danach der
+PT-Rest ohne DM/Particles-Duplikate).  Dazu wie gehabt: die drei
+User-L1-Slots, populierte ⟦N⟧-Renderings der noch vorhandenen
+Segmente, editierte Gloss Tables (§5.54-Hash, T4-kanonisch) und
+jede UNBEKANNTE L1-Sektion verbatim (§5.38-H2).  Placeholders
+regenerate freshly.  Idempotent modulo LAST_ANALYZED.  Returns
+FILEPATH."
   (let* ((keep-l1
           (cl-remove-if-not
            #'cdr
            (mapcar (lambda (h)
                      (cons h (tibetan-cascade--read-l1-body filepath h)))
                    '("My Notes" "Working Translation" "Footnotes"))))
-         ;; B1 (§5.58): UNCONDITIONAL — the reader module is a hard
-         ;; require of this file.  The old fboundp gate silently
-         ;; emptied this list in module-less batches and the
-         ;; regenerate destroyed every landed L2 body (B0 class).
-         (keep-l2
-          (cl-remove-if-not
-           #'cdr
-           (mapcar (lambda (h)
-                     (cons h (tibetan-sentence--read-l2-body filepath h)))
-                   ;; C1 (2026-09-24): "Word Analysis" is the
-                   ;; landed Sanskrit padapāṭha/morphology section
-                   ;; — preserved like every Claude-owned slot,
-                   ;; re-bound below so the tables materialize.
-                   '("Translation" "DharmaMitra Translation"
-                     "Claude Vocabulary" "Concept Notes"
-                     "Word Analysis"
-                     "Provided Translations"))))
-         (claude-grammar (tibetan-cascade--read-l3-body
-                          filepath "Claude Grammar"))
+         ;; B1 (§5.58): UNCONDITIONAL reads — tibetan-sentence-persist
+         ;; ist hartes require; S1: der Sections-Leser ist dual-
+         ;; positionell und placeholder-gefiltert.
+         (claude (tibetan-analysis--read-claude-sections filepath))
+         (keep-dm (tibetan-sentence--read-l2-body
+                   filepath "DharmaMitra Translation"))
+         (keep-word-analysis (tibetan-sentence--read-l2-body
+                              filepath "Word Analysis"))
+         (keep-pt-rest (tibetan-cascade--provided-translations-rest
+                        filepath))
          ;; R7: dual-format preserve — new-layout ⟦N⟧ lines or legacy
          ;; subtrees, whichever the file carries.
          (renderings
@@ -870,26 +989,20 @@ Returns FILEPATH."
       ;; the file's own preserved Claude Vocabulary in scope, so
       ;; `tibetan-reading--gloss' (and the Gloss Table's Claude-POS
       ;; tier) can prefer the context glosses over dictionary
-      ;; first-senses.  Parsed via the shared render-vars helper;
-      ;; nothing preserved → nil → unchanged dictionary behaviour.
+      ;; first-senses.
       (let ((tibetan-analysis--claude-vocabulary-for-render
              (and (fboundp 'tibetan-analysis--claude-render-vars)
                   (plist-get
                    (tibetan-analysis--claude-render-vars
-                    (list :vocabulary
-                          (cdr (assoc "Claude Vocabulary" keep-l2))))
+                    (list :vocabulary (plist-get claude :vocabulary)))
                    :vocabulary)))
             ;; C1 (2026-09-24): the preserved `** Word Analysis'
-            ;; body, parsed and re-keyed by UNIT TEXT (the shared
-            ;; renderer signatures carry no segment number) — the
-            ;; Sanskrit gloss tables and Interlinear lines
-            ;; materialize from it.  nil for bo files and for sa
-            ;; files Claude has not answered yet (degraded surface
-            ;; render).
+            ;; body, parsed and re-keyed by UNIT TEXT — the Sanskrit
+            ;; gloss tables materialize from it.
             (tibetan-sanskrit-reading--word-analysis
              (when (fboundp 'tibetan-sanskrit-reading-parse-word-analysis)
                (let ((parsed (tibetan-sanskrit-reading-parse-word-analysis
-                              (cdr (assoc "Word Analysis" keep-l2)))))
+                              keep-word-analysis)))
                  (when parsed
                    (cl-loop for (n . text) in segs
                             for entry = (assq n parsed)
@@ -902,49 +1015,40 @@ Returns FILEPATH."
          edited-gloss-tables))
       (dolist (kv keep-l1)
         (tibetan-cascade--set-body-in-buffer 1 (car kv) (cdr kv)))
-      (dolist (kv keep-l2)
-        (unless (tibetan-cascade--set-body-in-buffer 2 (car kv) (cdr kv))
-          ;; §5.26 class (2026-09-15): the scaffold does not always
-          ;; emit every preserved L2 slot — the renderer-error
-          ;; fallback emits only Translation + Provided Translations,
-          ;; and Claude Vocabulary / Concept Notes arrive only when
-          ;; the segment renderer ran.  A preserved body without a
-          ;; slot was silently DROPPED here.  Create the heading at
-          ;; the end of * Tibetan Analysis (above * Footnotes).
-          (save-excursion
-            (goto-char (point-min))
-            (if (re-search-forward "^\\* Footnotes" nil t)
-                (goto-char (line-beginning-position))
-              (goto-char (point-max))
-              (unless (bolp) (insert "\n")))
-            (insert "** " (car kv) "\n"
-                    (string-trim-right (cdr kv)) "\n\n"))))
-      (when claude-grammar
-        (unless (tibetan-cascade--set-body-in-buffer 3 "Claude Grammar"
-                                                     claude-grammar)
-          ;; B2 (§5.58): das sa-Scaffold emittiert kein ** Grammar —
-          ;; ohne Anlege-Fallback (den keep-l2 seit eb9b573 hat) ging
-          ;; der gelandete Body bei JEDEM Regenerate still verloren
-          ;; (sent-001-mav.org: null Grammar-Headings).  Heading-Paar
-          ;; anlegen: in einem vorhandenen ** Grammar-Subtree ans
-          ;; Ende, sonst samt ** Grammar oberhalb von * Footnotes.
-          (save-excursion
-            (goto-char (point-min))
-            (if (re-search-forward "^\\*\\* Grammar$" nil t)
-                (progn
-                  (forward-line 1)
-                  (if (re-search-forward "^\\*\\{1,2\\} " nil t)
-                      (goto-char (line-beginning-position))
-                    (goto-char (point-max))
-                    (unless (bolp) (insert "\n"))))
-              (goto-char (point-min))
-              (if (re-search-forward "^\\* Footnotes" nil t)
-                  (goto-char (line-beginning-position))
-                (goto-char (point-max))
-                (unless (bolp) (insert "\n")))
-              (insert "** Grammar\n"))
-            (insert "*** Claude Grammar\n"
-                    (string-trim-right claude-grammar) "\n\n"))))
+      ;; S2: Translation → der L1-Slot (Dual-Read hat alt L2 / neu L1
+      ;; bereits vereinheitlicht gelesen).
+      (when (plist-get claude :translation)
+        (tibetan-cascade--set-body-in-buffer
+         1 "Translation" (plist-get claude :translation)))
+      ;; S2: die flachen Analysis-Slots; fehlt ein Heading (sa,
+      ;; degradiert), wird es am ENDE von * Tibetan Analysis angelegt
+      ;; (eb9b573-Muster, neuer Anker).
+      (dolist (slot '((:vocabulary . "Claude Vocabulary")
+                      (:grammar . "Claude Grammar")
+                      (:particles . "Claude Particles")
+                      (:concepts . "Concept Notes")))
+        (let ((body (plist-get claude (car slot))))
+          (when body
+            (unless (tibetan-cascade--set-body-in-buffer
+                     2 (cdr slot) body)
+              (tibetan-cascade--insert-l2-in-analysis
+               (cdr slot) body)))))
+      (when keep-word-analysis
+        (unless (tibetan-cascade--set-body-in-buffer
+                 2 "Word Analysis" keep-word-analysis)
+          (tibetan-cascade--insert-l2-in-analysis
+           "Word Analysis" keep-word-analysis)))
+      ;; S2: * Provided Translations komponieren — DM-Slot (Body samt
+      ;; Drawer preserved) + PT-Rest (Lopez/W&M, Hand-Einträge; ohne
+      ;; DM-/Particles-Duplikate).
+      (tibetan-cascade--set-body-in-buffer
+       1 "Provided Translations"
+       (concat "** DharmaMitra Translation\n"
+               (string-trim-right
+                (or keep-dm "[Awaiting DharmaMitra…]"))
+               "\n"
+               (when keep-pt-rest
+                 (concat "\n" (string-trim-right keep-pt-rest) "\n"))))
       (dolist (r renderings)
         (when (cdr r)
           ;; R7: dual-format restore into whatever layout the
@@ -1286,14 +1390,11 @@ find-file-noselect at a landing site)."
                 (delete-region beg end)
                 (goto-char beg)
                 (insert (string-trim-right safe) "\n\n"))
-            ;; … or create it above * Footnotes.
-            (goto-char (point-min))
-            (if (re-search-forward "^\\* Footnotes" nil t)
-                (goto-char (line-beginning-position))
-              (goto-char (point-max))
-              (unless (bolp) (insert "\n")))
-            (insert "** Word Analysis\n"
-                    (string-trim-right safe) "\n\n")))
+            ;; … or create it at the end of * Tibetan Analysis
+            ;; (S2, §5.58: »vor * Footnotes« wäre mit der neuen
+            ;; L1-Ordnung der falsche Elternteil).
+            (tibetan-cascade--insert-l2-in-analysis
+             "Word Analysis" safe)))
         (save-buffer))
       t)))
 
@@ -1511,34 +1612,95 @@ touched."
                   "tibetan-sentence-claude")
 (declare-function tibetan-sentence--filepath "tibetan-sentence-persist")
 
+(defun tibetan-cascade--generated-reading-lines (file source-file units)
+  "Decorated Reading lines for UNITS, erzeugt mit DENSELBEN
+Bindungen wie Scaffold/Regenerate (S2, §5.58): default-directory an
+der Quelle (★-Wordlist-Auflösung, 2026-06-03-Lektion), target-lang
+und source-lang aus den Quell-Metadaten, Claude-Vokabular aus der
+Datei selbst.  Batch/Interaktiv-Parität by construction (§5.53) —
+die pensionierte ** Interlinear-Sektion und diese Erzeugung müssen
+auf Alt-Fixtures dieselben Zeilen liefern (Paritätstest)."
+  (let* ((default-directory (if source-file
+                                (file-name-directory
+                                 (expand-file-name source-file))
+                              default-directory))
+         (tibetan-analysis--target-lang
+          (or (and source-file
+                   (fboundp 'tibetan-analysis--read-source-metadata)
+                   (condition-case nil
+                       (plist-get (tibetan-analysis--read-source-metadata
+                                   source-file)
+                                  :target-lang)
+                     (error nil)))
+              (and (boundp 'tibetan-analysis--target-lang)
+                   tibetan-analysis--target-lang)))
+         (tibetan-analysis--source-lang
+          (and source-file
+               (fboundp 'tibetan-analysis--resolve-source-lang)
+               (condition-case nil
+                   (tibetan-analysis--resolve-source-lang source-file)
+                 (error nil))))
+         (tibetan-analysis--claude-vocabulary-for-render
+          (and (fboundp 'tibetan-analysis--claude-render-vars)
+               (plist-get
+                (tibetan-analysis--claude-render-vars
+                 (list :vocabulary
+                       (plist-get
+                        (tibetan-analysis--read-claude-sections file)
+                        :vocabulary)))
+                :vocabulary))))
+    (and (fboundp 'tibetan-reading-decorated-lines)
+         (condition-case nil
+             (tibetan-reading-decorated-lines units)
+           (error nil)))))
+
 (defun tibetan-cascade--prompt-grounding (sentence source-file folder)
   "Per-subsegment Interlinear grounding for the sentence-first prompt.
 In cascade mode there are no child seg files — the grounding blocks
-come from the cascade file's own subsegment `*** Interlinear Gloss'
-sections (same anti-hallucination purpose as the §5.34 child
-grounding).  nil when the file or every gloss is unavailable."
+come from the cascade file's own `** Interlinear' lines (Alt-Layout)
+or, seit S2 (§5.58, die Sektion ist pensioniert), aus der INTERNEN
+Token-Strom-Erzeugung (`tibetan-cascade--generated-reading-lines'
+über die shad-gesplitteten Units des Satzes — Splitter-Kontrakt:
+Konkatenation == Satztext, Position K ↔ K-tes Segment).  Same
+anti-hallucination purpose as the §5.34 child grounding.  nil when
+the file or every gloss is unavailable."
   (let* ((sent-num (plist-get sentence :sent-num))
+         (seg-nums (plist-get sentence :seg-nums))
          (file (and sent-num
                     (fboundp 'tibetan-sentence--filepath)
                     (tibetan-sentence--filepath sent-num folder
                                                 source-file))))
     (when (and file (file-exists-p file))
-      (let ((blocks
-             (delq nil
-                   (mapcar
-                    (lambda (n)
-                      (let ((gloss (tibetan-cascade--read-interlinear-for-unit
-                                    file n)))
-                        ;; Placeholder filter: `[Interlinear not
-                        ;; available]' etc. — but a combined Reading
-                        ;; line may legitimately BEGIN with an org
-                        ;; link (`[[https://…'), so require a
-                        ;; non-bracket after the opening bracket.
-                        (when (and gloss
-                                   (not (string-match-p "\\`\\[[^[]"
-                                                        gloss)))
-                          (format "=== Segment %d ===\n%s" n gloss))))
-                    (plist-get sentence :seg-nums)))))
+      (let* ((units (let ((u (and (plist-get sentence :tibetan-text)
+                                  (tibetan-cascade-split-shad-units
+                                   (plist-get sentence :tibetan-text)))))
+                      (and (= (length u) (length seg-nums)) u)))
+             (gen 'unset)
+             (idx -1)
+             (blocks
+              (delq nil
+                    (mapcar
+                     (lambda (n)
+                       (setq idx (1+ idx))
+                       (let ((gloss
+                              (or (tibetan-cascade--read-interlinear-for-unit
+                                   file n)
+                                  (when units
+                                    (when (eq gen 'unset)
+                                      (setq gen
+                                            (tibetan-cascade--generated-reading-lines
+                                             file source-file units)))
+                                    (nth idx gen)))))
+                         ;; Placeholder filter: `[Interlinear not
+                         ;; available]' etc. — but a combined Reading
+                         ;; line may legitimately BEGIN with an org
+                         ;; link (`[[https://…'), so require a
+                         ;; non-bracket after the opening bracket.
+                         (when (and gloss
+                                    (not (string-match-p "\\`\\[[^[]"
+                                                         gloss)))
+                           (format "=== Segment %d ===\n%s" n gloss))))
+                     seg-nums))))
         (when blocks
           (concat "\n\nPer-segment vocabulary matches (the tool's own "
                   "layered dictionary lookup; dictionary-attested — base "

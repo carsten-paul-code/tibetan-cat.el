@@ -316,19 +316,31 @@ translations (Lopez / W&M) never appear.  Returns the file."
                              n)
                             "\n\n")
                     parts)
-            (let* ((tib (and (fboundp 'tibetan-cascade--read-l1-body)
-                             (tibetan-cascade--read-l1-body
-                              file "Tibetan Text")))
+            (let* ((tib (or (and (fboundp 'tibetan-cascade--read-l1-body)
+                                 (tibetan-cascade--read-l1-body
+                                  file "Tibetan Text"))
+                            ;; S2 (§5.58): * Tibetan Text entfällt in
+                            ;; der Satzdatei — das Tibetisch kommt
+                            ;; aus den QUELL-Segmenten des Satzes.
+                            (and (fboundp 'tibetan-cascade--segs-for-sentence)
+                                 (let ((segs (tibetan-cascade--segs-for-sentence
+                                              source-file n)))
+                                   (when segs
+                                     (string-trim
+                                      (mapconcat #'cdr segs "")))))))
                    (tables (and (fboundp 'tibetan-cascade--read-gloss-tables)
                                 (car (tibetan-cascade--read-gloss-tables
                                       file))))
-                   ;; Dual-name accept (§5.18 class): the Rgyan
-                   ;; cascade files carry the legacy `** Claude
-                   ;; Translation' heading.
-                   (claude (and (fboundp 'tibetan-sentence--read-l2-body)
-                                (tibetan-translation-doc--strip-leading-drawer
-                                 (or (tibetan-sentence--read-l2-body
-                                      file "Translation")
+                   ;; Dual-name accept (§5.18 class) + S2 (§5.58):
+                   ;; der Claude-Vorschlag lebt neu auf L1.
+                   (claude (tibetan-translation-doc--strip-leading-drawer
+                            (or (and (fboundp 'tibetan-cascade--read-l1-body)
+                                     (tibetan-cascade--read-l1-body
+                                      file "Translation"))
+                                (and (fboundp 'tibetan-sentence--read-l2-body)
+                                     (tibetan-sentence--read-l2-body
+                                      file "Translation"))
+                                (and (fboundp 'tibetan-sentence--read-l2-body)
                                      (tibetan-sentence--read-l2-body
                                       file "Claude Translation")))))
                    (dm (and (fboundp 'tibetan-sentence--read-l2-body)

@@ -229,9 +229,10 @@ checks, no dictionary machinery)."
      ,@body))
 
 (ert-deftest tibetan-cascade-scaffold-structure ()
-  "R8: layout, header marker, per-layer Reading section with one
-line per shad unit, ⟦N⟧ rendering keys, no Subsegments tree, no
-Phonetics, and top/bottom user-slot ordering."
+  "Header-Marker + Retirements (die L1-/Reading-Ordnung prüft
+`tibetan-cascade-scaffold-v2-structure'): kein Subsegments-Baum,
+keine Phonetics, kein ** Renderings, keine ** Interlinear, kein
+* Tibetan Text (S2, §5.58); ⟦N⟧-Schlüssel + Platzhalter vorhanden."
   (tibetan-cascade-test--with-stub-renderer
     (let ((s (tibetan-cascade--scaffold
               4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
@@ -239,47 +240,164 @@ Phonetics, and top/bottom user-slot ordering."
       ;; Header marker + segments line.
       (should (string-match-p "^#\\+TIBETAN_LAYOUT: cascade$" s))
       (should (string-match-p "^#\\+SEGMENTS: 105, 106$" s))
-      ;; Top-level ordering — Reading directly after Tibetan Text.
-      (let ((notes (string-match "^\\* My Notes$" s))
-            (wt    (string-match "^\\* Working Translation$" s))
-            (tt    (string-match "^\\* Tibetan Text$" s))
-            (rd    (string-match "^\\* Reading$" s))
-            (ta    (string-match "^\\* Tibetan Analysis$" s))
-            (foot  (string-match "^\\* Footnotes$" s)))
-        (should (and notes wt tt rd ta foot))
-        (should (< notes wt tt rd ta foot)))
-      ;; T4 (§5.58): Gloss Tables FIRST (rendering lines inside),
-      ;; then Interlinear; the separate ** Renderings is RETIRED.
-      (let ((gt (string-match "^\\*\\* Gloss Tables$" s))
-            (il (string-match "^\\*\\* Interlinear$" s)))
-        (should (and gt il))
-        (should (< gt il)))
-      (should-not (string-match-p "^\\*\\* Renderings$" s))
-      (should-not (string-match-p "^\\*\\* Wylie$" s))
-      ;; Each unit's ⟦N⟧ line sits under ITS segment heading.
-      (let ((seg105 (string-match "^\\*\\*\\* Segment 105$" s))
-            (r105   (string-match "^- ⟦105⟧ " s))
-            (seg106 (string-match "^\\*\\*\\* Segment 106$" s))
-            (r106   (string-match "^- ⟦106⟧ " s)))
-        (should (and seg105 r105 seg106 r106))
-        (should (< seg105 r105 seg106 r106)))
+      (should (string-match-p "^- ⟦105⟧ " s))
+      (should (string-match-p "^- ⟦106⟧ " s))
       (should (string-match-p "\\[Awaiting sentence translation…\\]" s))
-      ;; Two combined lines, one per unit, each shad rendered ` /'.
-      (let* ((il-start (string-match "^\\*\\* Interlinear$" s))
-             (il-end (string-match "^\\* Tibetan Analysis$" s))
-             (body (substring s il-start il-end))
-             (lines (cl-remove-if #'string-empty-p
-                                  (cdr (split-string body "\n")))))
-        (should (= 2 (length lines)))
-        (should (cl-every (lambda (l) (string-suffix-p " /" l))
-                          lines)))
-      ;; The Subsegments tree and Phonetics are RETIRED.
+      ;; Retired sections.
       (should-not (string-match-p "^\\* Subsegments$" s))
       (should-not (string-match-p "^\\*+ Phonetics$" s))
       (should-not (string-match-p "^\\*\\* Segment 105$" s))
-      ;; The full sentence text sits under * Tibetan Text.
+      (should-not (string-match-p "^\\*\\* Renderings$" s))
+      (should-not (string-match-p "^\\*\\* Interlinear$" s))
+      (should-not (string-match-p "^\\*\\* Wylie$" s))
+      (should-not (string-match-p "^\\* Tibetan Text$" s)))))
+
+(ert-deftest tibetan-cascade-scaffold-v2-structure ()
+  "S2 (§5.58, Reading-Class-Struktur): * Translation ganz oben,
+* Reading nur mit Gloss Tables (kein Interlinear), * Tibetan
+Analysis flach (Sentence Structure / Claude Vocabulary / Claude
+Grammar / Claude Particles / Concept Notes als L2-Geschwister,
+keine ** Grammar-Hülle, kein ** Provided Translations darin),
+* Provided Translations auf L1 mit dem DM-Slot, Working
+Translation + My Notes am Ende; * Tibetan Text entfällt."
+  (tibetan-cascade-test--with-stub-renderer
+    (let ((s (tibetan-cascade--scaffold
+              4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+              "/tmp/doc.org")))
+      ;; L1 order: Translation → Reading → Tibetan Analysis →
+      ;; Provided Translations → Working Translation → My Notes →
+      ;; Footnotes.
+      (let ((tr   (string-match "^\\* Translation$" s))
+            (rd   (string-match "^\\* Reading$" s))
+            (ta   (string-match "^\\* Tibetan Analysis$" s))
+            (pt   (string-match "^\\* Provided Translations$" s))
+            (wt   (string-match "^\\* Working Translation$" s))
+            (mn   (string-match "^\\* My Notes$" s))
+            (foot (string-match "^\\* Footnotes$" s)))
+        (should (and tr rd ta pt wt mn foot))
+        (should (< tr rd ta pt wt mn foot)))
+      ;; Retired sections.
+      (should-not (string-match-p "^\\* Tibetan Text$" s))
+      (should-not (string-match-p "^\\*\\* Interlinear$" s))
+      (should-not (string-match-p "^\\*\\* Grammar$" s))
+      ;; Flat L2 analysis children, in order.
+      (let ((ss (string-match "^\\*\\* Sentence Structure$" s))
+            (cv (string-match "^\\*\\* Claude Vocabulary$" s))
+            (cg (string-match "^\\*\\* Claude Grammar$" s))
+            (cp (string-match "^\\*\\* Claude Particles$" s))
+            (cn (string-match "^\\*\\* Concept Notes$" s)))
+        (should (and ss cv cg cp cn))
+        (should (< ss cv cg cp cn)))
+      ;; Provided Translations darf NICHT mehr in * Tibetan Analysis
+      ;; liegen: es kommt genau einmal vor, als L1.
+      (should-not (string-match-p "^\\*\\* Provided Translations$" s))
+      ;; DM slot under the L1 Provided Translations.
+      (let ((pt (string-match "^\\* Provided Translations$" s))
+            (dm (string-match "^\\*\\* DharmaMitra Translation$" s))
+            (wt (string-match "^\\* Working Translation$" s)))
+        (should (and pt dm wt))
+        (should (< pt dm wt)))
+      ;; The L1 Translation slot carries the request placeholder.
       (should (string-match-p
-               (regexp-quote "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།") s)))))
+               "^\\* Translation\n\\[Requesting translation\\.\\.\\.\\]"
+               s))
+      ;; Die Bialek-Partikelkarte überlebt als eigenes L2 (aus dem
+      ;; Stub-Renderer-`*** Particles'-Body).
+      (should (string-match-p "^\\*\\* Partikelkarte$" s)))))
+
+(ert-deftest tibetan-cascade-regenerate-migrates-old-layout ()
+  "S2 (§5.58): das Regenerate einer ALT-Layout-Datei hebt die
+gelandeten Slots verlustfrei in die neue Struktur: ** Translation
+(L2) → * Translation (L1), *** Claude Grammar → ** Claude Grammar,
+*** Claude Particles (unter ** Provided Translations) → ** Claude
+Particles, DM-Body → unter * Provided Translations (L1)."
+  (tibetan-cascade-test--with-stub-renderer
+    (let* ((dir (make-temp-file "cascade-mig-" t))
+           (src (expand-file-name "doc.org" dir))
+           (file (expand-file-name "analysis/sent-004-doc.org" dir)))
+      (unwind-protect
+          (progn
+            (make-directory (expand-file-name "analysis" dir) t)
+            (with-temp-file src
+              (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                      "* Tibetan Text\n*** Sentence 4\n"
+                      "**** Segment 105\nབདག་གིས་ལས་བྱས།\n\n"
+                      "**** Segment 106\nཆོས་ཟབ་མོ་ཡིན།\n\n"))
+            ;; Hand-built OLD layout file with landed content.
+            (with-temp-file file
+              (insert "#+TITLE: Sentence 4 Analysis\n"
+                      "#+TIBETAN_LAYOUT: cascade\n"
+                      "#+SOURCE: [[file:../doc.org::*Sentence 4]"
+                      "[doc.org / Sentence 4]]\n"
+                      "#+SEGMENTS: 105, 106\n\n"
+                      "* My Notes\nNOTIZ bleibt.\n\n"
+                      "* Working Translation\nMeine Übersetzung.\n\n"
+                      "* Tibetan Text\nབདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།\n\n"
+                      "* Reading\n** Gloss Tables\n"
+                      ":PROPERTIES:\n:GENERATED_HASH: deadbeef\n:END:\n"
+                      "*** Segment 105\n| bdag |\n\n"
+                      "*** Segment 106\n| chos |\n\n"
+                      "** Interlinear\nbdag /\nchos /\n\n"
+                      "** Renderings\n"
+                      "- ⟦105⟧ Ich handelte.\n"
+                      "- ⟦106⟧ Der Dharma ist tief.\n\n"
+                      "* Tibetan Analysis\n"
+                      ":PROPERTIES:\n:GENERATED: t\n:END:\n\n"
+                      "** Claude Vocabulary\n*** Segment 105\n"
+                      "bdag, pronoun, \"ich\", Agens\n\n"
+                      "** Translation\nIch handelte; der Dharma ist tief.\n\n"
+                      "** Grammar\n*** Particles\nKARTE.\n\n"
+                      "*** Claude Grammar\nErgativ-Kette.\n\n"
+                      "** Provided Translations\n"
+                      "*** Claude Particles\n**** Segment 105\n"
+                      "gis, gis, 1.2, ergative\n\n"
+                      "** Concept Notes\nBegriffsnotiz.\n\n"
+                      "** DharmaMitra Translation\n"
+                      ":PROPERTIES:\n:LAST_TRANSLATED: 2026-10-07\n:END:\n"
+                      "DM-Übersetzung.\n\n"
+                      "* Footnotes\n\n"))
+            (tibetan-cascade--regenerate
+             file 4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+             src)
+            (let ((s (with-temp-buffer
+                       (insert-file-contents file)
+                       (buffer-string))))
+              ;; Translation → L1, body preserved.
+              (should (string-match-p
+                       "^\\* Translation\nIch handelte; der Dharma ist tief\\."
+                       s))
+              (should-not (string-match-p "^\\*\\* Translation$" s))
+              ;; Claude Grammar → L2 inside * Tibetan Analysis.
+              (should (string-match-p
+                       "^\\*\\* Claude Grammar\nErgativ-Kette\\." s))
+              ;; Claude Particles → L2, raus aus Provided Translations.
+              (should (string-match-p "^\\*\\* Claude Particles$" s))
+              (should (string-match-p "gis, gis, 1\\.2, ergative" s))
+              (let ((pt (string-match "^\\* Provided Translations$" s))
+                    (cp (string-match "^\\*\\* Claude Particles$" s)))
+                (should (and pt cp))
+                (should (< cp pt)))
+              ;; DM under the L1 Provided Translations, body intact.
+              (let ((pt (string-match "^\\* Provided Translations$" s))
+                    (dm (string-match "^\\*\\* DharmaMitra Translation$" s))
+                    (wt (string-match "^\\* Working Translation$" s)))
+                (should (and pt dm wt))
+                (should (< pt dm wt)))
+              (should (string-match-p "DM-Übersetzung\\." s))
+              (should (string-match-p ":LAST_TRANSLATED: 2026-10-07" s))
+              ;; User slots + renderings survive; Tibetan Text is gone.
+              (should (string-match-p "NOTIZ bleibt\\." s))
+              (should (string-match-p "Meine Übersetzung\\." s))
+              (should (string-match-p "^- ⟦105⟧ Ich handelte\\.$" s))
+              (should (string-match-p
+                       "^- ⟦106⟧ Der Dharma ist tief\\.$" s))
+              (should-not (string-match-p "^\\* Tibetan Text$" s))
+              ;; Vocabulary + Concept Notes an ihren L2-Slots.
+              (should (string-match-p
+                       "bdag, pronoun, \"ich\", Agens" s))
+              (should (string-match-p
+                       "^\\*\\* Concept Notes\nBegriffsnotiz\\." s))))
+        (delete-directory dir t)))))
 
 (ert-deftest tibetan-cascade-create-file-writes-marked-sent-file ()
   "C2.1: create-file writes the suffix-aware sent path with the
@@ -473,19 +591,11 @@ Placeholders regenerate freshly."
     ;; Populate user + Claude + DM + rendering content.
     (tibetan-cascade-test--set-l1-body cascade-file "My Notes"
                                        "USER NOTE stays.")
+    ;; Sentence-level Translation body (placeholder → real).
+    (tibetan-cascade-test--set-translation-body
+     cascade-file "The lama went and asked for dharma.")
     (with-temp-buffer
       (insert-file-contents cascade-file)
-      ;; Sentence-level Translation body (placeholder → real).
-      (goto-char (point-min))
-      (re-search-forward "^\\*\\* Translation$")
-      (forward-line 1)
-      (let ((start (point))
-            (end (if (re-search-forward "^\\*\\{1,2\\} " nil t)
-                     (line-beginning-position)
-                   (point-max))))
-        (delete-region start end)
-        (goto-char start)
-        (insert "The lama went and asked for dharma.\n\n"))
       ;; An UNKNOWN top-level section the regenerator must not eat.
       (goto-char (point-max))
       (insert "* Sanskrit (DharmaMitra)\nUNKNOWN SECTION body.\n\n")
@@ -515,42 +625,55 @@ Placeholders regenerate freshly."
       (should-not (tibetan-cascade--rendering-needs-request-p
                    cascade-file 105)))))
 
+(defun tibetan-cascade-test--set-l2-body (file heading body)
+  "Test helper: replace the `** HEADING' body in FILE with BODY."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (goto-char (point-min))
+    (re-search-forward (format "^\\*\\* %s$" (regexp-quote heading)))
+    (forward-line 1)
+    (let ((start (point))
+          (end (if (re-search-forward "^\\*\\{1,2\\} " nil t)
+                   (line-beginning-position)
+                 (point-max))))
+      (delete-region start end)
+      (goto-char start)
+      (insert body "\n\n"))
+    (write-region (point-min) (point-max) file nil 'silent)))
+
 (ert-deftest tibetan-cascade-regenerate-restores-vocab-without-scaffold-slot ()
-  "§5.26 class (2026-09-15): a preserved L2 body whose heading the
-fresh scaffold does NOT emit (the renderer-error fallback emits
-only Translation + Provided Translations; this fixture's canned
-renderer likewise has no Claude Vocabulary slot) must still be
-RESTORED — the restore loop creates the missing heading instead
-of silently dropping the body."
+  "§5.26 class (2026-09-15, S2-Fassung): a preserved L2 body whose
+heading the fresh scaffold does NOT emit (hier simuliert über einen
+leeren Analysis-Body) must still be RESTORED — am ENDE von
+* Tibetan Analysis angelegt, NICHT vor * Footnotes (zwischen beiden
+liegen seit S2 Provided Translations / Working Translation /
+My Notes — der alte Anker hätte den Slot ins falsche Elternteil
+gelegt)."
   (tibetan-cascade-test--with-cascade-file
-    ;; Land a populated Claude Vocabulary (as --insert-claude-sections
-    ;; would leave it).
-    (with-temp-buffer
-      (insert-file-contents cascade-file)
-      (goto-char (point-min))
-      (re-search-forward "^\\*\\* Translation$")
-      (beginning-of-line)
-      (insert "** Claude Vocabulary\n"
-              "khang pa, noun, \"Haus\", the context reading\n\n")
-      (write-region (point-min) (point-max) cascade-file nil 'silent))
-    (tibetan-cascade--regenerate
-     cascade-file 4
-     '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
-     (expand-file-name "doc.org" dir))
+    (tibetan-cascade-test--set-l2-body
+     cascade-file "Claude Vocabulary"
+     "khang pa, noun, \"Haus\", the context reading")
+    (cl-letf (((symbol-function 'tibetan-cascade--analysis-body)
+               (lambda (&rest _) "")))
+      (tibetan-cascade--regenerate
+       cascade-file 4
+       '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+       (expand-file-name "doc.org" dir)))
     (let ((body (tibetan-sentence--read-l2-body cascade-file
                                                 "Claude Vocabulary")))
       (should body)
       (should (string-match-p "khang pa, noun, \"Haus\"" body)))
-    ;; The created heading must sit INSIDE * Tibetan Analysis (above
-    ;; * Footnotes), not dangle at the file end.
+    ;; The created heading must sit INSIDE * Tibetan Analysis —
+    ;; before * Provided Translations, not dangling further down.
     (with-temp-buffer
       (insert-file-contents cascade-file)
       (let ((vocab (progn (goto-char (point-min))
                           (re-search-forward
                            "^\\*\\* Claude Vocabulary$" nil t)))
-            (foot  (progn (goto-char (point-min))
-                          (re-search-forward "^\\* Footnotes" nil t))))
-        (should (and vocab foot (< vocab foot)))))))
+            (pt    (progn (goto-char (point-min))
+                          (re-search-forward
+                           "^\\* Provided Translations$" nil t))))
+        (should (and vocab pt (< vocab pt)))))))
 
 (ert-deftest tibetan-cascade-regenerate-binds-claude-vocab-for-render ()
   "Regenerate binds `tibetan-analysis--claude-vocabulary-for-render'
@@ -562,14 +685,9 @@ Spy on the scaffold: at call time the var must hold the parsed
 alist keyed by the entry's Wylie."
   (tibetan-cascade-test--with-cascade-file
     ;; Land a populated sentence-level Claude Vocabulary body.
-    (with-temp-buffer
-      (insert-file-contents cascade-file)
-      (goto-char (point-min))
-      (re-search-forward "^\\*\\* Translation$")
-      (beginning-of-line)
-      (insert "** Claude Vocabulary\n"
-              "khang pa, noun, \"Haus\", the Claude context reading\n\n")
-      (write-region (point-min) (point-max) cascade-file nil 'silent))
+    (tibetan-cascade-test--set-l2-body
+     cascade-file "Claude Vocabulary"
+     "khang pa, noun, \"Haus\", the Claude context reading")
     (let* ((orig (symbol-function 'tibetan-cascade--scaffold))
            (captured 'unset))
       (cl-letf (((symbol-function 'tibetan-cascade--scaffold)
@@ -615,19 +733,8 @@ kommentarlos weg.  Ein fehlendes Lesemodul darf den Regenerate
 höchstens LAUT abbrechen (Datei unberührt), nie still zerstören."
   (tibetan-cascade-test--with-cascade-file
     ;; Populate the sentence-level Translation (placeholder → real).
-    (with-temp-buffer
-      (insert-file-contents cascade-file)
-      (goto-char (point-min))
-      (re-search-forward "^\\*\\* Translation$")
-      (forward-line 1)
-      (let ((start (point))
-            (end (if (re-search-forward "^\\*\\{1,2\\} " nil t)
-                     (line-beginning-position)
-                   (point-max))))
-        (delete-region start end)
-        (goto-char start)
-        (insert "The lama went and asked for dharma.\n\n"))
-      (write-region (point-min) (point-max) cascade-file nil 'silent))
+    (tibetan-cascade-test--set-translation-body
+     cascade-file "The lama went and asked for dharma.")
     ;; Simulate the unloaded module: the reader is UNBOUND.
     (let ((orig (symbol-function 'tibetan-sentence--read-l2-body)))
       (unwind-protect
@@ -838,11 +945,12 @@ Alt-Datei jede Sequenzübersetzung)."
         (should (< seg106 r106))))))
 
 (defun tibetan-cascade-test--set-translation-body (file body)
-  "Test helper: replace the `** Translation' body in FILE with BODY."
+  "Test helper: replace the Translation body in FILE with BODY —
+v2-L1 (`* Translation') zuerst, Alt-L2 als Fallback."
   (with-temp-buffer
     (insert-file-contents file)
     (goto-char (point-min))
-    (re-search-forward "^\\*\\* Translation$")
+    (re-search-forward "^\\*\\{1,2\\} Translation$")
     (forward-line 1)
     (let ((start (point))
           (end (if (re-search-forward "^\\*\\{1,2\\} " nil t)
@@ -949,19 +1057,48 @@ fehlenden Sektionen für immer unerreichbar waren."
 (require 'tibetan-sentence-claude)
 
 (ert-deftest tibetan-cascade-prompt-grounding-from-subsegments ()
-  "The cascade prompt grounding comes from the cascade file's OWN
-subsegment Interlinear sections (there are no child seg files)."
+  "S2 (§5.58): die Satzdatei trägt keine ** Interlinear mehr — das
+Grounding wird aus den Token-Strömen der shad-gesplitteten Units
+erzeugt (Splitter-Kontrakt: Position K ↔ K-tes Segment); Alt-Dateien
+mit Interlinear-Sektion werden weiter gelesen (Dual-Pfad)."
   (tibetan-cascade-test--with-cascade-file
     (let ((g (tibetan-cascade--prompt-grounding
-              (list :sent-num 4 :seg-nums '(105 106))
+              (list :sent-num 4 :seg-nums '(105 106)
+                    :tibetan-text "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།")
               (expand-file-name "doc.org" dir)
               (file-name-directory cascade-file))))
       (should g)
       (should (string-match-p "=== Segment 105 ===" g))
       (should (string-match-p "=== Segment 106 ===" g))
-      ;; Each block carries that unit's (non-empty) Reading line.
+      ;; Each block carries that unit's (non-empty) generated line.
       (should (string-match-p "=== Segment 105 ===\n[^=\n]" g))
       (should (string-match-p "do NOT invent meanings" g)))))
+
+(ert-deftest tibetan-cascade-prompt-grounding-parity-with-legacy-interlinear ()
+  "Paritäts-Lock (§5.53-Klasse): auf einer ALT-Layout-Datei MIT
+** Interlinear liest das Grounding die Dateizeile; die interne
+Erzeugung über dieselben Units liefert dieselbe Zeile — Batch- und
+Alt/Neu-Läufe füttern den Prompt identisch."
+  (tibetan-cascade-test--with-cascade-file
+    ;; Append a legacy ** Interlinear layer with the generated lines.
+    (let* ((units '("བདག་གིས་ལས་བྱས། " "ཆོས་ཟབ་མོ་ཡིན།"))
+           (src (expand-file-name "doc.org" dir))
+           (gen (tibetan-cascade--generated-reading-lines
+                 cascade-file src units)))
+      (should (= 2 (length gen)))
+      (with-temp-buffer
+        (insert-file-contents cascade-file)
+        (goto-char (point-min))
+        (re-search-forward "^\\* Tibetan Analysis$")
+        (goto-char (line-beginning-position))
+        (insert "** Interlinear\n" (string-join gen "\n") "\n\n")
+        (write-region (point-min) (point-max) cascade-file nil 'silent))
+      ;; Read path (legacy file line) == generated path.
+      (dolist (pair (list (cons 105 (nth 0 gen))
+                          (cons 106 (nth 1 gen))))
+        (should (equal (cdr pair)
+                       (tibetan-cascade--read-interlinear-for-unit
+                        cascade-file (car pair))))))))
 
 (ert-deftest tibetan-cascade-fire-end-to-end ()
   "Dispatcher on a cascade document: no child seg files — one claim,
@@ -1176,7 +1313,11 @@ Legacy-Namen nirgends emittieren."
                  (s (with-temp-buffer
                       (insert-file-contents file)
                       (buffer-string))))
-            (should (string-match-p "^\\*\\* Translation$" s))
+            ;; S2 (§5.58): der Slot heißt jetzt * Translation (L1);
+            ;; weder der Legacy-Name noch das alte L2 dürfen
+            ;; emittiert werden.
+            (should (string-match-p "^\\* Translation$" s))
+            (should-not (string-match-p "^\\*\\* Translation$" s))
             (should-not (string-match-p
                          "^\\*\\* Claude Translation$" s))))
       (delete-directory dir t))))
@@ -1814,26 +1955,20 @@ by GLOBAL segment number."
                    body))))
 
 (ert-deftest tibetan-cascade-reading-section-structure ()
-  "The assembled * Reading section (T4, §5.58): `** Gloss Tables'
-first (die ⟦N⟧-Zeilen unter ihren Segment-Headings), dann eine
-`** Interlinear'-Schicht; die eigene Renderings-Sektion ist weg."
-  (cl-letf (((symbol-function 'tibetan-reading-decorated-lines)
-             (lambda (units)
-               (mapcar (lambda (u) (format "LINE(%s)" u)) units)))
-            ((symbol-function 'tibetan-gloss-table-render-captioned)
+  "The assembled * Reading section (S2, §5.58): NUR `** Gloss
+Tables' — die ⟦N⟧-Zeilen unter ihren Segment-Headings; die eigene
+Renderings-Sektion UND die kombinierte Interlinear-Schicht sind
+pensioniert."
+  (cl-letf (((symbol-function 'tibetan-gloss-table-render-captioned)
              (lambda (_segs _vocab &optional _level) nil)))
     (let ((s (tibetan-cascade--reading-section
               '((105 . "བདག།") (106 . "ཆོས།")))))
       (should (string-match-p "^\\* Reading$" s))
-      (let ((gt (string-match "^\\*\\* Gloss Tables$" s))
-            (il (string-match "^\\*\\* Interlinear$" s)))
-        (should (and gt il))
-        (should (< gt il)))
+      (should (string-match-p "^\\*\\* Gloss Tables$" s))
       (should-not (string-match-p "^\\*\\* Renderings$" s))
+      (should-not (string-match-p "^\\*\\* Interlinear$" s))
       ;; The retired separate Wylie layer is gone.
       (should-not (string-match-p "^\\*\\* Wylie$" s))
-      (should (string-match-p "^LINE(བདག།)$" s))
-      (should (string-match-p "^LINE(ཆོས།)$" s))
       ;; ⟦N⟧ line under its own segment heading, in order.
       (let ((h105 (string-match "^\\*\\*\\* Segment 105$" s))
             (r105 (string-match "^- ⟦105⟧ \\[Awaiting" s))
@@ -1850,10 +1985,7 @@ three-row tables per shad unit BEFORE the Interlinear — carrying a
 emitted body, so a later regenerate can tell generated from
 hand-edited)."
   (let (seen-level)
-    (cl-letf (((symbol-function 'tibetan-reading-decorated-lines)
-               (lambda (units)
-                 (mapcar (lambda (u) (format "LINE(%s)" u)) units)))
-              ((symbol-function 'tibetan-gloss-table-render-captioned)
+    (cl-letf (((symbol-function 'tibetan-gloss-table-render-captioned)
                (lambda (_segs _vocab &optional level)
                  (setq seen-level level)
                  "*** Segment 105\n| CAPTBL |")))
@@ -1861,10 +1993,7 @@ hand-edited)."
                 '((105 . "བདག།") (106 . "ཆོས།")))))
         ;; Carsten's 2026-09-16 form: Segment number as HEADING.
         (should (eql 3 seen-level))
-        (let ((gt (string-match "^\\*\\* Gloss Tables$" s))
-              (il (string-match "^\\*\\* Interlinear$" s)))
-          (should (and gt il))
-          (should (< gt il)))
+        (should (string-match-p "^\\*\\* Gloss Tables$" s))
         (should (string-match-p "^| CAPTBL |$" s))
         (should (string-match-p "^\\*\\*\\* Segment 105$" s))
         ;; T4: ein Segment OHNE Renderer-Block bekommt trotzdem sein
@@ -1884,17 +2013,13 @@ hand-edited)."
 renderbare Tabellen wird `** Gloss Tables' emittiert — die Sektion
 ist jetzt das Zuhause der ⟦N⟧-Sequenzübersetzungen, jede Einheit
 bekommt ihr Heading + die Maschinenzeile (nur eben ohne Tabelle)."
-  (cl-letf (((symbol-function 'tibetan-reading-decorated-lines)
-             (lambda (units)
-               (mapcar (lambda (u) (format "LINE(%s)" u)) units)))
-            ((symbol-function 'tibetan-gloss-table-render-captioned)
+  (cl-letf (((symbol-function 'tibetan-gloss-table-render-captioned)
              (lambda (_segs _vocab &optional _level) nil)))
     (let ((s (tibetan-cascade--reading-section '((105 . "བདག།")))))
       (should (string-match-p "^\\*\\* Gloss Tables$" s))
       (should (string-match-p "^\\*\\*\\* Segment 105$" s))
       (should (string-match-p "^- ⟦105⟧ \\[Awaiting" s))
-      (should-not (string-match-p "^|" s))
-      (should (string-match-p "^\\*\\* Interlinear$" s)))))
+      (should-not (string-match-p "^|" s)))))
 
 (defun tibetan-cascade-test--edit-gloss-tables (file marker)
   "Append MARKER as an extra line to FILE's `** Gloss Tables' body,
@@ -1951,10 +2076,7 @@ layer, like the handout's hand-tuned tables."
       ;; The edit survives; the fresh render did NOT land.
       (should (string-match-p "^EDITIERT-VON-CARSTEN$" s))
       (should-not (string-match-p "^| NEU |$" s))
-      ;; Still the first Reading child.
-      (let ((gt (string-match "^\\*\\* Gloss Tables$" s))
-            (il (string-match "^\\*\\* Interlinear$" s)))
-        (should (and gt il (< gt il)))))
+      (should (string-match-p "^\\*\\* Gloss Tables$" s)))
     ;; Second regenerate: still byte-stable (modulo LAST_ANALYZED).
     (let ((before (with-temp-buffer
                     (insert-file-contents cascade-file) (buffer-string))))
@@ -1984,9 +2106,7 @@ re-inserted as the first Reading child (eb9b573 pattern)."
     (let ((s (with-temp-buffer
                (insert-file-contents cascade-file) (buffer-string))))
       (should (string-match-p "^EDITIERT-VON-CARSTEN$" s))
-      (let ((gt (string-match "^\\*\\* Gloss Tables$" s))
-            (il (string-match "^\\*\\* Interlinear$" s)))
-        (should (and gt il (< gt il)))))))
+      (should (string-match-p "^\\*\\* Gloss Tables$" s)))))
 
 (ert-deftest tibetan-cascade-regenerate-keeps-readers-with-gloss-tables ()
   "Adjacent lock: on a regenerated file WITH the new `** Gloss

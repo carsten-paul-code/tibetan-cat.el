@@ -2754,10 +2754,34 @@ Performs legacy-layout migration first (via
 `tibetan-analysis--migrate-legacy-claude-headings'), then creates
 whichever target heading is still missing.  Idempotent."
   (with-current-buffer buffer
-    ;; Step 1 — migrate legacy layouts into the target shape.
-    (tibetan-analysis--migrate-legacy-claude-headings buffer)
-    (save-excursion
-      (cond
+    ;; §5.58 (S2) cascade-v2: flat slots.  VOR der Legacy-Migration
+    ;; geprüft — der Migrator kennt nur die Two-File-Formen und darf
+    ;; die v2-Struktur nicht anfassen.
+    (if (tibetan-analysis--claude-cascade-v2-layout-p buffer)
+        (save-excursion
+          (dolist (h '("Claude Vocabulary" "Claude Grammar"
+                       "Claude Particles" "Concept Notes"))
+            (unless (save-excursion
+                      (goto-char (point-min))
+                      (re-search-forward
+                       (format "^\\*\\* %s$" (regexp-quote h)) nil t))
+              ;; Ans ENDE von * Tibetan Analysis (nie vor
+              ;; * Footnotes — dazwischen liegen jetzt PT/WT/Notes).
+              (goto-char (point-min))
+              (if (re-search-forward "^\\* Tibetan Analysis$" nil t)
+                  (progn
+                    (forward-line 1)
+                    (if (re-search-forward "^\\* " nil t)
+                        (goto-char (line-beginning-position))
+                      (goto-char (point-max))
+                      (unless (bolp) (insert "\n"))))
+                (goto-char (point-max))
+                (unless (bolp) (insert "\n")))
+              (insert "** " h "\n\n"))))
+      ;; Step 1 — migrate legacy layouts into the target shape.
+      (tibetan-analysis--migrate-legacy-claude-headings buffer)
+      (save-excursion
+        (cond
        ;; -------------------------------------------------------------
        ;; SEGMENT LAYOUT: Translation at level 2, Vocab/Grammar at 3.
        ;; -------------------------------------------------------------
@@ -2898,7 +2922,7 @@ whichever target heading is still missing.  Idempotent."
                 (insert (format "\n\n*** %s\n\n" heading))))
              (t
               (goto-char (point-max))
-              (insert (format "\n*** %s\n\n" heading)))))))))))
+              (insert (format "\n*** %s\n\n" heading))))))))))))
 
 (defun tibetan-analysis--claude-body-md-h3-to-org (body parent-level)
   "Convert markdown `### foo' lines in BODY to org headings.
@@ -3010,13 +3034,39 @@ without the segment-layout marker):
   existing sentence-level three-section workflow unchanged.
 
 Callers that write Claude output (insert, restore) use this list so
-a single buffer's layout drives heading levels consistently."
-  (if (tibetan-analysis--claude-segment-layout-p buffer)
-      tibetan-analysis--claude-section-order
+a single buffer's layout drives heading levels consistently.
+
+§5.58 (S2): die Kaskaden-v2-Struktur (textuelle Probe: ein
+L1-`* Translation'-Heading) schreibt Translation auf L1 und die
+übrigen Slots als flache L2-Kinder von * Tibetan Analysis —
+insbesondere Claude Particles NICHT mehr nach ** Provided
+Translations.  Alt-Layout-Kaskadendateien fallen in den
+Segment-Zweig und werden vom Regenerate-after-Land anschließend
+strukturell migriert (self-migrating landing)."
+  (cond
+   ((tibetan-analysis--claude-cascade-v2-layout-p buffer)
+    '((:translation "Translation"       1)
+      (:vocabulary  "Claude Vocabulary" 2)
+      (:grammar     "Claude Grammar"    2)
+      (:particles   "Claude Particles"  2)
+      (:concepts    "Concept Notes"     2)))
+   ((tibetan-analysis--claude-segment-layout-p buffer)
+    tibetan-analysis--claude-section-order)
+   (t
     '((:translation "Claude Translation" 3)
       (:vocabulary  "Claude Vocabulary"  3)
       (:grammar     "Claude Grammar"     3)
-      (:concepts    "Concept Notes"      3))))
+      (:concepts    "Concept Notes"      3)))))
+
+(defun tibetan-analysis--claude-cascade-v2-layout-p (buffer)
+  "Non-nil when BUFFER carries the §5.58 cascade-v2 layout.
+Textuelle Probe (B0-Doktrin: nie Load-State): das L1-Heading
+`* Translation' existiert nur in der neuen Reading-Class-Struktur
+— Two-File-Dateien und Alt-Kaskaden tragen es nie."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (re-search-forward "^\\* Translation$" nil t))))
 
 (defcustom tibetan-analysis-auto-regen-on-claude-arrival t
   "When non-nil, the Grammar section is re-rendered after Claude
