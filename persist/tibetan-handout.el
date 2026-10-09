@@ -594,5 +594,183 @@ appears (headings are German; the slots are named by content)."
             (tibetan-handout--text-part sentences)
             (mapconcat #'tibetan-handout--sentence-block sentences ""))))
 
+;; ============================================================================
+;; B3 — scope, file, PDF, command
+;; ============================================================================
+
+(defun tibetan-handout--enclosing-sentence ()
+  "Number of the `Sentence N' heading at or above point, or nil."
+  (save-excursion
+    (unless (org-before-first-heading-p)
+      (org-back-to-heading t)
+      (catch 'found
+        (while t
+          (let ((h (org-get-heading t t t t)))
+            (when (and h (string-match "\\`Sentence \\([0-9]+\\)\\b" h))
+              (throw 'found (string-to-number (match-string 1 h)))))
+          (unless (org-up-heading-safe)
+            (throw 'found nil)))))))
+
+(defun tibetan-handout--scope-at-point ()
+  "What the handout covers, from point: (:source :sent-nums :label
+:lopez).  In a cascade SOURCE the scope follows the org outline
+like C-c u A (§5.59 A1): Segment → its sentence, Sentence → it, any
+higher heading → every sentence below (a Section with
+`:LOPEZ_SECTION:' labels as \"§N\"), before the first heading → the
+document.  In a `sent-NNN' analysis buffer: that sentence."
+  (let ((file (buffer-file-name)))
+    (unless file
+      (user-error "Puffer ohne Datei — Handout braucht eine Kaskaden-Quelle"))
+    (if (string-match-p "\\`sent-[0-9]" (file-name-nondirectory file))
+        (let ((n (tibetan-sentence--sent-id-from-filename file))
+              (src (tibetan-sentence--source-file-from-analysis file)))
+          (unless (and n src)
+            (user-error "Satz/Quelle von %s nicht bestimmbar"
+                        (file-name-nondirectory file)))
+          (list :source src :sent-nums (list n)
+                :label (format "Satz %d" n)))
+      (unless (tibetan-analysis--cascade-p file)
+        (user-error "%s ist kein Kaskaden-Dokument (#+TIBETAN_LAYOUT: cascade)"
+                    (file-name-nondirectory file)))
+      (let ((sent (tibetan-handout--enclosing-sentence)))
+        (if sent
+            (list :source file :sent-nums (list sent)
+                  :label (format "Satz %d" sent))
+          (let* ((sub (tibetan-cascade--subtree-sentences))
+                 (lopez (save-excursion
+                          (unless (org-before-first-heading-p)
+                            (org-back-to-heading t)
+                            (let ((v (org-entry-get (point) "LOPEZ_SECTION")))
+                              (and v (string-match-p "\\`[0-9]+\\'" (string-trim v))
+                                   (string-to-number v)))))))
+            (unless (cdr sub)
+              (user-error "Keine Sätze unter „%s“" (or (car sub) "Dokument")))
+            (list :source file
+                  :sent-nums (mapcar (lambda (s) (plist-get s :sent-num))
+                                     (cdr sub))
+                  :label (cond (lopez (format "§%d" lopez))
+                               ((car sub) (string-remove-prefix
+                                           "Section " (car sub)))
+                               (t "gesamt"))
+                  :lopez lopez)))))))
+
+(defun tibetan-handout--output-file (scope)
+  "`<source dir>/handouts/<short>-par-NNN.org' for a Lopez § SCOPE,
+else `<short>-sent-N[-M].org'.  The source short name keeps
+multi-source folders collision-free (§5.23 lesson)."
+  (let* ((src (plist-get scope :source))
+         (nums (plist-get scope :sent-nums))
+         (short (tibetan-analysis-make-short-name src)))
+    (expand-file-name
+     (concat "handouts/" short "-"
+             (cond ((plist-get scope :lopez)
+                    (format "par-%d" (plist-get scope :lopez)))
+                   ((cdr nums)
+                    (format "sent-%03d-%03d" (car nums) (car (last nums))))
+                   (t (format "sent-%03d" (car nums))))
+             ".org")
+     (file-name-directory src))))
+
+(defun tibetan-handout--source-title (source-file)
+  "The work title: SOURCE-FILE's #+TITLE before \" — \", or its base name."
+  (or (with-temp-buffer
+        (insert-file-contents source-file nil 0 4096)
+        (goto-char (point-min))
+        (when (re-search-forward "^#\\+TITLE:[ \t]*\\(.+\\)$" nil t)
+          (string-trim (car (split-string (match-string 1) " — ")))))
+      (file-name-base source-file)))
+
+(defun tibetan-handout-build (scope &optional date)
+  "Write the handout .org for SCOPE (`tibetan-handout--scope-at-point'
+shape) and return its path.  The class wordlist (★) of the source's
+Resources is bound for the whole build; DATE (default today) goes
+into the footer.  An existing target WITHOUT the GENERATED marker is
+never overwritten (user-error) — a generated one is regenerated."
+  (let* ((src (plist-get scope :source))
+         (out (tibetan-handout--output-file scope)))
+    (when (and (file-exists-p out)
+               (not (with-temp-buffer
+                      (insert-file-contents out nil 0 512)
+                      (string-prefix-p tibetan-handout-generated-marker
+                                       (buffer-string)))))
+      (user-error "%s existiert und trägt keinen GENERATED-Marker — nicht überschrieben"
+                  (file-name-nondirectory out)))
+    (let* ((tibetan-current-resources-vocab (tibetan-handout--load-curated src))
+           (tibetan-current-custom-vocab nil)
+           (spec (list :title (tibetan-handout--source-title src)
+                       :scope (plist-get scope :label)
+                       :source-name (file-name-nondirectory src)
+                       :date (or date (format-time-string "%Y-%m-%d"))
+                       :sentences (mapcar (lambda (n)
+                                            (tibetan-handout--sentence-data n src))
+                                          (plist-get scope :sent-nums)))))
+      (make-directory (file-name-directory out) t)
+      (with-temp-file out
+        (insert (tibetan-handout-render spec)))
+      out)))
+
+(defvar org-latex-pdf-process)
+(declare-function org-latex-export-to-pdf "ox-latex")
+
+(defun tibetan-handout-export-pdf (org-file)
+  "Export ORG-FILE to PDF beside it and return the PDF path.
+LuaLaTeX (the file's #+LATEX_COMPILER), two runs for longtable —
+bound locally, so the user's own `org-latex-pdf-process' (latexmk …)
+neither breaks nor is changed."
+  (require 'ox-latex)
+  (let ((buf (find-file-noselect org-file)))
+    (unwind-protect
+        (with-current-buffer buf
+          (let ((org-latex-pdf-process
+                 '("%latex -interaction nonstopmode -output-directory %o %f"
+                   "%latex -interaction nonstopmode -output-directory %o %f")))
+            (expand-file-name (org-latex-export-to-pdf)
+                              (file-name-directory org-file))))
+      (unless (buffer-modified-p buf)
+        (kill-buffer buf)))))
+
+(defun tibetan-handout--generated-buffer-p ()
+  "Non-nil when the current buffer is a generated handout."
+  (save-excursion
+    (goto-char (point-min))
+    (looking-at-p (regexp-quote tibetan-handout-generated-marker))))
+
+;;;###autoload
+(defun tibetan-handout (&optional org-only)
+  "Reading-class handout for the scope at point (C-c u H).
+In a cascade source: the sentence at point, or every sentence under
+the heading at point (a § …); in a sent-NNN analysis buffer: that
+sentence.  Writes `handouts/<short>-….org' beside the source (may be
+shortened before printing; regenerating overwrites it), exports it
+to PDF and opens the PDF.  With ORG-ONLY (C-u): only the .org, which
+is opened for editing.  INSIDE a generated handout the buffer is
+saved and exported as it is — shortening before printing is never
+undone by a regeneration.  No network, no API call."
+  (interactive "P")
+  (if (and (buffer-file-name) (tibetan-handout--generated-buffer-p))
+      (progn
+        (save-buffer)
+        (let ((pdf (tibetan-handout-export-pdf (buffer-file-name))))
+          (org-open-file pdf)
+          (message "Handout: %s" (file-name-nondirectory pdf))
+          pdf))
+    (tibetan-handout--from-scope org-only)))
+
+(defun tibetan-handout--from-scope (org-only)
+  "Body of `tibetan-handout' outside a generated handout buffer."
+  (let ((scope (tibetan-handout--scope-at-point)))
+    (when (and (> (length (plist-get scope :sent-nums)) 50)
+               (not (y-or-n-p (format "Handout über %d Sätze erzeugen? "
+                                      (length (plist-get scope :sent-nums))))))
+      (user-error "Abgebrochen"))
+    (let ((org (tibetan-handout-build scope)))
+      (if org-only
+          (progn (find-file org)
+                 (message "Handout (org): %s" (file-name-nondirectory org)))
+        (let ((pdf (tibetan-handout-export-pdf org)))
+          (org-open-file pdf)
+          (message "Handout: %s" (file-name-nondirectory pdf))
+          pdf)))))
+
 (provide 'tibetan-handout)
 ;;; tibetan-handout.el ends here

@@ -464,5 +464,152 @@ Headlines, jede Vokabelzeile hat genau drei Zellen."
     (should-not (string-match-p "\\\\tibfont[^a-z]*[ༀ-࿿]" org))
     (should (string-match-p "\\\\segno{1}mohaḥ svabhāva" org))))
 
+;; ----------------------------------------------------------------------------
+;; B3 — scope at point, file writing, command
+;; ----------------------------------------------------------------------------
+
+(defmacro tibetan-handout-test--in-source (&rest body)
+  "Inside `--with-corpus': visit SRC (BUF current) for BODY."
+  (declare (indent 0))
+  `(let ((buf (find-file-noselect src)))
+     (unwind-protect
+         (with-current-buffer buf ,@body)
+       (with-current-buffer buf (set-buffer-modified-p nil))
+       (kill-buffer buf))))
+
+(defun tibetan-handout-test--scope-at (regexp)
+  "The handout scope with point on the line matching REGEXP."
+  (goto-char (point-min))
+  (re-search-forward regexp)
+  (beginning-of-line)
+  (tibetan-handout--scope-at-point))
+
+(ert-deftest tibetan-handout-scope-at-point ()
+  "Umfang wie bei C-c u A (§5.59 A1): Segment → sein Satz; Satz → Satz;
+Section → ihre Sätze (+ Lopez-§ fürs Label); `* Tibetan Text' →
+alle; in einer sent-Analysedatei → dieser Satz."
+  (tibetan-handout-test--with-corpus
+    (tibetan-handout-test--in-source
+      (let ((s (tibetan-handout-test--scope-at "^\\*\\* Section §220")))
+        (should (equal '(654 655) (plist-get s :sent-nums)))
+        (should (equal "§220" (plist-get s :label)))
+        (should (equal 220 (plist-get s :lopez)))
+        (should (equal src (plist-get s :source))))
+      (should (equal '(655) (plist-get (tibetan-handout-test--scope-at
+                                        "^\\*\\*\\* Sentence 655")
+                                       :sent-nums)))
+      (let ((s (tibetan-handout-test--scope-at "^\\*\\*\\*\\* Segment 1971")))
+        (should (equal '(654) (plist-get s :sent-nums)))
+        (should (equal "Satz 654" (plist-get s :label))))
+      (should (equal '(654 655 656)
+                     (plist-get (tibetan-handout-test--scope-at
+                                 "^\\* Tibetan Text")
+                                :sent-nums))))
+    (let ((buf (find-file-noselect (tibetan-sentence--filepath 654 folder src))))
+      (unwind-protect
+          (with-current-buffer buf
+            (let ((s (tibetan-handout--scope-at-point)))
+              (should (equal '(654) (plist-get s :sent-nums)))
+              (should (equal (file-truename src)
+                             (file-truename (plist-get s :source))))))
+        (kill-buffer buf)))))
+
+(ert-deftest tibetan-handout-build-writes-guarded-file ()
+  "Build schreibt `handouts/<short>-par-220.org' neben die Quelle:
+GENERATED-Marker, Werktitel aus #+TITLE, Lopez/W&M/DM/Working
+Translation NIE (Poison-Lock wie §5.54), kein „Claude“.  Eine
+vorhandene Datei OHNE Marker wird nie überschrieben; mit Marker
+schon (Regenerieren)."
+  (tibetan-handout-test--with-corpus
+    (let* ((scope (list :source src :sent-nums '(654 655 656)
+                        :label "§220" :lopez 220))
+           (out (tibetan-handout-build scope "2026-10-09"))
+           (text (with-temp-buffer (insert-file-contents out) (buffer-string))))
+      (should (equal (expand-file-name "handouts/rgyan-par-220.org" dir) out))
+      (should (string-prefix-p tibetan-handout-generated-marker text))
+      (should (string-match-p "Klu sgrub dgongs rgyan} · §220" text))
+      (dolist (poison '("LOPEZ POISON" "DM POISON" "WT POISON" "Claude"))
+        (should-not (string-match-p poison text)))
+      ;; Regenerieren überschreibt die generierte Datei …
+      (should (equal out (tibetan-handout-build scope "2026-10-10")))
+      (should (string-match-p "Stand 2026-10-10"
+                              (with-temp-buffer (insert-file-contents out)
+                                                (buffer-string))))
+      ;; … eine handeigene Datei nie.
+      (with-temp-file out (insert "* Meine eigene Fassung\n"))
+      (should-error (tibetan-handout-build scope "2026-10-11")
+                    :type 'user-error)
+      (should (equal "* Meine eigene Fassung\n"
+                     (with-temp-buffer (insert-file-contents out)
+                                       (buffer-string)))))))
+
+(ert-deftest tibetan-handout-output-names ()
+  "Dateiname: Lopez-§ → par-NNN, ein Satz → sent-NNN, mehrere ohne §
+→ sent-FIRST-LAST; immer mit dem Quell-Kurznamen (Mehrquellen-
+Ordner kollidieren nicht, §5.23-Lektion)."
+  (tibetan-handout-test--with-corpus
+    (should (string-suffix-p "handouts/rgyan-sent-654.org"
+                             (tibetan-handout--output-file
+                              (list :source src :sent-nums '(654)))))
+    (should (string-suffix-p "handouts/rgyan-sent-654-656.org"
+                             (tibetan-handout--output-file
+                              (list :source src :sent-nums '(654 655 656)))))))
+
+(ert-deftest tibetan-handout-command-org-only-and-pdf ()
+  "C-c u H: in der Quelle mit C-u nur die .org (kein LaTeX-Lauf, die
+.org wird geöffnet); ohne Präfix exportiert und das PDF geöffnet.  IN
+einer erzeugten Handout-.org exportiert C-c u H die Datei SO WIE SIE
+IST (gespeichert) — Carstens Kürzungen vor dem Druck dürfen nie durch
+Neu-Generieren verloren gehen."
+  (tibetan-handout-test--with-corpus
+    (let ((exported nil) (opened nil)
+          (org-file (expand-file-name "handouts/rgyan-par-220.org" dir)))
+      (cl-letf (((symbol-function 'tibetan-handout-export-pdf)
+                 (lambda (org) (setq exported org)
+                   (concat (file-name-sans-extension org) ".pdf")))
+                ((symbol-function 'org-open-file)
+                 (lambda (f &rest _) (setq opened f))))
+        (tibetan-handout-test--in-source
+          (goto-char (point-min))
+          (re-search-forward "^\\*\\* Section §220")
+          (save-window-excursion
+            (tibetan-handout '(4))
+            (should (file-exists-p org-file))
+            (should-not exported)
+            ;; Jetzt IN der Handout-.org: kürzen, C-c u H → Export der
+            ;; bearbeiteten Datei, kein Neu-Generieren.
+            (should (equal (file-truename org-file)
+                           (file-truename (buffer-file-name))))
+            (goto-char (point-max))
+            (insert "\nMEINE KÜRZUNG\n")
+            (tibetan-handout nil)
+            (should (equal (file-truename org-file) (file-truename exported)))
+            (should (string-match-p "MEINE KÜRZUNG"
+                                    (with-temp-buffer
+                                      (insert-file-contents org-file)
+                                      (buffer-string))))
+            (set-buffer-modified-p nil)
+            (kill-buffer))
+          ;; Aus der Quelle ohne Präfix: generieren + exportieren + öffnen.
+          (setq exported nil opened nil)
+          (tibetan-handout nil)
+          (should (string-suffix-p "rgyan-par-220.org" exported))
+          (should (string-suffix-p "rgyan-par-220.pdf" opened)))))))
+
+(ert-deftest tibetan-handout-export-pdf-smoke ()
+  "Echter LuaLaTeX-Lauf (nur wo lualatex + der Tibetisch-Font
+vorhanden sind): die erzeugte .org wird zu einem PDF."
+  (skip-unless (and (executable-find "lualatex")
+                    (executable-find "luaotfload-tool")
+                    (zerop (call-process "luaotfload-tool" nil nil nil
+                                         "--find" tibetan-handout-tibetan-font))))
+  (tibetan-handout-test--with-corpus
+    (let* ((out (tibetan-handout-build
+                 (list :source src :sent-nums '(654) :label "Satz 654")
+                 "2026-10-09"))
+           (pdf (tibetan-handout-export-pdf out)))
+      (should (file-exists-p pdf))
+      (should (string-suffix-p "rgyan-sent-654.pdf" pdf)))))
+
 (provide 'tibetan-handout-test)
 ;;; tibetan-handout-test.el ends here

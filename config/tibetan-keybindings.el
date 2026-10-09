@@ -98,6 +98,12 @@
 (global-set-key (kbd "C-c u j") 'tibetan-analysis-jump-to-source)
   ;; Jump from an analysis buffer back to its source heading
   ;; (follows the #+SOURCE link; sent / seg / par files alike).
+
+(global-set-key (kbd "C-c u H") 'tibetan-handout)
+  ;; Reading-class handout (§5.59) → PDF: Wylie + Uchen, Übersetzung,
+  ;; Vokabular (★ Wortliste zuerst), Grammatik — für den Satz / § /
+  ;; jede Überschrift an Punkt.  C-u: nur die .org (zum Kürzen); in
+  ;; der .org exportiert C-c u H die bearbeitete Fassung.
   ;; Masterarbeit single-screen workflow, 2026-09-15.
 
 (global-set-key (kbd "C-c u R") 'tibetan-reanalyze-segment)

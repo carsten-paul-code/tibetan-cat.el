@@ -215,6 +215,9 @@
      ["§-Ansicht generieren…" tibetan-translation-doc-section
       :active (fboundp 'tibetan-translation-doc-section)
       :help "Kompilierte §-Sicht: Tibetisch + Glossentabellen + Claude/DM-Vorschläge + Übersetzung CP"]
+     ["Lese-Handout (PDF) für Satz/§ an Punkt (C-c u H)" tibetan-handout
+      :active (fboundp 'tibetan-handout)
+      :help "Druckblatt für die Reading-Klasse: Wylie + Uchen, Übersetzung, Vokabular (★ Wortliste zuerst), Grammatik"]
      "---"
      ["Sanskrit-Quelle importieren… (C-c o k)"
       tibetan-cascade-import-sanskrit

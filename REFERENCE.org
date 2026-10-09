@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-10-09T14:27:40
+#+DATE: 2026-10-09T14:30:19
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  79 modules  ·  1548 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  79 modules  ·  1558 forms
 
 Regenerated automatically by:
 
@@ -68,7 +68,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (100)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
-  - [[#persist/tibetan-handout.el][persist/tibetan-handout.el]]  (28)
+  - [[#persist/tibetan-handout.el][persist/tibetan-handout.el]]  (38)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
   - [[#persist/tibetan-sentence-claude.el][persist/tibetan-sentence-claude.el]]  (27)
   - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (60)
@@ -2915,7 +2915,7 @@ Hash table of Tibetan verbs with grammatical information.
 ** ~tibetan-increase-text-scale~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 431
+:LINE: 437
 :SIGNATURE: (tibetan-increase-text-scale)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -2926,7 +2926,7 @@ Increase Tibetan text scale by 0.1.
 ** ~tibetan-decrease-text-scale~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 437
+:LINE: 443
 :SIGNATURE: (tibetan-decrease-text-scale)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -2937,7 +2937,7 @@ Decrease Tibetan text scale by 0.1 (minimum 1.0).
 ** ~tibetan-thesaurus-prefix-map~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 270
+:LINE: 276
 :DEFAULT: (make-sparse-keymap)
 :END:
 
@@ -2953,7 +2953,7 @@ Keymap for thesaurus commands — prefix `C-c u z'.
 ** ~tibetan-cat-context-menu-map~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 275
+:LINE: 278
 :DEFAULT: (let ((map (make-sparse-keymap "Tibetan")))
     (define-key map [segment-info] '(menu-item "Segment Info" tibetan-segmen
 :END:
@@ -18441,11 +18441,12 @@ tool's Translation/Vocabulary/Grammar slots — Provided Translations
 
 S with the LaTeX special characters escaped (raw-LaTeX blocks).
 
-** ~tibetan-handout--emphasis~  /function/
+** ~tibetan-handout--emphasis~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
 :LINE: 371
 :SIGNATURE: (tibetan-handout--emphasis body org-marker latex-cmd prev next)
+:INTERACTIVE: t
 :END:
 
 BODY as org emphasis with ORG-MARKER when org will recognise it
@@ -18544,6 +18545,111 @@ plists.  Pure: no file access.  Layout (Carsten 09.10.): `* Text'
 with Übersetzung / Vokabular / Grammatik.  The word "Claude" never
 appears (headings are German; the slots are named by content).
 
+** ~tibetan-handout--enclosing-sentence~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 601
+:SIGNATURE: (tibetan-handout--enclosing-sentence)
+:END:
+
+Number of the `Sentence N' heading at or above point, or nil.
+
+** ~tibetan-handout--scope-at-point~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 614
+:SIGNATURE: (tibetan-handout--scope-at-point)
+:END:
+
+What the handout covers, from point: (:source :sent-nums :label
+:lopez).  In a cascade SOURCE the scope follows the org outline
+like C-c u A (§5.59 A1): Segment → its sentence, Sentence → it, any
+higher heading → every sentence below (a Section with
+`:LOPEZ_SECTION:' labels as "§N"), before the first heading → the
+document.  In a `sent-NNN' analysis buffer: that sentence.
+
+** ~tibetan-handout--output-file~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 657
+:SIGNATURE: (tibetan-handout--output-file scope)
+:END:
+
+`<source dir>/handouts/<short>-par-NNN.org' for a Lopez § SCOPE,
+else `<short>-sent-N[-M].org'.  The source short name keeps
+multi-source folders collision-free (§5.23 lesson).
+
+** ~tibetan-handout--source-title~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 674
+:SIGNATURE: (tibetan-handout--source-title source-file)
+:END:
+
+The work title: SOURCE-FILE's #+TITLE before " — ", or its base name.
+
+** ~tibetan-handout-build~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 683
+:SIGNATURE: (tibetan-handout-build scope &optional date)
+:END:
+
+Write the handout .org for SCOPE (`tibetan-handout--scope-at-point'
+shape) and return its path.  The class wordlist (★) of the source's
+Resources is bound for the whole build; DATE (default today) goes
+into the footer.  An existing target WITHOUT the GENERATED marker is
+never overwritten (user-error) — a generated one is regenerated.
+
+** ~tibetan-handout-export-pdf~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 715
+:SIGNATURE: (tibetan-handout-export-pdf org-file)
+:END:
+
+Export ORG-FILE to PDF beside it and return the PDF path.
+LuaLaTeX (the file's #+LATEX_COMPILER), two runs for longtable —
+bound locally, so the user's own `org-latex-pdf-process' (latexmk …)
+neither breaks nor is changed.
+
+** ~tibetan-handout--generated-buffer-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 732
+:SIGNATURE: (tibetan-handout--generated-buffer-p)
+:END:
+
+Non-nil when the current buffer is a generated handout.
+
+** ~tibetan-handout~  /function/  ⚡  ↗
+:PROPERTIES:
+:KIND: defun
+:LINE: 739
+:SIGNATURE: (tibetan-handout &optional org-only)
+:INTERACTIVE: t
+:AUTOLOAD: t
+:END:
+
+Reading-class handout for the scope at point (C-c u H).
+In a cascade source: the sentence at point, or every sentence under
+the heading at point (a § …); in a sent-NNN analysis buffer: that
+sentence.  Writes `handouts/<short>-….org' beside the source (may be
+shortened before printing; regenerating overwrites it), exports it
+to PDF and opens the PDF.  With ORG-ONLY (C-u): only the .org, which
+is opened for editing.  INSIDE a generated handout the buffer is
+saved and exported as it is — shortening before printing is never
+undone by a regeneration.  No network, no API call.
+
+** ~tibetan-handout--from-scope~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 759
+:SIGNATURE: (tibetan-handout--from-scope org-only)
+:END:
+
+Body of `tibetan-handout' outside a generated handout buffer.
+
 ** ~tibetan-handout-grammar-labels~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
@@ -18607,6 +18713,14 @@ First line of every generated handout.  The overwrite guard
 refuses an existing target without it (a hand-owned file is never
 clobbered); a generated handout may be shortened before printing —
 the next C-c u H regenerates it from the analysis files.
+
+** ~org-latex-pdf-process~  /variable/
+:PROPERTIES:
+:KIND: defvar
+:LINE: 712
+:END:
+
+/(no docstring)/
 
 
 * persist/tibetan-portfolio.el
@@ -21546,7 +21660,7 @@ Holds the result of the WHEN clause for use in THEN assertions.
 ** ~tibetan-cat-setup~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 296
+:LINE: 297
 :SIGNATURE: (tibetan-cat-setup)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -21558,7 +21672,7 @@ Loads glossaries and prepares the system for use.
 ** ~tibetan-cat-version~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 382
+:LINE: 383
 :SIGNATURE: (tibetan-cat-version)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -21569,7 +21683,7 @@ Display Tibetan CAT version and feature summary.
 ** ~tibetan-cat--server-socket-path~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 425
+:LINE: 426
 :SIGNATURE: (tibetan-cat--server-socket-path server-name)
 :END:
 
@@ -21581,7 +21695,7 @@ removed when the server is stopped).
 ** ~tibetan-cat-open-zettel-for-word-at-point~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 436
+:LINE: 437
 :SIGNATURE: (tibetan-cat-open-zettel-for-word-at-point &optional arg)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -21614,7 +21728,7 @@ in the appropriate instance.
 ** ~tibetan-cat-zettel-target-server~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 405
+:LINE: 406
 :TYPE: 'string
 :GROUP: tibetan-cat
 :DEFAULT: "research-emacs"
@@ -21636,7 +21750,7 @@ Empty string disables remote routing entirely.
 ** ~tibetan-cat-version~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 293
+:LINE: 294
 :END:
 
 /(no docstring)/
@@ -21644,7 +21758,7 @@ Empty string disables remote routing entirely.
 ** ~tibetan-cat-version~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 378
+:LINE: 379
 :DEFAULT: "2.1.0"
 :END:
 
@@ -21653,7 +21767,7 @@ Version of Tibetan CAT system.
 ** ~server-socket-dir~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 423
+:LINE: 424
 :END:
 
 /(no docstring)/

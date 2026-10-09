@@ -165,6 +165,7 @@
 (require 'tibetan-reading nil t)        ; R3: decorated Wylie lines (cascade Reading view)
 (require 'tibetan-gloss-table nil t)    ; §184-handout three-row gloss tables
 (require 'tibetan-translation-doc nil t) ; Masterarbeit view 3: translation stitcher
+(require 'tibetan-handout nil t)        ; §5.59 reading-class handout → PDF (C-c u H)
 (require 'tibetan-analysis-nav nil t)    ; Source<->analysis navigation (C-c u j/n/p)
 
 ;; AI Translation (optional - soft load)
