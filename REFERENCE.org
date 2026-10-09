@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-10-09T10:55:32
+#+DATE: 2026-10-09T14:10:50
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  78 modules  ·  1513 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  78 modules  ·  1515 forms
 
 Regenerated automatically by:
 
@@ -65,7 +65,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-analysis-persist.el][persist/tibetan-analysis-persist.el]]  (154)
   - [[#persist/tibetan-analysis-sanskrit.el][persist/tibetan-analysis-sanskrit.el]]  (22)
   - [[#persist/tibetan-auto-analysis.el][persist/tibetan-auto-analysis.el]]  (29)
-  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (94)
+  - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (96)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
@@ -16942,10 +16942,39 @@ gilt je SLOT: solange irgendein Pflicht-Slot leer ist, darf der
 Satz-Fire öffnen (die Landung gated ihrerseits per Slot und fasst
 Gelandetes nicht an).
 
-** ~tibetan-cascade--fire-sentence~  /function/
+** ~tibetan-cascade--fire-plist~  /function/
 :PROPERTIES:
 :KIND: defun
 :LINE: 1762
+:SIGNATURE: (tibetan-cascade--fire-plist sent-num segs)
+:END:
+
+The sentence plist `tibetan-cascade--fire-sentence' expects, built
+from SENT-NUM and SEGS ((GLOBAL-NUM . TEXT) …): :sent-num,
+:seg-nums, :children and :tibetan-text.
+A0 (§5.59): EINE Bauvorschrift — der Prompt-Builder leitet die
+`### Segment N'-Enumeration aus :children ab (A3-Vertrag, 2026-09-24:
+ohne sie bekommt Claude keine Segmenttexte und kann die ⟦N⟧-Spans
+nicht setzen).
+
+** ~tibetan-cascade--sentence-needs-fire-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 1777
+:SIGNATURE: (tibetan-cascade--sentence-needs-fire-p file seg-nums)
+:END:
+
+Non-nil when the cascade FILE still needs a sentence-level fire:
+a Claude slot is incomplete (`--claude-sections-incomplete-p', per
+slot — B3) or any ⟦N⟧ rendering of SEG-NUMS is a placeholder/stub.
+A0 (§5.59): EIN Gate für den Fire selbst und für die Vorab-Zählung
+der Subtree-Analyse (C-c u A auf höheren Ebenen fragt ab einer
+Schwelle nach — die Zahl muss exakt die Fires sein, die passieren).
+
+** ~tibetan-cascade--fire-sentence~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 1789
 :SIGNATURE: (tibetan-cascade--fire-sentence sentence source-file folder
                                        &optional force)
 :END:
@@ -16964,7 +16993,7 @@ nested slot.  Returns `fired' / `dedup-hit' / nil (does not apply).
 ** ~tibetan-cascade--fire-sentence-1~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1782
+:LINE: 1809
 :SIGNATURE: (tibetan-cascade--fire-sentence-1 sentence source-file folder force)
 :END:
 
@@ -16973,7 +17002,7 @@ Unguarded body of `tibetan-cascade--fire-sentence'.
 ** ~tibetan-cascade--collect-sentences~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1819
+:LINE: 1841
 :SIGNATURE: (tibetan-cascade--collect-sentences)
 :END:
 
@@ -16986,7 +17015,7 @@ deeper level (the `tibetan-auto--collect-segments' convention).
 ** ~tibetan-cascade--collect-section-chunks~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1886
+:LINE: 1908
 :SIGNATURE: (tibetan-cascade--collect-section-chunks)
 :END:
 
@@ -16999,7 +17028,7 @@ when a chunk would exceed `tibetan-cascade-chunk-max-segments'.
 ** ~tibetan-cascade--build-chunk-prompts~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 1955
+:LINE: 1977
 :SIGNATURE: (tibetan-cascade--build-chunk-prompts chunk source-file)
 :END:
 
@@ -17008,7 +17037,7 @@ Build (SYSTEM . USER) for a chunk-fire call over CHUNK.
 ** ~tibetan-cascade--chunk-translation-body~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2009
+:LINE: 2031
 :SIGNATURE: (tibetan-cascade--chunk-translation-body response)
 :END:
 
@@ -17018,7 +17047,7 @@ heading is absent — the markers still carry the information).
 ** ~tibetan-cascade--land-chunk-response~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2021
+:LINE: 2043
 :SIGNATURE: (tibetan-cascade--land-chunk-response response ctx)
 :END:
 
@@ -17037,7 +17066,7 @@ landing-gated per file (§5.38-M7).
 ** ~tibetan-cascade-create-all~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 2097
+:LINE: 2119
 :SIGNATURE: (tibetan-cascade-create-all &optional force)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -17055,7 +17084,7 @@ under `#+TIBETAN_DEFER_MT').  Returns
 ** ~tibetan-cascade--segs-for-sentence~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2157
+:LINE: 2179
 :SIGNATURE: (tibetan-cascade--segs-for-sentence source-file sent-num)
 :END:
 
@@ -17064,7 +17093,7 @@ SOURCE-FILE's sentence SENT-NUM as (GLOBAL-NUM . TEXT) pairs, or nil.
 ** ~tibetan-cascade-open-for-segment~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 2171
+:LINE: 2193
 :SIGNATURE: (tibetan-cascade-open-for-segment seg-id source-file)
 :AUTOLOAD: t
 :END:
@@ -17082,7 +17111,7 @@ is what counts.
 ** ~tibetan-cascade-reanalyze-file~  /function (cl)/
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 2265
+:LINE: 2287
 :SIGNATURE: (tibetan-cascade-reanalyze-file filepath &key source-file
                                                    re-request-claude)
 :END:
@@ -17098,7 +17127,7 @@ still defers under #+TIBETAN_DEFER_MT.  Returns
 ** ~tibetan-cascade-reanalyze-for-segment~  /function/  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 2332
+:LINE: 2341
 :SIGNATURE: (tibetan-cascade-reanalyze-for-segment seg-id source-file
                                               &optional re-request-claude)
 :AUTOLOAD: t
@@ -17111,7 +17140,7 @@ label).  Returns the `tibetan-cascade-reanalyze-file' plist.
 ** ~tibetan-cascade-file-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2364
+:LINE: 2373
 :SIGNATURE: (tibetan-cascade-file-p filepath)
 :END:
 
@@ -17123,7 +17152,7 @@ destroy the * Subsegments tree.
 ** ~tibetan-shad-split-segments~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 2385
+:LINE: 2394
 :SIGNATURE: (tibetan-shad-split-segments)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -17145,7 +17174,7 @@ Returns (:segments-before N :segments-after M).
 ** ~tibetan-cascade--sanskrit-split-prose~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2485
+:LINE: 2494
 :SIGNATURE: (tibetan-cascade--sanskrit-split-prose block)
 :END:
 
@@ -17158,7 +17187,7 @@ daṇḍa-less block is ONE unit.  nil-safe.
 ** ~tibetan-cascade--sanskrit-block-verse-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2502
+:LINE: 2511
 :SIGNATURE: (tibetan-cascade--sanskrit-block-verse-p block)
 :END:
 
@@ -17168,7 +17197,7 @@ Non-nil when BLOCK reads as a verse: ≥2 lines AND a double-daṇḍa
 ** ~tibetan-cascade--sanskrit-split-blocks~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2509
+:LINE: 2518
 :SIGNATURE: (tibetan-cascade--sanskrit-split-blocks text)
 :END:
 
@@ -17179,7 +17208,7 @@ Text before the first marker forms a section labeled "Text".
 ** ~tibetan-cascade-import-sanskrit~  /function (cl)/  ⚡  ↗
 :PROPERTIES:
 :KIND: cl-defun
-:LINE: 2538
+:LINE: 2547
 :SIGNATURE: (tibetan-cascade-import-sanskrit input output-file &key title)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -17222,7 +17251,7 @@ Returns (:sections N :sentences N :segments N :file OUTPUT-FILE).
 ** ~tibetan-cascade-import-comparative~  /function/  ⚡
 :PROPERTIES:
 :KIND: defun
-:LINE: 2638
+:LINE: 2647
 :SIGNATURE: (tibetan-cascade-import-comparative comparative-file output-file)
 :INTERACTIVE: t
 :END:
@@ -17252,7 +17281,7 @@ hand-owned from the moment it exists.  Returns
 ** ~tibetan-cascade--sentence-lopez-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2754
+:LINE: 2763
 :SIGNATURE: (tibetan-cascade--sentence-lopez-section source-file sent-num)
 :END:
 
@@ -17261,7 +17290,7 @@ The :LOPEZ_SECTION: of the Section wrapping SENT-NUM, or nil.
 ** ~tibetan-cascade--section-refs-block~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2774
+:LINE: 2783
 :SIGNATURE: (tibetan-cascade--section-refs-block sentence source-file)
 :END:
 
@@ -17277,7 +17306,7 @@ anything along the chain is missing.
 ** ~tibetan-cascade--section-ref-bodies~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2807
+:LINE: 2816
 :SIGNATURE: (tibetan-cascade--section-ref-bodies refs-file secnum)
 :END:
 
@@ -17296,7 +17325,7 @@ Translations (P2).
 ** ~tibetan-cascade--pt-region~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2856
+:LINE: 2865
 :SIGNATURE: (tibetan-cascade--pt-region)
 :END:
 
@@ -17306,7 +17335,7 @@ aktuellen Buffer, oder nil.
 ** ~tibetan-cascade--pt-slot-present-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2869
+:LINE: 2878
 :SIGNATURE: (tibetan-cascade--pt-slot-present-p name)
 :END:
 
@@ -17317,7 +17346,7 @@ des aktuellen Buffers steht (EINMALIG-Gate: ein vorhandener Slot
 ** ~tibetan-cascade--pt-insert-slot~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 2881
+:LINE: 2890
 :SIGNATURE: (tibetan-cascade--pt-insert-slot name body)
 :END:
 
@@ -17327,7 +17356,7 @@ des aktuellen Buffers einsetzen; t bei Erfolg.
 ** ~tibetan-cascade-materialize-provided-translations~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 2895
+:LINE: 2904
 :SIGNATURE: (tibetan-cascade-materialize-provided-translations target)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -17351,7 +17380,7 @@ die §5.54-Poison-Locks halten die Bodies aus Stitcher und
 ** ~tibetan-cascade-migrate-structure-v2~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 2960
+:LINE: 2981
 :SIGNATURE: (tibetan-cascade-migrate-structure-v2 folder)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -17371,7 +17400,7 @@ Rückgabe (:total :ok :skipped :failed :failures ((FILE . ERR)…)).
 ** ~tibetan-cascade--schedule-dm-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3004
+:LINE: 3025
 :SIGNATURE: (tibetan-cascade--schedule-dm-section chunk files force)
 :END:
 
@@ -17382,7 +17411,7 @@ per SECTION instead of one per sentence.
 ** ~tibetan-cascade--fire-section~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 3028
+:LINE: 3049
 :SIGNATURE: (tibetan-cascade--fire-section chunk source-file folder
                                       &optional force)
 :END:
@@ -17397,7 +17426,7 @@ flavor); DM rides the same claim at SECTION granularity.  Returns
 ** ~tibetan-cascade-fire-sections~  /function/  ⚡  ↗
 :PROPERTIES:
 :KIND: defun
-:LINE: 3095
+:LINE: 3116
 :SIGNATURE: (tibetan-cascade-fire-sections &optional force)
 :INTERACTIVE: t
 :AUTOLOAD: t
@@ -17412,7 +17441,7 @@ populated sections too.
 ** ~tibetan-cascade-chunk-max-segments~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
-:LINE: 1877
+:LINE: 1899
 :TYPE: 'integer
 :GROUP: tibetan-cat
 :DEFAULT: 40
@@ -17522,7 +17551,7 @@ per-Slot-Gate der Landung.
 ** ~tibetan-auto-fire-claude-on-create~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 1817
+:LINE: 1839
 :END:
 
 /(no docstring)/
@@ -17530,7 +17559,7 @@ per-Slot-Gate der Landung.
 ** ~tibetan-cascade--chunk-system-addendum~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 1918
+:LINE: 1940
 :DEFAULT: "
 
 CHUNK MODE — this request covers a PASSAGE spanning several
@@ -17546,7 +17575,7 @@ responses drop content, so vocabulary/grammar stay per-sentence.
 ** ~tibetan-cascade--chunk-system-addendum-sanskrit~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 1937
+:LINE: 1959
 :DEFAULT: "
 
 CHUNK MODE — this request covers a PASSAGE spanning several
@@ -17561,7 +17590,7 @@ Tibetan pair.  Constant per document.
 ** ~tibetan-sentence-claude--dm-schedule-count~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 3001
+:LINE: 3022
 :END:
 
 /(no docstring)/
@@ -17569,7 +17598,7 @@ Tibetan pair.  Constant per document.
 ** ~tibetan-dharmamitra-sentence-request-delay~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 3002
+:LINE: 3023
 :END:
 
 /(no docstring)/

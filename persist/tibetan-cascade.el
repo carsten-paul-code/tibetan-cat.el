@@ -1759,6 +1759,33 @@ Gelandetes nicht an)."
                  (null (tibetan-sentence--read-l2-body
                         file "Word Analysis"))))))))
 
+(defun tibetan-cascade--fire-plist (sent-num segs)
+  "The sentence plist `tibetan-cascade--fire-sentence' expects, built
+from SENT-NUM and SEGS ((GLOBAL-NUM . TEXT) …): :sent-num,
+:seg-nums, :children and :tibetan-text.
+A0 (§5.59): EINE Bauvorschrift — der Prompt-Builder leitet die
+`### Segment N'-Enumeration aus :children ab (A3-Vertrag, 2026-09-24:
+ohne sie bekommt Claude keine Segmenttexte und kann die ⟦N⟧-Spans
+nicht setzen)."
+  (list :sent-num sent-num
+        :seg-nums (mapcar #'car segs)
+        :children (mapcar (lambda (s)
+                            (list :seg-num (car s) :text (cdr s)))
+                          segs)
+        :tibetan-text (mapconcat #'cdr segs "")))
+
+(defun tibetan-cascade--sentence-needs-fire-p (file seg-nums)
+  "Non-nil when the cascade FILE still needs a sentence-level fire:
+a Claude slot is incomplete (`--claude-sections-incomplete-p', per
+slot — B3) or any ⟦N⟧ rendering of SEG-NUMS is a placeholder/stub.
+A0 (§5.59): EIN Gate für den Fire selbst und für die Vorab-Zählung
+der Subtree-Analyse (C-c u A auf höheren Ebenen fragt ab einer
+Schwelle nach — die Zahl muss exakt die Fires sein, die passieren)."
+  (or (tibetan-cascade--claude-sections-incomplete-p file)
+      (cl-some (lambda (n)
+                 (tibetan-cascade--rendering-needs-request-p file n))
+               seg-nums)))
+
 (defun tibetan-cascade--fire-sentence (sentence source-file folder
                                        &optional force)
   "Fire ONE sentence-level Claude call for a CASCADE document.
@@ -1790,15 +1817,10 @@ nested slot.  Returns `fired' / `dedup-hit' / nil (does not apply)."
     (when (and file (file-exists-p file) seg-nums
                (fboundp 'tibetan-sentence-claude--claim)
                (fboundp 'tibetan-sentence-claude--request))
-      ;; B3 (§5.58): per-Slot-Prädikat statt needs-request-p — siehe
-      ;; `tibetan-cascade--claude-sections-incomplete-p'.
+      ;; B3 (§5.58): per-Slot-Prädikat statt needs-request-p; A0
+      ;; (§5.59): das Gate lebt in `--sentence-needs-fire-p'.
       (when (or force
-                (tibetan-cascade--claude-sections-incomplete-p file)
-                (cl-some
-                 (lambda (n)
-                   (tibetan-cascade--rendering-needs-request-p
-                    file n))
-                 seg-nums))
+                (tibetan-cascade--sentence-needs-fire-p file seg-nums))
         (let ((label (format "sent-%03d (cascade)" sent-num)))
           (if (not (tibetan-sentence-claude--claim
                     source-file sent-num label))
@@ -2300,23 +2322,10 @@ still defers under #+TIBETAN_DEFER_MT.  Returns
               ;; DEFER-MT VISIBILITY (2026-07-30): the guarded fire
               ;; returns `deferred' silently — C-c u R then LOOKED
               ;; like a no-op failure.  Tell the user what happened.
+              ;; A3 (2026-09-24) / A0 (§5.59): :children trägt die
+              ;; Segment-Enumeration — `--fire-plist' baut sie.
               (when (eq (tibetan-cascade--fire-sentence
-                         (list :sent-num sent-id
-                               :seg-nums (mapcar #'car segs)
-                               ;; A3 (2026-09-24): --build-prompts
-                               ;; derives the `### Segment N' user-
-                               ;; prompt enumeration from :children —
-                               ;; without it Claude gets no per-
-                               ;; segment texts and cannot place the
-                               ;; ⟦N⟧ spans (the walker path always
-                               ;; carried it; this hand-built plist
-                               ;; did not).
-                               :children (mapcar
-                                          (lambda (s)
-                                            (list :seg-num (car s)
-                                                  :text (cdr s)))
-                                          segs)
-                               :tibetan-text (mapconcat #'cdr segs ""))
+                         (tibetan-cascade--fire-plist sent-id segs)
                          src (file-name-directory
                               (expand-file-name filepath))
                          (eq re-request-claude t))

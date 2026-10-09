@@ -1081,6 +1081,43 @@ fehlenden Sektionen für immer unerreichbar waren."
         (should (= 1 (length requests)))))))
 
 ;; ============================================================================
+;; A0 (§5.59): Fire-Plist + Fire-Gate als geteilte Helfer
+;; ============================================================================
+
+(ert-deftest tibetan-cascade-fire-plist-carries-children ()
+  "A0 (§5.59): der Satz-Plist für `--fire-sentence' wird an EINER
+Stelle gebaut — :seg-nums, :children (der A3-Vertrag: ohne sie bekommt
+Claude keine Segment-Enumeration) und :tibetan-text."
+  (let ((p (tibetan-cascade--fire-plist
+            4 '((105 . "བདག་གིས་") (106 . "ཆོས།")))))
+    (should (= 4 (plist-get p :sent-num)))
+    (should (equal '(105 106) (plist-get p :seg-nums)))
+    (should (equal '((:seg-num 105 :text "བདག་གིས་")
+                     (:seg-num 106 :text "ཆོས།"))
+                   (plist-get p :children)))
+    (should (equal "བདག་གིས་ཆོས།" (plist-get p :tibetan-text)))))
+
+(ert-deftest tibetan-cascade-sentence-needs-fire-p-gate ()
+  "A0 (§5.59): EIN Gate für Fire und Vorab-Zählung — offen bei
+unvollständigen Claude-Slots ODER Rendering-Platzhalter, zu wenn
+alles gelandet ist."
+  (tibetan-cascade-test--with-cascade-file
+    ;; Frisches Scaffold: alles Platzhalter → offen.
+    (should (tibetan-cascade--sentence-needs-fire-p cascade-file '(105 106)))
+    (tibetan-cascade-test--set-translation-body cascade-file "Ganzer Satz.")
+    (tibetan-cascade-test--set-l2-body cascade-file "Claude Vocabulary"
+                                       "bdag, pronoun, \"ich\", note")
+    (tibetan-cascade-test--set-l2-body cascade-file "Concept Notes"
+                                       "[No notable concepts in this passage]")
+    (tibetan-cascade--write-rendering cascade-file 105 "Span eins.")
+    ;; 106 noch Platzhalter → offen.
+    (should (tibetan-cascade--sentence-needs-fire-p cascade-file '(105 106)))
+    (tibetan-cascade--write-rendering cascade-file 106 "Span zwei.")
+    ;; Alles gelandet → zu.
+    (should-not (tibetan-cascade--sentence-needs-fire-p
+                 cascade-file '(105 106)))))
+
+;; ============================================================================
 ;; M1 (§5.58): Ordner-Migration auf die v2-Struktur
 ;; ============================================================================
 
