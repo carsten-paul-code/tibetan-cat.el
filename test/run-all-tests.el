@@ -131,6 +131,8 @@ body in the test suite (the transport self-tests only).")
 (condition-case nil (require 'tibetan-cascade-test) (error nil))
 ;; Masterarbeit view 3: translation stitcher (2026-09-15)
 (condition-case nil (require 'tibetan-translation-doc-test) (error nil))
+;; §5.59: reading-class handout (2026-10-09)
+(condition-case nil (require 'tibetan-handout-test) (error nil))
 ;; Source<->analysis navigation (2026-09-15)
 (condition-case nil (require 'tibetan-analysis-nav-test) (error nil))
 
