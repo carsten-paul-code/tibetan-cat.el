@@ -1502,6 +1502,125 @@ never creates a seg file."
               (kill-buffer b))))))))
 
 ;; ============================================================================
+;; A1 (§5.59): C-c u A auf JEDER Hierarchieebene (Kaskaden-Quelle)
+;; ============================================================================
+
+(defmacro tibetan-cascade-test--with-sectioned-source (sec1 &rest body)
+  "Visit a cascade source with two Sections — SEC1 (heading text
+after `** ') wraps Sentences 4+5, `Section §168' wraps Sentence 6.
+Bind SRC, DIR, ANALYSIS; BUF is current.  The renderer is stubbed;
+FIRED collects the sent-nums `--fire-sentence' saw, OPENED the
+segment `--open-for-segment' was called with, PARAGRAPH is set when
+the two-file paragraph path runs."
+  (declare (indent 1))
+  `(tibetan-cascade-test--with-stub-renderer
+     (let* ((dir (make-temp-file "cascade-subtree-" t))
+            (src (expand-file-name "doc.org" dir))
+            (analysis (expand-file-name "analysis" dir))
+            (fired '()) (opened nil) (paragraph nil)
+            (tibetan-auto-fire-claude-on-create t))
+       (unwind-protect
+           (progn
+             (with-temp-file src
+               (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                       "* Tibetan Text\n"
+                       "** " ,sec1 "\n"
+                       ":PROPERTIES:\n:LOPEZ_SECTION: 167\n:END:\n\n"
+                       "*** Sentence 4\n"
+                       "**** Segment 105\nབདག་གིས་ལས་བྱས།\n\n"
+                       "**** Segment 106\nཆོས་ཟབ་མོ་ཡིན།\n\n"
+                       "*** Sentence 5\n"
+                       "**** Segment 107\nམཐའ་མ་འདི་ཡིན།\n\n"
+                       "** Section §168\n"
+                       ":PROPERTIES:\n:LOPEZ_SECTION: 168\n:END:\n\n"
+                       "*** Sentence 6\n"
+                       "**** Segment 108\nལམ་འདི་ཡིན།\n\n"))
+             (let ((buf (find-file-noselect src)))
+               (unwind-protect
+                   (cl-letf (((symbol-function 'tibetan-cascade--fire-sentence)
+                              (lambda (sentence &rest _)
+                                (push (plist-get sentence :sent-num) fired)
+                                'fired))
+                             ((symbol-function 'tibetan-cascade-open-for-segment)
+                              (lambda (seg &rest _) (setq opened seg) nil))
+                             ((symbol-function 'tibetan-open-paragraph-analysis)
+                              (lambda (&rest _) (setq paragraph t))))
+                     (with-current-buffer buf ,@body))
+                 (when (buffer-live-p buf)
+                   (with-current-buffer buf (set-buffer-modified-p nil))
+                   (kill-buffer buf)))))
+         (delete-directory dir t)))))
+
+(defun tibetan-cascade-test--sent-files (analysis)
+  "Sorted sent-file basenames in ANALYSIS (nil when absent)."
+  (and (file-directory-p analysis)
+       (sort (directory-files analysis nil "\\`sent-") #'string<)))
+
+(ert-deftest tibetan-cascade-cu-a-on-section-analyzes-subtree ()
+  "A1 (§5.59, Carstens Befund an §220): C-c u A auf `** Section §167'
+einer KASKADEN-Quelle lief in den Two-File-Absatzpfad („Paragraph
+§220 has no `*** Tibetisch' child\").  Jetzt: alle Sätze NUR dieses
+Subtrees angelegt + (gated) gefeuert, der erste Satz geöffnet."
+  (tibetan-cascade-test--with-sectioned-source "Section §167"
+    (goto-char (point-min))
+    (re-search-forward "^\\*\\* Section §167")
+    (tibetan-open-segment-analysis)
+    (should-not paragraph)
+    (should (equal '("sent-004-doc.org" "sent-005-doc.org")
+                   (tibetan-cascade-test--sent-files analysis)))
+    (should (equal '(4 5) (sort fired #'<)))
+    (should (equal 105 opened))))
+
+(ert-deftest tibetan-cascade-cu-a-on-top-heading-analyzes-document ()
+  "A1 (§5.59): `* Tibetan Text' (Ebene 1) umfasst alle Sätze — die
+org-Hierarchie bestimmt den Umfang, nicht ein fester Level."
+  (tibetan-cascade-test--with-sectioned-source "Section §167"
+    (goto-char (point-min))
+    (re-search-forward "^\\* Tibetan Text")
+    (tibetan-open-segment-analysis)
+    (should (equal '("sent-004-doc.org" "sent-005-doc.org"
+                     "sent-006-doc.org")
+                   (tibetan-cascade-test--sent-files analysis)))
+    (should (equal '(4 5 6) (sort fired #'<)))))
+
+(ert-deftest tibetan-cascade-cu-a-on-section-without-paragraph-sign ()
+  "A1 (§5.59): Sanskrit-Quellen tragen Sections ohne „§\"
+\(`** Section MAv VI.28') — bisher fiel C-c u A dort in den
+Segment-Impl („Not in a segment or paragraph\")."
+  (tibetan-cascade-test--with-sectioned-source "Section MAv VI.28"
+    (goto-char (point-min))
+    (re-search-forward "^\\*\\* Section MAv")
+    (tibetan-open-segment-analysis)
+    (should (equal '(4 5) (sort fired #'<)))))
+
+(ert-deftest tibetan-cascade-cu-a-subtree-asks-above-threshold ()
+  "A1 (§5.59): über `tibetan-cascade-subtree-confirm-threshold'
+fragt C-c u A mit der Anzahl nach (API-Kosten!); „n\" → kein
+Fire.  Das strukturelle Anlegen ist gratis und bleibt."
+  (tibetan-cascade-test--with-sectioned-source "Section §167"
+    (let ((tibetan-cascade-subtree-confirm-threshold 1)
+          (prompt nil))
+      (cl-letf (((symbol-function 'y-or-n-p)
+                 (lambda (p) (setq prompt p) nil)))
+        (goto-char (point-min))
+        (re-search-forward "^\\* Tibetan Text")
+        (tibetan-open-segment-analysis))
+      (should (and prompt (string-match-p "\\b3\\b" prompt)))
+      (should-not fired)
+      (should (= 3 (length (tibetan-cascade-test--sent-files analysis)))))))
+
+(ert-deftest tibetan-cascade-cu-a-subtree-skips-complete-sentences ()
+  "A1 (§5.59): vollständige Sätze feuern nicht (das A0-Gate
+entscheidet — Zählung und Fire benutzen dasselbe Prädikat)."
+  (tibetan-cascade-test--with-sectioned-source "Section §167"
+    (cl-letf (((symbol-function 'tibetan-cascade--sentence-needs-fire-p)
+               (lambda (file _segs) (string-match-p "sent-005" file))))
+      (goto-char (point-min))
+      (re-search-forward "^\\*\\* Section §167")
+      (tibetan-open-segment-analysis))
+    (should (equal '(5) fired))))
+
+;; ============================================================================
 ;; C4.3 — reanalyze routing + folder-batch safety
 ;; ============================================================================
 

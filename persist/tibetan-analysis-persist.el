@@ -5002,6 +5002,9 @@ unused-arg warning without breaking the public API."
 ;; MAIN COMMANDS
 ;; ============================================================================
 
+(declare-function tibetan-cascade-analyze-subtree "tibetan-cascade"
+                  (source-file))
+
 ;;;###autoload
 (defun tibetan-open-segment-analysis ()
   "Open or create analysis, dispatched by cursor context (all 3 levels).
@@ -5011,10 +5014,14 @@ Priority is most-specific-wins, respecting nested org layouts:
      → classical segment-level analysis (seg-NNN.org)
   2. `*** Sentence N' heading (or its body between segments)
      → `tibetan-sentence-open-analysis' (sent-NNN.org)
-  3. `** §N' paragraph heading (or any descendant when the subtree
-     has no sentence/segment children)
+  3. CASCADE source, any other position (Section, `* Tibetan
+     Text', any heading level, file header)
+     → `tibetan-cascade-analyze-subtree' (§5.59: the org subtree
+     cascades — create + gated fire for every sentence below)
+  4. `** §N' paragraph heading (or any descendant when the subtree
+     has no sentence/segment children) of a TWO-FILE source
      → `tibetan-open-paragraph-analysis' (par-NNN.org)
-  4. Legacy 〔seg:…〕 or plain-text line
+  5. Legacy 〔seg:…〕 or plain-text line
      → classical segment impl via `-any-format' detection.
 
 Segment/sentence detectors only look at the nearest heading, so
@@ -5057,6 +5064,17 @@ sentence."
               (tibetan-cascade-open-for-segment seg (buffer-file-name))
             (user-error "Sentence at point has no segments")))
       (tibetan-sentence-open-analysis)))
+   ;; A1 (§5.59): every OTHER position in a CASCADE source (Section,
+   ;; `* Tibetan Text', any heading level, the file header) analyzes
+   ;; the org subtree — never the two-file paragraph path, whose `§'
+   ;; probe matched `** Section §220' and demanded a `*** Tibetisch'
+   ;; child.  The layout is probed textually; the module is then
+   ;; REQUIRED (no fboundp fall-through into a wrong path — B0).
+   ((and (derived-mode-p 'org-mode)
+         (buffer-file-name)
+         (tibetan-analysis--cascade-p (buffer-file-name)))
+    (require 'tibetan-cascade)
+    (tibetan-cascade-analyze-subtree (buffer-file-name)))
    ((and (derived-mode-p 'org-mode)
          (fboundp 'tibetan-org-at-paragraph-p)
          (tibetan-org-at-paragraph-p))

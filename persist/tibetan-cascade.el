@@ -2274,6 +2274,106 @@ is what counts."
         buf))))
 
 ;; ============================================================================
+;; A1 (§5.59) — C-c u A above sentence level: the org subtree cascades
+;; ============================================================================
+
+(defcustom tibetan-cascade-subtree-confirm-threshold 10
+  "C-c u A above sentence level asks before firing MORE sentences.
+The subtree analysis fires one Claude + one DharmaMitra call per
+incomplete sentence; on `* Tibetan Text' of a big source that is
+hundreds of API calls.  Up to this many it fires without asking (a
+§ typically has a handful of sentences)."
+  :type 'integer
+  :group 'tibetan-cat)
+
+(defun tibetan-cascade--subtree-sentences ()
+  "The org subtree at point in the current cascade SOURCE buffer.
+Returns (LABEL . SENTENCES): LABEL is the heading text (nil before
+the first heading = whole document), SENTENCES the walker plists
+of every `Sentence' below it — level-agnostic, the org outline
+decides the scope (`*' = all, `** Section' = its sentences …)."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (let ((label nil))
+        (unless (org-before-first-heading-p)
+          (org-back-to-heading t)
+          (setq label (org-get-heading t t t t))
+          (org-narrow-to-subtree))
+        (cons label (tibetan-cascade--collect-sentences))))))
+
+;;;###autoload
+(defun tibetan-cascade-analyze-subtree (source-file)
+  "C-c u A on a heading ABOVE sentence level of the cascade SOURCE-FILE.
+Cascades down the org subtree at point: every sentence below gets
+its cascade file (created when missing — structural, free), every
+INCOMPLETE one a sentence-level fire (the A0 gate
+`--sentence-needs-fire-p'; the queue throttles, the leaf defers
+under #+TIBETAN_DEFER_MT, claim/dedup prevents doubles).  More than
+`tibetan-cascade-subtree-confirm-threshold' fires → `y-or-n-p' with
+the count.  Finally the first sentence's file opens (its open-fire
+is a dedup hit; after a declined prompt the open does not fire).
+Honors `tibetan-auto-fire-claude-on-create' like every create-fire.
+Returns (:sentences N :created N :fired N :pending N).
+
+A1 (§5.59, Carstens Befund an §220): auf `** Section §220' lief
+C-c u A bisher in den Two-File-ABSATZpfad (`** §N' + `*** Tibetisch'),
+auf Sections ohne „§\" und `* Tibetan Text' in den Segment-Impl —
+beides Fehlermeldungen statt Analyse."
+  (let* ((sub (tibetan-cascade--subtree-sentences))
+         (label (or (car sub) (file-name-nondirectory source-file)))
+         (sentences (cdr sub))
+         (folder (file-name-as-directory
+                  (expand-file-name
+                   "analysis" (file-name-directory source-file))))
+         (created 0)
+         (todo '()))
+    (unless sentences
+      (user-error "Keine Sätze unter „%s“" label))
+    (dolist (s sentences)
+      (let* ((n (plist-get s :sent-num))
+             (segs (plist-get s :segs))
+             (file (tibetan-sentence--filepath n folder source-file)))
+        (unless (file-exists-p file)
+          (tibetan-cascade--create-file n segs source-file)
+          (cl-incf created))
+        (when (tibetan-cascade--sentence-needs-fire-p
+               file (mapcar #'car segs))
+          (push s todo))))
+    (setq todo (nreverse todo))
+    (let* ((auto (and (boundp 'tibetan-auto-fire-claude-on-create)
+                      tibetan-auto-fire-claude-on-create))
+           (go (and todo auto
+                    (or (<= (length todo)
+                            tibetan-cascade-subtree-confirm-threshold)
+                        (y-or-n-p
+                         (format "%s: %d Sätze an Claude + DharmaMitra senden? "
+                                 label (length todo))))))
+           (fired 0))
+      (when go
+        (dolist (s todo)
+          (condition-case err
+              (when (eq 'fired
+                        (tibetan-cascade--fire-sentence
+                         (tibetan-cascade--fire-plist
+                          (plist-get s :sent-num) (plist-get s :segs))
+                         source-file folder))
+                (cl-incf fired))
+            (error (message "Cascade fire skipped (Satz %s): %s"
+                            (plist-get s :sent-num)
+                            (error-message-string err))))))
+      (message "%s: %d Sätze — %d angelegt, %d gefeuert, %d vollständig"
+               label (length sentences) created fired
+               (- (length sentences) (length todo)))
+      ;; Open the first sentence.  A declined prompt must not be
+      ;; undercut by the open path's own fire.
+      (let ((tibetan-auto-fire-claude-on-create (and go auto)))
+        (tibetan-cascade-open-for-segment
+         (car (car (plist-get (car sentences) :segs))) source-file))
+      (list :sentences (length sentences) :created created
+            :fired fired :pending (- (length todo) fired)))))
+
+;; ============================================================================
 ;; C4.3 — reanalyze routing (single file, per-segment, batch guard)
 ;; ============================================================================
 
