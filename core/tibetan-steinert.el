@@ -195,11 +195,14 @@ Queries only the Sanskrit-indexed sources for cleanliness."
   "Return a Steinert web-dictionary URL for WYLIE-TERM, or nil.
 The URL encodes a JSON hash fragment that the single-page app at
 `https://dictionary.christian-steinert.de/' routes to a search result.
-WYLIE-TERM should be a lowercased Wylie string (e.g. \"mnyam med\").
-Strips trailing particles like \\='s, \\='i suffixes for cleaner lookups."
+WYLIE-TERM is passed through VERBATIM (trimmed only): Wylie capitals
+encode Sanskrit sounds (rwA, DhA, Sh…) — the former `downcase'
+destroyed the search term for every transliteration token (B6b,
+§5.58).  Clitic stripping is the CALLER's business (the old
+docstring claimed an \\='s/\\='i strip the code never did)."
   (when (and wylie-term (stringp wylie-term)
              (not (string-empty-p (string-trim wylie-term))))
-    (let* ((term (string-trim (downcase wylie-term)))
+    (let* ((term (string-trim wylie-term))
            ;; Build the JSON hash the Steinert SPA expects via json-encode
            ;; so a term containing a quote / backslash produces VALID JSON
            ;; (a raw format string would emit broken JSON).  Alist order is

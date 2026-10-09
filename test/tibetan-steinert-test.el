@@ -133,5 +133,18 @@ the term produced malformed JSON."
     (should (equal (gethash "activeTerm" parsed) "mnyam med"))
     (should (equal (gethash "lang" parsed) "tib"))))
 
+(ert-deftest tibetan-steinert-url-preserves-wylie-capitals ()
+  "B6b (§5.58): Wylie-Großbuchstaben kodieren Sanskrit-Laute
+\(rwA, DhA, Sh…) — der URL-Bau downcaste den Term und zerstörte
+damit den Suchbegriff für jedes Transliterations-Token.  Der Term
+muss unverändert in den JSON-Fragment-Hash."
+  (skip-unless (fboundp 'tibetan-steinert-url))
+  (let* ((url (tibetan-steinert-url "rwA"))
+         (frag (substring url (1+ (string-match "#" url))))
+         (parsed (json-parse-string
+                  (decode-coding-string (url-unhex-string frag) 'utf-8))))
+    (should (equal (gethash "activeTerm" parsed) "rwA"))
+    (should (equal (gethash "currentListTerm" parsed) "rwA"))))
+
 (provide 'tibetan-steinert-test)
 ;;; tibetan-steinert-test.el ends here
