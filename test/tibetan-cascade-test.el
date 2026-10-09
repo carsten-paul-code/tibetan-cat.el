@@ -704,6 +704,36 @@ alist keyed by the entry's Wylie."
       (should (consp captured))
       (should (assoc "khang pa" captured)))))
 
+(ert-deftest tibetan-cascade-regenerate-binds-claude-particles-for-tables ()
+  "T3 (§5.58): das Regenerate bindet
+`tibetan-gloss-table--claude-particles' textkeyed aus dem
+preservierten ** Claude Particles-Body — die Converb-Funktionen
+erreichen Zeile 3 der Tabellen (§5.57-Word-Analysis-Muster)."
+  (tibetan-cascade-test--with-cascade-file
+    (tibetan-cascade-test--set-l2-body
+     cascade-file "Claude Particles"
+     (concat "*** Segment 105\n"
+             "gis, gis, 1.2, ergative\n"
+             "byas nas, nas, 2.11, sequential converb"))
+    (let* ((orig (symbol-function 'tibetan-cascade--scaffold))
+           (captured 'unset))
+      (cl-letf (((symbol-function 'tibetan-cascade--scaffold)
+                 (lambda (&rest args)
+                   (setq captured
+                         (and (boundp 'tibetan-gloss-table--claude-particles)
+                              tibetan-gloss-table--claude-particles))
+                   (apply orig args))))
+        (tibetan-cascade--regenerate
+         cascade-file 4
+         '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+         (expand-file-name "doc.org" dir)))
+      (should (consp captured))
+      (let ((unit (cdr (assoc "བདག་གིས་ལས་བྱས།" captured))))
+        (should unit)
+        (should (equal "nas" (plist-get (cadr unit) :particle)))
+        (should (equal "sequential converb"
+                       (plist-get (cadr unit) :label)))))))
+
 (ert-deftest tibetan-cascade-regenerate-is-idempotent ()
   "A second regenerate with identical inputs is byte-identical
 modulo the LAST_ANALYZED stamp."

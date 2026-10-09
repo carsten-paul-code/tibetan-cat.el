@@ -3392,6 +3392,38 @@ passages — those shouldn't crash the caller)."
                   result))))
       (nreverse result))))
 
+(defun tibetan-analysis--parse-claude-particles-by-segment (body)
+  "Parse a Claude-Particles BODY into per-segment tuple groups.
+Returns ((SEG-NUM . TUPLES) …): `*** Segment N' / `**** Segment N'
+headings open a group (the §5.58-v2 and the Alt-Layout
+star-levels); lines before the first heading — the flat legacy
+form — land under the nil key.  Tuple shape =
+`tibetan-analysis--parse-claude-particles' (:word :particle
+:sub-id :label); lines that are not 4-field tuples are skipped.
+T3 (§5.58): die Glossentabellen brauchen die SEGMENT-Zuordnung,
+der flache Parser verlor sie."
+  (when (and body (stringp body) (not (string-empty-p body)))
+    (let ((groups '()) (current nil) (acc '()))
+      (cl-flet ((flush ()
+                  (when acc
+                    (push (cons current (nreverse acc)) groups)
+                    (setq acc nil))))
+        (dolist (line (split-string body "\n"))
+          (if (string-match "^\\*\\{3,4\\} Segment \\([0-9]+\\)" line)
+              (progn (flush)
+                     (setq current (string-to-number
+                                    (match-string 1 line))))
+            (let ((fields (mapcar #'string-trim
+                                  (split-string line "," t))))
+              (when (= 4 (length fields))
+                (push (list :word (nth 0 fields)
+                            :particle (nth 1 fields)
+                            :sub-id (nth 2 fields)
+                            :label (nth 3 fields))
+                      acc)))))
+        (flush))
+      (nreverse groups))))
+
 ;; Backwards-compatible single-section reader — returns just the
 ;; translation body so legacy callers keep working.
 (defun tibetan-analysis--read-claude-translation (filepath)

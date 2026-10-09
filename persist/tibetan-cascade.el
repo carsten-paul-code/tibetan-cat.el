@@ -47,6 +47,10 @@
 ;; by the scaffold/regenerate below; same shadow hazard as above.
 (defvar tibetan-analysis--source-lang)
 (defvar tibetan-sanskrit-reading--word-analysis)
+;; T3 (§5.58): die textkeyed Particles-Dynamik der Glossentabellen
+;; (definiert in tibetan-gloss-table.el) — vom Regenerate gebunden;
+;; gleiche Shadow-Falle wie oben.
+(defvar tibetan-gloss-table--claude-particles)
 (defvar tibetan-sentence-claude--system-prompt-sanskrit)
 (defvar tibetan-analysis-auto-regen-on-claude-arrival)
 (declare-function tibetan-analysis--resolve-source-lang
@@ -996,6 +1000,23 @@ FILEPATH."
                    (tibetan-analysis--claude-render-vars
                     (list :vocabulary (plist-get claude :vocabulary)))
                    :vocabulary)))
+            ;; T3 (§5.58): die preservierten Claude Particles,
+            ;; segment-gruppiert geparst und auf UNIT-TEXT gekeyed —
+            ;; die Converb-Funktionen (CONV:nas (seq.)) erreichen
+            ;; Zeile 3 der Tabellen (§5.57-Word-Analysis-Muster).
+            (tibetan-gloss-table--claude-particles
+             (when (fboundp 'tibetan-analysis--parse-claude-particles-by-segment)
+               (let ((groups (tibetan-analysis--parse-claude-particles-by-segment
+                              (plist-get claude :particles))))
+                 (when groups
+                   (cl-loop for (n . text) in segs
+                            for g = (or (cdr (assq n groups))
+                                        ;; flache Alt-Form: nur bei
+                                        ;; Einzel-Segment eindeutig.
+                                        (and (= 1 (length segs))
+                                             (cdr (assq nil groups))))
+                            when g
+                            collect (cons (string-trim text) g))))))
             ;; C1 (2026-09-24): the preserved `** Word Analysis'
             ;; body, parsed and re-keyed by UNIT TEXT — the Sanskrit
             ;; gloss tables materialize from it.

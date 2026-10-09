@@ -311,6 +311,68 @@ gedrückt)."
                            visible)))
         (should (= 1 (length (delete-dups pipes))))))))
 
+;; ----------------------------------------------------------------------------
+;; T3 (§5.58): Converb-Funktion in Zeile 3 — CONV:nas (seq.)
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-gloss-table-converb-function-from-claude-particles ()
+  "T3 (§5.58): ein CONV-Partikel bekommt die FUNKTION aus den
+gelandeten Claude Particles angehängt — `ABL/CONV:nas (seq.)'.
+Quelle ist die textkeyed Dynamik (Einheitstext → Tupel), die das
+Kaskaden-Regenerate aus dem preservierten Body bindet."
+  (tibetan-gloss-table-test--with-tokens
+      '(("U1" . ((:tibetan "བསླབས" :wylie "bslabs" :kind verb
+                  :meaning "to learn")
+                 (:tibetan "ནས" :wylie "nas" :kind particle
+                  :label "ABL/CONV:nas" :prev-verb-p t))))
+    (let ((tibetan-gloss-table--claude-particles
+           '(("U1" . ((:word "bslabs nas" :particle "nas"
+                       :sub-id "1.8.2"
+                       :label "approx-sequential-temporal"))))))
+      (let ((out (tibetan-gloss-table-render '("U1"))))
+        (should (string-match-p "| ABL/CONV:nas (seq\\.)" out))))))
+
+(ert-deftest tibetan-gloss-table-converb-function-positional-cursor ()
+  "Mehrfachvorkommen desselben Partikels in EINER Einheit werden
+POSITIONSBEWUSST zugeordnet (Vorkommens-Cursor, nie first-match —
+die Two-File-Interlinear vergab dort immer das erste Label)."
+  (tibetan-gloss-table-test--with-tokens
+      '(("U1" . ((:tibetan "བསླབས" :wylie "bslabs" :kind verb
+                  :meaning "learn")
+                 (:tibetan "ནས" :wylie "nas" :kind particle
+                  :label "ABL/CONV:nas" :prev-verb-p t)
+                 (:tibetan "སོང" :wylie "song" :kind verb
+                  :meaning "went")
+                 (:tibetan "ནས" :wylie "nas" :kind particle
+                  :label "ABL/CONV:nas" :prev-verb-p t))))
+    (let ((tibetan-gloss-table--claude-particles
+           '(("U1" . ((:word "bslabs nas" :particle "nas"
+                       :sub-id "2.11" :label "sequential converb")
+                      (:word "song nas" :particle "nas"
+                       :sub-id "2.11" :label "causal converb"))))))
+      (let* ((out (tibetan-gloss-table-render '("U1")))
+             (seqpos (string-match "ABL/CONV:nas (seq\\.)" out))
+             (kauspos (string-match "ABL/CONV:nas (kaus\\.)" out)))
+        (should (and seqpos kauspos))
+        (should (< seqpos kauspos))))))
+
+(ert-deftest tibetan-gloss-table-converb-function-deterministic-fallback ()
+  "Ohne gelandete Claude Particles liefert der Clause-Segmenter die
+Funktion (EIN Mapping seiner Klassen, keine fünfte Taxonomie):
+ནས → (abl.), ཞིང → (simult.); Kasuspartikeln bleiben ohne Zusatz."
+  (tibetan-gloss-table-test--with-tokens
+      '(("U1" . ((:tibetan "ནས" :wylie "nas" :kind particle
+                  :label "ABL/CONV:nas" :prev-verb-p t)
+                 (:tibetan "ཞིང" :wylie "zhing" :kind particle
+                  :label "CONV:cing" :prev-verb-p t)
+                 (:tibetan "གི" :wylie "gi" :kind particle
+                  :label "GEN"))))
+    (let ((out (tibetan-gloss-table-render '("U1"))))
+      (should (string-match-p "ABL/CONV:nas (abl\\.)" out))
+      (should (string-match-p "CONV:cing (simult\\.)" out))
+      (should (string-match-p "| GEN *|" out))
+      (should-not (string-match-p "GEN (" out)))))
+
 (ert-deftest tibetan-gloss-table-sa-rows-stay-linkless ()
   "sa-Dokumente (IAST-Tokens) bekommen KEINE steinert:-Links —
 das Steinert-Wörterbuch ist tibetisch-keyed; ein IAST-Suchbegriff

@@ -579,6 +579,32 @@ needs-request (Doppel-Fire-/Überschreib-Klasse)."
                               (or (plist-get p :particles) "")))
       (should (equal (plist-get p :concepts) "Begriff.")))))
 
+(ert-deftest tibetan-claude-sections-parse-particles-by-segment ()
+  "T3 (§5.58): der gruppierende Particles-Parser — `*** / ****
+Segment N'-Überschriften teilen die Tupel je Segment; ein flacher
+Body (Alt-Form ohne Gruppen) landet unter dem nil-Schlüssel."
+  (let ((grouped (tibetan-analysis--parse-claude-particles-by-segment
+                  (concat "*** Segment 105\n"
+                          "bslabs nas, nas, 2.11, sequential converb\n"
+                          "gis, gis, 1.2, ergative\n\n"
+                          "**** Segment 106\n"
+                          "la, la, 1.4, dative\n"))))
+    (should (= 2 (length grouped)))
+    (let ((g105 (cdr (assq 105 grouped)))
+          (g106 (cdr (assq 106 grouped))))
+      (should (= 2 (length g105)))
+      (should (equal "nas" (plist-get (car g105) :particle)))
+      (should (equal "sequential converb"
+                     (plist-get (car g105) :label)))
+      (should (equal "la" (plist-get (car g106) :particle)))))
+  (let ((flat (tibetan-analysis--parse-claude-particles-by-segment
+               "nas, nas, 2.11, ablative converb\n")))
+    (should (= 1 (length flat)))
+    (should (null (car (car flat))))
+    (should (equal "nas" (plist-get (car (cdr (car flat))) :particle))))
+  (should-not (tibetan-analysis--parse-claude-particles-by-segment nil))
+  (should-not (tibetan-analysis--parse-claude-particles-by-segment "")))
+
 (ert-deftest tibetan-claude-sections-read-skips-placeholders ()
   "`[Requesting...]' / `[Claude unavailable...]' / `[Translation not available...]'
 bodies count as nothing-to-preserve."

@@ -138,6 +138,63 @@ A trailing clitic's label is dot-appended (NMLZ.GEN, N.GEN)."
       label)))
 
 ;; ----------------------------------------------------------------------------
+;; T3 (§5.58): Converb-Funktion — CONV:nas (seq.)
+;; ----------------------------------------------------------------------------
+
+(defvar tibetan-gloss-table--claude-particles nil
+  "Textkeyed Dynamik: ((UNIT-TEXT . TUPLES) …) — je Einheit die
+gelandeten Claude-Particles-Tupel (:word :particle :sub-id :label,
+der `tibetan-analysis--parse-claude-particles'-Shape).  Gebunden
+vom Kaskaden-Regenerate aus dem preservierten `** Claude
+Particles'-Body (Schlüssel = getrimmter Einheitstext — die
+Renderer-Signaturen tragen keine Segmentnummer, das §5.57-
+Word-Analysis-Muster).  nil → deterministischer Fallback über die
+Clause-Segmenter-Klassen.")
+
+(defconst tibetan-gloss-table--converb-label-tags
+  '(("sequential"   . "seq.")
+    ("temporal"     . "temp.")
+    ("causal"       . "kaus.")
+    ("concessive"   . "konz.")
+    ("conditional"  . "kond.")
+    ("coordinative" . "koord.")
+    ("simultaneous" . "simult.")
+    ("ablative"     . "abl.")
+    ("terminative"  . "term.")
+    ("quotative"    . "quot.")
+    ("adversative"  . "advers.")
+    ("final"        . "final")
+    ("modal"        . "modal"))
+  "Stichwort → Kurz-Tag für Claudes freie Particles-Labels
+\(`approx-sequential-temporal' → seq.).  Scan-Reihenfolge =
+Priorität bei Mehrfach-Treffern.")
+
+(defconst tibetan-gloss-table--converb-class-tags
+  '((ablative     . "abl.")
+    (coordinative . "koord.")
+    (simultaneous . "simult.")
+    (causal       . "kaus.")
+    (concessive   . "konz.")
+    (conditional  . "kond."))
+  "Clause-Segmenter-Klasse → Kurz-Tag — EIN Mapping der
+bestehenden `tibetan-clause-seg--converb-suffixes'-Klassen, keine
+fünfte Parallel-Taxonomie (§5.58-Plan).")
+
+(defun tibetan-gloss-table--converb-function-from-label (label)
+  "Kurz-Tag aus Claudes freiem Particles-LABEL, oder nil."
+  (when (stringp label)
+    (let ((l (downcase label)))
+      (cl-loop for (key . tag) in tibetan-gloss-table--converb-label-tags
+               when (string-match-p key l) return tag))))
+
+(defun tibetan-gloss-table--converb-function-fallback (tok)
+  "Deterministischer Kurz-Tag für TOK aus der Segmenter-Klasse."
+  (when (boundp 'tibetan-clause-seg--converb-suffixes)
+    (cdr (assq (cdr (assoc (plist-get tok :tibetan)
+                           tibetan-clause-seg--converb-suffixes))
+               tibetan-gloss-table--converb-class-tags))))
+
+;; ----------------------------------------------------------------------------
 ;; org-table renderer (pure)
 ;; ----------------------------------------------------------------------------
 
@@ -198,7 +255,16 @@ empty — their information is the row-3 label), row 3 the
 unit yields no tokens."
   (let ((toks (tibetan-reading--unit-tokens unit-text)))
     (when toks
-      (let (r1 r2 r3)
+      ;; T3 (§5.58): Claude-Particles-Tupel dieser Einheit +
+      ;; Vorkommens-Cursor je Partikel — Mehrfachvorkommen werden
+      ;; positionsbewusst zugeordnet, NIE first-match (die
+      ;; Two-File-Interlinear vergab dort immer das erste Label).
+      (let ((tuples (and (boundp 'tibetan-gloss-table--claude-particles)
+                         unit-text
+                         (cdr (assoc (string-trim unit-text)
+                                     tibetan-gloss-table--claude-particles))))
+            (cursor (make-hash-table :test 'equal))
+            r1 r2 r3)
         (dolist (tok toks)
           (let ((particle-p (eq (plist-get tok :kind) 'particle))
                 (clitic (plist-get tok :clitic)))
@@ -226,7 +292,32 @@ unit yields no tokens."
                       (tibetan-reading--gloss tok))))
                   r2)
             (push (tibetan-gloss-table--cell
-                   (tibetan-gloss-table--token-label tok vocab-alist))
+                   (let ((label (tibetan-gloss-table--token-label
+                                 tok vocab-alist)))
+                     ;; T3: CONV-Partikel → Funktion anhängen
+                     ;; (Carstens Skizze: "Bei Converben gerne die
+                     ;; Funktion (temp., causual usw.)").  Claude-
+                     ;; Tupel (kontextsensitiv, je Vorkommen) vor
+                     ;; dem deterministischen Segmenter-Fallback.
+                     (if (and particle-p
+                              (string-match-p "CONV"
+                                              (or (plist-get tok :label)
+                                                  "")))
+                         (let* ((p (plist-get tok :wylie))
+                                (k (gethash p cursor 0))
+                                (hit (nth k (cl-remove-if-not
+                                             (lambda (tu)
+                                               (equal (plist-get tu :particle)
+                                                      p))
+                                             tuples)))
+                                (fn (or (and hit
+                                             (tibetan-gloss-table--converb-function-from-label
+                                              (plist-get hit :label)))
+                                        (tibetan-gloss-table--converb-function-fallback
+                                         tok))))
+                           (puthash p (1+ k) cursor)
+                           (if fn (format "%s (%s)" label fn) label))
+                       label)))
                   r3)))
         (list (nreverse r1) (nreverse r2) (nreverse r3))))))
 
