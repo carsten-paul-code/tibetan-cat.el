@@ -229,22 +229,31 @@ never reach generated documents.  Returns OUTPUT-FILE."
 
 (defun tibetan-translation-doc--renderings (file)
   "FILE's landed ⟦N⟧ rendering lines: ((N . BODY)…), in order.
-Reads the `** Renderings' body (the cascade Reading layer — in
-the Rgyan corpus Claude's per-segment German lives HERE, not in
-the sentence-level Translation body).  Machine placeholders
-\(`[Awaiting…' etc.) are skipped."
-  (let ((body (and (fboundp 'tibetan-sentence--read-l2-body)
-                   (tibetan-sentence--read-l2-body file "Renderings")))
-        out)
-    (when body
-      (dolist (line (split-string body "\n"))
-        (when (and (string-match "\\`- ⟦\\([0-9]+\\)⟧ \\(.*\\)\\'" line)
-                   (not (string-match-p
+T4 (§5.58): die Zeilen leben unter den Segment-Tabellen in
+`** Gloss Tables'; Alt-Layout-Dateien tragen sie unter
+`** Renderings'.  Beide liegen in `* Reading' — gescannt wird die
+GANZE Reading-Sektion, denn nur Maschinenzeilen dort matchen das
+`- ⟦N⟧ '-Zeilenformat (in the Rgyan corpus Claude's per-segment
+German lives HERE, not in the sentence-level Translation body).
+Machine placeholders (`[Awaiting…' etc.) are skipped."
+  (let (out)
+    (when (and file (stringp file) (file-exists-p file))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (when (re-search-forward "^\\* Reading[ \t]*$" nil t)
+          (let ((end (save-excursion
+                       (if (re-search-forward "^\\* " nil t)
+                           (line-beginning-position)
+                         (point-max)))))
+            (while (re-search-forward
+                    "^- ⟦\\([0-9]+\\)⟧ \\(.*\\)$" end t)
+              (let ((n (string-to-number (match-string 1)))
+                    (body (match-string 2)))
+                (unless (string-match-p
                          "\\`\\[\\(?:Awaiting\\|Claude\\|Requesting\\)"
-                         (match-string 2 line))))
-          (push (cons (string-to-number (match-string 1 line))
-                      (match-string 2 line))
-                out))))
+                         body)
+                  (push (cons n body) out))))))))
     (nreverse out)))
 
 (defun tibetan-translation-doc--strip-leading-drawer (body)

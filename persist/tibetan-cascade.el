@@ -141,15 +141,64 @@ markdown-bold body lines never truncate the section."
   (and unit-text (string-match-p "[།༎༏༐༑༔]\\s-*$" unit-text)))
 
 (defun tibetan-cascade--renderings-list-body (segs)
-  "The `** Renderings' list body for SEGS ((GLOBAL-NUM . TEXT)…):
-one `- ⟦N⟧ placeholder' line per unit.  The ⟦N⟧ marker is the
-machine key (`tibetan-cascade--write-rendering' replaces the line
-body); the placeholder is the standard rendering placeholder, which
-the defer-MT rewriter replaces in place when active."
+  "LEGACY shape helper: one `- ⟦N⟧ placeholder' line per unit.
+T4 (§5.58): der Scaffold emittiert keine `** Renderings'-Sektion
+mehr — die Zeilen leben unter ihren Segment-Tabellen (siehe
+`tibetan-cascade--gloss-tables-with-renderings').  Der Helfer
+bleibt für Alt-Layout-Tests und als Zeilenform-Referenz."
   (mapconcat (lambda (seg)
                (format "- ⟦%d⟧ %s" (car seg)
                        tibetan-cascade-rendering-placeholder))
              segs "\n"))
+
+(defun tibetan-cascade--gloss-tables-canonical (body)
+  "BODY der `** Gloss Tables'-Sektion OHNE die ⟦N⟧-Maschinenzeilen.
+T4 (§5.58): die Sequenzübersetzungen stehen unter den
+Segment-Tabellen, also IM gehashten Body — ohne diese Kanonik
+kippte jede Landung den :GENERATED_HASH:-Vergleich und fröre die
+Tabellen dauerhaft als »handeditiert« ein.  Emitter UND
+Edit-Erkennung hashen beide die kanonische Form; ein Zellen-Edit
+ändert sie, eine Landung nicht.  Alt-Layout-Bodies (ohne
+⟦N⟧-Zeilen) sind ihr eigener Kanon — alte Hashes bleiben gültig."
+  (string-trim
+   (replace-regexp-in-string "^- ⟦[0-9]+⟧ .*\n?" "" (or body ""))
+   "\n+" "\n+"))
+
+(defun tibetan-cascade--gloss-tables-with-renderings (segs tables)
+  "Der `** Gloss Tables'-Body: je Einheit das `*** Segment N' aus
+TABLES (dem Output von `tibetan-gloss-table-render-captioned`; nil
+im degradierten Fall), gefolgt von der `- ⟦N⟧ …'-Zeile der Einheit
+\(T4, §5.58: die Sequenzübersetzung steht UNTER ihrer Tabelle).
+Jede Einheit bekommt Heading + Zeile auch ohne renderbare Tabelle —
+die ⟦N⟧-Zeile ist der Maschinenschlüssel, auf den die Landung
+schreibt."
+  (let ((blocks '()))
+    (when (and tables (stringp tables))
+      (with-temp-buffer
+        (insert tables)
+        (goto-char (point-min))
+        (while (re-search-forward "^\\*\\*\\* Segment \\([0-9]+\\)$" nil t)
+          (let ((n (string-to-number (match-string 1)))
+                (start (line-beginning-position))
+                (end (save-excursion
+                       (forward-line 1)
+                       (if (re-search-forward "^\\*\\*\\* Segment [0-9]+$"
+                                              nil t)
+                           (line-beginning-position)
+                         (point-max)))))
+            (push (cons n (string-trim-right
+                           (buffer-substring-no-properties start end)
+                           "\n+"))
+                  blocks)))))
+    (mapconcat
+     (lambda (seg)
+       (let* ((n (car seg))
+              (blk (cdr (assq n blocks))))
+         (concat (or blk (format "*** Segment %d" n))
+                 "\n"
+                 (format "- ⟦%d⟧ %s" n
+                         tibetan-cascade-rendering-placeholder))))
+     segs "\n\n")))
 
 (defun tibetan-cascade--reading-section (segs)
   "The full `* Reading' section string for SEGS ((GLOBAL-NUM . TEXT)…).
@@ -201,19 +250,24 @@ when nothing renders."
                      ;; a foldable L3 HEADING (handout style).
                      3)
                   (error nil)))))
-      (concat "* Reading\n"
-              (if tables
-                  (concat "** Gloss Tables\n"
-                          ":PROPERTIES:\n"
-                          (format ":GENERATED_HASH: %s\n" (sha1 tables))
-                          ":END:\n"
-                          tables "\n\n")
-                "")
-              "** Interlinear\n"
-              (string-join lines "\n") "\n\n"
-              "** Renderings\n"
-              (tibetan-cascade--renderings-list-body segs)
-              "\n\n"))))
+      ;; T4 (§5.58): `** Gloss Tables' wird IMMER emittiert — es ist
+      ;; jetzt das Zuhause der ⟦N⟧-Sequenzübersetzungen (eine Zeile
+      ;; unter jeder Segment-Tabelle); die eigene `** Renderings'-
+      ;; Sektion entfällt.  Der Hash deckt die KANONISCHE Form (ohne
+      ;; die Maschinenzeilen), damit Landungen den Edit-Schutz nicht
+      ;; kippen.
+      (let ((gt-body (tibetan-cascade--gloss-tables-with-renderings
+                      segs tables)))
+        (concat "* Reading\n"
+                "** Gloss Tables\n"
+                ":PROPERTIES:\n"
+                (format ":GENERATED_HASH: %s\n"
+                        (sha1 (tibetan-cascade--gloss-tables-canonical
+                               gt-body)))
+                ":END:\n"
+                gt-body "\n\n"
+                "** Interlinear\n"
+                (string-join lines "\n") "\n\n")))))
 
 (declare-function tibetan-segment-text "tibetan-enhanced-parser" (text))
 (declare-function tibetan-extract-verbs-compound-aware
@@ -270,7 +324,12 @@ edited; protection errs on the preserving side)."
   (and state
        (not (string-empty-p (car state)))
        (or (null (cdr state))
-           (not (equal (sha1 (car state)) (cdr state))))))
+           ;; T4 (§5.58): Vergleich über die KANONISCHE Form — die
+           ;; ⟦N⟧-Maschinenzeilen im Body (Landungen!) zählen nicht
+           ;; als Edit; Alt-Layout-Bodies sind ihr eigener Kanon.
+           (not (equal (sha1 (tibetan-cascade--gloss-tables-canonical
+                              (car state)))
+                       (cdr state))))))
 
 (defun tibetan-cascade--restore-gloss-tables-in-buffer (state)
   "Replace or insert the `** Gloss Tables' section from STATE in
@@ -924,26 +983,25 @@ so only the known machine prefixes gate."
 ;; ============================================================================
 
 (defun tibetan-cascade--renderings-region ()
-  "Bounds (START . END) of the `** Renderings' body under
-`* Reading' in the current buffer, or nil.  Anchored to the Reading
-section so ⟦N⟧ markers elsewhere (an unstripped Translation span,
-user notes) can never be mistaken for rendering lines."
+  "Bounds (START . END) of the region holding the `- ⟦N⟧ …' lines:
+the whole `* Reading' section body, or nil.
+
+T4 (§5.58): die Zeilen leben unter ihren Segment-Tabellen in
+`** Gloss Tables'; Alt-Layout-Dateien tragen sie unter
+`** Renderings' — beides liegt in `* Reading', und innerhalb der
+Sektion matchen NUR Maschinenzeilen das `- ⟦N⟧ '-Zeilenformat
+\(Translation-Spans und Nutzernotizen leben außerhalb von
+* Reading).  Die weite Region ist damit zugleich das Dual-Format:
+ein Leser/Writer-Pfad für alt und neu."
   (save-excursion
     (goto-char (point-min))
     (when (re-search-forward "^\\* Reading[ \t]*$" nil t)
-      (let ((reading-end (save-excursion
-                           (if (re-search-forward "^\\* " nil t)
-                               (line-beginning-position)
-                             (point-max)))))
-        (when (re-search-forward "^\\*\\* Renderings[ \t]*$"
-                                 reading-end t)
-          (forward-line 1)
-          (let ((start (point))
-                (end (if (re-search-forward "^\\*\\{1,2\\} "
-                                            reading-end t)
-                         (line-beginning-position)
-                       reading-end)))
-            (cons start end)))))))
+      (forward-line 1)
+      (let ((start (point))
+            (end (if (re-search-forward "^\\* " nil t)
+                     (line-beginning-position)
+                   (point-max))))
+        (cons start end)))))
 
 (defun tibetan-cascade--rendering-line-re (seg-num)
   "Anchored regex for SEG-NUM's rendering line; body in group 1."
@@ -984,6 +1042,30 @@ fallback.  Returns t when written."
                 (replace-match (format "- ⟦%d⟧ %s" seg-num clean)
                                t t)
                 t))))
+        ;; T4 (§5.58): Insert-if-missing — eine hand-preservierte
+        ;; Gloss-Tables-Sektion aus dem ALTEN Layout trägt keine
+        ;; ⟦N⟧-Zeilen; die Zeile wird dann hinter dem
+        ;; `*** Segment N'-Block NEU eingesetzt statt die
+        ;; Sequenzübersetzung still zu verlieren.
+        (let ((region (tibetan-cascade--renderings-region)))
+          (when region
+            (save-excursion
+              (goto-char (car region))
+              (when (re-search-forward
+                     (format "^\\*\\*\\* Segment %d$" seg-num)
+                     (cdr region) t)
+                (let ((block-end
+                       (save-excursion
+                         (forward-line 1)
+                         (if (re-search-forward "^\\*\\{1,3\\} "
+                                                (cdr region) t)
+                             (line-beginning-position)
+                           (cdr region)))))
+                  (goto-char block-end)
+                  (skip-chars-backward " \t\n")
+                  (forward-line 1)
+                  (insert (format "- ⟦%d⟧ %s\n" seg-num clean))
+                  t)))))
         (tibetan-cascade--write-subsegment-section-in-buffer
          seg-num "Rendering" clean))))
 

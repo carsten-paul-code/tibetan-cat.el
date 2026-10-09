@@ -248,18 +248,25 @@ Phonetics, and top/bottom user-slot ordering."
             (foot  (string-match "^\\* Footnotes$" s)))
         (should (and notes wt tt rd ta foot))
         (should (< notes wt tt rd ta foot)))
-      ;; Reading layers (combined): ** Interlinear then Renderings.
-      (let ((il (string-match "^\\*\\* Interlinear$" s))
-            (re (string-match "^\\*\\* Renderings$" s)))
-        (should (and il re))
-        (should (< il re)))
+      ;; T4 (§5.58): Gloss Tables FIRST (rendering lines inside),
+      ;; then Interlinear; the separate ** Renderings is RETIRED.
+      (let ((gt (string-match "^\\*\\* Gloss Tables$" s))
+            (il (string-match "^\\*\\* Interlinear$" s)))
+        (should (and gt il))
+        (should (< gt il)))
+      (should-not (string-match-p "^\\*\\* Renderings$" s))
       (should-not (string-match-p "^\\*\\* Wylie$" s))
-      (should (string-match-p "^- ⟦105⟧ " s))
-      (should (string-match-p "^- ⟦106⟧ " s))
+      ;; Each unit's ⟦N⟧ line sits under ITS segment heading.
+      (let ((seg105 (string-match "^\\*\\*\\* Segment 105$" s))
+            (r105   (string-match "^- ⟦105⟧ " s))
+            (seg106 (string-match "^\\*\\*\\* Segment 106$" s))
+            (r106   (string-match "^- ⟦106⟧ " s)))
+        (should (and seg105 r105 seg106 r106))
+        (should (< seg105 r105 seg106 r106)))
       (should (string-match-p "\\[Awaiting sentence translation…\\]" s))
       ;; Two combined lines, one per unit, each shad rendered ` /'.
       (let* ((il-start (string-match "^\\*\\* Interlinear$" s))
-             (il-end (string-match "^\\*\\* Renderings$" s))
+             (il-end (string-match "^\\* Tibetan Analysis$" s))
              (body (substring s il-start il-end))
              (lines (cl-remove-if #'string-empty-p
                                   (cdr (split-string body "\n")))))
@@ -747,6 +754,88 @@ clobbers an already-populated Rendering."
     ;; 106 was populated → non-FORCE landing left it alone.
     (should (equal "KEEP ME."
                    (tibetan-cascade--read-rendering cascade-file 106)))))
+
+;; ============================================================================
+;; T4 (§5.58) — Sequenzübersetzung unter der jeweiligen Segment-Tabelle
+;; ============================================================================
+
+(ert-deftest tibetan-cascade-rendering-line-lives-under-its-table ()
+  "T4 (§5.58, Reading-Class-Layout): jede ⟦N⟧-Sequenzübersetzung
+steht DIREKT unter der Glossentabelle ihres Segments (nach dem
+`*** Segment N'-Block, vor dem nächsten), nicht mehr in einer
+eigenen `** Renderings'-Sektion."
+  (tibetan-cascade-test--with-cascade-file
+    (let ((s (with-temp-buffer
+               (insert-file-contents cascade-file)
+               (buffer-string))))
+      (should-not (string-match-p "^\\*\\* Renderings$" s))
+      (let ((seg105 (string-match "^\\*\\*\\* Segment 105$" s))
+            (r105   (string-match "^- ⟦105⟧ " s))
+            (seg106 (string-match "^\\*\\*\\* Segment 106$" s))
+            (r106   (string-match "^- ⟦106⟧ " s)))
+        (should (and seg105 r105 seg106 r106))
+        (should (< seg105 r105 seg106 r106)))
+      ;; Readers/writers follow the lines to their new home.
+      (should (equal '(105 106)
+                     (tibetan-cascade--rendering-numbers cascade-file)))
+      (should (tibetan-cascade--write-rendering cascade-file 105
+                                                "Neuer Span."))
+      (should (equal "Neuer Span."
+                     (tibetan-cascade--read-rendering cascade-file 105))))))
+
+(ert-deftest tibetan-cascade-landing-keeps-gloss-tables-unedited ()
+  "T4 (§5.58, Hash-Kanonik): die ⟦N⟧-Zeilen leben IM
+Gloss-Tables-Body — ohne Kanonisierung würde jede Landung den
+:GENERATED_HASH:-Vergleich kippen und die Tabellen dauerhaft als
+»handeditiert« einfrieren.  Der Hash muss die Maschinenzeilen
+beidseitig ausklammern: nach einer Landung gilt die Sektion weiter
+als GENERIERT."
+  (tibetan-cascade-test--with-cascade-file
+    (tibetan-cascade--land-response
+     tibetan-cascade-test--response
+     (list :sent-num 4 :seg-nums '(105 106)
+           :sent-file cascade-file :cascade t :force nil))
+    ;; The landed span sits inside the Gloss Tables section…
+    (let* ((state (tibetan-cascade--read-gloss-tables cascade-file)))
+      (should state)
+      (should (string-match-p "⟦105⟧ The lama went to rNgog's place"
+                              (car state)))
+      ;; …and the section still counts as generated (hash canonical).
+      (should-not (tibetan-cascade--gloss-tables-edited-p state)))
+    ;; A real CELL edit still flips the protection.
+    (with-temp-buffer
+      (insert-file-contents cascade-file)
+      (goto-char (point-min))
+      (re-search-forward "^\\*\\*\\* Segment 105$")
+      (forward-line 1)
+      (insert "| HANDEDIT |\n")
+      (write-region (point-min) (point-max) cascade-file nil 'silent))
+    (should (tibetan-cascade--gloss-tables-edited-p
+             (tibetan-cascade--read-gloss-tables cascade-file)))))
+
+(ert-deftest tibetan-cascade-write-rendering-inserts-missing-line ()
+  "T4 (§5.58): eine hand-preservierte Gloss-Tables-Sektion aus dem
+ALTEN Layout trägt keine ⟦N⟧-Zeilen — der Writer muss die Zeile
+dann hinter dem `*** Segment N'-Block NEU einsetzen statt still
+nil zu liefern (sonst verlöre der Regenerate einer editierten
+Alt-Datei jede Sequenzübersetzung)."
+  (tibetan-cascade-test--with-cascade-file
+    ;; Simulate the post-restore state: strip every ⟦N⟧ line.
+    (with-temp-buffer
+      (insert-file-contents cascade-file)
+      (goto-char (point-min))
+      (while (re-search-forward "^- ⟦[0-9]+⟧ .*\n" nil t)
+        (replace-match ""))
+      (write-region (point-min) (point-max) cascade-file nil 'silent))
+    (should (tibetan-cascade--write-rendering cascade-file 106
+                                              "Wieder da."))
+    (let ((s (with-temp-buffer
+               (insert-file-contents cascade-file)
+               (buffer-string))))
+      (let ((seg106 (string-match "^\\*\\*\\* Segment 106$" s))
+            (r106   (string-match "^- ⟦106⟧ Wieder da\\.$" s)))
+        (should (and seg106 r106))
+        (should (< seg106 r106))))))
 
 (defun tibetan-cascade-test--set-translation-body (file body)
   "Test helper: replace the `** Translation' body in FILE with BODY."
@@ -1725,24 +1814,33 @@ by GLOBAL segment number."
                    body))))
 
 (ert-deftest tibetan-cascade-reading-section-structure ()
-  "The assembled * Reading section (COMBINED, 2nd iteration): one
-`** Interlinear' layer of combined lines, then the Renderings list."
+  "The assembled * Reading section (T4, §5.58): `** Gloss Tables'
+first (die ⟦N⟧-Zeilen unter ihren Segment-Headings), dann eine
+`** Interlinear'-Schicht; die eigene Renderings-Sektion ist weg."
   (cl-letf (((symbol-function 'tibetan-reading-decorated-lines)
              (lambda (units)
-               (mapcar (lambda (u) (format "LINE(%s)" u)) units))))
+               (mapcar (lambda (u) (format "LINE(%s)" u)) units)))
+            ((symbol-function 'tibetan-gloss-table-render-captioned)
+             (lambda (_segs _vocab &optional _level) nil)))
     (let ((s (tibetan-cascade--reading-section
               '((105 . "བདག།") (106 . "ཆོས།")))))
       (should (string-match-p "^\\* Reading$" s))
-      (let ((il (string-match "^\\*\\* Interlinear$" s))
-            (re (string-match "^\\*\\* Renderings$" s)))
-        (should (and il re))
-        (should (< il re)))
+      (let ((gt (string-match "^\\*\\* Gloss Tables$" s))
+            (il (string-match "^\\*\\* Interlinear$" s)))
+        (should (and gt il))
+        (should (< gt il)))
+      (should-not (string-match-p "^\\*\\* Renderings$" s))
       ;; The retired separate Wylie layer is gone.
       (should-not (string-match-p "^\\*\\* Wylie$" s))
       (should (string-match-p "^LINE(བདག།)$" s))
       (should (string-match-p "^LINE(ཆོས།)$" s))
-      (should (string-match-p "^- ⟦105⟧ \\[Awaiting" s))
-      (should (string-match-p "^- ⟦106⟧ \\[Awaiting" s)))))
+      ;; ⟦N⟧ line under its own segment heading, in order.
+      (let ((h105 (string-match "^\\*\\*\\* Segment 105$" s))
+            (r105 (string-match "^- ⟦105⟧ \\[Awaiting" s))
+            (h106 (string-match "^\\*\\*\\* Segment 106$" s))
+            (r106 (string-match "^- ⟦106⟧ \\[Awaiting" s)))
+        (should (and h105 r105 h106 r106))
+        (should (< h105 r105 h106 r106))))))
 
 (ert-deftest tibetan-cascade-reading-section-emits-gloss-tables ()
   "2026-09-15 (Masterarbeit three-view plan, Carsten's placement
@@ -1764,29 +1862,38 @@ hand-edited)."
         ;; Carsten's 2026-09-16 form: Segment number as HEADING.
         (should (eql 3 seen-level))
         (let ((gt (string-match "^\\*\\* Gloss Tables$" s))
-              (il (string-match "^\\*\\* Interlinear$" s))
-              (re (string-match "^\\*\\* Renderings$" s)))
-          (should (and gt il re))
-          (should (< gt il re)))
+              (il (string-match "^\\*\\* Interlinear$" s)))
+          (should (and gt il))
+          (should (< gt il)))
         (should (string-match-p "^| CAPTBL |$" s))
         (should (string-match-p "^\\*\\*\\* Segment 105$" s))
-        ;; Edit-protection drawer with the body hash.
+        ;; T4: ein Segment OHNE Renderer-Block bekommt trotzdem sein
+        ;; Heading + die ⟦N⟧-Zeile (Maschinenschlüssel).
+        (should (string-match-p "^\\*\\*\\* Segment 106$" s))
+        (should (string-match-p "^- ⟦106⟧ " s))
+        ;; Edit-protection drawer hashes the CANONICAL body (the
+        ;; ⟦N⟧ machine lines stripped — T4 Hash-Kanonik).
         (should (string-match-p
                  (concat ":GENERATED_HASH: "
-                         (sha1 "*** Segment 105\n| CAPTBL |"))
+                         (sha1 (concat "*** Segment 105\n| CAPTBL |"
+                                       "\n\n*** Segment 106")))
                  s))))))
 
-(ert-deftest tibetan-cascade-reading-section-omits-gloss-tables-when-empty ()
-  "No renderable unit (or the gloss-table module absent) → no
-`** Gloss Tables' heading at all — no empty-section litter, the
-degraded scaffold stays valid."
+(ert-deftest tibetan-cascade-reading-section-always-emits-gloss-tables ()
+  "T4 (§5.58) INVERTIERT den alten Omit-Kontrakt: auch ohne
+renderbare Tabellen wird `** Gloss Tables' emittiert — die Sektion
+ist jetzt das Zuhause der ⟦N⟧-Sequenzübersetzungen, jede Einheit
+bekommt ihr Heading + die Maschinenzeile (nur eben ohne Tabelle)."
   (cl-letf (((symbol-function 'tibetan-reading-decorated-lines)
              (lambda (units)
                (mapcar (lambda (u) (format "LINE(%s)" u)) units)))
             ((symbol-function 'tibetan-gloss-table-render-captioned)
              (lambda (_segs _vocab &optional _level) nil)))
     (let ((s (tibetan-cascade--reading-section '((105 . "བདག།")))))
-      (should-not (string-match-p "^\\*\\* Gloss Tables$" s))
+      (should (string-match-p "^\\*\\* Gloss Tables$" s))
+      (should (string-match-p "^\\*\\*\\* Segment 105$" s))
+      (should (string-match-p "^- ⟦105⟧ \\[Awaiting" s))
+      (should-not (string-match-p "^|" s))
       (should (string-match-p "^\\*\\* Interlinear$" s)))))
 
 (defun tibetan-cascade-test--edit-gloss-tables (file marker)
@@ -1810,16 +1917,20 @@ edit (the hash now mismatches the body)."
 section is regenerated fresh — new content, new hash."
   (tibetan-cascade-test--with-cascade-file
     (cl-letf (((symbol-function 'tibetan-gloss-table-render-captioned)
-               (lambda (_segs _vocab &optional _level) "Unit 1 — Segment 105\n| NEU |")))
+               (lambda (_segs _vocab &optional _level)
+                 "*** Segment 105\n| NEU |")))
       (tibetan-cascade--regenerate
        cascade-file 4 '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
        (expand-file-name "doc.org" dir)))
     (let ((s (with-temp-buffer
                (insert-file-contents cascade-file) (buffer-string))))
       (should (string-match-p "^| NEU |$" s))
+      ;; T4: der Hash deckt die KANONISCHE Form (Maschinenzeilen
+      ;; gestrippt, Segment 106 trägt nur sein Heading).
       (should (string-match-p
                (concat ":GENERATED_HASH: "
-                       (sha1 "Unit 1 — Segment 105\n| NEU |"))
+                       (sha1 (concat "*** Segment 105\n| NEU |"
+                                     "\n\n*** Segment 106")))
                s)))))
 
 (ert-deftest tibetan-cascade-regenerate-preserves-edited-gloss-tables ()
