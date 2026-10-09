@@ -3255,6 +3255,13 @@ read / restore helpers in
 `persist/tibetan-analysis-combined.el'."
   (let ((translation
          (or
+          ;; §5.58 cascade layout (S1, 2026-10-09): top-level
+          ;; `* Translation' — die Satz-/Vers-Übersetzung steht in
+          ;; der Reading-Class-Struktur ganz oben.  Two-file files
+          ;; never carry an L1 Translation, so this probe is inert
+          ;; for them (byte-identical behaviour).
+          (tibetan-analysis--read-claude-section-body
+           filepath "Translation" 1)
           ;; Current layout (Phase 1.3 of layout-revision §5.18,
           ;; 2026-05-04): level-2 `** Translation' under
           ;; `* Tibetan Analysis'.
@@ -3290,8 +3297,15 @@ read / restore helpers in
           ;; Legacy level-3 placement inside Provided Translations.
           (tibetan-analysis--read-claude-section-body
            filepath "Claude Grammar" 3)))
-        (particles (tibetan-analysis--read-claude-section-body
-                    filepath "Claude Particles" 3))
+        (particles
+         (or
+          ;; §5.58 cascade layout (S1): level-2 `** Claude
+          ;; Particles' as a flat * Tibetan Analysis child.
+          (tibetan-analysis--read-claude-section-body
+           filepath "Claude Particles" 2)
+          ;; Legacy: level 3 inside ** Provided Translations.
+          (tibetan-analysis--read-claude-section-body
+           filepath "Claude Particles" 3)))
         ;; §5.24 (2026-05-22):  the canonical slot is `** Concept
         ;; Notes' at level 2 for segment layout, `*** Concept Notes'
         ;; at level 3 for sentence layout.  Reader checks both, plus

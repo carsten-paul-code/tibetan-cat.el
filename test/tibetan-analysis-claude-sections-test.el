@@ -556,6 +556,29 @@ yields a translation via the legacy fallback."
       (should (null  (plist-get p :grammar)))
       (should (null  (plist-get p :concepts))))))
 
+(ert-deftest tibetan-claude-sections-read-cascade-v2-layout ()
+  "S1 (§5.58): die neue Kaskaden-Struktur trägt `* Translation' auf
+L1 und `** Claude Particles' auf L2 (flaches * Tibetan Analysis).
+Der geteilte Leser muss beide Positionen VOR den Alt-Fallbacks
+finden — sonst gälten migrierte Dateien dauerhaft als
+needs-request (Doppel-Fire-/Überschreib-Klasse)."
+  (tibetan-sections-test--with-analysis
+      (concat "#+TIBETAN_LAYOUT: cascade\n\n"
+              "* Translation\nGanzer Satz deutsch.\n\n"
+              "* Reading\n** Gloss Tables\n*** Segment 1\n- ⟦1⟧ x\n\n"
+              "* Tibetan Analysis\n"
+              "** Claude Vocabulary\nwort, noun, \"W\", n\n\n"
+              "** Claude Grammar\nGrammatik.\n\n"
+              "** Claude Particles\n**** Segment 1\nnas, nas, 2.11, seq\n\n"
+              "** Concept Notes\nBegriff.\n\n"
+              "* Footnotes\n")
+    (let ((p (tibetan-analysis--read-claude-sections analysis-file)))
+      (should (equal (plist-get p :translation) "Ganzer Satz deutsch."))
+      (should (equal (plist-get p :grammar) "Grammatik."))
+      (should (string-match-p "nas, nas, 2\\.11"
+                              (or (plist-get p :particles) "")))
+      (should (equal (plist-get p :concepts) "Begriff.")))))
+
 (ert-deftest tibetan-claude-sections-read-skips-placeholders ()
   "`[Requesting...]' / `[Claude unavailable...]' / `[Translation not available...]'
 bodies count as nothing-to-preserve."
