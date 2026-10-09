@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-10-09T09:58:11
+#+DATE: 2026-10-09T10:01:00
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  78 modules  ·  1487 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  78 modules  ·  1488 forms
 
 Regenerated automatically by:
 
@@ -23,7 +23,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#analysis/tibetan-interlinear.el][analysis/tibetan-interlinear.el]]  (22)
   - [[#analysis/tibetan-mitra-translation.el][analysis/tibetan-mitra-translation.el]]  (24)
   - [[#analysis/tibetan-particles-bialek.el][analysis/tibetan-particles-bialek.el]]  (8)
-  - [[#analysis/tibetan-reading.el][analysis/tibetan-reading.el]]  (25)
+  - [[#analysis/tibetan-reading.el][analysis/tibetan-reading.el]]  (26)
   - [[#analysis/tibetan-sanskrit-reading.el][analysis/tibetan-sanskrit-reading.el]]  (7)
   - [[#analysis/tibetan-sentence-tree.el][analysis/tibetan-sentence-tree.el]]  (10)
   - [[#analysis/tibetan-translation-engine.el][analysis/tibetan-translation-engine.el]]  (10)
@@ -2105,10 +2105,29 @@ Returns list of all grammatical features detected.
 The `tibetan-interlinear--particle-patterns' label for TIBETAN
 when the whole token is a known particle form, else nil.
 
-** ~tibetan-reading--verb-p~  /function/
+** ~tibetan-reading--context-particle-label~  /function/
 :PROPERTIES:
 :KIND: defun
 :LINE: 53
+:SIGNATURE: (tibetan-reading--context-particle-label tibetan prev-verb-p)
+:END:
+
+Particle label for TIBETAN with minimal left context (B5, §5.58).
+Die Pattern-Alist ist kontextfrei und etikettiert zwei Homographen
+falsch — sie dient zugleich dem Suffix-Strip und bleibt darum
+unangetastet; der Kontext wird HIER angelegt, wo der Tokenstrom ihn
+kennt (`:prev-verb-p'):
+- དེ ist nur POSTVERBAL das ste-Converb-Allomorph (`snang de');
+  standalone nach einem Nicht-Verb ist es das DEMONSTRATIVUM —
+  kein Partikel-Label, das Token bleibt gewöhnliches Wort.
+- standalone པས/བས nach einem Nicht-Verb ist Nominalisierer +
+  Ergativ (§5.39: `dgra bcom pas'), nicht das kausale Converb.
+Alles andere: das Alist-Label unverändert.
+
+** ~tibetan-reading--verb-p~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 73
 :SIGNATURE: (tibetan-reading--verb-p tibetan)
 :END:
 
@@ -2117,7 +2136,7 @@ Non-nil when TIBETAN resolves in the Hill verb DB.
 ** ~tibetan-reading--curated-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 59
+:LINE: 79
 :SIGNATURE: (tibetan-reading--curated-p tibetan)
 :END:
 
@@ -2126,7 +2145,7 @@ Non-nil when TIBETAN is an exact curated wordlist key.
 ** ~tibetan-reading--wylie~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 67
+:LINE: 87
 :SIGNATURE: (tibetan-reading--wylie tibetan)
 :END:
 
@@ -2135,7 +2154,7 @@ Deterministic Wylie of TIBETAN (fallback: the input verbatim).
 ** ~tibetan-reading--split-merged-clitic~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 85
+:LINE: 105
 :SIGNATURE: (tibetan-reading--split-merged-clitic tibetan)
 :END:
 
@@ -2148,7 +2167,7 @@ stream.  Curated whole tokens are never split (W4b authority rule).
 ** ~tibetan-reading--decorate-particle~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 102
+:LINE: 122
 :SIGNATURE: (tibetan-reading--decorate-particle wylie label prev-verb-p tibetan)
 :END:
 
@@ -2157,7 +2176,7 @@ Wrap WYLIE in `=…=' or `~…~' according to LABEL and context.
 ** ~tibetan-reading--source-lang-sa-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 128
+:LINE: 148
 :SIGNATURE: (tibetan-reading--source-lang-sa-p)
 :END:
 
@@ -2169,7 +2188,7 @@ window state, so batch and interactive runs dispatch identically.
 ** ~tibetan-reading--unit-tokens~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 136
+:LINE: 156
 :SIGNATURE: (tibetan-reading--unit-tokens unit-text)
 :END:
 
@@ -2190,7 +2209,7 @@ branch choice (§5.52/§5.53).
 ** ~tibetan-reading--unit-tokens-bo~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 154
+:LINE: 174
 :SIGNATURE: (tibetan-reading--unit-tokens-bo unit-text)
 :END:
 
@@ -2199,7 +2218,7 @@ The Tibetan body of `tibetan-reading--unit-tokens'.
 ** ~tibetan-reading--claude-gloss~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 196
+:LINE: 219
 :SIGNATURE: (tibetan-reading--claude-gloss tok)
 :END:
 
@@ -2216,7 +2235,7 @@ Returns the first double-quoted field of the matched line
 ** ~tibetan-reading--sanskrit-token-p~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 224
+:LINE: 247
 :SIGNATURE: (tibetan-reading--sanskrit-token-p tok)
 :END:
 
@@ -2225,7 +2244,7 @@ Non-nil when TOK's Tibetan carries a Sanskrit-only sign.
 ** ~tibetan-reading--gloss~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 229
+:LINE: 252
 :SIGNATURE: (tibetan-reading--gloss tok)
 :END:
 
@@ -2248,7 +2267,7 @@ short, deliberate, and in the document's target language.
 ** ~tibetan-reading--linkify~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 272
+:LINE: 295
 :SIGNATURE: (tibetan-reading--linkify wylie tok)
 :END:
 
@@ -2260,7 +2279,7 @@ interlinears.
 ** ~tibetan-reading--render-token~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 286
+:LINE: 309
 :SIGNATURE: (tibetan-reading--render-token tok &optional main-verb-p)
 :END:
 
@@ -2277,7 +2296,7 @@ colors vanish.
 ** ~tibetan-reading-decorated-unit-line~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 330
+:LINE: 353
 :SIGNATURE: (tibetan-reading-decorated-unit-line unit-text &optional last-unit-p)
 :END:
 
@@ -2295,7 +2314,7 @@ decoration, no verb marking, no shad suffix.
 ** ~tibetan-reading--decorated-unit-line-bo~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 345
+:LINE: 368
 :SIGNATURE: (tibetan-reading--decorated-unit-line-bo unit-text last-unit-p)
 :END:
 
@@ -2304,7 +2323,7 @@ The Tibetan body of `tibetan-reading-decorated-unit-line'.
 ** ~tibetan-reading-decorated-lines~  /function/
 :PROPERTIES:
 :KIND: defun
-:LINE: 361
+:LINE: 384
 :SIGNATURE: (tibetan-reading-decorated-lines units)
 :END:
 
@@ -2340,7 +2359,7 @@ The main verb is marked in the LAST unit only.
 ** ~tibetan-reading--merged-clitics~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 76
+:LINE: 96
 :DEFAULT: '
 :END:
 
@@ -2349,7 +2368,7 @@ The main verb is marked in the LAST unit only.
 ** ~tibetan-analysis--source-lang~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 126
+:LINE: 146
 :END:
 
 /(no docstring)/
@@ -2357,7 +2376,7 @@ The main verb is marked in the LAST unit only.
 ** ~tibetan-analysis--target-lang~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 193
+:LINE: 216
 :END:
 
 /(no docstring)/
@@ -2365,7 +2384,7 @@ The main verb is marked in the LAST unit only.
 ** ~tibetan-analysis--claude-vocabulary-for-render~  /variable/
 :PROPERTIES:
 :KIND: defvar
-:LINE: 194
+:LINE: 217
 :END:
 
 /(no docstring)/
@@ -2373,7 +2392,7 @@ The main verb is marked in the LAST unit only.
 ** ~tibetan-reading--sanskrit-sign-re~  /constant/
 :PROPERTIES:
 :KIND: defconst
-:LINE: 216
+:LINE: 239
 :DEFAULT: "[ཱཻཽྲྀཷླྀཹཾཿྃཊཋཌཎཥ]"
 :END:
 

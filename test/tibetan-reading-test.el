@@ -110,6 +110,58 @@ Portfolio (W2 parity for the Reading layer)."
         (should (string-match-p "Erscheinungen" line))
         (should-not (string-match-p "appearances" line))))))
 
+(ert-deftest tibetan-reading-pas-after-noun-is-nmlz-erg ()
+  "B5 (§5.58): standalone པས nach einem NICHT-Verb ist Nominalisierer
++ Ergativ (§5.39: dgra bcom pas = der Arhat ERG), kein kausales
+Converb.  Die kontextfreie Pattern-Alist etikettierte jedes པས als
+CONV:pas — sichtbar in sent-015 (`dgra bcom | pas | CONV:pas')."
+  (tibetan-reading-test--with-env
+      '(("དགྲ་བཅོམ" . "Feindzerstörer // arhat"))
+    (let* ((toks (tibetan-reading--unit-tokens "དགྲ་བཅོམ་པས་བྱུང།"))
+           (pas (cl-find "པས" toks
+                         :key (lambda (tok) (plist-get tok :tibetan))
+                         :test #'equal)))
+      (should pas)
+      (should (eq 'particle (plist-get pas :kind)))
+      (should (equal "NMLZ.ERG" (plist-get pas :label))))))
+
+(ert-deftest tibetan-reading-pas-after-verb-stays-converb ()
+  "Lock zu B5: standalone པས NACH einem Verb bleibt das kausale
+Converb CONV:pas."
+  (tibetan-reading-test--with-env '()
+    (let* ((toks (tibetan-reading--unit-tokens "སྒྲིགས་པས་ཡོད།"))
+           (pas (cl-find "པས" toks
+                         :key (lambda (tok) (plist-get tok :tibetan))
+                         :test #'equal)))
+      (should pas)
+      (should (equal "CONV:pas" (plist-get pas :label))))))
+
+(ert-deftest tibetan-reading-de-after-noun-is-demonstrative ()
+  "B5 (§5.58): standalone དེ nach einem NICHT-Verb ist das
+Demonstrativum — ein gewöhnliches Wort, KEIN Partikel-Label.  Die
+Alist trug དེ bedingungslos als CONV:ste (ste-Allomorph), was in
+sent-015 `blo de' und `de yang' zu Converben machte."
+  (tibetan-reading-test--with-env '()
+    (let* ((toks (tibetan-reading--unit-tokens "ཆོས་དེ་ཡོད།"))
+           (de (cl-find "དེ" toks
+                        :key (lambda (tok) (plist-get tok :tibetan))
+                        :test #'equal)))
+      (should de)
+      (should (eq 'word (plist-get de :kind)))
+      (should-not (plist-get de :label)))))
+
+(ert-deftest tibetan-reading-de-after-verb-stays-converb ()
+  "Lock zu B5: standalone དེ NACH einem Verb bleibt das
+ste-Converb-Allomorph CONV:ste (der sent-654-Fall `snang de')."
+  (tibetan-reading-test--with-env '()
+    (let* ((toks (tibetan-reading--unit-tokens "བྱུང་དེ་ཡོད།"))
+           (de (cl-find "དེ" toks
+                        :key (lambda (tok) (plist-get tok :tibetan))
+                        :test #'equal)))
+      (should de)
+      (should (eq 'particle (plist-get de :kind)))
+      (should (equal "CONV:ste" (plist-get de :label))))))
+
 (ert-deftest tibetan-reading-merged-clitic-decorates-inline ()
   "A merged genitive clitic renders embedded: tri='i='."
   (tibetan-reading-test--with-env '()

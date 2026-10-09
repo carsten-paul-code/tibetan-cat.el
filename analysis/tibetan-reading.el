@@ -50,6 +50,26 @@ when the whole token is a known particle form, else nil."
   (when (boundp 'tibetan-interlinear--particle-patterns)
     (cdr (assoc tibetan tibetan-interlinear--particle-patterns))))
 
+(defun tibetan-reading--context-particle-label (tibetan prev-verb-p)
+  "Particle label for TIBETAN with minimal left context (B5, §5.58).
+Die Pattern-Alist ist kontextfrei und etikettiert zwei Homographen
+falsch — sie dient zugleich dem Suffix-Strip und bleibt darum
+unangetastet; der Kontext wird HIER angelegt, wo der Tokenstrom ihn
+kennt (`:prev-verb-p'):
+- དེ ist nur POSTVERBAL das ste-Converb-Allomorph (`snang de');
+  standalone nach einem Nicht-Verb ist es das DEMONSTRATIVUM —
+  kein Partikel-Label, das Token bleibt gewöhnliches Wort.
+- standalone པས/བས nach einem Nicht-Verb ist Nominalisierer +
+  Ergativ (§5.39: `dgra bcom pas'), nicht das kausale Converb.
+Alles andere: das Alist-Label unverändert."
+  (let ((label (tibetan-reading--particle-label tibetan)))
+    (cond
+     ((null label) nil)
+     ((and (equal tibetan "དེ") (not prev-verb-p)) nil)
+     ((and (member tibetan '("པས" "བས")) (not prev-verb-p))
+      "NMLZ.ERG")
+     (t label))))
+
 (defun tibetan-reading--verb-p (tibetan)
   "Non-nil when TIBETAN resolves in the Hill verb DB."
   (and (fboundp 'tibetan-verb-lookup)
@@ -161,7 +181,10 @@ branch choice (§5.52/§5.53)."
         out)
     (dolist (cell cells)
       (let* ((tib (car cell))
-             (label (tibetan-reading--particle-label tib))
+             ;; B5 (§5.58): Kontext-Weiche für die Homographen
+             ;; དེ / པས / བས — siehe --context-particle-label.
+             (label (tibetan-reading--context-particle-label
+                     tib prev-verb-p))
              (clitic (unless label
                        (tibetan-reading--split-merged-clitic tib)))
              (stem (if clitic (car clitic) tib))
