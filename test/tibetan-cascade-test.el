@@ -796,6 +796,36 @@ fehlende Slots landen, die vorhandene Translation bleibt unberührt."
         (or (tibetan-sentence--read-l2-body cascade-file "Translation")
             ""))))))
 
+(ert-deftest tibetan-cascade-land-truncated-response-stubs-concept-notes ()
+  "B4 (§5.58): eine ABGESCHNITTENE Satz-Antwort (sent-654-Klasse:
+der Text riss mitten im Particles-Eintrag `…approx-quotative (' ab,
+`## Concept Notes' kam nie) wurde kommentarlos gelandet — Concept
+Notes blieb stummer Platzhalter, nichts signalisierte den Abriss.
+Die Landung muss den fehlenden Pflicht-Schluss erkennen und einen
+SICHTBAREN Stub schreiben, der weiter als needs-request zählt."
+  (tibetan-cascade-test--with-cascade-file
+    (tibetan-cascade--land-response
+     (concat "## Translation\n"
+             "⟦105⟧Er ging⟦/105⟧ und ⟦106⟧fragte⟦/106⟧.\n\n"
+             "## Vocabulary\n### Segment 105\n"
+             "rngog, proper noun, \"rNgog\", ein Schüler\n\n"
+             "## Grammar\nZwei Klausen.\n\n"
+             "## Particles\n### Segment 105\n"
+             "kun rdzob bden zhes, zhes, 2.4, approx-quotative (")
+     (list :sent-num 4 :seg-nums '(105 106)
+           :sent-file cascade-file :cascade t :force nil))
+    (let ((s (with-temp-buffer
+               (insert-file-contents cascade-file)
+               (buffer-string))))
+      ;; Visible truncation stub under ** Concept Notes — it must
+      ;; SURVIVE the regenerate-after-land (hence no `[Awaiting'
+      ;; prefix: keep-l2 filtert die heraus; §5.40-Stub-Familie).
+      (should (string-match-p "^\\*\\* Concept Notes" s))
+      (should (string-match-p "\\[Antwort abgeschnitten" s))
+      ;; The stub still counts as needing a request → B3 gate open.
+      (should (tibetan-cascade--claude-sections-incomplete-p
+               cascade-file)))))
+
 (ert-deftest tibetan-cascade-fire-gate-opens-on-missing-vocabulary ()
   "B3 (§5.58, Gate-Falle, Feuerseite): im Nach-Chunk-Zustand
 \(Translation + Renderings gefüllt, Vocabulary/Concept Notes leer)

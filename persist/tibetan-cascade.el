@@ -1252,6 +1252,41 @@ Never signals (a failed re-render must not kill the landing)."
           t))
     (error nil)))
 
+(defconst tibetan-cascade-truncation-stub
+  "[Antwort abgeschnitten — Satz neu feuern mit C-c u R]"
+  "Sichtbarer Stub für den Concept-Notes-Slot einer abgeschnittenen
+Satz-Antwort (B4, §5.58).  Das Präfix ist BEWUSST keines der
+Platzhalter-Präfixe (`[Awaiting' / `[Requesting' / …): keep-l2
+filtert die beim Regenerate heraus — der Stub muss den
+Regenerate-after-Land aber ÜBERLEBEN (dieselbe Persistenz-Familie
+wie der §5.40-Missing-Stub `[Claude sentence response missing…').
+Dass er trotzdem als still-needing-request zählt, leisten
+`tibetan-cascade--truncation-stub-p' in
+`tibetan-cascade--claude-sections-incomplete-p' und das
+per-Slot-Gate der Landung.")
+
+(defun tibetan-cascade--truncation-stub-p (body)
+  "Non-nil wenn BODY der B4-Truncation-Stub ist (präfix-stabil,
+damit künftige Wortlaut-Feinschliffe alte Stubs nicht stranden)."
+  (and (stringp body)
+       (string-prefix-p "[Antwort abgeschnitten" body)))
+
+(defun tibetan-cascade--response-truncated-p (response)
+  "Non-nil wenn RESPONSE sichtbar unvollständig ist (abgeschnitten).
+Definitives Signal: der verpflichtende Schluss `## Concept Notes'
+fehlt.  Beide Satz-Schemata (bo UND sa) verlangen die Sektion in
+jeder Antwort — ein leeres Ergebnis muss den Sentinel `[No notable
+concepts in this passage]' tragen —, ihr Fehlen heißt also: die
+Antwort brach vor ihrem Schwanz ab (sent-654: mitten im
+Particles-Eintrag bei `approx-quotative (') oder driftete vom
+Schema; so oder so sind die hinteren Sektionen nicht
+vertrauenswürdig.  Bewusst KEIN Auto-Refire am Erkennungsort
+\(Schleifengefahr — die Landung ruft nie einen feuernden
+Entry-Point); der Stub hält das B3-Gate für den NÄCHSTEN manuellen
+oder Batch-Fire offen."
+  (and (stringp response)
+       (not (string-match-p "^## Concept Notes" response))))
+
 (defun tibetan-cascade--land-response (response ctx)
   "Land a sentence-first RESPONSE into the ONE cascade file.
 CTX: (:sent-num N :seg-nums L :sent-file FILE :cascade t :force BOOL).
@@ -1313,7 +1348,14 @@ touched."
       ;; gelandeter Slot wird ohne FORCE nicht überschrieben (M7).
       (let* ((have (tibetan-analysis--read-claude-sections file))
              (md (cl-flet ((want (key)
-                             (or force (null (plist-get have key)))))
+                             (let ((v (plist-get have key)))
+                               (or force (null v)
+                                   ;; B4: ein Truncation-Stub zählt
+                                   ;; als leer — sonst blockierte er
+                                   ;; seine eigene Ersetzung beim
+                                   ;; Re-Fire.
+                                   (tibetan-cascade--truncation-stub-p
+                                    v)))))
                    (tibetan-sentence-claude--synthesize-segment-markdown
                     (list :translation
                           (and (want :translation)
@@ -1335,8 +1377,18 @@ touched."
                                 parsed :particles seg-nums))
                           :concepts
                           (and (want :concepts)
-                               (plist-get parsed :concepts)))))))
+                               (or (plist-get parsed :concepts)
+                                   ;; B4 (§5.58): abgeschnittene
+                                   ;; Antwort → sichtbarer Stub statt
+                                   ;; stummem Platzhalter.
+                                   (and (tibetan-cascade--response-truncated-p
+                                         response)
+                                        tibetan-cascade-truncation-stub))))))))
         (when (and md (not (string-empty-p md)))
+          (when (and (null (plist-get parsed :concepts))
+                     (tibetan-cascade--response-truncated-p response))
+            (message "tibetan-cascade: Claude-Antwort für %s wirkt abgeschnitten — Concept Notes als Stub markiert, Satz braucht einen Re-Fire"
+                     (file-name-nondirectory file)))
           (let ((tibetan-analysis-auto-regen-on-claude-arrival nil))
             (tibetan-analysis--insert-claude-sections md file))))
       ;; C3 (2026-09-24): ONE pure re-render so the landing reaches
@@ -1428,13 +1480,19 @@ Satz-Fire öffnen (die Landung gated ihrerseits per Slot und fasst
 Gelandetes nicht an)."
   (when (and file (file-exists-p file))
     (let ((sections (tibetan-analysis--read-claude-sections file)))
-      (or (null (plist-get sections :translation))
-          (null (plist-get sections :vocabulary))
-          (null (plist-get sections :concepts))
-          (and (fboundp 'tibetan-analysis--resolve-source-lang)
-               (equal (tibetan-analysis--resolve-source-lang file) "sa")
-               (null (tibetan-sentence--read-l2-body
-                      file "Word Analysis")))))))
+      (cl-flet ((empty (key)
+                  (let ((v (plist-get sections key)))
+                    (or (null v)
+                        ;; B4: der persistente Truncation-Stub zählt
+                        ;; als leer — er hält das Gate offen.
+                        (tibetan-cascade--truncation-stub-p v)))))
+        (or (empty :translation)
+            (empty :vocabulary)
+            (empty :concepts)
+            (and (fboundp 'tibetan-analysis--resolve-source-lang)
+                 (equal (tibetan-analysis--resolve-source-lang file) "sa")
+                 (null (tibetan-sentence--read-l2-body
+                        file "Word Analysis"))))))))
 
 (defun tibetan-cascade--fire-sentence (sentence source-file folder
                                        &optional force)
