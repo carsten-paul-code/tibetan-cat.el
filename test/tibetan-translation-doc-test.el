@@ -178,6 +178,12 @@ copy (Renderings / DharmaMitra / Provided Translations)."
               (format "** Translation\nPOISON-CLAUDE-%d\n\n" n)
               (format "** DharmaMitra Translation\nPOISON-DM-%d\n\n" n)
               (format "** Provided Translations\nPOISON-LOPEZ-%d\n\n" n)
+              ;; §5.58 (P2): die NEUE L1-Form mit materialisierten
+              ;; Referenzübersetzungen — der Copyright-Lock muss auch
+              ;; sie aus Stitcher und §-Ansicht heraushalten.
+              "* Provided Translations\n"
+              (format "** Lopez 2006\nPOISON-LOPEZ-2006-%d\n\n" n)
+              (format "** Wangjié & Mulligan\nPOISON-WM-%d\n\n" n)
               "* Footnotes\n" (or footnotes "") "\n"))
     f))
 

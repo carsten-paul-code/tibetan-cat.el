@@ -1081,6 +1081,87 @@ fehlenden Sektionen für immer unerreichbar waren."
         (should (= 1 (length requests)))))))
 
 ;; ============================================================================
+;; P2 (§5.58): Lopez/W&M-Materialisierung nach * Provided Translations
+;; ============================================================================
+
+(ert-deftest tibetan-cascade-materialize-provided-translations-once ()
+  "P2 (§5.58, Entscheidung »einmalig«): das Kommando kopiert die
+§-Referenzübersetzungen (Lopez 2006, Wangjié & Mulligan — NIE
+Tibetisch/Wylie) aus der Comparative in * Provided Translations
+der Satzdatei; danach sind sie editierbar und keep-geschützt.
+Zweiter Lauf: idempotent, Hand-Edits bleiben unangetastet."
+  (tibetan-cascade-test--with-stub-renderer
+    (let* ((dir (make-temp-file "cascade-pt-" t))
+           (src (expand-file-name "doc.org" dir))
+           (refs (expand-file-name "comparative.org" dir)))
+      (unwind-protect
+          (progn
+            (with-temp-file refs
+              (insert "* Text\n"
+                      "** §7\n"
+                      "*** Tibetisch (B2)\nབོད་ཡིག\n\n"
+                      "*** Wylie\nbod yig\n\n"
+                      "*** Lopez 2006\n:PROPERTIES:\n:READ_ONLY: t\n:END:\n"
+                      "*§7.* The mind itself is distilled here.\n\n"
+                      "*** Wangjié & Mulligan\n:PROPERTIES:\n:READ_ONLY: t\n:END:\n"
+                      "*§7.* [W&M ¶7, PDF-S. 12] The very mind.\n\n"
+                      "** §8\n*** Lopez 2006\nanderer §.\n"))
+            (with-temp-file src
+              (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n"
+                      "#+TIBETAN_SECTION_REFS: comparative.org\n\n"
+                      "* Tibetan Text\n"
+                      "** Section §7\n"
+                      ":PROPERTIES:\n:LOPEZ_SECTION: 7\n:END:\n"
+                      "*** Sentence 4\n"
+                      "**** Segment 105\nབདག་གིས་ལས་བྱས།\n\n"))
+            (let ((file (tibetan-cascade--create-file
+                         4 '((105 . "བདག་གིས་ལས་བྱས།")) src)))
+              (let ((r (tibetan-cascade-materialize-provided-translations
+                        file)))
+                (should (= 1 (plist-get r :written))))
+              (let ((s (with-temp-buffer
+                         (insert-file-contents file)
+                         (buffer-string))))
+                ;; Beide Referenzen unter * Provided Translations,
+                ;; NACH dem DM-Slot; Tibetisch/Wylie nie.
+                (let ((pt (string-match "^\\* Provided Translations$" s))
+                      (dm (string-match
+                           "^\\*\\* DharmaMitra Translation$" s))
+                      (lo (string-match "^\\*\\* Lopez 2006$" s))
+                      (wm (string-match
+                           "^\\*\\* Wangjié & Mulligan$" s))
+                      (wt (string-match "^\\* Working Translation$" s)))
+                  (should (and pt dm lo wm wt))
+                  (should (< pt dm lo wm wt)))
+                (should (string-match-p
+                         "The mind itself is distilled here\\." s))
+                (should (string-match-p "\\[W&M ¶7, PDF-S\\. 12\\]" s))
+                (should-not (string-match-p "བོད་ཡིག" s))
+                (should-not (string-match-p "^bod yig$" s))
+                ;; Nicht der andere §.
+                (should-not (string-match-p "anderer §" s)))
+              ;; Hand-Edit + zweiter Lauf: idempotent, Edit bleibt.
+              (with-temp-buffer
+                (insert-file-contents file)
+                (goto-char (point-min))
+                (re-search-forward "^\\*\\* Lopez 2006$")
+                (forward-line 1)
+                (insert "HAND-GEKÜRZT.\n")
+                (write-region (point-min) (point-max) file nil 'silent))
+              (let ((r2 (tibetan-cascade-materialize-provided-translations
+                         file)))
+                (should (= 0 (plist-get r2 :written))))
+              (let ((s2 (with-temp-buffer
+                          (insert-file-contents file)
+                          (buffer-string))))
+                (should (string-match-p "HAND-GEKÜRZT\\." s2))
+                ;; Keine Duplikate.
+                (should (= 1 (cl-count "** Lopez 2006"
+                                       (split-string s2 "\n")
+                                       :test #'equal))))))
+        (delete-directory dir t)))))
+
+;; ============================================================================
 ;; C3.2 — cascade fire (dispatcher branch, claim, request, DM)
 ;; ============================================================================
 

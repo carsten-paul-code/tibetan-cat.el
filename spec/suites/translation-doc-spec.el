@@ -37,6 +37,12 @@
                          "* Tibetan Text\nབདག\n\n"
                          "* Tibetan Analysis\n"
                          "** Provided Translations\nPOISON-LOPEZ\n\n"
+                         ;; §5.58 (P2): neue L1-Form mit
+                         ;; materialisierten Referenzen — ebenso
+                         ;; copyright-gesperrt.
+                         "* Provided Translations\n"
+                         "** Lopez 2006\nPOISON-LOPEZ-2006\n\n"
+                         "** Wangjié & Mulligan\nPOISON-WM\n\n"
                          "* Footnotes\n[fn:x] Erste Definition.\n"))
                (with-temp-file f2
                  (insert "#+TITLE: S2\n\n"
@@ -59,6 +65,8 @@
             "gap visible as placeholder")
            (tibetan-bdd-assert-not-contains result "POISON-LOPEZ"
             "reference translations locked out")
+           (tibetan-bdd-assert-not-contains result "POISON-WM"
+            "W&M under the new L1 slot locked out too")
            (should (string-prefix-p "# GENERATED" result)))
     :example "two sentences of §167 → one generated document"
     :tags (:translation-doc :stitcher :critical)))

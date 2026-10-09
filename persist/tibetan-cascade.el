@@ -2793,47 +2793,168 @@ anything along the chain is missing."
                       (tibetan-cascade--sentence-lopez-section
                        source-file (plist-get sentence :sent-num)))))
     (when secnum
-      (condition-case nil
-          (with-temp-buffer
-            (insert-file-contents refs-file)
-            (goto-char (point-min))
-            (when (re-search-forward
-                   (format "^\\*\\* §%d\\b" secnum) nil t)
-              (let ((limit (save-excursion
-                             (if (re-search-forward "^\\*\\* " nil t)
-                                 (line-beginning-position)
-                               (point-max))))
-                    (blocks '()))
-                (while (re-search-forward
-                        "^\\*\\*\\* \\(.+\\)$" limit t)
-                  (let ((name (string-trim (match-string 1))))
-                    (forward-line 1)
-                    ;; Skip a :PROPERTIES: drawer (:READ_ONLY: etc.).
-                    (when (looking-at "^:PROPERTIES:$")
-                      (when (re-search-forward "^:END:$" limit t)
-                        (forward-line 1)))
-                    (let* ((start (point))
-                           (end (if (re-search-forward
-                                     "^\\*\\{1,3\\} " limit t)
-                                    (progn (goto-char
-                                            (line-beginning-position))
-                                           (point))
-                                  limit))
-                           (body (string-trim
-                                  (buffer-substring-no-properties
-                                   start end))))
-                      (unless (or (string-prefix-p "Tibetisch" name)
-                                  (string-prefix-p "Wylie" name)
-                                  (string-empty-p body))
-                        (push (format "=== %s ===\n%s" name body)
-                              blocks)))))
-                (when blocks
-                  (concat
-                   (format
-                    "\n\nReference translations for Lopez §%d (¶-level context ONLY — they span several sentences; do NOT copy their wording, and never reproduce them in your output sections):\n"
-                    secnum)
-                   (mapconcat #'identity (nreverse blocks) "\n"))))))
-        (error nil)))))
+      (let ((bodies (tibetan-cascade--section-ref-bodies
+                     refs-file secnum)))
+        (when bodies
+          (concat
+           (format
+            "\n\nReference translations for Lopez §%d (¶-level context ONLY — they span several sentences; do NOT copy their wording, and never reproduce them in your output sections):\n"
+            secnum)
+           (mapconcat (lambda (nb)
+                        (format "=== %s ===\n%s" (car nb) (cdr nb)))
+                      bodies "\n")))))))
+
+(defun tibetan-cascade--section-ref-bodies (refs-file secnum)
+  "Die §-Referenzübersetzungen aus REFS-FILE für Lopez-§ SECNUM:
+\((NAME . BODY) …) in Dateireihenfolge — jedes `*** <name>'-Kind
+des `** §N'-Subtrees AUSSER dem B2-Tibetisch und dem Wylie (also
+Lopez, Wangjié & Mulligan, Thakchoe/Hessel wo vorhanden).
+:PROPERTIES:-Drawer (:READ_ONLY: etc.) werden übersprungen.  nil
+wenn Datei/§/Inhalte fehlen; signalisiert nie.
+
+P1 (§5.58): aus `tibetan-cascade--section-refs-block'
+herausgelöst — Konsumenten sind der User-Prompt (Block-Format
+unverändert) und die Materialisierung nach * Provided
+Translations (P2)."
+  (when (and refs-file (file-readable-p refs-file) secnum)
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents refs-file)
+          (goto-char (point-min))
+          (when (re-search-forward
+                 (format "^\\*\\* §%d\\b" secnum) nil t)
+            (let ((limit (save-excursion
+                           (if (re-search-forward "^\\*\\* " nil t)
+                               (line-beginning-position)
+                             (point-max))))
+                  (bodies '()))
+              (while (re-search-forward
+                      "^\\*\\*\\* \\(.+\\)$" limit t)
+                (let ((name (string-trim (match-string 1))))
+                  (forward-line 1)
+                  ;; Skip a :PROPERTIES: drawer (:READ_ONLY: etc.).
+                  (when (looking-at "^:PROPERTIES:$")
+                    (when (re-search-forward "^:END:$" limit t)
+                      (forward-line 1)))
+                  (let* ((start (point))
+                         (end (if (re-search-forward
+                                   "^\\*\\{1,3\\} " limit t)
+                                  (progn (goto-char
+                                          (line-beginning-position))
+                                         (point))
+                                limit))
+                         (body (string-trim
+                                (buffer-substring-no-properties
+                                 start end))))
+                    (unless (or (string-prefix-p "Tibetisch" name)
+                                (string-prefix-p "Wylie" name)
+                                (string-empty-p body))
+                      (push (cons name body) bodies)))))
+              (nreverse bodies))))
+      (error nil))))
+
+(defun tibetan-cascade--pt-region ()
+  "Bounds (START . END) des `* Provided Translations'-Bodys im
+aktuellen Buffer, oder nil."
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward "^\\* Provided Translations[ \t]*$" nil t)
+      (forward-line 1)
+      (let ((start (point))
+            (end (if (re-search-forward "^\\* " nil t)
+                     (line-beginning-position)
+                   (point-max))))
+        (cons start end)))))
+
+(defun tibetan-cascade--pt-slot-present-p (name)
+  "Non-nil wenn `** NAME' bereits im Provided-Translations-Body
+des aktuellen Buffers steht (EINMALIG-Gate: ein vorhandener Slot
+— auch hand-gekürzt oder geleert — wird nie überschrieben)."
+  (let ((region (tibetan-cascade--pt-region)))
+    (when region
+      (save-excursion
+        (goto-char (car region))
+        (re-search-forward
+         (format "^\\*\\* %s[ \t]*$" (regexp-quote name))
+         (cdr region) t)))))
+
+(defun tibetan-cascade--pt-insert-slot (name body)
+  "`** NAME' mit BODY ans Ende des Provided-Translations-Bodys
+des aktuellen Buffers einsetzen; t bei Erfolg."
+  (let ((region (tibetan-cascade--pt-region)))
+    (when region
+      (save-excursion
+        (goto-char (cdr region))
+        (skip-chars-backward " \t\n")
+        (forward-line 1)
+        (insert "** " name "\n"
+                (string-trim-right body) "\n\n")
+        t))))
+
+;;;###autoload
+(defun tibetan-cascade-materialize-provided-translations (target)
+  "Materialisiere die §-Referenzübersetzungen in TARGET (Satzdatei
+oder analysis/-Ordner): jedes `*** <name>'-Kind des zugehörigen
+`** §N' der `#+TIBETAN_SECTION_REFS:'-Comparative (Lopez 2006,
+Wangjié & Mulligan, …; NIE Tibetisch/Wylie) wird als `** <name>'
+unter `* Provided Translations' der Satzdatei eingesetzt.
+
+EINMALIG (Carstens Entscheidung 09.10.): ein bereits vorhandener
+Slot wird nie angefasst — die Kopien sind danach editierbar (z. B.
+W&M-Mehr-§-Blöcke von Hand zuschneiden; das [W&M ¶N, PDF-S. N]-
+Präfix trägt den Hinweis) und über die keep-l1-Preservation des
+Provided-Translations-Subtrees regenerate-geschützt.  Copyright:
+die §5.54-Poison-Locks halten die Bodies aus Stitcher und
+§-Ansicht heraus.  Headless-tauglich; Rückgabe-Plist
+\(:written :skipped :missing)."
+  (interactive "fSatzdatei oder analysis/-Ordner: ")
+  (let* ((files (if (file-directory-p target)
+                    (sort (directory-files
+                           target t
+                           "\\`sent-[0-9]+\\(?:-[A-Za-z0-9]+\\)?\\.org\\'")
+                          #'string<)
+                  (list target)))
+         (written 0) (skipped 0) (missing 0))
+    (dolist (file files)
+      (let* ((source (and (fboundp 'tibetan-sentence--source-file-from-analysis)
+                          (tibetan-sentence--source-file-from-analysis
+                           file)))
+             (sent (and (fboundp 'tibetan-sentence--sent-id-from-filename)
+                        (tibetan-sentence--sent-id-from-filename file)))
+             (secnum (and source sent
+                          (tibetan-cascade--sentence-lopez-section
+                           source sent)))
+             (refs-rel (and secnum
+                            (fboundp 'tibetan-analysis--read-source-metadata)
+                            (plist-get
+                             (tibetan-analysis--read-source-metadata
+                              source)
+                             :section-refs)))
+             (refs-file (and refs-rel
+                             (expand-file-name
+                              refs-rel (file-name-directory
+                                        (expand-file-name source)))))
+             (bodies (and refs-file
+                          (tibetan-cascade--section-ref-bodies
+                           refs-file secnum))))
+        (if (not bodies)
+            (cl-incf missing)
+          (let ((buf (tibetan-fresh-file-buffer file))
+                (any nil))
+            (with-current-buffer buf
+              (save-excursion
+                (dolist (nb bodies)
+                  (unless (tibetan-cascade--pt-slot-present-p (car nb))
+                    (when (tibetan-cascade--pt-insert-slot
+                           (car nb) (cdr nb))
+                      (setq any t)))))
+              (if any
+                  (progn (save-buffer) (cl-incf written))
+                (cl-incf skipped)))))))
+    (when (called-interactively-p 'any)
+      (message "Provided Translations: %d Datei(en) befüllt, %d übersprungen, %d ohne §-Referenzen"
+               written skipped missing))
+    (list :written written :skipped skipped :missing missing)))
 
 ;; ============================================================================
 ;; CH2c — fire-section + UX
