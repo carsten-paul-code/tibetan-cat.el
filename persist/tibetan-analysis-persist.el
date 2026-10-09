@@ -2979,37 +2979,42 @@ unit.  nil when no unit parses."
                         segs))
          (any (cl-some #'identity trees)))
     (when any
-      (let ((overview
-             (cons '("Seg" "Satzphrasen" "Verb" "Anschluss")
-                   (cl-loop for seg in segs
-                            for tree in trees
-                            do (cl-incf i)
-                            collect
-                            (list (number-to-string (car seg))
-                                  (if tree
-                                      (tibetan-analysis--structure-overview-phrases
-                                       tree)
-                                    "—")
-                                  (if tree
-                                      (tibetan-analysis--structure-verb-cell
-                                       tree)
-                                    "—")
-                                  (cond ((= i n) "HAUPTVERB")
-                                        (t (tibetan-analysis--structure-unit-connector
-                                            (cdr seg))))))))
-            (details
-             (cl-loop for seg in segs
-                      for tree in trees
-                      when tree
-                      collect
-                      (format "*** Segment %d\n%s"
-                              (car seg)
-                              (tibetan-analysis--structure-format-table
-                               (cons '("Phrase" "Kasus" "Funktion")
-                                     (tibetan-analysis--structure-detail-rows
-                                      tree)))))))
+      ;; V1 (§5.58): Einheiten ohne Baum (kein Hill-Verb erkannt —
+      ;; typisch Vers-Pādas, sent-654: drei `| — | — |'-Zeilen)
+      ;; erscheinen NICHT mehr als Strich-Zeilen; eine Zählzeile
+      ;; unter der Übersicht macht die Lücke sichtbar.
+      (let* ((dropped (cl-count nil trees))
+             (overview
+              (cons '("Seg" "Satzphrasen" "Verb" "Anschluss")
+                    (cl-loop for seg in segs
+                             for tree in trees
+                             do (cl-incf i)
+                             when tree
+                             collect
+                             (list (number-to-string (car seg))
+                                   (tibetan-analysis--structure-overview-phrases
+                                    tree)
+                                   (tibetan-analysis--structure-verb-cell
+                                    tree)
+                                   (cond ((= i n) "HAUPTVERB")
+                                         (t (tibetan-analysis--structure-unit-connector
+                                             (cdr seg))))))))
+             (details
+              (cl-loop for seg in segs
+                       for tree in trees
+                       when tree
+                       collect
+                       (format "*** Segment %d\n%s"
+                               (car seg)
+                               (tibetan-analysis--structure-format-table
+                                (cons '("Phrase" "Kasus" "Funktion")
+                                      (tibetan-analysis--structure-detail-rows
+                                       tree)))))))
         (concat (tibetan-analysis--structure-format-table overview)
-                "\n\n"
+                (if (> dropped 0)
+                    (format "\n%d Einheit%s ohne erkanntes Hill-Verb — nicht gelistet.\n\n"
+                            dropped (if (= dropped 1) "" "en"))
+                  "\n\n")
                 (string-join details "\n\n"))))))
 
 (defun tibetan-analysis--get-grammatical-role (word root-form verb-table)

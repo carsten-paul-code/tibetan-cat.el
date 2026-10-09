@@ -659,13 +659,18 @@ slots visible)."
     (should (string-match-p "^| 2 .*HAUPTVERB" out))))
 
 (ert-deftest tibetan-analysis-structure-tables-unparseable-unit ()
-  "A unit without a detected clause still appears in the overview
-(as a — row) and never breaks the neighbours."
+  "V1 (§5.58): Einheiten ohne erkanntes Hill-Verb erzeugen KEINE
+—-Strich-Zeile mehr in der Übersicht (Vers-Segmente fluteten die
+sent-654-Tabelle mit `| — | — |'-Zeilen) — stattdessen steht eine
+Zählzeile unter der Tabelle; die Nachbarn bleiben unberührt."
   (skip-unless (fboundp 'tibetan-analyze-sentence))
   (let ((out (tibetan-analysis--render-structure-tables
               '((7 . "ཨ།") (8 . "ཆོས་ཡིན།")))))
     (should out)
-    (should (string-match-p "^| 8 " out))))
+    (should (string-match-p "^| 8 " out))
+    (should-not (string-match-p "^| 7 " out))
+    (should (string-match-p
+             "1 Einheit ohne erkanntes Hill-Verb" out))))
 
 (ert-deftest tibetan-analysis-par-sentence-structure-tabular-when-var-bound ()
   "Par context (seg-start var bound): generate-content's
