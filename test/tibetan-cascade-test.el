@@ -598,6 +598,48 @@ modulo the LAST_ANALYZED stamp."
         (tibetan-cascade--regenerate cascade-file 4 segs src)
         (should (equal first (funcall strip)))))))
 
+(ert-deftest tibetan-cascade-regenerate-never-silently-drops-l2-when-reader-unbound ()
+  "B1 (§5.58, B0-Klasse): keep-l2 hing an `(fboundp
+'tibetan-sentence--read-l2-body)' — in einem Batch ohne
+tibetan-sentence-persist wurde die Liste still leer und der
+Regenerate warf JEDEN gelandeten L2-Body (Translation, DM,
+Vocabulary, Concept Notes, Word Analysis, Provided Translations)
+kommentarlos weg.  Ein fehlendes Lesemodul darf den Regenerate
+höchstens LAUT abbrechen (Datei unberührt), nie still zerstören."
+  (tibetan-cascade-test--with-cascade-file
+    ;; Populate the sentence-level Translation (placeholder → real).
+    (with-temp-buffer
+      (insert-file-contents cascade-file)
+      (goto-char (point-min))
+      (re-search-forward "^\\*\\* Translation$")
+      (forward-line 1)
+      (let ((start (point))
+            (end (if (re-search-forward "^\\*\\{1,2\\} " nil t)
+                     (line-beginning-position)
+                   (point-max))))
+        (delete-region start end)
+        (goto-char start)
+        (insert "The lama went and asked for dharma.\n\n"))
+      (write-region (point-min) (point-max) cascade-file nil 'silent))
+    ;; Simulate the unloaded module: the reader is UNBOUND.
+    (let ((orig (symbol-function 'tibetan-sentence--read-l2-body)))
+      (unwind-protect
+          (progn
+            (fmakunbound 'tibetan-sentence--read-l2-body)
+            ;; A loud abort is acceptable; silent completion that
+            ;; loses the body is the bug.
+            (ignore-errors
+              (tibetan-cascade--regenerate
+               cascade-file 4
+               '((105 . "བདག་གིས་ལས་བྱས། ") (106 . "ཆོས་ཟབ་མོ་ཡིན།"))
+               (expand-file-name "doc.org" dir))))
+        (fset 'tibetan-sentence--read-l2-body orig)))
+    (should (string-match-p
+             "The lama went and asked for dharma\\."
+             (with-temp-buffer
+               (insert-file-contents cascade-file)
+               (buffer-string))))))
+
 ;; ============================================================================
 ;; C3.1 — span extraction + response landing
 ;; ============================================================================

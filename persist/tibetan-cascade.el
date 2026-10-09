@@ -61,6 +61,18 @@
 ;; and batch load-state aligned (the B0 lesson).
 (require 'tibetan-gloss-table nil t)
 
+;; B1 (§5.58, 2026-10-09): HARD require.  keep-l2 in
+;; `tibetan-cascade--regenerate' reads every landed L2 body through
+;; `tibetan-sentence--read-l2-body'; behind an fboundp probe that
+;; read silently returned NOTHING in a batch that never loaded the
+;; module, and the regenerate then threw away Translation / DM /
+;; Vocabulary / Concept Notes / Word Analysis / Provided
+;; Translations (B0 class — an fboundp probe is a LOAD-STATE probe
+;; and must never choose between destructive and preserving
+;; behaviour).  sentence-persist requires tibetan-cascade only at
+;; call time (soft), so there is no load-time cycle.
+(require 'tibetan-sentence-persist)
+
 (defun tibetan-cascade-split-shad-units (text)
   "Split TEXT into its shad-terminated units.
 
@@ -757,20 +769,23 @@ Returns FILEPATH."
            (mapcar (lambda (h)
                      (cons h (tibetan-cascade--read-l1-body filepath h)))
                    '("My Notes" "Working Translation" "Footnotes"))))
+         ;; B1 (§5.58): UNCONDITIONAL — the reader module is a hard
+         ;; require of this file.  The old fboundp gate silently
+         ;; emptied this list in module-less batches and the
+         ;; regenerate destroyed every landed L2 body (B0 class).
          (keep-l2
-          (when (fboundp 'tibetan-sentence--read-l2-body)
-            (cl-remove-if-not
-             #'cdr
-             (mapcar (lambda (h)
-                       (cons h (tibetan-sentence--read-l2-body filepath h)))
-                     ;; C1 (2026-09-24): "Word Analysis" is the
-                     ;; landed Sanskrit padapāṭha/morphology section
-                     ;; — preserved like every Claude-owned slot,
-                     ;; re-bound below so the tables materialize.
-                     '("Translation" "DharmaMitra Translation"
-                       "Claude Vocabulary" "Concept Notes"
-                       "Word Analysis"
-                       "Provided Translations")))))
+          (cl-remove-if-not
+           #'cdr
+           (mapcar (lambda (h)
+                     (cons h (tibetan-sentence--read-l2-body filepath h)))
+                   ;; C1 (2026-09-24): "Word Analysis" is the
+                   ;; landed Sanskrit padapāṭha/morphology section
+                   ;; — preserved like every Claude-owned slot,
+                   ;; re-bound below so the tables materialize.
+                   '("Translation" "DharmaMitra Translation"
+                     "Claude Vocabulary" "Concept Notes"
+                     "Word Analysis"
+                     "Provided Translations"))))
          (claude-grammar (tibetan-cascade--read-l3-body
                           filepath "Claude Grammar"))
          ;; R7: dual-format preserve — new-layout ⟦N⟧ lines or legacy
