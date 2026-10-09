@@ -608,13 +608,22 @@ Returns hash-table with both Wylie and Tibetan keys."
         (if (re-search-forward "^|" nil t)
             (progn
               (goto-char (point-min))
-              (while (re-search-forward "^|\\s-*\\([^|]+\\)|\\s-*\\([^|]+\\)|" nil t)
+              ;; One table ROW per match: the cell classes exclude the
+              ;; newline and org hlines (`|---+---|') are skipped.
+              ;; BUG fixed 2026-10-09: the old `\\s-*' / `[^|]+'
+              ;; crossed the line end, read the hline as an entry and
+              ;; swallowed the FIRST data row (`bden pa gnyis' in
+              ;; Wortliste-rgyan.org never loaded).
+              (while (re-search-forward
+                      "^|[ \t]*\\([^|\n]+\\)|[ \t]*\\([^|\n]+\\)|" nil t)
                 (let ((term (string-trim (match-string 1)))
                       (def (string-trim (match-string 2))))
-                  (unless (or (string-match-p "^-+$" term)  ; Skip separator lines
+                  (unless (or (string-match-p "\\`[-+]+\\'" term) ; hline
                               (string= term "Term")        ; Skip header
-                              (string-empty-p term))
-                    (tibetan--store-vocab-entry vocab-table term def)))))
+                              (string-empty-p term)
+                              (string-empty-p def))
+                    (tibetan--store-vocab-entry vocab-table term def)))
+                (forward-line 1)))
           ;; Heading format
           (while (re-search-forward "^\\*+\\s-+\\(.+\\)$" nil t)
             (let ((term (string-trim (match-string 1)))

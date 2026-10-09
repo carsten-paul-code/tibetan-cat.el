@@ -323,6 +323,31 @@ so a single valid entry may result in 2 hash entries."
             (should (> (hash-table-count vocab) 0))))
       (delete-file temp-file))))
 
+(ert-deftest tibetan-parse-wordlist-org-table-keeps-first-row ()
+  "BUG (2026-10-09, gefunden beim Lese-Handout §5.59): die Zellen-Regex
+lief über den Zeilenumbruch — die org-Trennlinie `|----+----|' wurde
+mit dem Pipe der FOLGEZEILE als „Eintrag\" gelesen und verschluckte
+die erste Datenzeile.  In Wortliste-rgyan.org ist das `bden pa
+gnyis' (der seit §5.58 notierte Fall „trifft die kuratierte
+Wortliste nicht\").  Jede Datenzeile muss ankommen, die Trennlinie
+nie."
+  (let ((temp-file (make-temp-file "wordlist" nil ".org")))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file
+            (insert "| Term | Bedeutung |\n"
+                    "|------+-----------|\n"
+                    "| bden pa gnyis | die zwei Wahrheiten // the two truths |\n"
+                    "| blo | Verstand // mind / awareness |\n"))
+          (let ((vocab (tibetan-parse-wordlist-org temp-file)))
+            (should (equal "die zwei Wahrheiten // the two truths"
+                           (gethash "bden pa gnyis" vocab)))
+            (should (equal "Verstand // mind / awareness"
+                           (gethash "blo" vocab)))
+            (should-not (gethash "------+-----------" vocab))
+            (should-not (gethash "Term" vocab))))
+      (delete-file temp-file))))
+
 (ert-deftest tibetan-parse-wordlist-org-nonexistent ()
   "Test parsing nonexistent org file."
   (let ((vocab (tibetan-parse-wordlist-org "/nonexistent/file.org")))
