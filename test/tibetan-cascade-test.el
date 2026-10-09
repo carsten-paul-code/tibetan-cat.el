@@ -1081,6 +1081,88 @@ fehlenden Sektionen für immer unerreichbar waren."
         (should (= 1 (length requests)))))))
 
 ;; ============================================================================
+;; M1 (§5.58): Ordner-Migration auf die v2-Struktur
+;; ============================================================================
+
+(ert-deftest tibetan-cascade-migrate-structure-v2-folder ()
+  "M1 (§5.58): der Ordner-Wrapper migriert jede Kaskaden-Satzdatei
+per purem Preserve-Regenerate (NIE ein Fire — trotz der per B3
+geöffneten Gates), überspringt Two-File-Dateien, sammelt Fehler
+statt abzubrechen (resume-fähig)."
+  (tibetan-cascade-test--with-stub-renderer
+    (let* ((dir (make-temp-file "cascade-migrate-" t))
+           (src (expand-file-name "doc.org" dir))
+           (analysis (file-name-as-directory
+                      (expand-file-name "analysis" dir))))
+      (unwind-protect
+          (progn
+            (make-directory analysis t)
+            (with-temp-file src
+              (insert "#+TITLE: D\n#+TIBETAN_LAYOUT: cascade\n\n"
+                      "* Tibetan Text\n*** Sentence 4\n"
+                      "**** Segment 105\nབདག་གིས་ལས་བྱས།\n\n"))
+            ;; (a) Alt-Layout-Kaskadendatei mit gelandetem Inhalt.
+            (with-temp-file (expand-file-name "sent-004-doc.org"
+                                              analysis)
+              (insert "#+TITLE: Sentence 4 Analysis\n"
+                      "#+TIBETAN_LAYOUT: cascade\n"
+                      "#+SOURCE: [[file:../doc.org::*Sentence 4]"
+                      "[doc.org / Sentence 4]]\n"
+                      "#+SEGMENTS: 105\n\n"
+                      "* My Notes\n\n\n* Working Translation\n\n\n"
+                      "* Tibetan Text\nབདག་གིས་ལས་བྱས།\n\n"
+                      "* Reading\n** Renderings\n"
+                      "- ⟦105⟧ Ich handelte.\n\n"
+                      "* Tibetan Analysis\n"
+                      "** Translation\nIch handelte.\n\n"
+                      "* Footnotes\n\n"))
+            ;; (b) Two-File-Satzdatei (kein Kaskaden-Marker).
+            (with-temp-file (expand-file-name "sent-007-doc.org"
+                                              analysis)
+              (insert "#+TITLE: Sentence 7 Analysis\n\n"
+                      "* Tibetan Analysis\n** Translation\nZwei-File.\n"))
+            ;; (c) Kaputte Kaskadendatei (keine Quelle auflösbar).
+            (with-temp-file (expand-file-name "sent-099-doc.org"
+                                              analysis)
+              (insert "#+TITLE: Sentence 99 Analysis\n"
+                      "#+TIBETAN_LAYOUT: cascade\n\n* Footnotes\n"))
+            (let ((two-file-before
+                   (with-temp-buffer
+                     (insert-file-contents
+                      (expand-file-name "sent-007-doc.org" analysis))
+                     (buffer-string)))
+                  (fires 0))
+              (cl-letf (((symbol-function 'tibetan-cascade--fire-sentence)
+                         (lambda (&rest _) (cl-incf fires) 'fired))
+                        ((symbol-function 'tibetan-cascade--fire-section)
+                         (lambda (&rest _) (cl-incf fires) 'fired)))
+                (let ((r (tibetan-cascade-migrate-structure-v2 analysis)))
+                  (should (= 3 (plist-get r :total)))
+                  (should (= 1 (plist-get r :ok)))
+                  (should (= 1 (plist-get r :skipped)))
+                  (should (= 1 (plist-get r :failed)))
+                  (should (= 1 (length (plist-get r :failures))))))
+              ;; NIE gefeuert — Migration ist render-only.
+              (should (= 0 fires))
+              ;; (a) migriert: L1-Translation, Rendering erhalten.
+              (let ((s (with-temp-buffer
+                         (insert-file-contents
+                          (expand-file-name "sent-004-doc.org" analysis))
+                         (buffer-string))))
+                (should (string-match-p
+                         "^\\* Translation\nIch handelte\\." s))
+                (should (string-match-p "^- ⟦105⟧ Ich handelte\\.$" s))
+                (should-not (string-match-p "^\\* Tibetan Text$" s)))
+              ;; (b) byte-identisch unberührt.
+              (should (equal two-file-before
+                             (with-temp-buffer
+                               (insert-file-contents
+                                (expand-file-name "sent-007-doc.org"
+                                                  analysis))
+                               (buffer-string))))))
+        (delete-directory dir t)))))
+
+;; ============================================================================
 ;; P2 (§5.58): Lopez/W&M-Materialisierung nach * Provided Translations
 ;; ============================================================================
 

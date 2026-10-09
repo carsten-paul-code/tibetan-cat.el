@@ -2956,6 +2956,42 @@ die §5.54-Poison-Locks halten die Bodies aus Stitcher und
                written skipped missing))
     (list :written written :skipped skipped :missing missing)))
 
+;;;###autoload
+(defun tibetan-cascade-migrate-structure-v2 (folder)
+  "Migriere alle Kaskaden-Satzdateien in FOLDER auf die
+§5.58-Reading-Class-Struktur.  Je Datei ein PURES
+Preserve-Regenerate (`tibetan-cascade-reanalyze-file' mit
+re-request-claude nil — das Regenerate IST die Migration, S2;
+trotz der per B3 geöffneten Fire-Gates wird NIE gefeuert).
+Two-File-Satzdateien (ohne `#+TIBETAN_LAYOUT: cascade') werden
+übersprungen.  Resume-fähig: Fehler werden gesammelt, der Lauf
+geht weiter.  Betriebsrezept (M3): git-Snapshot vorher, Dry-Run
+auf einer Scratch-Kopie, Diff-Review, Lauf, Idempotenz-Zweitlauf.
+Rückgabe (:total :ok :skipped :failed :failures ((FILE . ERR)…))."
+  (interactive "DAnalysis-Ordner: ")
+  (let* ((files (sort (directory-files
+                       folder t
+                       "\\`sent-[0-9]+\\(?:-[A-Za-z0-9]+\\)?\\.org\\'")
+                      #'string<))
+         (ok 0) (skipped 0) (failed 0) (failures '()))
+    (dolist (file files)
+      (if (not (and (fboundp 'tibetan-cascade-file-p)
+                    (tibetan-cascade-file-p file)))
+          (cl-incf skipped)
+        (let ((r (condition-case err
+                     (tibetan-cascade-reanalyze-file file)
+                   (error (list :ok nil
+                                :error (error-message-string err))))))
+          (if (plist-get r :ok)
+              (cl-incf ok)
+            (cl-incf failed)
+            (push (cons file (plist-get r :error)) failures)))))
+    (when (called-interactively-p 'any)
+      (message "Migration v2: %d ok, %d übersprungen (Two-File), %d fehlgeschlagen"
+               ok skipped failed))
+    (list :total (length files) :ok ok :skipped skipped
+          :failed failed :failures (nreverse failures))))
+
 ;; ============================================================================
 ;; CH2c — fire-section + UX
 ;; ============================================================================
