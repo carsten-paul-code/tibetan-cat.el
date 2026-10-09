@@ -221,9 +221,16 @@ handout request) and the same column count."
           (should (string-suffix-p " |" l))
           ;; 3 columns → 4 pipes.
           (should (= 4 (cl-count ?| l))))
-        ;; Aligned: identical rendered width for all three rows.
-        (should (= 1 (length (delete-dups
-                              (mapcar #'string-width lines)))))))))
+        ;; Aligned: identical VISIBLE width for all three rows (T2:
+        ;; row 1 carries collapsed steinert:-links).
+        (should (= 1 (length
+                      (delete-dups
+                       (mapcar (lambda (l)
+                                 (string-width
+                                  (replace-regexp-in-string
+                                   "\\[\\[[^][]+\\]\\[\\([^][]+\\)\\]\\]"
+                                   "\\1" l)))
+                               lines)))))))))
 
 (ert-deftest tibetan-gloss-table-render-row-contents ()
   "Row 1 = plain Wylie, row 2 = display gloss with EMPTY particle
@@ -236,22 +243,85 @@ cells, row 3 = grammar labels."
                             (mapcar #'string-trim
                                     (butlast (cdr (split-string l "|")))))
                           lines)))
-      (should (equal '("rje" "yi" "mdzad") (nth 0 cells)))
+      ;; T2 (§5.58): Wörter/Verben als steinert:-Links, Partikel plain.
+      (should (equal '("[[steinert:rje][rje]]" "yi"
+                       "[[steinert:mdzad][mdzad]]")
+                     (nth 0 cells)))
       ;; Particle gloss cell EMPTY (its information is the label).
       (should (equal '("Ehrwürdiger" "" "to do, to act (hon.)")
                      (nth 1 cells)))
       (should (equal '("?" "GEN" "V.HON") (nth 2 cells))))))
 
 (ert-deftest tibetan-gloss-table-render-clitic-and-no-markup ()
-  "A merged clitic re-attaches in the Wylie row (pa'i) and no
-cell carries emphasis/link markup."
+  "A merged clitic re-attaches VISIBLY in the Wylie row (pa'i,
+Linkziel der Stamm — T2 §5.58) and rows 2/3 stay free of
+emphasis/link markup."
   (tibetan-gloss-table-test--with-tokens
       `(("U1" . ,tibetan-gloss-table-test--toks-b))
-    (let ((out (tibetan-gloss-table-render '("U1"))))
-      (should (string-match-p "| pa'i *|" out))
+    (let* ((out (tibetan-gloss-table-render '("U1")))
+           (lines (split-string out "\n")))
+      (should (string-match-p "\\[\\[steinert:pa\\]\\[pa'i\\]\\]" out))
       (should (string-match-p "| NMLZ\\.GEN *|" out))
-      (dolist (bad '("=" "~" "!" "\\[\\["))
-        (should-not (string-match-p bad out))))))
+      (dolist (bad '("=" "~" "!"))
+        (should-not (string-match-p bad out)))
+      ;; Links nur in Zeile 1.
+      (should-not (string-match-p "\\[\\[" (nth 1 lines)))
+      (should-not (string-match-p "\\[\\[" (nth 2 lines))))))
+
+;; ----------------------------------------------------------------------------
+;; T2 (§5.58): steinert:-Links in Zeile 1 + Breite nach sichtbarem Text
+;; ----------------------------------------------------------------------------
+
+(ert-deftest tibetan-gloss-table-row1-links-words-and-verbs ()
+  "T2 (§5.58): Zeile 1 verlinkt Wörter UND Verben als
+steinert:-Links (Pfad = Stamm-Wylie, sichtbar der Zelltext);
+Partikeln bleiben plain.  Emission bewusst OHNE
+steinert-available-p-Probe — die DB-Kopplung des alten
+Reading-Linkifiers war die §5.53-Drift-Klasse."
+  (tibetan-gloss-table-test--with-tokens
+      `(("U1" . ,tibetan-gloss-table-test--toks-a))
+    (let ((out (tibetan-gloss-table-render '("U1"))))
+      (should (string-match-p "\\[\\[steinert:rje\\]\\[rje\\]\\]" out))
+      (should (string-match-p "\\[\\[steinert:mdzad\\]\\[mdzad\\]\\]"
+                              out))
+      (should-not (string-match-p "steinert:yi" out)))))
+
+(ert-deftest tibetan-gloss-table-alignment-on-visible-text ()
+  "T2 (§5.58): die Spalten fluchten im SICHTBAREN Text — org
+kollabiert [[steinert:…][desc]] auf desc, also zählt die
+Breitenrechnung (Bänder, Padding) den sichtbaren Teil, nicht den
+Rohstring (eine Roh-URL hätte die Band-Rechnung auf 1 Spalte
+gedrückt)."
+  (tibetan-gloss-table-test--with-tokens
+      `(("U1" . ,tibetan-gloss-table-test--toks-a))
+    (let* ((out (tibetan-gloss-table-render '("U1")))
+           (strip (lambda (s)
+                    (replace-regexp-in-string
+                     "\\[\\[[^][]+\\]\\[\\([^][]+\\)\\]\\]" "\\1" s)))
+           (visible (mapcar strip (split-string out "\n"))))
+      (should (= 3 (length visible)))
+      ;; Identical visible width AND identical pipe positions.
+      (should (= 1 (length (delete-dups
+                            (mapcar #'string-width visible)))))
+      (let ((pipes (mapcar (lambda (l)
+                             (let (ps (i 0))
+                               (dolist (c (string-to-list l) (nreverse ps))
+                                 (when (eq c ?|) (push i ps))
+                                 (setq i (1+ i)))))
+                           visible)))
+        (should (= 1 (length (delete-dups pipes))))))))
+
+(ert-deftest tibetan-gloss-table-sa-rows-stay-linkless ()
+  "sa-Dokumente (IAST-Tokens) bekommen KEINE steinert:-Links —
+das Steinert-Wörterbuch ist tibetisch-keyed; ein IAST-Suchbegriff
+wäre Lookup-Müll."
+  (tibetan-gloss-table-test--with-tokens
+      `(("U1" . ((:tibetan "dharmāṇām" :wylie "dharmāṇām"
+                  :kind word :morph "N.GEN.PL" :meaning "dharma"))))
+    (let* ((tibetan-analysis--source-lang "sa")
+           (out (tibetan-gloss-table-render '("U1"))))
+      (should-not (string-match-p "steinert:" out))
+      (should (string-match-p "| dharmāṇām *|" out)))))
 
 (ert-deftest tibetan-gloss-table-cell-strips-literal-escape-sequences ()
   "A gloss carrying LITERAL backslash-escape sequences (\\n, \\t —
@@ -394,9 +464,10 @@ order."
       (should (>= (length hlines) 1))
       (should (= 0 (mod (length cell-lines) 3)))
       (should (= (length hlines) (1- (/ (length cell-lines) 3))))
-      ;; Budget: keine Zeile breiter als max-width.
+      ;; Budget: keine Zeile SICHTBAR breiter als max-width (T2:
+      ;; der Link-Rohtext kollabiert im Display).
       (dolist (l lines)
-        (should (<= (string-width l) 70)))
+        (should (<= (tibetan-gloss-table--visible-width l) 70)))
       ;; Alle Tokens, in Reihenfolge (Zeile 1 der Bänder konkateniert).
       (let ((row1 (mapconcat #'identity
                              (cl-loop for i from 0 below (length cell-lines)
@@ -417,12 +488,15 @@ aligned grid."
            (tibetan-gloss-table-cell-gloss-width 25)
            (out (tibetan-gloss-table-render '("U1")))
            (lines (split-string out "\n"))
+           ;; T2: Pipe-Positionen im SICHTBAREN Text (Links
+           ;; kollabiert), wie org die Tabelle anzeigt.
            (positions
             (delete-dups
              (mapcar (lambda (l)
-                       (mapcar (lambda (p) p)
-                               (tibetan-gloss-table-test--pipe-positions
-                                (replace-regexp-in-string "\\+" "|" l))))
+                       (tibetan-gloss-table-test--pipe-positions
+                        (replace-regexp-in-string
+                         "\\[\\[[^][]+\\]\\[\\([^][]+\\)\\]\\]" "\\1"
+                         (replace-regexp-in-string "\\+" "|" l))))
                      lines))))
       (should (= 1 (length positions))))))
 

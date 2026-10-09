@@ -202,8 +202,23 @@ unit yields no tokens."
         (dolist (tok toks)
           (let ((particle-p (eq (plist-get tok :kind) 'particle))
                 (clitic (plist-get tok :clitic)))
-            (push (tibetan-gloss-table--cell
-                   (concat (plist-get tok :wylie) (car clitic)))
+            ;; T2 (§5.58): Wörter und Verben verlinken als
+            ;; `[[steinert:STAMM][sichtbarer Zelltext]]' — Pfad ist
+            ;; der klitika-freie Stamm (:wylie), sichtbar bleibt die
+            ;; volle Form (pa'i).  Emission bewusst OHNE
+            ;; DB-Kopplung (§5.53) und NICHT für sa (IAST wäre im
+            ;; tibetisch-keyed Steinert Lookup-Müll).
+            (push (let* ((display (tibetan-gloss-table--cell
+                                   (concat (plist-get tok :wylie)
+                                           (car clitic))))
+                         (stem (tibetan-gloss-table--cell
+                                (or (plist-get tok :wylie) ""))))
+                    (if (and (memq (plist-get tok :kind) '(word verb))
+                             (not (tibetan-reading--source-lang-sa-p))
+                             (not (string-empty-p stem))
+                             (not (string-empty-p display)))
+                        (format "[[steinert:%s][%s]]" stem display)
+                      display))
                   r1)
             (push (tibetan-gloss-table--cell
                    (if particle-p ""
@@ -232,6 +247,16 @@ drift class.  For the same reason the budget must never be
 derived from the live window width."
   :type 'integer
   :group 'tibetan-cat)
+
+(defun tibetan-gloss-table--visible-width (s)
+  "Display width of cell S — org-Link-Syntax kollabiert auf die
+Beschreibung (T2, §5.58): `[[steinert:chags ldan][chags ldan]]'
+zählt als `chags ldan'.  Die Band-/Padding-Rechnung MUSS so
+messen, sonst drückte der unsichtbare Link-Rohtext die Bänder auf
+Ein-Spalten-Breite und die Pipes fluchteten nur im Rohstring."
+  (string-width
+   (replace-regexp-in-string
+    "\\[\\[[^][]+\\]\\[\\([^][]+\\)\\]\\]" "\\1" (or s ""))))
 
 (defun tibetan-gloss-table--band-width (widths n)
   "Rendered line width for bands of N consecutive columns.
@@ -266,10 +291,11 @@ cells, token order kept.  Private per-block widths fragmented
 the segment visually and for org's table commands (§15 review,
 2026-09-17)."
   (let* ((ncols (length (car rows)))
+         ;; T2 (§5.58): SICHTBARE Breiten — Link-Syntax kollabiert.
          (widths
           (cl-loop for i below ncols
                    collect (cl-loop for row in rows
-                                    maximize (string-width
+                                    maximize (tibetan-gloss-table--visible-width
                                               (or (nth i row) "")))))
          (n (tibetan-gloss-table--columns-per-band widths))
          (posw (cl-loop for k below n
@@ -292,7 +318,10 @@ the segment visually and for org's table commands (§15 review,
                      (cell (or (and (< i ncols) (nth i row)) ""))
                      (w (nth k posw)))
                 (concat cell
-                        (make-string (- w (string-width cell)) ?\s))))
+                        (make-string
+                         (max 0 (- w (tibetan-gloss-table--visible-width
+                                      cell)))
+                         ?\s))))
             (number-sequence 0 (1- n)) " | ")
            " |"))
         rows "\n"))
