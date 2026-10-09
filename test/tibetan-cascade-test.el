@@ -748,6 +748,81 @@ clobbers an already-populated Rendering."
     (should (equal "KEEP ME."
                    (tibetan-cascade--read-rendering cascade-file 106)))))
 
+(defun tibetan-cascade-test--set-translation-body (file body)
+  "Test helper: replace the `** Translation' body in FILE with BODY."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (goto-char (point-min))
+    (re-search-forward "^\\*\\* Translation$")
+    (forward-line 1)
+    (let ((start (point))
+          (end (if (re-search-forward "^\\*\\{1,2\\} " nil t)
+                   (line-beginning-position)
+                 (point-max))))
+      (delete-region start end)
+      (goto-char start)
+      (insert body "\n\n"))
+    (write-region (point-min) (point-max) file nil 'silent)))
+
+(ert-deftest tibetan-cascade-land-response-fills-missing-slots-after-chunk ()
+  "B3 (§5.58, Gate-Falle, Landungsseite): nach einer Chunk-Landung
+ist ** Translation gefüllt und das ALTE Gesamt-Gate (needs-request-p
+= Translation UND Vocabulary beide leer) dauerhaft zu — Vocabulary /
+Grammar / Particles / Concept Notes einer späteren Satz-Antwort
+kamen ohne FORCE nie mehr an.  Die Landung muss per Slot gaten:
+fehlende Slots landen, die vorhandene Translation bleibt unberührt."
+  (tibetan-cascade-test--with-cascade-file
+    ;; Simulate the post-chunk state: Translation populated (chunk
+    ;; slice with its label), everything else still placeholder.
+    (tibetan-cascade-test--set-translation-body
+     cascade-file
+     "(Sentence 4 — §220 chunk)\nCHUNK TRANSLATION stays.")
+    (tibetan-cascade--land-response
+     tibetan-cascade-test--response
+     (list :sent-num 4 :seg-nums '(105 106)
+           :sent-file cascade-file :cascade t :force nil))
+    (let ((s (with-temp-buffer
+               (insert-file-contents cascade-file)
+               (buffer-string))))
+      ;; The missing slots arrived.
+      (should (string-match-p "rngog, proper noun" s))
+      (should (string-match-p "two-clause chain" s))
+      (should (string-match-p "one of Mar pa's four pillars" s))
+      ;; The populated Translation was NOT overwritten (non-FORCE).
+      (should (string-match-p "CHUNK TRANSLATION stays\\." s))
+      (should-not
+       (string-match-p
+        "The lama went to rNgog's place and requested the dharma\\."
+        (or (tibetan-sentence--read-l2-body cascade-file "Translation")
+            ""))))))
+
+(ert-deftest tibetan-cascade-fire-gate-opens-on-missing-vocabulary ()
+  "B3 (§5.58, Gate-Falle, Feuerseite): im Nach-Chunk-Zustand
+\(Translation + Renderings gefüllt, Vocabulary/Concept Notes leer)
+muss der Satz-Fire öffnen — das alte Gate lieferte nil, womit die
+fehlenden Sektionen für immer unerreichbar waren."
+  (tibetan-cascade-test--with-cascade-file
+    (tibetan-cascade-test--set-translation-body
+     cascade-file
+     "(Sentence 4 — §220 chunk)\nCHUNK TRANSLATION stays.")
+    (tibetan-cascade--write-rendering cascade-file 105 "Span eins.")
+    (tibetan-cascade--write-rendering cascade-file 106 "Span zwei.")
+    (let ((requests '()))
+      (cl-letf (((symbol-function 'tibetan-sentence-claude--claim)
+                 (lambda (&rest _) t))
+                ((symbol-function 'tibetan-sentence-claude--request)
+                 (lambda (&rest args) (push args requests)))
+                ((symbol-function 'tibetan-sentence-claude--schedule-dm)
+                 (lambda (&rest _) nil)))
+        (should (eq 'fired
+                    (tibetan-cascade--fire-sentence-1
+                     (list :sent-num 4 :seg-nums '(105 106)
+                           :tibetan-text "བདག་གིས་ལས་བྱས། ཆོས་ཟབ་མོ་ཡིན།")
+                     (expand-file-name "doc.org" dir)
+                     (file-name-directory cascade-file)
+                     nil)))
+        (should (= 1 (length requests)))))))
+
 ;; ============================================================================
 ;; C3.2 — cascade fire (dispatcher branch, claim, request, DM)
 ;; ============================================================================

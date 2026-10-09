@@ -1111,6 +1111,8 @@ bracket, the §5.40 lesson)."
                   "tibetan-analysis-claude")
 (declare-function tibetan-analysis--claude-needs-request-p
                   "tibetan-analysis-claude")
+(declare-function tibetan-analysis--read-claude-sections
+                  "tibetan-analysis-claude")
 
 (defun tibetan-cascade--extract-span (whole seg-num)
   "The text between `⟦SEG-NUM⟧' and `⟦/SEG-NUM⟧' in WHOLE, or nil.
@@ -1299,22 +1301,42 @@ touched."
       ;; Sentence-level sections.  The generic auto-regen router only
       ;; knows seg-/par- files and would silently fail on a sent file
       ;; — bound off; the cascade does its OWN re-render below.
-      (let ((md (tibetan-sentence-claude--synthesize-segment-markdown
-                 (list :translation
-                       (and whole
-                            (tibetan-sentence-claude--strip-span-markers
-                             whole))
-                       :vocabulary (tibetan-cascade--reassemble-subsections
-                                    parsed :vocabulary seg-nums)
-                       :grammar (tibetan-cascade--reassemble-subsections
-                                 parsed :grammar seg-nums
-                                 (plist-get parsed :grammar-preamble))
-                       :particles (tibetan-cascade--reassemble-subsections
-                                   parsed :particles seg-nums)
-                       :concepts (plist-get parsed :concepts)))))
-        (when (and md (not (string-empty-p md))
-                   (or force
-                       (tibetan-analysis--claude-needs-request-p file)))
+      ;;
+      ;; B3 (§5.58, Gate-Falle): per-SLOT gating statt des alten
+      ;; Gesamt-Gates.  Nach einer Chunk-Landung (nur Translation)
+      ;; war `tibetan-analysis--claude-needs-request-p' (Translation
+      ;; UND Vocabulary beide leer) dauerhaft nil — Vocabulary /
+      ;; Grammar / Particles / Concept Notes einer späteren
+      ;; Satz-Antwort wurden hier verworfen und konnten ohne FORCE
+      ;; NIE mehr ankommen (der Zustand von ~736 Rgyan-Dateien).
+      ;; Jetzt landet jeder Slot, der FORCE ist oder noch leer; ein
+      ;; gelandeter Slot wird ohne FORCE nicht überschrieben (M7).
+      (let* ((have (tibetan-analysis--read-claude-sections file))
+             (md (cl-flet ((want (key)
+                             (or force (null (plist-get have key)))))
+                   (tibetan-sentence-claude--synthesize-segment-markdown
+                    (list :translation
+                          (and (want :translation)
+                               whole
+                               (tibetan-sentence-claude--strip-span-markers
+                                whole))
+                          :vocabulary
+                          (and (want :vocabulary)
+                               (tibetan-cascade--reassemble-subsections
+                                parsed :vocabulary seg-nums))
+                          :grammar
+                          (and (want :grammar)
+                               (tibetan-cascade--reassemble-subsections
+                                parsed :grammar seg-nums
+                                (plist-get parsed :grammar-preamble)))
+                          :particles
+                          (and (want :particles)
+                               (tibetan-cascade--reassemble-subsections
+                                parsed :particles seg-nums))
+                          :concepts
+                          (and (want :concepts)
+                               (plist-get parsed :concepts)))))))
+        (when (and md (not (string-empty-p md)))
           (let ((tibetan-analysis-auto-regen-on-claude-arrival nil))
             (tibetan-analysis--insert-claude-sections md file))))
       ;; C3 (2026-09-24): ONE pure re-render so the landing reaches
@@ -1390,13 +1412,38 @@ grounding).  nil when the file or every gloss is unavailable."
                   "meanings for listed words):\n"
                   (mapconcat #'identity blocks "\n")))))))
 
+(defun tibetan-cascade--claude-sections-incomplete-p (file)
+  "Non-nil when a sentence-level Claude slot of FILE still lacks
+content: Translation, Claude Vocabulary or Concept Notes missing or
+placeholder — for a `#+SOURCE_LANG: sa' file also a missing
+`** Word Analysis'.
+
+B3 (§5.58, Gate-Falle): das alte Fire-Gate nutzte
+`tibetan-analysis--claude-needs-request-p' (Translation UND
+Vocabulary BEIDE leer).  Nach einer Chunk-Landung — die nur die
+Translation schreibt — war es dauerhaft zu: die übrigen Sektionen
+konnten ohne FORCE nie mehr nachgefeuert werden.  Dieses Prädikat
+gilt je SLOT: solange irgendein Pflicht-Slot leer ist, darf der
+Satz-Fire öffnen (die Landung gated ihrerseits per Slot und fasst
+Gelandetes nicht an)."
+  (when (and file (file-exists-p file))
+    (let ((sections (tibetan-analysis--read-claude-sections file)))
+      (or (null (plist-get sections :translation))
+          (null (plist-get sections :vocabulary))
+          (null (plist-get sections :concepts))
+          (and (fboundp 'tibetan-analysis--resolve-source-lang)
+               (equal (tibetan-analysis--resolve-source-lang file) "sa")
+               (null (tibetan-sentence--read-l2-body
+                      file "Word Analysis")))))))
+
 (defun tibetan-cascade--fire-sentence (sentence source-file folder
                                        &optional force)
   "Fire ONE sentence-level Claude call for a CASCADE document.
 SENTENCE is the walker plist; the target is the single cascade file
 \(resolved suffix-aware in FOLDER) — there are no child seg files.
-Fire gate: FORCE, the sentence-level Claude slots still needing a
-request, or ANY subsegment Rendering still a placeholder/stub.
+Fire gate: FORCE, ANY sentence-level Claude slot still incomplete
+\(`tibetan-cascade--claude-sections-incomplete-p' — per-slot, B3),
+or ANY subsegment Rendering still a placeholder/stub.
 Claim/request/DM all ride the §5.40 machinery — the request carries
 the `:cascade' context flag so the response lands through
 `tibetan-cascade--land-response'; DM targets the cascade file's own
@@ -1420,9 +1467,10 @@ nested slot.  Returns `fired' / `dedup-hit' / nil (does not apply)."
     (when (and file (file-exists-p file) seg-nums
                (fboundp 'tibetan-sentence-claude--claim)
                (fboundp 'tibetan-sentence-claude--request))
+      ;; B3 (§5.58): per-Slot-Prädikat statt needs-request-p — siehe
+      ;; `tibetan-cascade--claude-sections-incomplete-p'.
       (when (or force
-                (and (fboundp 'tibetan-analysis--claude-needs-request-p)
-                     (tibetan-analysis--claude-needs-request-p file))
+                (tibetan-cascade--claude-sections-incomplete-p file)
                 (cl-some
                  (lambda (n)
                    (tibetan-cascade--rendering-needs-request-p
