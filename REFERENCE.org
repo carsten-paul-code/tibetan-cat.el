@@ -1,9 +1,9 @@
 #+TITLE: Function Reference — tibetan-cat.el
 #+SUBTITLE: Auto-generated from source — do not hand-edit; re-run generate-function-reference.py
-#+DATE: 2026-10-09T14:23:26
+#+DATE: 2026-10-09T14:27:40
 #+OPTIONS: toc:2 num:nil
 
-Source tree: ~/Users/cp/tibetan-cat.el~  ·  79 modules  ·  1535 forms
+Source tree: ~/Users/cp/tibetan-cat.el~  ·  79 modules  ·  1548 forms
 
 Regenerated automatically by:
 
@@ -68,7 +68,7 @@ python3 ~/emacs-zettelkasten/generate-function-reference.py /Users/cp/tibetan-ca
   - [[#persist/tibetan-cascade.el][persist/tibetan-cascade.el]]  (100)
   - [[#persist/tibetan-claude-queue.el][persist/tibetan-claude-queue.el]]  (21)
   - [[#persist/tibetan-compound-analysis.el][persist/tibetan-compound-analysis.el]]  (29)
-  - [[#persist/tibetan-handout.el][persist/tibetan-handout.el]]  (15)
+  - [[#persist/tibetan-handout.el][persist/tibetan-handout.el]]  (28)
   - [[#persist/tibetan-portfolio.el][persist/tibetan-portfolio.el]]  (5)
   - [[#persist/tibetan-sentence-claude.el][persist/tibetan-sentence-claude.el]]  (27)
   - [[#persist/tibetan-sentence-persist.el][persist/tibetan-sentence-persist.el]]  (60)
@@ -18432,6 +18432,118 @@ CALLER binds (`tibetan-handout--load-curated').  Reads only the
 tool's Translation/Vocabulary/Grammar slots — Provided Translations
 (Lopez/W&M/DM) and the Working Translation never reach the handout.
 
+** ~tibetan-handout--latex-escape~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 360
+:SIGNATURE: (tibetan-handout--latex-escape s)
+:END:
+
+S with the LaTeX special characters escaped (raw-LaTeX blocks).
+
+** ~tibetan-handout--emphasis~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 371
+:SIGNATURE: (tibetan-handout--emphasis body org-marker latex-cmd prev next)
+:END:
+
+BODY as org emphasis with ORG-MARKER when org will recognise it
+between the characters PREV and NEXT (nil = line edge); otherwise
+an export snippet with LATEX-CMD — the output must be right even
+where org's emphasis rules would leave the markers standing.
+
+** ~tibetan-handout--md-to-org~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 384
+:SIGNATURE: (tibetan-handout--md-to-org s)
+:END:
+
+Claude's markdown emphasis in S as org: `**x**' → bold, `*x*' →
+italic.  Lines that org would read as a heading, comment or table
+are defused with an empty export snippet in front.
+
+** ~tibetan-handout--cell~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 409
+:SIGNATURE: (tibetan-handout--cell s)
+:END:
+
+S as a single org table cell: one line, `|' as \vert{}.
+
+** ~tibetan-handout--macro-arg~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 417
+:SIGNATURE: (tibetan-handout--macro-arg s)
+:END:
+
+S safe as an org macro argument (commas escaped).
+
+** ~tibetan-handout--seg-range~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 421
+:SIGNATURE: (tibetan-handout--seg-range segs)
+:END:
+
+"1970–1974" / "1975" for the :segs of a sentence.
+
+** ~tibetan-handout--sentence-range~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 428
+:SIGNATURE: (tibetan-handout--sentence-range sentences)
+:END:
+
+"Satz 654" / "Sätze 654–656" for the handout's SENTENCES.
+
+** ~tibetan-handout--header~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 436
+:SIGNATURE: (tibetan-handout--header spec)
+:END:
+
+The org header (marker, keywords, LaTeX preamble, macros) of SPEC.
+
+** ~tibetan-handout--text-part~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 483
+:SIGNATURE: (tibetan-handout--text-part sentences)
+:END:
+
+`* Text': every segment — Uchen above Wylie (bo) or the IAST (sa),
+segment number in the margin, wide line spacing for handwriting.
+
+** ~tibetan-handout--sentence-block~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 507
+:SIGNATURE: (tibetan-handout--sentence-block d)
+:END:
+
+`* Satz N (Seg. …)' for the sentence data D: compact Wylie,
+Übersetzung, Vokabular, Grammatik — or the visible gap.
+
+** ~tibetan-handout-render~  /function/
+:PROPERTIES:
+:KIND: defun
+:LINE: 584
+:SIGNATURE: (tibetan-handout-render spec)
+:END:
+
+The handout org text for SPEC — a plist (:title :scope :source-name
+:date :sentences), :sentences being `tibetan-handout--sentence-data'
+plists.  Pure: no file access.  Layout (Carsten 09.10.): `* Text'
+(the whole passage: Uchen + Wylie per segment, room for handwriting,
+6 cm free right margin on every page), then per sentence `* Satz N'
+with Übersetzung / Vokabular / Grammatik.  The word "Claude" never
+appears (headings are German; the slots are named by content).
+
 ** ~tibetan-handout-grammar-labels~  /customize variable/
 :PROPERTIES:
 :KIND: defcustom
@@ -18442,6 +18554,17 @@ tool's Translation/Vocabulary/Grammar slots — Provided Translations
 :END:
 
 /(no docstring)/
+
+** ~tibetan-handout-tibetan-font~  /customize variable/
+:PROPERTIES:
+:KIND: defcustom
+:LINE: 355
+:TYPE: 'string
+:GROUP: tibetan-cat
+:DEFAULT: "Noto Serif Tibetan"
+:END:
+
+Font for the Uchen line of the handout (fontspec name, HarfBuzz).
 
 ** ~tibetan-handout--particle-syllables~  /variable/
 :PROPERTIES:
@@ -18472,6 +18595,18 @@ Cache of `tibetan-handout--particle-syllables'.
 Machine placeholders / stubs — never content on a handout.
 Prefix-anchored (§5.40 lesson: a real rendering may open with an
 editorial bracket like `[He] spoke').
+
+** ~tibetan-handout-generated-marker~  /constant/
+:PROPERTIES:
+:KIND: defconst
+:LINE: 348
+:DEFAULT: "# GENERATED by tibetan-handout"
+:END:
+
+First line of every generated handout.  The overwrite guard
+refuses an existing target without it (a hand-owned file is never
+clobbered); a generated handout may be shortened before printing —
+the next C-c u H regenerates it from the analysis files.
 
 
 * persist/tibetan-portfolio.el

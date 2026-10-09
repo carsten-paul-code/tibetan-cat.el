@@ -343,5 +343,126 @@ info column carries the Word-Analysis morphology."
       (should (equal '(("Syntax" . "nominal sentence."))
                      (cdr (assq 1 (plist-get d :grammar))))))))
 
+;; ----------------------------------------------------------------------------
+;; B2 — renderer (pure: data → org string)
+;; ----------------------------------------------------------------------------
+
+(defconst tibetan-handout-test--spec
+  (list
+   :title "Klu sgrub dgongs rgyan" :scope "§220" :source-name "Rgyan-cat.org"
+   :date "2026-10-09"
+   :sentences
+   (list
+    (list :sent-num 654 :lang "bo"
+          :segs '((:num 1970 :wylie "blos mthong ba ~M_x" :uchen "བློས་མཐོང་བ།")
+                  (:num 1971 :wylie "kun rdzob/" :uchen "ཀུན་རྫོབ།"))
+          :translation '(:by-seg ((1970 . "Durch den Verstand gesehen,")
+                                  (1971 . "die scheinbare Wahrheit.")))
+          :vocab '((1970 (:term "blos" :gloss "Verstand // mind / awareness"
+                          :star t :context "durch den Verstand, dadurch"
+                          :info "ergative/instrumental; Skt. buddhi")
+                         (:term "dang" :gloss "und | mit" :star nil
+                          :context nil :info "particle"))
+                   (1971 (:term "kun rdzob" :gloss "scheinbar" :star t
+                          :context nil :info "noun")))
+          :grammar '((1970 ("Verb backbone" . "*mthong* is the verb.")
+                           ("Notable constructions" . "**blos** instrumental."))
+                     (1971 (nil . "Free prose."))))
+    (list :sent-num 655 :lang "bo" :missing t
+          :segs '((:num 1975 :wylie "bcos mar" :uchen "བཅོས་མར།")))
+    (list :sent-num 656 :lang "bo"
+          :segs '((:num 1976 :wylie "zhes" :uchen "ཞེས།"))
+          :translation '(:whole "Ganzer *Satz*.")
+          :vocab nil :grammar nil)))
+  "A hand-built handout spec: full sentence, missing file, gaps.")
+
+(ert-deftest tibetan-handout-render-header ()
+  "Kopf: GENERATED-Marker zuerst, LuaLaTeX, Tibetisch-Font aus der
+defcustom, Kopfzeile Werk · Umfang · Sätze, NIRGENDS „Claude“."
+  (let ((org (tibetan-handout-render tibetan-handout-test--spec)))
+    (should (string-prefix-p tibetan-handout-generated-marker org))
+    (should (string-match-p "^#\\+LATEX_COMPILER: lualatex$" org))
+    (should (string-match-p (regexp-quote tibetan-handout-tibetan-font) org))
+    (should (string-match-p "Klu sgrub dgongs rgyan} · §220 · Sätze 654–656"
+                            org))
+    (should (string-match-p "Stand 2026-10-09" org))
+    (should-not (string-match-p "Claude" org))))
+
+(ert-deftest tibetan-handout-render-text-part ()
+  "`* Text': je Segment Uchen (in \\tibfont) über dem Wylie, die
+Segmentnummer am Rand; Wylie LaTeX-sicher (~ _ escaped), in einem
+Export-Block (org-Markup kann es nicht verbiegen)."
+  (let ((org (tibetan-handout-render tibetan-handout-test--spec)))
+    (should (string-match-p "^\\* Text$" org))
+    (should (string-match-p "\\\\segno{1970}{\\\\tibfont[^}]*བློས་མཐོང་བ།}" org))
+    (should (string-match-p (regexp-quote
+                             "blos mthong ba \\textasciitilde{}M\\_x")
+                            org))
+    (should (string-match-p "#\\+BEGIN_EXPORT latex" org))
+    ;; Der Text steht auf eigenen Seiten (neben den Klassentext legen).
+    (should (string-match-p "}\\\\clearpage\n#\\+END_EXPORT" org))))
+
+(ert-deftest tibetan-handout-render-sentence-blocks ()
+  "Je Satz: Übersetzung mit Segmentnummern-Makro bzw. ganz bzw. Lücke,
+Vokabular als Tabelle je Segment (★, Kontextglosse im ctx-Makro mit
+escapten Kommas, `|' als \\vert{}), Grammatik als Beschreibungsliste
+mit org-Kursiv statt Markdown-Sternen; fehlende Datei = sichtbare
+Lücke."
+  (let ((org (tibetan-handout-render tibetan-handout-test--spec)))
+    (should (string-match-p "^\\* Satz 654 (Seg\\. 1970–1971)$" org))
+    (should (string-match-p (regexp-quote
+                             "{{{n(1970)}}}Durch den Verstand gesehen, {{{n(1971)}}}die scheinbare Wahrheit.")
+                            org))
+    (should (string-match-p
+             (regexp-quote
+              "| blos | ★ Verstand // mind / awareness {{{ctx(durch den Verstand\\, dadurch)}}} | ergative/instrumental; Skt. buddhi |")
+             org))
+    (should (string-match-p (regexp-quote "| dang | und \\vert{} mit | particle |")
+                            org))
+    (should (string-match-p (regexp-quote "{{{seg(1971)}}}") org))
+    (should (string-match-p
+             (regexp-quote "- Verb backbone :: /mthong/ is the verb.") org))
+    (should (string-match-p
+             (regexp-quote "- Notable constructions :: *blos* instrumental.")
+             org))
+    (should (string-match-p "^Free prose\\.$" org))
+    ;; Satz 655: Analysedatei fehlt.
+    (should (string-match-p "Analysedatei fehlt" org))
+    ;; Satz 656: ganze Übersetzung, Lücken für Vokabular/Grammatik.
+    (should (string-match-p "^Ganzer /Satz/\\.$" org))
+    (should (string-match-p "{{{luecke(noch kein Vokabular)}}}" org))
+    (should (string-match-p "{{{luecke(noch keine Grammatik)}}}" org))))
+
+(ert-deftest tibetan-handout-render-parses-as-org ()
+  "Das Ergebnis ist gültiges org: die Satz-Überschriften sind echte
+Headlines, jede Vokabelzeile hat genau drei Zellen."
+  (let ((org (tibetan-handout-render tibetan-handout-test--spec)))
+    (with-temp-buffer
+      (insert org)
+      (org-mode)
+      (let ((tree (org-element-parse-buffer)))
+        (should (equal '("Text" "Satz 654 (Seg. 1970–1971)"
+                         "Satz 655 (Seg. 1975)" "Satz 656 (Seg. 1976)")
+                       (org-element-map tree 'headline
+                         (lambda (h) (when (= 1 (org-element-property :level h))
+                                       (org-element-property :raw-value h))))))
+        (should (cl-every (lambda (n) (= n 3))
+                          (org-element-map tree 'table-row
+                            (lambda (r)
+                              (when (eq 'standard (org-element-property :type r))
+                                (length (org-element-contents r)))))))))))
+
+(ert-deftest tibetan-handout-render-sanskrit-no-uchen ()
+  "Sanskrit: keine Uchen-Zeile, das IAST steht direkt mit Nummer."
+  (let ((org (tibetan-handout-render
+              (list :title "MAv" :scope "MAv VI.28" :source-name "x.org"
+                    :date "2026-10-09"
+                    :sentences
+                    (list (list :sent-num 1 :lang "sa"
+                                :segs '((:num 1 :wylie "mohaḥ svabhāva" :uchen nil))
+                                :translation nil :vocab nil :grammar nil))))))
+    (should-not (string-match-p "\\\\tibfont[^a-z]*[ༀ-࿿]" org))
+    (should (string-match-p "\\\\segno{1}mohaḥ svabhāva" org))))
+
 (provide 'tibetan-handout-test)
 ;;; tibetan-handout-test.el ends here
